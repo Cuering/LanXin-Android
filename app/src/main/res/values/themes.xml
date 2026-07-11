@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <style name="Theme.LanXin" parent="android:Theme.Material.NoActionBar" />
+
+    <style name="Theme.LanXin.Starting" parent="Theme.SplashScreen.IconBackground">
+        <item name="windowSplashScreenBackground">@color/ic_lanxin_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_icon_inset</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/ic_lanxin_background</item>
+        <item name="postSplashScreenTheme">@style/Theme.LanXin</item>
+    </style>
+
+</resources>
