@@ -232,7 +232,8 @@ fun HomeScreen(
                     navigateToNewChat(it)
                     homeViewModel.closeSelectModelDialog()
                 },
-                onPlatformSelect = { homeViewModel.updatePlatformCheckedState(it) }
+                onPlatformSelect = { homeViewModel.updatePlatformCheckedState(it) },
+                onGoToSettings = settingOnClick
             )
         }
 
@@ -458,7 +459,8 @@ fun SelectPlatformDialog(
     selectedPlatforms: List<Boolean>,
     onDismissRequest: () -> Unit,
     onConfirmation: (enabledPlatforms: List<String>) -> Unit,
-    onPlatformSelect: (idx: Int) -> Unit
+    onPlatformSelect: (idx: Int) -> Unit,
+    onGoToSettings: () -> Unit = {}
 ) {
     val configuration = LocalWindowInfo.current
     val screenWidth = with(LocalDensity.current) { configuration.containerSize.width.toDp() }
@@ -498,7 +500,7 @@ fun SelectPlatformDialog(
                         )
                     }
                 } else {
-                    EnablePlatformWarningText()
+                    EnablePlatformWarningText(onGoToSettings = onGoToSettings)
                 }
                 HorizontalDivider(Modifier.padding(top = 8.dp))
             }
@@ -521,18 +523,25 @@ fun SelectPlatformDialog(
     )
 }
 
-@Preview
 @Composable
-fun EnablePlatformWarningText() {
-    Text(
+fun EnablePlatformWarningText(onGoToSettings: () -> Unit = {}) {
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .height(200.dp)
             .wrapContentHeight(align = Alignment.CenterVertically)
             .padding(16.dp),
-        textAlign = TextAlign.Center,
-        text = stringResource(R.string.enable_at_leat_one_platform)
-    )
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            textAlign = TextAlign.Center,
+            text = stringResource(R.string.enable_at_leat_one_platform)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        TextButton(onClick = onGoToSettings) {
+            Text("去设置")
+        }
+    }
 }
 
 @Composable
