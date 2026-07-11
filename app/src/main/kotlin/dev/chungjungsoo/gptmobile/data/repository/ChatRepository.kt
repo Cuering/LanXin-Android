@@ -1,11 +1,11 @@
-package dev.chungjungsoo.gptmobile.data.repository
+package com.lanxin.android.data.repository
 
-import dev.chungjungsoo.gptmobile.data.database.entity.ChatRoom
-import dev.chungjungsoo.gptmobile.data.database.entity.ChatRoomV2
-import dev.chungjungsoo.gptmobile.data.database.entity.Message
-import dev.chungjungsoo.gptmobile.data.database.entity.MessageV2
-import dev.chungjungsoo.gptmobile.data.database.entity.PlatformV2
-import dev.chungjungsoo.gptmobile.data.dto.ApiState
+import com.lanxin.android.data.database.entity.ChatRoom
+import com.lanxin.android.data.database.entity.ChatRoomV2
+import com.lanxin.android.data.database.entity.Message
+import com.lanxin.android.data.database.entity.MessageV2
+import com.lanxin.android.data.database.entity.PlatformV2
+import com.lanxin.android.data.dto.ApiState
 import kotlinx.coroutines.flow.Flow
 
 interface ChatRepository {

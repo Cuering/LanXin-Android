@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.presentation.ui.home
+package com.lanxin.android.presentation.ui.home
 
 import android.content.res.Configuration
 import android.widget.Toast
@@ -71,10 +71,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lanxin.android.R
-import dev.chungjungsoo.gptmobile.data.database.entity.ChatRoomV2
-import dev.chungjungsoo.gptmobile.data.database.entity.PlatformV2
-import dev.chungjungsoo.gptmobile.presentation.common.PlatformCheckBoxItem
-import dev.chungjungsoo.gptmobile.util.getPlatformName
+import com.lanxin.android.data.database.entity.ChatRoomV2
+import com.lanxin.android.data.database.entity.PlatformV2
+import com.lanxin.android.presentation.common.PlatformCheckBoxItem
+import com.lanxin.android.util.getPlatformName
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable

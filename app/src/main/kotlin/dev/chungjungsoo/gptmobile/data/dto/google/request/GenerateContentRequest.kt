@@ -1,6 +1,6 @@
-package dev.chungjungsoo.gptmobile.data.dto.google.request
+package com.lanxin.android.data.dto.google.request
 
-import dev.chungjungsoo.gptmobile.data.dto.google.common.Content
+import com.lanxin.android.data.dto.google.common.Content
 import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName

@@ -1,8 +1,8 @@
-package dev.chungjungsoo.gptmobile.data.datastore
+package com.lanxin.android.data.datastore
 
-import dev.chungjungsoo.gptmobile.data.model.ApiType
-import dev.chungjungsoo.gptmobile.data.model.DynamicTheme
-import dev.chungjungsoo.gptmobile.data.model.ThemeMode
+import com.lanxin.android.data.model.ApiType
+import com.lanxin.android.data.model.DynamicTheme
+import com.lanxin.android.data.model.ThemeMode
 
 interface SettingDataSource {
     suspend fun updateDynamicTheme(theme: DynamicTheme)

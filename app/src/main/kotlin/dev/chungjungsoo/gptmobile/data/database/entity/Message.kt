@@ -1,11 +1,11 @@
-package dev.chungjungsoo.gptmobile.data.database.entity
+package com.lanxin.android.data.database.entity
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
-import dev.chungjungsoo.gptmobile.data.model.ApiType
+import com.lanxin.android.data.model.ApiType
 
 @Entity(
     tableName = "messages",

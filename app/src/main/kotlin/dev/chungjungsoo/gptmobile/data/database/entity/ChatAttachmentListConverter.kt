@@ -1,7 +1,7 @@
-package dev.chungjungsoo.gptmobile.data.database.entity
+package com.lanxin.android.data.database.entity
 
 import androidx.room.TypeConverter
-import dev.chungjungsoo.gptmobile.data.model.ChatAttachment
+import com.lanxin.android.data.model.ChatAttachment
 import kotlinx.serialization.json.Json
 
 class ChatAttachmentListConverter {

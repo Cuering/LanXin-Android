@@ -1,11 +1,11 @@
-package dev.chungjungsoo.gptmobile.data.database.entity
+package com.lanxin.android.data.database.entity
 
 import android.os.Parcelable
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import androidx.room.TypeConverter
-import dev.chungjungsoo.gptmobile.data.model.ApiType
+import com.lanxin.android.data.model.ApiType
 import kotlinx.parcelize.Parcelize
 
 @Parcelize

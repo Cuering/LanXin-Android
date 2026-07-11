@@ -1,64 +1,64 @@
-package dev.chungjungsoo.gptmobile.data.repository
+package com.lanxin.android.data.repository
 
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
-import dev.chungjungsoo.gptmobile.data.context.ContextBuilder
-import dev.chungjungsoo.gptmobile.data.context.ConversationTurn
-import dev.chungjungsoo.gptmobile.data.context.ProviderContextPolicy
-import dev.chungjungsoo.gptmobile.data.database.dao.ChatPlatformModelV2Dao
-import dev.chungjungsoo.gptmobile.data.database.dao.ChatRoomDao
-import dev.chungjungsoo.gptmobile.data.database.dao.ChatRoomV2Dao
-import dev.chungjungsoo.gptmobile.data.database.dao.MessageDao
-import dev.chungjungsoo.gptmobile.data.database.dao.MessageV2Dao
-import dev.chungjungsoo.gptmobile.data.database.entity.ChatPlatformModelV2
-import dev.chungjungsoo.gptmobile.data.database.entity.ChatRoom
-import dev.chungjungsoo.gptmobile.data.database.entity.ChatRoomV2
-import dev.chungjungsoo.gptmobile.data.database.entity.Message
-import dev.chungjungsoo.gptmobile.data.database.entity.MessageV2
-import dev.chungjungsoo.gptmobile.data.database.entity.PlatformV2
-import dev.chungjungsoo.gptmobile.data.database.entity.effectiveContent
-import dev.chungjungsoo.gptmobile.data.dto.ApiState
-import dev.chungjungsoo.gptmobile.data.dto.anthropic.common.ImageContent as AnthropicImageContent
-import dev.chungjungsoo.gptmobile.data.dto.anthropic.common.ImageSource
-import dev.chungjungsoo.gptmobile.data.dto.anthropic.common.MediaType
-import dev.chungjungsoo.gptmobile.data.dto.anthropic.common.MessageContent as AnthropicMessageContent
-import dev.chungjungsoo.gptmobile.data.dto.anthropic.common.MessageRole
-import dev.chungjungsoo.gptmobile.data.dto.anthropic.common.TextContent as AnthropicTextContent
-import dev.chungjungsoo.gptmobile.data.dto.anthropic.request.InputMessage
-import dev.chungjungsoo.gptmobile.data.dto.anthropic.request.MessageRequest
-import dev.chungjungsoo.gptmobile.data.dto.google.common.Content
-import dev.chungjungsoo.gptmobile.data.dto.google.common.Part
-import dev.chungjungsoo.gptmobile.data.dto.google.common.Role as GoogleRole
-import dev.chungjungsoo.gptmobile.data.dto.google.request.GenerateContentRequest
-import dev.chungjungsoo.gptmobile.data.dto.google.request.GenerationConfig
-import dev.chungjungsoo.gptmobile.data.dto.google.request.SafetySetting
-import dev.chungjungsoo.gptmobile.data.dto.groq.request.GroqChatCompletionRequest
-import dev.chungjungsoo.gptmobile.data.dto.openai.common.ImageContent as OpenAIImageContent
-import dev.chungjungsoo.gptmobile.data.dto.openai.common.ImageUrl
-import dev.chungjungsoo.gptmobile.data.dto.openai.common.MessageContent as OpenAIMessageContent
-import dev.chungjungsoo.gptmobile.data.dto.openai.common.Role as OpenAIRole
-import dev.chungjungsoo.gptmobile.data.dto.openai.common.TextContent as OpenAITextContent
-import dev.chungjungsoo.gptmobile.data.dto.openai.request.ChatCompletionRequest
-import dev.chungjungsoo.gptmobile.data.dto.openai.request.ChatMessage
-import dev.chungjungsoo.gptmobile.data.dto.openai.request.ReasoningConfig
-import dev.chungjungsoo.gptmobile.data.dto.openai.request.ResponseContentPart
-import dev.chungjungsoo.gptmobile.data.dto.openai.request.ResponseInputContent
-import dev.chungjungsoo.gptmobile.data.dto.openai.request.ResponseInputMessage
-import dev.chungjungsoo.gptmobile.data.dto.openai.request.ResponsesRequest
-import dev.chungjungsoo.gptmobile.data.dto.openai.response.OutputTextDeltaEvent
-import dev.chungjungsoo.gptmobile.data.dto.openai.response.ReasoningSummaryTextDeltaEvent
-import dev.chungjungsoo.gptmobile.data.dto.openai.response.ResponseErrorEvent
-import dev.chungjungsoo.gptmobile.data.dto.openai.response.ResponseFailedEvent
-import dev.chungjungsoo.gptmobile.data.model.ApiType
-import dev.chungjungsoo.gptmobile.data.model.ClientType
-import dev.chungjungsoo.gptmobile.data.model.GeminiSafetySettings
-import dev.chungjungsoo.gptmobile.data.network.AnthropicAPI
-import dev.chungjungsoo.gptmobile.data.network.GoogleAPI
-import dev.chungjungsoo.gptmobile.data.network.GroqAPI
-import dev.chungjungsoo.gptmobile.data.network.OpenAIAPI
-import dev.chungjungsoo.gptmobile.util.AttachmentPayloadCache
-import dev.chungjungsoo.gptmobile.util.FileUtils
-import dev.chungjungsoo.gptmobile.util.stripAssistantErrorNote
+import com.lanxin.android.data.context.ContextBuilder
+import com.lanxin.android.data.context.ConversationTurn
+import com.lanxin.android.data.context.ProviderContextPolicy
+import com.lanxin.android.data.database.dao.ChatPlatformModelV2Dao
+import com.lanxin.android.data.database.dao.ChatRoomDao
+import com.lanxin.android.data.database.dao.ChatRoomV2Dao
+import com.lanxin.android.data.database.dao.MessageDao
+import com.lanxin.android.data.database.dao.MessageV2Dao
+import com.lanxin.android.data.database.entity.ChatPlatformModelV2
+import com.lanxin.android.data.database.entity.ChatRoom
+import com.lanxin.android.data.database.entity.ChatRoomV2
+import com.lanxin.android.data.database.entity.Message
+import com.lanxin.android.data.database.entity.MessageV2
+import com.lanxin.android.data.database.entity.PlatformV2
+import com.lanxin.android.data.database.entity.effectiveContent
+import com.lanxin.android.data.dto.ApiState
+import com.lanxin.android.data.dto.anthropic.common.ImageContent as AnthropicImageContent
+import com.lanxin.android.data.dto.anthropic.common.ImageSource
+import com.lanxin.android.data.dto.anthropic.common.MediaType
+import com.lanxin.android.data.dto.anthropic.common.MessageContent as AnthropicMessageContent
+import com.lanxin.android.data.dto.anthropic.common.MessageRole
+import com.lanxin.android.data.dto.anthropic.common.TextContent as AnthropicTextContent
+import com.lanxin.android.data.dto.anthropic.request.InputMessage
+import com.lanxin.android.data.dto.anthropic.request.MessageRequest
+import com.lanxin.android.data.dto.google.common.Content
+import com.lanxin.android.data.dto.google.common.Part
+import com.lanxin.android.data.dto.google.common.Role as GoogleRole
+import com.lanxin.android.data.dto.google.request.GenerateContentRequest
+import com.lanxin.android.data.dto.google.request.GenerationConfig
+import com.lanxin.android.data.dto.google.request.SafetySetting
+import com.lanxin.android.data.dto.groq.request.GroqChatCompletionRequest
+import com.lanxin.android.data.dto.openai.common.ImageContent as OpenAIImageContent
+import com.lanxin.android.data.dto.openai.common.ImageUrl
+import com.lanxin.android.data.dto.openai.common.MessageContent as OpenAIMessageContent
+import com.lanxin.android.data.dto.openai.common.Role as OpenAIRole
+import com.lanxin.android.data.dto.openai.common.TextContent as OpenAITextContent
+import com.lanxin.android.data.dto.openai.request.ChatCompletionRequest
+import com.lanxin.android.data.dto.openai.request.ChatMessage
+import com.lanxin.android.data.dto.openai.request.ReasoningConfig
+import com.lanxin.android.data.dto.openai.request.ResponseContentPart
+import com.lanxin.android.data.dto.openai.request.ResponseInputContent
+import com.lanxin.android.data.dto.openai.request.ResponseInputMessage
+import com.lanxin.android.data.dto.openai.request.ResponsesRequest
+import com.lanxin.android.data.dto.openai.response.OutputTextDeltaEvent
+import com.lanxin.android.data.dto.openai.response.ReasoningSummaryTextDeltaEvent
+import com.lanxin.android.data.dto.openai.response.ResponseErrorEvent
+import com.lanxin.android.data.dto.openai.response.ResponseFailedEvent
+import com.lanxin.android.data.model.ApiType
+import com.lanxin.android.data.model.ClientType
+import com.lanxin.android.data.model.GeminiSafetySettings
+import com.lanxin.android.data.network.AnthropicAPI
+import com.lanxin.android.data.network.GoogleAPI
+import com.lanxin.android.data.network.GroqAPI
+import com.lanxin.android.data.network.OpenAIAPI
+import com.lanxin.android.util.AttachmentPayloadCache
+import com.lanxin.android.util.FileUtils
+import com.lanxin.android.util.stripAssistantErrorNote
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -488,7 +488,7 @@ class ChatRepositoryImpl @Inject constructor(
         // Add image content
         imageAttachments.forEach { attachment ->
             val providerRef = attachment.providerRefFor(platformUid)
-            if (providerRef?.remoteType == dev.chungjungsoo.gptmobile.data.model.AttachmentRemoteType.OPENAI_FILE) {
+            if (providerRef?.remoteType == com.lanxin.android.data.model.AttachmentRemoteType.OPENAI_FILE) {
                 parts.add(ResponseContentPart.imageFile(providerRef.remoteId))
             } else {
                 val filePath = attachment.preparedFilePath.ifBlank { attachment.localFilePath }
@@ -534,7 +534,7 @@ class ChatRepositoryImpl @Inject constructor(
                     temperature = if (platform.reasoning) null else platform.temperature,
                     topP = if (platform.reasoning) null else platform.topP,
                     thinking = if (platform.reasoning) {
-                        dev.chungjungsoo.gptmobile.data.dto.anthropic.request.ThinkingConfig(
+                        com.lanxin.android.data.dto.anthropic.request.ThinkingConfig(
                             type = "enabled",
                             budgetTokens = 10000
                         )
@@ -547,13 +547,13 @@ class ChatRepositoryImpl @Inject constructor(
                 flow {
                     anthropicAPI.streamChatMessage(request, platform.timeout).collect { chunk ->
                         when (chunk) {
-                            is dev.chungjungsoo.gptmobile.data.dto.anthropic.response.ContentDeltaResponseChunk -> {
+                            is com.lanxin.android.data.dto.anthropic.response.ContentDeltaResponseChunk -> {
                                 when (chunk.delta.type) {
-                                    dev.chungjungsoo.gptmobile.data.dto.anthropic.response.ContentBlockType.THINKING_DELTA -> {
+                                    com.lanxin.android.data.dto.anthropic.response.ContentBlockType.THINKING_DELTA -> {
                                         chunk.delta.thinking?.let { emit(ApiState.Thinking(it)) }
                                     }
 
-                                    dev.chungjungsoo.gptmobile.data.dto.anthropic.response.ContentBlockType.DELTA -> {
+                                    com.lanxin.android.data.dto.anthropic.response.ContentBlockType.DELTA -> {
                                         chunk.delta.text?.let { emit(ApiState.Success(it)) }
                                     }
 
@@ -561,7 +561,7 @@ class ChatRepositoryImpl @Inject constructor(
                                 }
                             }
 
-                            is dev.chungjungsoo.gptmobile.data.dto.anthropic.response.ErrorResponseChunk -> {
+                            is com.lanxin.android.data.dto.anthropic.response.ErrorResponseChunk -> {
                                 emit(ApiState.Error(chunk.error.message))
                             }
 
@@ -591,7 +591,7 @@ class ChatRepositoryImpl @Inject constructor(
         // Add file content (images)
         message.attachments.forEach { attachment ->
             val providerRef = attachment.providerRefFor(platformUid)
-            if (providerRef?.remoteType == dev.chungjungsoo.gptmobile.data.model.AttachmentRemoteType.ANTHROPIC_FILE) {
+            if (providerRef?.remoteType == com.lanxin.android.data.model.AttachmentRemoteType.ANTHROPIC_FILE) {
                 content.add(AnthropicImageContent(source = ImageSource.file(providerRef.remoteId)))
             } else {
                 val filePath = attachment.preparedFilePath.ifBlank { attachment.localFilePath }
@@ -637,7 +637,7 @@ class ChatRepositoryImpl @Inject constructor(
                         temperature = platform.temperature,
                         topP = platform.topP,
                         thinkingConfig = if (platform.reasoning) {
-                            dev.chungjungsoo.gptmobile.data.dto.google.request.ThinkingConfig(
+                            com.lanxin.android.data.dto.google.request.ThinkingConfig(
                                 includeThoughts = true
                             )
                         } else {
@@ -726,7 +726,7 @@ class ChatRepositoryImpl @Inject constructor(
         // Add file content (images)
         message.attachments.forEach { attachment ->
             val providerRef = attachment.providerRefFor(platformUid)
-            if (providerRef?.remoteType == dev.chungjungsoo.gptmobile.data.model.AttachmentRemoteType.GOOGLE_FILE) {
+            if (providerRef?.remoteType == com.lanxin.android.data.model.AttachmentRemoteType.GOOGLE_FILE) {
                 parts.add(Part.fileData(providerRef.mimeType, providerRef.remoteId))
             } else {
                 val filePath = attachment.preparedFilePath.ifBlank { attachment.localFilePath }

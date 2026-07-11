@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.presentation.ui.setup
+package com.lanxin.android.presentation.ui.setup
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack

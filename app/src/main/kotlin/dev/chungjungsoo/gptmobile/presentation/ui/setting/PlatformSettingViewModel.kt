@@ -1,12 +1,12 @@
-package dev.chungjungsoo.gptmobile.presentation.ui.setting
+package com.lanxin.android.presentation.ui.setting
 
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dev.chungjungsoo.gptmobile.data.database.entity.PlatformV2
-import dev.chungjungsoo.gptmobile.data.model.GeminiSafetySettings
-import dev.chungjungsoo.gptmobile.data.repository.SettingRepository
+import com.lanxin.android.data.database.entity.PlatformV2
+import com.lanxin.android.data.model.GeminiSafetySettings
+import com.lanxin.android.data.repository.SettingRepository
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

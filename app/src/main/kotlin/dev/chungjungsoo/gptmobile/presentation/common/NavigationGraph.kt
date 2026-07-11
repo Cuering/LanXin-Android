@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.presentation.common
+package com.lanxin.android.presentation.common
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,21 +14,21 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import androidx.navigation.navigation
-import dev.chungjungsoo.gptmobile.presentation.ui.chat.ChatScreen
-import dev.chungjungsoo.gptmobile.presentation.ui.home.HomeScreen
-import dev.chungjungsoo.gptmobile.presentation.ui.migrate.MigrateScreen
-import dev.chungjungsoo.gptmobile.presentation.ui.setting.AboutScreen
-import dev.chungjungsoo.gptmobile.presentation.ui.setting.AddPlatformScreen
-import dev.chungjungsoo.gptmobile.presentation.ui.setting.LicenseScreen
-import dev.chungjungsoo.gptmobile.presentation.ui.setting.PlatformSettingScreen
-import dev.chungjungsoo.gptmobile.presentation.ui.setting.SettingScreen
-import dev.chungjungsoo.gptmobile.presentation.ui.setting.SettingViewModelV2
-import dev.chungjungsoo.gptmobile.presentation.ui.setup.SetupCompleteScreen
-import dev.chungjungsoo.gptmobile.presentation.ui.setup.SetupPlatformListScreen
-import dev.chungjungsoo.gptmobile.presentation.ui.setup.SetupPlatformTypeScreen
-import dev.chungjungsoo.gptmobile.presentation.ui.setup.SetupPlatformWizardScreen
-import dev.chungjungsoo.gptmobile.presentation.ui.setup.SetupViewModelV2
-import dev.chungjungsoo.gptmobile.presentation.ui.startscreen.StartScreen
+import com.lanxin.android.presentation.ui.chat.ChatScreen
+import com.lanxin.android.presentation.ui.home.HomeScreen
+import com.lanxin.android.presentation.ui.migrate.MigrateScreen
+import com.lanxin.android.presentation.ui.setting.AboutScreen
+import com.lanxin.android.presentation.ui.setting.AddPlatformScreen
+import com.lanxin.android.presentation.ui.setting.LicenseScreen
+import com.lanxin.android.presentation.ui.setting.PlatformSettingScreen
+import com.lanxin.android.presentation.ui.setting.SettingScreen
+import com.lanxin.android.presentation.ui.setting.SettingViewModelV2
+import com.lanxin.android.presentation.ui.setup.SetupCompleteScreen
+import com.lanxin.android.presentation.ui.setup.SetupPlatformListScreen
+import com.lanxin.android.presentation.ui.setup.SetupPlatformTypeScreen
+import com.lanxin.android.presentation.ui.setup.SetupPlatformWizardScreen
+import com.lanxin.android.presentation.ui.setup.SetupViewModelV2
+import com.lanxin.android.presentation.ui.startscreen.StartScreen
 
 @Composable
 fun SetupNavGraph(navController: NavHostController) {

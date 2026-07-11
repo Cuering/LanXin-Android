@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.presentation.ui.setup
+package com.lanxin.android.presentation.ui.setup
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -31,7 +31,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.lanxin.android.R
-import dev.chungjungsoo.gptmobile.data.model.ClientType
+import com.lanxin.android.data.model.ClientType
 
 data class PlatformTypeInfo(
     val clientType: ClientType,

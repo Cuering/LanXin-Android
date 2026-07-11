@@ -1,9 +1,9 @@
-package dev.chungjungsoo.gptmobile.data.network
+package com.lanxin.android.data.network
 
-import dev.chungjungsoo.gptmobile.data.dto.google.request.GenerateContentRequest
-import dev.chungjungsoo.gptmobile.data.dto.google.response.ErrorDetail
-import dev.chungjungsoo.gptmobile.data.dto.google.response.GenerateContentResponse
-import dev.chungjungsoo.gptmobile.util.applyPlatformStreamingTimeout
+import com.lanxin.android.data.dto.google.request.GenerateContentRequest
+import com.lanxin.android.data.dto.google.response.ErrorDetail
+import com.lanxin.android.data.dto.google.response.GenerateContentResponse
+import com.lanxin.android.util.applyPlatformStreamingTimeout
 import io.ktor.client.call.body
 import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.request.header

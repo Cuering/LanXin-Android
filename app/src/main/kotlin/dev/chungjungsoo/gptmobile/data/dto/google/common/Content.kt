@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.data.dto.google.common
+package com.lanxin.android.data.dto.google.common
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable

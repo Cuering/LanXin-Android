@@ -1,7 +1,7 @@
-package dev.chungjungsoo.gptmobile.data.network
+package com.lanxin.android.data.network
 
-import dev.chungjungsoo.gptmobile.data.dto.google.request.GenerateContentRequest
-import dev.chungjungsoo.gptmobile.data.dto.google.response.GenerateContentResponse
+import com.lanxin.android.data.dto.google.request.GenerateContentRequest
+import com.lanxin.android.data.dto.google.response.GenerateContentResponse
 import kotlinx.coroutines.flow.Flow
 
 interface GoogleAPI {

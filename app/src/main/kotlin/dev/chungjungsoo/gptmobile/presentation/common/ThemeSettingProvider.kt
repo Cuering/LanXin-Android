@@ -1,12 +1,12 @@
-package dev.chungjungsoo.gptmobile.presentation.common
+package com.lanxin.android.presentation.common
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import dev.chungjungsoo.gptmobile.data.model.DynamicTheme
-import dev.chungjungsoo.gptmobile.data.model.ThemeMode
+import com.lanxin.android.data.model.DynamicTheme
+import com.lanxin.android.data.model.ThemeMode
 
 val LocalDynamicTheme = compositionLocalOf { DynamicTheme.OFF }
 val LocalThemeMode = compositionLocalOf { ThemeMode.SYSTEM }

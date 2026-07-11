@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.data.dto.anthropic.common
+package com.lanxin.android.data.dto.anthropic.common
 
 import kotlinx.serialization.Serializable
 

@@ -1,11 +1,11 @@
-package dev.chungjungsoo.gptmobile.data.network
+package com.lanxin.android.data.network
 
-import dev.chungjungsoo.gptmobile.data.ModelConstants
-import dev.chungjungsoo.gptmobile.data.dto.anthropic.request.MessageRequest
-import dev.chungjungsoo.gptmobile.data.dto.anthropic.response.ErrorDetail
-import dev.chungjungsoo.gptmobile.data.dto.anthropic.response.ErrorResponseChunk
-import dev.chungjungsoo.gptmobile.data.dto.anthropic.response.MessageResponseChunk
-import dev.chungjungsoo.gptmobile.util.applyPlatformStreamingTimeout
+import com.lanxin.android.data.ModelConstants
+import com.lanxin.android.data.dto.anthropic.request.MessageRequest
+import com.lanxin.android.data.dto.anthropic.response.ErrorDetail
+import com.lanxin.android.data.dto.anthropic.response.ErrorResponseChunk
+import com.lanxin.android.data.dto.anthropic.response.MessageResponseChunk
+import com.lanxin.android.util.applyPlatformStreamingTimeout
 import io.ktor.client.call.body
 import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.request.accept

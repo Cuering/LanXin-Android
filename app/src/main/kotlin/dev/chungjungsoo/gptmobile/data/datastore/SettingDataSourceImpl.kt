@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.data.datastore
+package com.lanxin.android.data.datastore
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -7,9 +7,9 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
-import dev.chungjungsoo.gptmobile.data.model.ApiType
-import dev.chungjungsoo.gptmobile.data.model.DynamicTheme
-import dev.chungjungsoo.gptmobile.data.model.ThemeMode
+import com.lanxin.android.data.model.ApiType
+import com.lanxin.android.data.model.DynamicTheme
+import com.lanxin.android.data.model.ThemeMode
 import javax.inject.Inject
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map

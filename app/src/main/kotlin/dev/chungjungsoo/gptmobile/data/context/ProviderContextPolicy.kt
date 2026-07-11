@@ -1,6 +1,6 @@
-package dev.chungjungsoo.gptmobile.data.context
+package com.lanxin.android.data.context
 
-import dev.chungjungsoo.gptmobile.data.model.ClientType
+import com.lanxin.android.data.model.ClientType
 
 data class ProviderContextPolicy(
     val recentTurnWindow: Int,

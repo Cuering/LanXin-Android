@@ -1,6 +1,6 @@
-package dev.chungjungsoo.gptmobile.data.repository
+package com.lanxin.android.data.repository
 
-import dev.chungjungsoo.gptmobile.data.dto.ApiState
+import com.lanxin.android.data.dto.ApiState
 
 private const val GROQ_THINK_OPEN = "<think>"
 private const val GROQ_THINK_CLOSE = "</think>"

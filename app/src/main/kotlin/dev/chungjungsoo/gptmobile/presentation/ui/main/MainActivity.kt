@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.presentation.ui.main
+package com.lanxin.android.presentation.ui.main
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -12,12 +12,12 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import dagger.hilt.android.AndroidEntryPoint
-import dev.chungjungsoo.gptmobile.presentation.common.LocalDynamicTheme
-import dev.chungjungsoo.gptmobile.presentation.common.LocalThemeMode
-import dev.chungjungsoo.gptmobile.presentation.common.Route
-import dev.chungjungsoo.gptmobile.presentation.common.SetupNavGraph
-import dev.chungjungsoo.gptmobile.presentation.common.ThemeSettingProvider
-import dev.chungjungsoo.gptmobile.presentation.theme.LanXinTheme
+import com.lanxin.android.presentation.common.LocalDynamicTheme
+import com.lanxin.android.presentation.common.LocalThemeMode
+import com.lanxin.android.presentation.common.Route
+import com.lanxin.android.presentation.common.SetupNavGraph
+import com.lanxin.android.presentation.common.ThemeSettingProvider
+import com.lanxin.android.presentation.theme.LanXinTheme
 import kotlinx.coroutines.launch
 
 @AndroidEntryPoint

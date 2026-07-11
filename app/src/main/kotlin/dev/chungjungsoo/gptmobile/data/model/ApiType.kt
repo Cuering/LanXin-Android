@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.data.model
+package com.lanxin.android.data.model
 
 enum class ApiType {
     OPENAI,

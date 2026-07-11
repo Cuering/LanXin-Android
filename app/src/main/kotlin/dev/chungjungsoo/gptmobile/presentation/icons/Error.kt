@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.presentation.icons
+package com.lanxin.android.presentation.icons
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable

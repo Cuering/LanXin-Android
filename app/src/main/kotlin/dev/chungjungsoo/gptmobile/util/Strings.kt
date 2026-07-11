@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.util
+package com.lanxin.android.util
 
 import android.util.Patterns
 import android.webkit.URLUtil

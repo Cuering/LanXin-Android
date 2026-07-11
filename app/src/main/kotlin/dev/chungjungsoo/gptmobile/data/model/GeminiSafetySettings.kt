@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.data.model
+package com.lanxin.android.data.model
 
 import androidx.annotation.StringRes
 import com.lanxin.android.R

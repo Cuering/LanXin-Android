@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.presentation.ui.setting
+package com.lanxin.android.presentation.ui.setting
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -35,18 +35,18 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lanxin.android.R
-import dev.chungjungsoo.gptmobile.data.database.entity.PlatformV2
-import dev.chungjungsoo.gptmobile.data.model.DynamicTheme
-import dev.chungjungsoo.gptmobile.data.model.ThemeMode
-import dev.chungjungsoo.gptmobile.presentation.common.LocalDynamicTheme
-import dev.chungjungsoo.gptmobile.presentation.common.LocalThemeMode
-import dev.chungjungsoo.gptmobile.presentation.common.LocalThemeViewModel
-import dev.chungjungsoo.gptmobile.presentation.common.RadioItem
-import dev.chungjungsoo.gptmobile.presentation.common.SettingItem
-import dev.chungjungsoo.gptmobile.util.getClientTypeDisplayName
-import dev.chungjungsoo.gptmobile.util.getDynamicThemeTitle
-import dev.chungjungsoo.gptmobile.util.getThemeModeTitle
-import dev.chungjungsoo.gptmobile.util.pinnedExitUntilCollapsedScrollBehavior
+import com.lanxin.android.data.database.entity.PlatformV2
+import com.lanxin.android.data.model.DynamicTheme
+import com.lanxin.android.data.model.ThemeMode
+import com.lanxin.android.presentation.common.LocalDynamicTheme
+import com.lanxin.android.presentation.common.LocalThemeMode
+import com.lanxin.android.presentation.common.LocalThemeViewModel
+import com.lanxin.android.presentation.common.RadioItem
+import com.lanxin.android.presentation.common.SettingItem
+import com.lanxin.android.util.getClientTypeDisplayName
+import com.lanxin.android.util.getDynamicThemeTitle
+import com.lanxin.android.util.getThemeModeTitle
+import com.lanxin.android.util.pinnedExitUntilCollapsedScrollBehavior
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

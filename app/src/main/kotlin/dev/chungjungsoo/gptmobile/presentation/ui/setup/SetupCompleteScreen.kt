@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.presentation.ui.setup
+package com.lanxin.android.presentation.ui.setup
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Column
@@ -23,9 +23,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.lanxin.android.R
-import dev.chungjungsoo.gptmobile.presentation.common.PrimaryLongButton
-import dev.chungjungsoo.gptmobile.presentation.common.Route
-import dev.chungjungsoo.gptmobile.presentation.icons.Done
+import com.lanxin.android.presentation.common.PrimaryLongButton
+import com.lanxin.android.presentation.common.Route
+import com.lanxin.android.presentation.icons.Done
 
 @Composable
 fun SetupCompleteScreen(

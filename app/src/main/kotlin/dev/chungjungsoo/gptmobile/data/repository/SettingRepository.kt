@@ -1,8 +1,8 @@
-package dev.chungjungsoo.gptmobile.data.repository
+package com.lanxin.android.data.repository
 
-import dev.chungjungsoo.gptmobile.data.database.entity.PlatformV2
-import dev.chungjungsoo.gptmobile.data.dto.Platform
-import dev.chungjungsoo.gptmobile.data.dto.ThemeSetting
+import com.lanxin.android.data.database.entity.PlatformV2
+import com.lanxin.android.data.dto.Platform
+import com.lanxin.android.data.dto.ThemeSetting
 
 interface SettingRepository {
     suspend fun fetchPlatforms(): List<Platform>

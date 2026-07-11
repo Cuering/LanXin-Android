@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.presentation.ui.setup
+package com.lanxin.android.presentation.ui.setup
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -36,8 +36,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lanxin.android.R
-import dev.chungjungsoo.gptmobile.data.database.entity.PlatformV2
-import dev.chungjungsoo.gptmobile.presentation.common.PrimaryLongButton
+import com.lanxin.android.data.database.entity.PlatformV2
+import com.lanxin.android.presentation.common.PrimaryLongButton
 
 @Composable
 fun SetupPlatformListScreen(

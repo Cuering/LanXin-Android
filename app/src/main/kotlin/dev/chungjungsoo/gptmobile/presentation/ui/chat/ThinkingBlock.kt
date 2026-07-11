@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.presentation.ui.chat
+package com.lanxin.android.presentation.ui.chat
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -32,7 +32,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.lanxin.android.R
-import dev.chungjungsoo.gptmobile.presentation.theme.LanXinTheme
+import com.lanxin.android.presentation.theme.LanXinTheme
 
 @Composable
 fun ThinkingBlock(

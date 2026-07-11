@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.data.network
+package com.lanxin.android.data.network
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.HttpClientEngineFactory
 import io.ktor.client.plugins.DefaultRequest

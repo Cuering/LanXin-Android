@@ -1,14 +1,14 @@
-package dev.chungjungsoo.gptmobile.data.network
+package com.lanxin.android.data.network
 
-import dev.chungjungsoo.gptmobile.data.ModelConstants
-import dev.chungjungsoo.gptmobile.data.dto.openai.request.ChatCompletionRequest
-import dev.chungjungsoo.gptmobile.data.dto.openai.request.ResponsesRequest
-import dev.chungjungsoo.gptmobile.data.dto.openai.response.ChatCompletionChunk
-import dev.chungjungsoo.gptmobile.data.dto.openai.response.ErrorDetail
-import dev.chungjungsoo.gptmobile.data.dto.openai.response.ResponseErrorEvent
-import dev.chungjungsoo.gptmobile.data.dto.openai.response.ResponsesStreamEvent
-import dev.chungjungsoo.gptmobile.data.dto.openai.response.UnknownEvent
-import dev.chungjungsoo.gptmobile.util.applyPlatformStreamingTimeout
+import com.lanxin.android.data.ModelConstants
+import com.lanxin.android.data.dto.openai.request.ChatCompletionRequest
+import com.lanxin.android.data.dto.openai.request.ResponsesRequest
+import com.lanxin.android.data.dto.openai.response.ChatCompletionChunk
+import com.lanxin.android.data.dto.openai.response.ErrorDetail
+import com.lanxin.android.data.dto.openai.response.ResponseErrorEvent
+import com.lanxin.android.data.dto.openai.response.ResponsesStreamEvent
+import com.lanxin.android.data.dto.openai.response.UnknownEvent
+import com.lanxin.android.util.applyPlatformStreamingTimeout
 import io.ktor.client.call.body
 import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.request.accept

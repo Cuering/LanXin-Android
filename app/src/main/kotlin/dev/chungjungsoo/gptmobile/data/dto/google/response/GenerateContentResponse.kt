@@ -1,6 +1,6 @@
-package dev.chungjungsoo.gptmobile.data.dto.google.response
+package com.lanxin.android.data.dto.google.response
 
-import dev.chungjungsoo.gptmobile.data.dto.google.common.Content
+import com.lanxin.android.data.dto.google.common.Content
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 

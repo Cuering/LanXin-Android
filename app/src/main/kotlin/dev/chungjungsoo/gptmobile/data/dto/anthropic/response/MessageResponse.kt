@@ -1,7 +1,7 @@
-package dev.chungjungsoo.gptmobile.data.dto.anthropic.response
+package com.lanxin.android.data.dto.anthropic.response
 
-import dev.chungjungsoo.gptmobile.data.dto.anthropic.common.MessageRole
-import dev.chungjungsoo.gptmobile.data.dto.anthropic.common.TextContent
+import com.lanxin.android.data.dto.anthropic.common.MessageRole
+import com.lanxin.android.data.dto.anthropic.common.TextContent
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 

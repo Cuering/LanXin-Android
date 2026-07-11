@@ -1,14 +1,14 @@
-package dev.chungjungsoo.gptmobile.data.database
+package com.lanxin.android.data.database
 
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
-import dev.chungjungsoo.gptmobile.data.ModelConstants
-import dev.chungjungsoo.gptmobile.data.database.entity.ACTIVE_REVISION_LATEST
-import dev.chungjungsoo.gptmobile.data.database.entity.AssistantRevision
-import dev.chungjungsoo.gptmobile.data.database.entity.AssistantRevisionListConverter
-import dev.chungjungsoo.gptmobile.data.database.entity.ChatAttachmentListConverter
-import dev.chungjungsoo.gptmobile.data.model.ChatAttachment
-import dev.chungjungsoo.gptmobile.data.model.ClientType
+import com.lanxin.android.data.ModelConstants
+import com.lanxin.android.data.database.entity.ACTIVE_REVISION_LATEST
+import com.lanxin.android.data.database.entity.AssistantRevision
+import com.lanxin.android.data.database.entity.AssistantRevisionListConverter
+import com.lanxin.android.data.database.entity.ChatAttachmentListConverter
+import com.lanxin.android.data.model.ChatAttachment
+import com.lanxin.android.data.model.ClientType
 import java.io.File
 
 object ChatDatabaseV2Migrations {

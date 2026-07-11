@@ -1,10 +1,10 @@
-package dev.chungjungsoo.gptmobile.data.database.entity
+package com.lanxin.android.data.database.entity
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
-import dev.chungjungsoo.gptmobile.data.model.ClientType
-import dev.chungjungsoo.gptmobile.data.model.GeminiSafetySettings
+import com.lanxin.android.data.model.ClientType
+import com.lanxin.android.data.model.GeminiSafetySettings
 import java.util.*
 
 @Entity(tableName = "platform_v2")

@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.presentation.ui.setting
+package com.lanxin.android.presentation.ui.setting
 
 import android.content.ClipData
 import androidx.compose.foundation.layout.Column
@@ -31,7 +31,7 @@ import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.lanxin.android.R
-import dev.chungjungsoo.gptmobile.presentation.common.SettingItem
+import com.lanxin.android.presentation.common.SettingItem
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)

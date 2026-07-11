@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.presentation.ui.setting
+package com.lanxin.android.presentation.ui.setting
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -39,9 +39,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.lanxin.android.R
-import dev.chungjungsoo.gptmobile.data.ModelConstants
-import dev.chungjungsoo.gptmobile.data.database.entity.PlatformV2
-import dev.chungjungsoo.gptmobile.data.model.ClientType
+import com.lanxin.android.data.ModelConstants
+import com.lanxin.android.data.database.entity.PlatformV2
+import com.lanxin.android.data.model.ClientType
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

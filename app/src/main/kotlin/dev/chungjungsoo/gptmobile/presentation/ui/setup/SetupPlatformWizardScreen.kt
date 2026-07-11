@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.presentation.ui.setup
+package com.lanxin.android.presentation.ui.setup
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
@@ -44,11 +44,11 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lanxin.android.R
-import dev.chungjungsoo.gptmobile.data.model.ClientType
-import dev.chungjungsoo.gptmobile.presentation.ui.setup.SetupViewModelV2.Companion.WIZARD_STEP_API_KEY
-import dev.chungjungsoo.gptmobile.presentation.ui.setup.SetupViewModelV2.Companion.WIZARD_STEP_BASICS
-import dev.chungjungsoo.gptmobile.presentation.ui.setup.SetupViewModelV2.Companion.WIZARD_STEP_MODEL
-import dev.chungjungsoo.gptmobile.presentation.ui.setup.SetupViewModelV2.Companion.WIZARD_TOTAL_STEPS
+import com.lanxin.android.data.model.ClientType
+import com.lanxin.android.presentation.ui.setup.SetupViewModelV2.Companion.WIZARD_STEP_API_KEY
+import com.lanxin.android.presentation.ui.setup.SetupViewModelV2.Companion.WIZARD_STEP_BASICS
+import com.lanxin.android.presentation.ui.setup.SetupViewModelV2.Companion.WIZARD_STEP_MODEL
+import com.lanxin.android.presentation.ui.setup.SetupViewModelV2.Companion.WIZARD_TOTAL_STEPS
 
 @Composable
 fun SetupPlatformWizardScreen(

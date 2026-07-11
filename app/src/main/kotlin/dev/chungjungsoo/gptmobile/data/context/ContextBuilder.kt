@@ -1,11 +1,11 @@
-package dev.chungjungsoo.gptmobile.data.context
+package com.lanxin.android.data.context
 
-import dev.chungjungsoo.gptmobile.data.database.entity.ACTIVE_REVISION_LATEST
-import dev.chungjungsoo.gptmobile.data.database.entity.MessageV2
-import dev.chungjungsoo.gptmobile.data.database.entity.PlatformV2
-import dev.chungjungsoo.gptmobile.data.database.entity.effectiveContent
-import dev.chungjungsoo.gptmobile.util.isAssistantErrorMessage
-import dev.chungjungsoo.gptmobile.util.stripAssistantErrorNote
+import com.lanxin.android.data.database.entity.ACTIVE_REVISION_LATEST
+import com.lanxin.android.data.database.entity.MessageV2
+import com.lanxin.android.data.database.entity.PlatformV2
+import com.lanxin.android.data.database.entity.effectiveContent
+import com.lanxin.android.util.isAssistantErrorMessage
+import com.lanxin.android.util.stripAssistantErrorNote
 import javax.inject.Inject
 
 class ContextBuilder @Inject constructor() {

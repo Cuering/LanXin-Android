@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.data.dto.anthropic.request
+package com.lanxin.android.data.dto.anthropic.request
 
 import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.ExperimentalSerializationApi

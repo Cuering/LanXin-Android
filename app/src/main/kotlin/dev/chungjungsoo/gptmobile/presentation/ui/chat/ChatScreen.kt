@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.presentation.ui.chat
+package com.lanxin.android.presentation.ui.chat
 
 import android.content.ClipData
 import android.content.Context
@@ -90,11 +90,11 @@ import androidx.core.content.FileProvider.getUriForFile
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lanxin.android.R
-import dev.chungjungsoo.gptmobile.data.database.entity.ACTIVE_REVISION_LATEST
-import dev.chungjungsoo.gptmobile.data.database.entity.MessageV2
-import dev.chungjungsoo.gptmobile.data.database.entity.PlatformV2
-import dev.chungjungsoo.gptmobile.data.database.entity.effectiveContent
-import dev.chungjungsoo.gptmobile.data.database.entity.effectiveThoughts
+import com.lanxin.android.data.database.entity.ACTIVE_REVISION_LATEST
+import com.lanxin.android.data.database.entity.MessageV2
+import com.lanxin.android.data.database.entity.PlatformV2
+import com.lanxin.android.data.database.entity.effectiveContent
+import com.lanxin.android.data.database.entity.effectiveThoughts
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay

@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.data.dto.openai.request
+package com.lanxin.android.data.dto.openai.request
 
 import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.ExperimentalSerializationApi

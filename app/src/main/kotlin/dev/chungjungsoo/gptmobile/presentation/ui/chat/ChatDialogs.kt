@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.presentation.ui.chat
+package com.lanxin.android.presentation.ui.chat
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -28,9 +28,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import com.lanxin.android.R
-import dev.chungjungsoo.gptmobile.data.database.entity.MessageV2
-import dev.chungjungsoo.gptmobile.data.database.entity.effectiveContent
-import dev.chungjungsoo.gptmobile.data.database.entity.effectiveThoughts
+import com.lanxin.android.data.database.entity.MessageV2
+import com.lanxin.android.data.database.entity.effectiveContent
+import com.lanxin.android.data.database.entity.effectiveThoughts
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext

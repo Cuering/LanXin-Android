@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.presentation.common
+package com.lanxin.android.presentation.common
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.fillMaxWidth

@@ -1,7 +1,7 @@
-package dev.chungjungsoo.gptmobile.data.network
+package com.lanxin.android.data.network
 
-import dev.chungjungsoo.gptmobile.data.dto.anthropic.request.MessageRequest
-import dev.chungjungsoo.gptmobile.data.dto.anthropic.response.MessageResponseChunk
+import com.lanxin.android.data.dto.anthropic.request.MessageRequest
+import com.lanxin.android.data.dto.anthropic.response.MessageResponseChunk
 import kotlinx.coroutines.flow.Flow
 
 interface AnthropicAPI {

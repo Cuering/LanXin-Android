@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.presentation.icons
+package com.lanxin.android.presentation.icons
 
 import androidx.compose.foundation.Image
 import androidx.compose.material3.MaterialTheme
@@ -13,9 +13,9 @@ import androidx.compose.ui.graphics.vector.ImageVector.Builder
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import dev.chungjungsoo.gptmobile.data.model.DynamicTheme
-import dev.chungjungsoo.gptmobile.data.model.ThemeMode
-import dev.chungjungsoo.gptmobile.presentation.theme.LanXinTheme
+import com.lanxin.android.data.model.DynamicTheme
+import com.lanxin.android.data.model.ThemeMode
+import com.lanxin.android.presentation.theme.LanXinTheme
 
 val GptMobileStartScreen: ImageVector
     @Composable

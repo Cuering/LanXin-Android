@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.util
+package com.lanxin.android.util
 
 private const val RESPONSE_STOPPED_PREFIX = "\n\n[Response stopped: "
 private const val ASSISTANT_ERROR_PREFIX = "Error: "

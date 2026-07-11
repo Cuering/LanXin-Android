@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.presentation.theme
+package com.lanxin.android.presentation.theme
 
 import androidx.compose.ui.graphics.Color
 

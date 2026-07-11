@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.di
+package com.lanxin.android.di
 
 import android.content.Context
 import androidx.datastore.core.DataStore

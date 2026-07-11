@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.data.dto.openai.response
+package com.lanxin.android.data.dto.openai.response
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable

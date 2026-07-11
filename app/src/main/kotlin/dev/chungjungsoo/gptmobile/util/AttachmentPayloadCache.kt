@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.util
+package com.lanxin.android.util
 
 object AttachmentPayloadCache {
     internal const val MAX_ENTRIES: Int = 32

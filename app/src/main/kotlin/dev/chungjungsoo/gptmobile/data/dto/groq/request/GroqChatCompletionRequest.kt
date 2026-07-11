@@ -1,6 +1,6 @@
-package dev.chungjungsoo.gptmobile.data.dto.groq.request
+package com.lanxin.android.data.dto.groq.request
 
-import dev.chungjungsoo.gptmobile.data.dto.openai.request.ChatMessage
+import com.lanxin.android.data.dto.openai.request.ChatMessage
 import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName

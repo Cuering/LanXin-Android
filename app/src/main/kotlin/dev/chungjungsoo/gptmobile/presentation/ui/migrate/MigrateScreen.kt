@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.presentation.ui.migrate
+package com.lanxin.android.presentation.ui.migrate
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -31,12 +31,12 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lanxin.android.R
-import dev.chungjungsoo.gptmobile.presentation.common.PrimaryLongButton
-import dev.chungjungsoo.gptmobile.presentation.icons.Block
-import dev.chungjungsoo.gptmobile.presentation.icons.Complete
-import dev.chungjungsoo.gptmobile.presentation.icons.Error
-import dev.chungjungsoo.gptmobile.presentation.icons.Migrating
-import dev.chungjungsoo.gptmobile.presentation.icons.Ready
+import com.lanxin.android.presentation.common.PrimaryLongButton
+import com.lanxin.android.presentation.icons.Block
+import com.lanxin.android.presentation.icons.Complete
+import com.lanxin.android.presentation.icons.Error
+import com.lanxin.android.presentation.icons.Migrating
+import com.lanxin.android.presentation.icons.Ready
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

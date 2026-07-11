@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.util
+package com.lanxin.android.util
 
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.HttpRequestBuilder

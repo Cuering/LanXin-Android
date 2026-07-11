@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.data.dto
+package com.lanxin.android.data.dto
 
 sealed class ApiState {
     data object Loading : ApiState()

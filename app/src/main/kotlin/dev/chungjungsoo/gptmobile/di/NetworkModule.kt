@@ -1,18 +1,18 @@
-package dev.chungjungsoo.gptmobile.di
+package com.lanxin.android.di
 
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
-import dev.chungjungsoo.gptmobile.data.network.AnthropicAPI
-import dev.chungjungsoo.gptmobile.data.network.AnthropicAPIImpl
-import dev.chungjungsoo.gptmobile.data.network.GoogleAPI
-import dev.chungjungsoo.gptmobile.data.network.GoogleAPIImpl
-import dev.chungjungsoo.gptmobile.data.network.GroqAPI
-import dev.chungjungsoo.gptmobile.data.network.GroqAPIImpl
-import dev.chungjungsoo.gptmobile.data.network.NetworkClient
-import dev.chungjungsoo.gptmobile.data.network.OpenAIAPI
-import dev.chungjungsoo.gptmobile.data.network.OpenAIAPIImpl
+import com.lanxin.android.data.network.AnthropicAPI
+import com.lanxin.android.data.network.AnthropicAPIImpl
+import com.lanxin.android.data.network.GoogleAPI
+import com.lanxin.android.data.network.GoogleAPIImpl
+import com.lanxin.android.data.network.GroqAPI
+import com.lanxin.android.data.network.GroqAPIImpl
+import com.lanxin.android.data.network.NetworkClient
+import com.lanxin.android.data.network.OpenAIAPI
+import com.lanxin.android.data.network.OpenAIAPIImpl
 import io.ktor.client.engine.cio.CIO
 import javax.inject.Singleton
 

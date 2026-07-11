@@ -1,11 +1,11 @@
-package dev.chungjungsoo.gptmobile.data.network
+package com.lanxin.android.data.network
 
 import android.util.Log
-import dev.chungjungsoo.gptmobile.data.ModelConstants
-import dev.chungjungsoo.gptmobile.data.dto.groq.request.GroqChatCompletionRequest
-import dev.chungjungsoo.gptmobile.data.dto.groq.response.GroqChatCompletionChunk
-import dev.chungjungsoo.gptmobile.data.dto.groq.response.GroqErrorDetail
-import dev.chungjungsoo.gptmobile.util.applyPlatformStreamingTimeout
+import com.lanxin.android.data.ModelConstants
+import com.lanxin.android.data.dto.groq.request.GroqChatCompletionRequest
+import com.lanxin.android.data.dto.groq.response.GroqChatCompletionChunk
+import com.lanxin.android.data.dto.groq.response.GroqErrorDetail
+import com.lanxin.android.util.applyPlatformStreamingTimeout
 import io.ktor.client.call.body
 import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.request.accept

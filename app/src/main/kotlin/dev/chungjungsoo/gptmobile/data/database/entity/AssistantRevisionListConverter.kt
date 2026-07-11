@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.data.database.entity
+package com.lanxin.android.data.database.entity
 
 import androidx.room.TypeConverter
 import kotlinx.serialization.SerializationException

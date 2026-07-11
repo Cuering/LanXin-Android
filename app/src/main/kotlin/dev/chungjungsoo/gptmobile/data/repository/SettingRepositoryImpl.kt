@@ -1,16 +1,16 @@
-package dev.chungjungsoo.gptmobile.data.repository
+package com.lanxin.android.data.repository
 
-import dev.chungjungsoo.gptmobile.data.ModelConstants
-import dev.chungjungsoo.gptmobile.data.database.dao.ChatPlatformModelV2Dao
-import dev.chungjungsoo.gptmobile.data.database.dao.PlatformV2Dao
-import dev.chungjungsoo.gptmobile.data.database.entity.PlatformV2
-import dev.chungjungsoo.gptmobile.data.datastore.SettingDataSource
-import dev.chungjungsoo.gptmobile.data.dto.Platform
-import dev.chungjungsoo.gptmobile.data.dto.ThemeSetting
-import dev.chungjungsoo.gptmobile.data.model.ApiType
-import dev.chungjungsoo.gptmobile.data.model.ClientType
-import dev.chungjungsoo.gptmobile.data.model.DynamicTheme
-import dev.chungjungsoo.gptmobile.data.model.ThemeMode
+import com.lanxin.android.data.ModelConstants
+import com.lanxin.android.data.database.dao.ChatPlatformModelV2Dao
+import com.lanxin.android.data.database.dao.PlatformV2Dao
+import com.lanxin.android.data.database.entity.PlatformV2
+import com.lanxin.android.data.datastore.SettingDataSource
+import com.lanxin.android.data.dto.Platform
+import com.lanxin.android.data.dto.ThemeSetting
+import com.lanxin.android.data.model.ApiType
+import com.lanxin.android.data.model.ClientType
+import com.lanxin.android.data.model.DynamicTheme
+import com.lanxin.android.data.model.ThemeMode
 import javax.inject.Inject
 
 class SettingRepositoryImpl @Inject constructor(

@@ -1,7 +1,7 @@
-package dev.chungjungsoo.gptmobile.data.dto.openai.request
+package com.lanxin.android.data.dto.openai.request
 
-import dev.chungjungsoo.gptmobile.data.dto.openai.common.MessageContent
-import dev.chungjungsoo.gptmobile.data.dto.openai.common.Role
+import com.lanxin.android.data.dto.openai.common.MessageContent
+import com.lanxin.android.data.dto.openai.common.Role
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 

@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.util
+package com.lanxin.android.util
 
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.AnimationState

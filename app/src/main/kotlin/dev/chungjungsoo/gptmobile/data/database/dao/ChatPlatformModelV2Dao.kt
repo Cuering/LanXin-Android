@@ -1,9 +1,9 @@
-package dev.chungjungsoo.gptmobile.data.database.dao
+package com.lanxin.android.data.database.dao
 
 import androidx.room.Dao
 import androidx.room.Query
 import androidx.room.Upsert
-import dev.chungjungsoo.gptmobile.data.database.entity.ChatPlatformModelV2
+import com.lanxin.android.data.database.entity.ChatPlatformModelV2
 
 @Dao
 interface ChatPlatformModelV2Dao {

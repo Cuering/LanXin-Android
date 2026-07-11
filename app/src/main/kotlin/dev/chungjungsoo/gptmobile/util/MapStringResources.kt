@@ -1,13 +1,13 @@
-package dev.chungjungsoo.gptmobile.util
+package com.lanxin.android.util
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import com.lanxin.android.R
-import dev.chungjungsoo.gptmobile.data.dto.APIModel
-import dev.chungjungsoo.gptmobile.data.model.ApiType
-import dev.chungjungsoo.gptmobile.data.model.ClientType
-import dev.chungjungsoo.gptmobile.data.model.DynamicTheme
-import dev.chungjungsoo.gptmobile.data.model.ThemeMode
+import com.lanxin.android.data.dto.APIModel
+import com.lanxin.android.data.model.ApiType
+import com.lanxin.android.data.model.ClientType
+import com.lanxin.android.data.model.DynamicTheme
+import com.lanxin.android.data.model.ThemeMode
 
 @Composable
 fun getPlatformTitleResources(): Map<ApiType, String> = mapOf(

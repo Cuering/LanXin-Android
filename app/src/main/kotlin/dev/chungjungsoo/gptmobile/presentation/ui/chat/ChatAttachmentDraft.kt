@@ -1,6 +1,6 @@
-package dev.chungjungsoo.gptmobile.presentation.ui.chat
+package com.lanxin.android.presentation.ui.chat
 
-import dev.chungjungsoo.gptmobile.data.model.ChatAttachment
+import com.lanxin.android.data.model.ChatAttachment
 import java.io.File
 
 data class ChatAttachmentDraft(

@@ -1,10 +1,10 @@
-package dev.chungjungsoo.gptmobile.util
+package com.lanxin.android.util
 
-import dev.chungjungsoo.gptmobile.data.database.entity.AssistantRevision
-import dev.chungjungsoo.gptmobile.data.database.entity.resetActiveRevision
-import dev.chungjungsoo.gptmobile.data.dto.ApiState
-import dev.chungjungsoo.gptmobile.presentation.ui.chat.ChatViewModel
-import dev.chungjungsoo.gptmobile.presentation.ui.chat.updateAssistantSlot
+import com.lanxin.android.data.database.entity.AssistantRevision
+import com.lanxin.android.data.database.entity.resetActiveRevision
+import com.lanxin.android.data.dto.ApiState
+import com.lanxin.android.presentation.ui.chat.ChatViewModel
+import com.lanxin.android.presentation.ui.chat.updateAssistantSlot
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update

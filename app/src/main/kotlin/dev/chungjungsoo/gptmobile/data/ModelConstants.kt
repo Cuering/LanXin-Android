@@ -1,6 +1,6 @@
-package dev.chungjungsoo.gptmobile.data
+package com.lanxin.android.data
 
-import dev.chungjungsoo.gptmobile.data.model.ApiType
+import com.lanxin.android.data.model.ApiType
 
 object ModelConstants {
     // LinkedHashSet should be used to guarantee item order

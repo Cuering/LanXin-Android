@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.presentation.icons
+package com.lanxin.android.presentation.icons
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathFillType.Companion.NonZero

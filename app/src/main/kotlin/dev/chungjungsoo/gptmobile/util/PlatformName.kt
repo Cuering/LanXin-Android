@@ -1,5 +1,5 @@
-package dev.chungjungsoo.gptmobile.util
+package com.lanxin.android.util
 
-import dev.chungjungsoo.gptmobile.data.database.entity.PlatformV2
+import com.lanxin.android.data.database.entity.PlatformV2
 
 fun List<PlatformV2>.getPlatformName(uid: String): String = this.find { it.uid == uid }?.name ?: "Unknown"

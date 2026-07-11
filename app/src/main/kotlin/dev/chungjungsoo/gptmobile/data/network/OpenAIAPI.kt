@@ -1,9 +1,9 @@
-package dev.chungjungsoo.gptmobile.data.network
+package com.lanxin.android.data.network
 
-import dev.chungjungsoo.gptmobile.data.dto.openai.request.ChatCompletionRequest
-import dev.chungjungsoo.gptmobile.data.dto.openai.request.ResponsesRequest
-import dev.chungjungsoo.gptmobile.data.dto.openai.response.ChatCompletionChunk
-import dev.chungjungsoo.gptmobile.data.dto.openai.response.ResponsesStreamEvent
+import com.lanxin.android.data.dto.openai.request.ChatCompletionRequest
+import com.lanxin.android.data.dto.openai.request.ResponsesRequest
+import com.lanxin.android.data.dto.openai.response.ChatCompletionChunk
+import com.lanxin.android.data.dto.openai.response.ResponsesStreamEvent
 import kotlinx.coroutines.flow.Flow
 
 interface OpenAIAPI {

@@ -1,14 +1,14 @@
-package dev.chungjungsoo.gptmobile.di
+package com.lanxin.android.di
 
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
-import dev.chungjungsoo.gptmobile.data.database.dao.ChatPlatformModelV2Dao
-import dev.chungjungsoo.gptmobile.data.database.dao.PlatformV2Dao
-import dev.chungjungsoo.gptmobile.data.datastore.SettingDataSource
-import dev.chungjungsoo.gptmobile.data.repository.SettingRepository
-import dev.chungjungsoo.gptmobile.data.repository.SettingRepositoryImpl
+import com.lanxin.android.data.database.dao.ChatPlatformModelV2Dao
+import com.lanxin.android.data.database.dao.PlatformV2Dao
+import com.lanxin.android.data.datastore.SettingDataSource
+import com.lanxin.android.data.repository.SettingRepository
+import com.lanxin.android.data.repository.SettingRepositoryImpl
 import javax.inject.Singleton
 
 @Module

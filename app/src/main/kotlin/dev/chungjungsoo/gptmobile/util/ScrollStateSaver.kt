@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.util
+package com.lanxin.android.util
 
 import androidx.compose.foundation.ScrollState
 import androidx.compose.runtime.saveable.Saver

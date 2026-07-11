@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.presentation
+package com.lanxin.android.presentation
 
 import android.app.Application
 import android.content.Context

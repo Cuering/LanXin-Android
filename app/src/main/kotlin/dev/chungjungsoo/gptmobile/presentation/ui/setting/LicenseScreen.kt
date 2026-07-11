@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.presentation.ui.setting
+package com.lanxin.android.presentation.ui.setting
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize

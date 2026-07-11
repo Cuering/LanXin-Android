@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.data.dto
+package com.lanxin.android.data.dto
 
 data class APIModel(
     val name: String,

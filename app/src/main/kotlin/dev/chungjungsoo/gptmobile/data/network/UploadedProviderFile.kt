@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.data.network
+package com.lanxin.android.data.network
 
 data class UploadedProviderFile(
     val id: String,

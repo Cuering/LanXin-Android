@@ -1,7 +1,7 @@
-package dev.chungjungsoo.gptmobile.data.dto
+package com.lanxin.android.data.dto
 
-import dev.chungjungsoo.gptmobile.data.model.DynamicTheme
-import dev.chungjungsoo.gptmobile.data.model.ThemeMode
+import com.lanxin.android.data.model.DynamicTheme
+import com.lanxin.android.data.model.ThemeMode
 
 data class ThemeSetting(
     val dynamicTheme: DynamicTheme = DynamicTheme.OFF,

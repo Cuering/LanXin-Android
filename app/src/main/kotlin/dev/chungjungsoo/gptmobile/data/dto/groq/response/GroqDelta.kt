@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.data.dto.groq.response
+package com.lanxin.android.data.dto.groq.response
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable

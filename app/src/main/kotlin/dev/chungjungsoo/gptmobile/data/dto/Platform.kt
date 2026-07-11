@@ -1,7 +1,7 @@
-package dev.chungjungsoo.gptmobile.data.dto
+package com.lanxin.android.data.dto
 
-import dev.chungjungsoo.gptmobile.data.ModelConstants.getDefaultAPIUrl
-import dev.chungjungsoo.gptmobile.data.model.ApiType
+import com.lanxin.android.data.ModelConstants.getDefaultAPIUrl
+import com.lanxin.android.data.model.ApiType
 
 data class Platform(
     val name: ApiType,

@@ -1,13 +1,13 @@
-package dev.chungjungsoo.gptmobile.presentation.ui.home
+package com.lanxin.android.presentation.ui.home
 
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dev.chungjungsoo.gptmobile.data.database.entity.ChatRoomV2
-import dev.chungjungsoo.gptmobile.data.database.entity.PlatformV2
-import dev.chungjungsoo.gptmobile.data.repository.ChatRepository
-import dev.chungjungsoo.gptmobile.data.repository.SettingRepository
+import com.lanxin.android.data.database.entity.ChatRoomV2
+import com.lanxin.android.data.database.entity.PlatformV2
+import com.lanxin.android.data.repository.ChatRepository
+import com.lanxin.android.data.repository.SettingRepository
 import javax.inject.Inject
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow

@@ -1,14 +1,14 @@
-package dev.chungjungsoo.gptmobile.data.database
+package com.lanxin.android.data.database
 
 import androidx.room.AutoMigration
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
-import dev.chungjungsoo.gptmobile.data.database.dao.ChatRoomDao
-import dev.chungjungsoo.gptmobile.data.database.dao.MessageDao
-import dev.chungjungsoo.gptmobile.data.database.entity.APITypeConverter
-import dev.chungjungsoo.gptmobile.data.database.entity.ChatRoom
-import dev.chungjungsoo.gptmobile.data.database.entity.Message
+import com.lanxin.android.data.database.dao.ChatRoomDao
+import com.lanxin.android.data.database.dao.MessageDao
+import com.lanxin.android.data.database.entity.APITypeConverter
+import com.lanxin.android.data.database.entity.ChatRoom
+import com.lanxin.android.data.database.entity.Message
 
 @Database(
     entities = [ChatRoom::class, Message::class],

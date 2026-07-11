@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.data.dto.openai.common
+package com.lanxin.android.data.dto.openai.common
 
 import kotlinx.serialization.Serializable
 

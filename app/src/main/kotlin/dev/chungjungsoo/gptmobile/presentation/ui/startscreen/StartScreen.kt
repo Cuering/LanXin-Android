@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.presentation.ui.startscreen
+package com.lanxin.android.presentation.ui.startscreen
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Column
@@ -22,8 +22,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.lanxin.android.R
-import dev.chungjungsoo.gptmobile.presentation.common.PrimaryLongButton
-import dev.chungjungsoo.gptmobile.presentation.icons.GptMobileStartScreen
+import com.lanxin.android.presentation.common.PrimaryLongButton
+import com.lanxin.android.presentation.icons.GptMobileStartScreen
 
 @Composable
 fun StartScreen(onStartClick: () -> Unit) {

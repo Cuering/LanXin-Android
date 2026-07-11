@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.di
+package com.lanxin.android.di
 
 import android.content.Context
 import dagger.Module
@@ -6,19 +6,19 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
-import dev.chungjungsoo.gptmobile.data.context.ContextBuilder
-import dev.chungjungsoo.gptmobile.data.database.dao.ChatPlatformModelV2Dao
-import dev.chungjungsoo.gptmobile.data.database.dao.ChatRoomDao
-import dev.chungjungsoo.gptmobile.data.database.dao.ChatRoomV2Dao
-import dev.chungjungsoo.gptmobile.data.database.dao.MessageDao
-import dev.chungjungsoo.gptmobile.data.database.dao.MessageV2Dao
-import dev.chungjungsoo.gptmobile.data.network.AnthropicAPI
-import dev.chungjungsoo.gptmobile.data.network.GoogleAPI
-import dev.chungjungsoo.gptmobile.data.network.GroqAPI
-import dev.chungjungsoo.gptmobile.data.network.OpenAIAPI
-import dev.chungjungsoo.gptmobile.data.repository.ChatRepository
-import dev.chungjungsoo.gptmobile.data.repository.ChatRepositoryImpl
-import dev.chungjungsoo.gptmobile.data.repository.SettingRepository
+import com.lanxin.android.data.context.ContextBuilder
+import com.lanxin.android.data.database.dao.ChatPlatformModelV2Dao
+import com.lanxin.android.data.database.dao.ChatRoomDao
+import com.lanxin.android.data.database.dao.ChatRoomV2Dao
+import com.lanxin.android.data.database.dao.MessageDao
+import com.lanxin.android.data.database.dao.MessageV2Dao
+import com.lanxin.android.data.network.AnthropicAPI
+import com.lanxin.android.data.network.GoogleAPI
+import com.lanxin.android.data.network.GroqAPI
+import com.lanxin.android.data.network.OpenAIAPI
+import com.lanxin.android.data.repository.ChatRepository
+import com.lanxin.android.data.repository.ChatRepositoryImpl
+import com.lanxin.android.data.repository.SettingRepository
 import javax.inject.Singleton
 
 @Module
@@ -39,7 +39,7 @@ object ChatRepositoryModule {
         groqAPI: GroqAPI,
         anthropicAPI: AnthropicAPI,
         googleAPI: GoogleAPI,
-        attachmentUploadCoordinator: dev.chungjungsoo.gptmobile.data.repository.AttachmentUploadCoordinator,
+        attachmentUploadCoordinator: com.lanxin.android.data.repository.AttachmentUploadCoordinator,
         contextBuilder: ContextBuilder
     ): ChatRepository = ChatRepositoryImpl(
         context,

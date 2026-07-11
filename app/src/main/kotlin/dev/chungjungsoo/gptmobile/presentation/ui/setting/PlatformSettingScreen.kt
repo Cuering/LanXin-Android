@@ -1,4 +1,4 @@
-package dev.chungjungsoo.gptmobile.presentation.ui.setting
+package com.lanxin.android.presentation.ui.setting
 
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
@@ -51,10 +51,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lanxin.android.R
-import dev.chungjungsoo.gptmobile.data.model.ClientType
-import dev.chungjungsoo.gptmobile.presentation.common.SettingItem
-import dev.chungjungsoo.gptmobile.util.formatPlatformTimeout
-import dev.chungjungsoo.gptmobile.util.pinnedExitUntilCollapsedScrollBehavior
+import com.lanxin.android.data.model.ClientType
+import com.lanxin.android.presentation.common.SettingItem
+import com.lanxin.android.util.formatPlatformTimeout
+import com.lanxin.android.util.pinnedExitUntilCollapsedScrollBehavior
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

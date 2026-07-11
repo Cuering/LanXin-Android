@@ -1,6 +1,6 @@
-package dev.chungjungsoo.gptmobile.data.context
+package com.lanxin.android.data.context
 
-import dev.chungjungsoo.gptmobile.data.database.entity.MessageV2
+import com.lanxin.android.data.database.entity.MessageV2
 
 data class ConversationTurn(
     val userMessage: MessageV2,
