@@ -12,6 +12,7 @@ import com.lanxin.android.data.network.GroqAPI
 import com.lanxin.android.data.network.GroqAPIImpl
 import com.lanxin.android.data.network.LanXinAPI
 import com.lanxin.android.data.network.LanXinAPIImpl
+import com.lanxin.android.data.network.LanXinAuthClient
 import com.lanxin.android.data.network.NetworkClient
 import com.lanxin.android.data.network.OpenAIAPI
 import com.lanxin.android.data.network.OpenAIAPIImpl
