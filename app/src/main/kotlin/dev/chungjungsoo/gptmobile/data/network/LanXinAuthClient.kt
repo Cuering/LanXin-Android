@@ -1,13 +1,14 @@
 package com.lanxin.android.data.network
 
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
+import io.ktor.http.contentType
+import io.ktor.http.isSuccess
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
-import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -18,13 +19,11 @@ data class LoginResult(
 )
 
 @Singleton
-class LanXinAuthClient @Inject constructor() {
+class LanXinAuthClient @Inject constructor(
+    private val networkClient: NetworkClient
+) {
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .writeTimeout(30, TimeUnit.SECONDS)
-        .build()
+    private val client get() = networkClient()
 
     suspend fun login(baseUrl: String, username: String, password: String): LoginResult =
         withContext(Dispatchers.IO) {
@@ -34,16 +33,15 @@ class LanXinAuthClient @Inject constructor() {
                     put("username", username)
                     put("password", password)
                 }
-                val body = json.toString().toRequestBody("application/json".toMediaType())
-                val request = Request.Builder()
-                    .url(url)
-                    .post(body)
-                    .build()
 
-                val response = client.newCall(request).execute()
-                val responseBody = response.body?.string() ?: ""
+                val response = client.post(url) {
+                    contentType(ContentType.Application.Json)
+                    setBody(json.toString())
+                }
 
-                if (response.isSuccessful) {
+                val responseBody = response.bodyAsText()
+
+                if (response.status.isSuccess()) {
                     val responseJson = JSONObject(responseBody)
                     val token = responseJson.optString("token")
                     if (token.isNotBlank()) {
@@ -53,9 +51,9 @@ class LanXinAuthClient @Inject constructor() {
                     }
                 } else {
                     val errorMsg = try {
-                        JSONObject(responseBody).optString("detail", response.message)
+                        JSONObject(responseBody).optString("detail", response.status.description)
                     } catch (_: Exception) {
-                        response.message
+                        response.status.description
                     }
                     LoginResult(success = false, message = "登录失败: $errorMsg")
                 }

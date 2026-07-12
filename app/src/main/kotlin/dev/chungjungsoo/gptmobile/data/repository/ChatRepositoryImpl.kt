@@ -702,7 +702,7 @@ class ChatRepositoryImpl @Inject constructor(
         assistantMessages: List<List<MessageV2>>,
         platform: PlatformV2
     ): Flow<ApiState> = try {
-        lanXinAPI.setToken(platform.token)
+        lanXinAPI.setToken(platform.token ?: "")
         lanXinAPI.setAPIUrl(platform.apiUrl)
 
         val latestUserMessage = userMessages.lastOrNull()?.content ?: ""
