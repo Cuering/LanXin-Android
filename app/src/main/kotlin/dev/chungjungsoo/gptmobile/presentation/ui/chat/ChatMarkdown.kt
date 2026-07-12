@@ -42,6 +42,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
+import com.lanxin.android.R
 import com.mikepenz.markdown.annotator.annotatorSettings
 import com.mikepenz.markdown.compose.LocalMarkdownTypography
 import com.mikepenz.markdown.compose.LocalReferenceLinkHandler
@@ -56,7 +57,6 @@ import com.mikepenz.markdown.model.markdownAnimations
 import com.mikepenz.markdown.model.markdownAnnotator
 import com.mikepenz.markdown.model.markdownInlineContent
 import com.mikepenz.markdown.model.rememberMarkdownState
-import com.lanxin.android.R
 import dev.snipme.highlights.Highlights
 import dev.snipme.highlights.model.BoldHighlight
 import dev.snipme.highlights.model.ColorHighlight
@@ -86,17 +86,20 @@ fun ChatMarkdown(
     val highlightsBuilder = remember(isDarkTheme) {
         Highlights.Builder().theme(SyntaxThemes.atom(isDarkTheme))
     }
-    val combinedMarkdown = remember(parsed.blocks, displayMathNonce) {
+val combinedMarkdown = remember(parsed.blocks, displayMathNonce,
+ {
         buildCombinedMarkdown(parsed.blocks, displayMathNonce)
     }
     val inlineMathByPlaceholder = remember(parsed.inlineMath) {
         parsed.inlineMath.associateBy { it.placeholder }
     }
-    val displayMathByPlaceholder = remember(parsed.blocks, displayMathNonce) {
+val displayMathByPlaceholder = remember(parsed.blocks, displayMathNonce,
+ {
         parsed.blocks
             .filterIsInstance<ChatMarkdownBlock.DisplayMath>()
             .mapIndexed { index, block ->
-                createDisplayMathPlaceholder(index, displayMathNonce) to block
+createDisplayMathPlaceholder(index, displayMathNonce,
+ to block
             }
             .toMap()
     }
@@ -124,14 +127,16 @@ fun ChatMarkdown(
             }
         }
     }
-    val copyCodeToClipboard: (String) -> Unit = remember(clipboard, scope) {
+val copyCodeToClipboard: (String,
+ -> Unit = remember(clipboard, scope) {
         { code ->
             scope.launch {
                 clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(CLIPBOARD_LABEL_CODE, code)))
             }
         }
     }
-    val components = remember(highlightsBuilder, copyCodeToClipboard, displayMathByPlaceholder, annotator) {
+val components = remember(highlightsBuilder, copyCodeToClipboard, displayMathByPlaceholder, annotator,
+ {
         markdownComponents(
             codeBlock = {
                 MarkdownCodeBlock(it.content, it.node, it.typography.code) { code, language, style ->
@@ -342,7 +347,8 @@ private fun appendTextWithInlineMath(
             return
         }
 
-        val (placeholder, start) = nextToken
+val (placeholder, start,
+ = nextToken
         if (start > cursor) {
             builder.append(text.substring(cursor, start))
         }
@@ -351,7 +357,8 @@ private fun appendTextWithInlineMath(
     }
 }
 
-private fun inlineMathWidth(tex: String) = (tex.length.coerceIn(2, 24) * 0.55f).em
+private fun inlineMathWidth(tex: String,
+ = (tex.length.coerceIn(2, 24) * 0.55f).em
 
 private fun inlineMathHeight(tex: String) = when {
     tex.containsDisplaySizedMath() -> 3.2.em
@@ -443,7 +450,7 @@ private fun StringBuilder.currentLinePrefix(): String? {
 private fun createDisplayMathPlaceholder(
     index: Int,
     nonce: String
-): String = "\uE000$DISPLAY_MATH_PLACEHOLDER_PREFIX${nonce}_$index$DISPLAY_MATH_PLACEHOLDER_SUFFIX\uE001"
+): String = "\uE000$DISPLAY_MATH_PLACEHOLDER_PREFIX$nonce_$index$DISPLAY_MATH_PLACEHOLDER_SUFFIX\uE001"
 
 @Composable
 private fun chatMarkdownTypography() = markdownTypography(

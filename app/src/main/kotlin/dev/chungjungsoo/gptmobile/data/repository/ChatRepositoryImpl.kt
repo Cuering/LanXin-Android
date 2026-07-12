@@ -1,7 +1,6 @@
 package com.lanxin.android.data.repository
 
 import android.content.Context
-import dagger.hilt.android.qualifiers.ApplicationContext
 import com.lanxin.android.data.context.ContextBuilder
 import com.lanxin.android.data.context.ConversationTurn
 import com.lanxin.android.data.context.ProviderContextPolicy
@@ -60,6 +59,7 @@ import com.lanxin.android.data.network.OpenAIAPI
 import com.lanxin.android.util.AttachmentPayloadCache
 import com.lanxin.android.util.FileUtils
 import com.lanxin.android.util.stripAssistantErrorNote
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -447,7 +447,8 @@ class ChatRepositoryImpl @Inject constructor(
         // Add file content (images)
         message.attachments.forEach { attachment ->
             val filePath = attachment.preparedFilePath.ifBlank { attachment.localFilePath }
-            val mimeType = attachment.mimeType.ifBlank { FileUtils.getMimeType(context, filePath) }
+val mimeType = attachment.mimeType.ifBlank { FileUtils.getMimeType(context, filePath,
+ }
             val encodedImage = getEncodedAttachment(filePath, mimeType)
             if (encodedImage != null) {
                 content.add(
@@ -471,7 +472,8 @@ class ChatRepositoryImpl @Inject constructor(
         // Check if there are any image files
         val imageAttachments = message.attachments.filter { attachment ->
             val filePath = attachment.preparedFilePath.ifBlank { attachment.localFilePath }
-            val mimeType = attachment.mimeType.ifBlank { FileUtils.getMimeType(context, filePath) }
+val mimeType = attachment.mimeType.ifBlank { FileUtils.getMimeType(context, filePath,
+ }
             FileUtils.isImage(mimeType)
         }
 
@@ -498,7 +500,8 @@ class ChatRepositoryImpl @Inject constructor(
                 parts.add(ResponseContentPart.imageFile(providerRef.remoteId))
             } else {
                 val filePath = attachment.preparedFilePath.ifBlank { attachment.localFilePath }
-                val mimeType = attachment.mimeType.ifBlank { FileUtils.getMimeType(context, filePath) }
+val mimeType = attachment.mimeType.ifBlank { FileUtils.getMimeType(context, filePath,
+ }
                 val encodedImage = getEncodedAttachment(filePath, mimeType)
                 if (encodedImage != null) {
                     parts.add(
@@ -601,7 +604,8 @@ class ChatRepositoryImpl @Inject constructor(
                 content.add(AnthropicImageContent(source = ImageSource.file(providerRef.remoteId)))
             } else {
                 val filePath = attachment.preparedFilePath.ifBlank { attachment.localFilePath }
-                val mimeType = attachment.mimeType.ifBlank { FileUtils.getMimeType(context, filePath) }
+val mimeType = attachment.mimeType.ifBlank { FileUtils.getMimeType(context, filePath,
+ }
                 val encodedImage = getEncodedAttachment(filePath, mimeType)
                 if (encodedImage != null) {
                     val mediaType = when {
@@ -761,7 +765,8 @@ class ChatRepositoryImpl @Inject constructor(
                 parts.add(Part.fileData(providerRef.mimeType, providerRef.remoteId))
             } else {
                 val filePath = attachment.preparedFilePath.ifBlank { attachment.localFilePath }
-                val mimeType = attachment.mimeType.ifBlank { FileUtils.getMimeType(context, filePath) }
+val mimeType = attachment.mimeType.ifBlank { FileUtils.getMimeType(context, filePath,
+ }
                 val encodedImage = getEncodedAttachment(filePath, mimeType)
                 if (encodedImage != null) {
                     parts.add(Part.inlineData(encodedImage.mimeType, encodedImage.base64Data))
@@ -777,7 +782,8 @@ class ChatRepositoryImpl @Inject constructor(
         AttachmentPayloadCache.get(filePath)?.let { return it }
 
         return withContext(Dispatchers.IO) {
-            FileUtils.encodeFileForUpload(context, filePath, mimeType)?.also { encodedImage ->
+FileUtils.encodeFileForUpload(context, filePath, mimeType,
+?.also { encodedImage ->
                 AttachmentPayloadCache.put(filePath, encodedImage)
             }
         }
@@ -787,10 +793,12 @@ class ChatRepositoryImpl @Inject constructor(
         messages: List<MessageV2>,
         platform: PlatformV2
     ): List<MessageV2> {
-        val updatedMessages = messages.map { attachmentUploadCoordinator.ensureMessageAttachmentsForPlatform(it, platform) }
+val updatedMessages = messages.map { attachmentUploadCoordinator.ensureMessageAttachmentsForPlatform(it, platform,
+ }
         val changedMessages = updatedMessages
             .zip(messages)
-            .mapNotNull { (updated, original) -> updated.takeIf { it != original } }
+.mapNotNull { (updated, original,
+ -> updated.takeIf { it != original } }
 
         if (changedMessages.isNotEmpty()) {
             messageV2Dao.editMessages(*changedMessages.toTypedArray())
@@ -835,7 +843,8 @@ class ChatRepositoryImpl @Inject constructor(
     override suspend fun saveChatPlatformModels(chatId: Int, models: Map<String, String>) {
         val rows = models
             .filterKeys { it.isNotBlank() }
-            .map { (platformUid, model) ->
+.map { (platformUid, model,
+ ->
                 ChatPlatformModelV2(
                     chatId = chatId,
                     platformUid = platformUid,

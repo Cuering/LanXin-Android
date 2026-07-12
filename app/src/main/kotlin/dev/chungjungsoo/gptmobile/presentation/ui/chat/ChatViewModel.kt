@@ -7,8 +7,6 @@ import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import com.lanxin.android.data.database.entity.ACTIVE_REVISION_LATEST
 import com.lanxin.android.data.database.entity.ChatRoomV2
 import com.lanxin.android.data.database.entity.MessageV2
@@ -25,6 +23,8 @@ import com.lanxin.android.util.AttachmentPayloadCache
 import com.lanxin.android.util.FileUtils
 import com.lanxin.android.util.getPlatformName
 import com.lanxin.android.util.handleStates
+import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -237,7 +237,8 @@ class ChatViewModel @Inject constructor(
     fun updateChatPlatformModels(models: Map<String, String>) {
         val sanitizedModels = models
             .filterKeys { it in enabledPlatformsInChat }
-            .mapValues { (_, model) -> model.trim() }
+.mapValues { (_, model,
+ -> model.trim() }
 
         _chatPlatformModels.update { it + sanitizedModels }
 
@@ -470,7 +471,8 @@ class ChatViewModel @Inject constructor(
     }
 
     fun showPreviousAssistantRevision(turnIndex: Int, platformIndex: Int) {
-        updateAssistantRevisionSelection(turnIndex, platformIndex) { message ->
+updateAssistantRevisionSelection(turnIndex, platformIndex,
+ { message ->
             when {
                 message.revisions.isEmpty() -> message.activeRevisionIndex
                 message.activeRevisionIndex == ACTIVE_REVISION_LATEST -> 0
@@ -481,7 +483,8 @@ class ChatViewModel @Inject constructor(
     }
 
     fun showNextAssistantRevision(turnIndex: Int, platformIndex: Int) {
-        updateAssistantRevisionSelection(turnIndex, platformIndex) { message ->
+updateAssistantRevisionSelection(turnIndex, platformIndex,
+ { message ->
             when {
                 message.activeRevisionIndex == ACTIVE_REVISION_LATEST -> ACTIVE_REVISION_LATEST
                 message.activeRevisionIndex == 0 -> ACTIVE_REVISION_LATEST
@@ -627,7 +630,8 @@ class ChatViewModel @Inject constructor(
                     .sumOf { FileUtils.getFileSize(context, it.sourceFilePath).coerceAtLeast(0L) }
             }
 
-            if (FileUtils.wouldExceedTotalUploadLimit(currentDraftBytes, fileSize)) {
+if (FileUtils.wouldExceedTotalUploadLimit(currentDraftBytes, fileSize,
+) {
                 rejectDraftAttachment(
                     currentAttachments = currentAttachments,
                     updateAttachments = updateAttachments,
@@ -855,7 +859,8 @@ class ChatViewModel @Inject constructor(
             emptyMap()
         }
 
-        val mergedModels = defaultModels.mapValues { (uid, defaultModel) ->
+val mergedModels = defaultModels.mapValues { (uid, defaultModel,
+ ->
             persistedModels[uid]?.takeIf { it.isNotBlank() } ?: defaultModel
         }
 
@@ -955,7 +960,8 @@ internal fun createRetryAssistantMessage(
     currentMessage: MessageV2,
     chatId: Int,
     platformUid: String
-): MessageV2 = createEmptyAssistantMessage(chatId, platformUid).copy(
+): MessageV2 = createEmptyAssistantMessage(chatId, platformUid,
+.copy(
     revisions = currentMessage.revisions
 )
 

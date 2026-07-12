@@ -1,11 +1,6 @@
 package com.lanxin.android.di
 
 import android.content.Context
-import dagger.Module
-import dagger.Provides
-import dagger.hilt.InstallIn
-import dagger.hilt.android.qualifiers.ApplicationContext
-import dagger.hilt.components.SingletonComponent
 import com.lanxin.android.data.context.ContextBuilder
 import com.lanxin.android.data.database.dao.ChatPlatformModelV2Dao
 import com.lanxin.android.data.database.dao.ChatRoomDao
@@ -20,6 +15,11 @@ import com.lanxin.android.data.network.OpenAIAPI
 import com.lanxin.android.data.repository.ChatRepository
 import com.lanxin.android.data.repository.ChatRepositoryImpl
 import com.lanxin.android.data.repository.SettingRepository
+import dagger.Module
+import dagger.Provides
+import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
+import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
 @Module

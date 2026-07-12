@@ -8,13 +8,13 @@ import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import io.ktor.utils.io.readUTF8Line
+import javax.inject.Inject
+import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import org.json.JSONObject
-import javax.inject.Inject
-import javax.inject.Singleton
 
 @Singleton
 class LanXinAPIImpl @Inject constructor(
@@ -41,7 +41,7 @@ class LanXinAPIImpl @Inject constructor(
         emit(ApiState.Loading)
 
         try {
-            val url = "${apiUrl}/api/v1/chat"
+            val url = "$apiUrl/api/v1/chat"
             val body = buildJsonMessage(message, username, sessionId)
 
             val response = networkClient().post(url) {
@@ -93,7 +93,8 @@ class LanXinAPIImpl @Inject constructor(
         return JSONObject().apply {
             put("username", username)
             put("message", message)
-            sessionId?.let { put("session_id", it) }
+sessionId?.let { put("session_id", it,
+ }
             put("platform", JSONObject().apply {
                 put("platform", "webchat")
                 put("user_id", "lanxin_app")
