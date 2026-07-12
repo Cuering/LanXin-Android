@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FFF5F5">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <!-- 标题 -->
+        <TextView
+            android:id="@+id/tvCrashTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="💥 兰心出了点问题"
+            android:textColor="#D32F2F"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:paddingBottom="12dp" />
+
+        <!-- 提示文字 -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="别担心，我们已经记录了错误信息。点击下方按钮可以一键复制，然后发给哥哥帮忙定位问题~"
+            android:textColor="#666666"
+            android:textSize="14sp"
+            android:gravity="center"
+            android:paddingBottom="16dp" />
+
+        <!-- 设备信息卡片 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="#FFFFFF"
+            android:padding="16dp"
+            android:layout_marginBottom="12dp"
+            android:elevation="2dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="📱 设备信息"
+                android:textColor="#333333"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:paddingBottom="8dp" />
+
+            <TextView
+                android:id="@+id/tvDeviceInfo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="#666666"
+                android:textSize="13sp"
+                android:lineSpacingExtra="4dp" />
+
+            <TextView
+                android:id="@+id/tvCrashTime"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="#999999"
+                android:textSize="12sp"
+                android:paddingTop="8dp" />
+        </LinearLayout>
+
+        <!-- 堆栈信息卡片 -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="🔍 错误详情（可复制）"
+            android:textColor="#333333"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:paddingBottom="8dp" />
+
+        <ScrollView
+            android:id="@+id/svCrashStack"
+            android:layout_width="match_parent"
+            android:layout_height="300dp"
+            android:background="#FFFFFF"
+            android:padding="12dp"
+            android:layout_marginBottom="12dp"
+            android:elevation="2dp">
+
+            <TextView
+                android:id="@+id/tvCrashStack"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="#C62828"
+                android:textSize="11sp"
+                android:fontFamily="monospace"
+                android:lineSpacingExtra="2dp" />
+        </ScrollView>
+
+        <!-- 按钮区域 -->
+        <Button
+            android:id="@+id/btnCopyStack"
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:text="📋 一键复制错误信息"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="10dp" />
+
+        <Button
+            android:id="@+id/btnRestartApp"
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:text="🔄 重启应用"
+            android:textSize="15sp"
+            android:backgroundTint="#FFA726"
+            android:textColor="#FFFFFF" />
+
+    </LinearLayout>
+</ScrollView>
