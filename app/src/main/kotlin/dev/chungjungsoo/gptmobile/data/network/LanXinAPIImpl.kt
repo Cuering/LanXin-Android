@@ -1,7 +1,7 @@
 package com.lanxin.android.data.network
 
 import com.lanxin.android.data.dto.ApiState
-import io.ktor.client.request.preparePost
+import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.ContentType
@@ -12,7 +12,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -45,47 +44,45 @@ class LanXinAPIImpl @Inject constructor(
             val url = "${apiUrl}/api/v1/chat"
             val body = buildJsonMessage(message, username, sessionId)
 
-            networkClient().preparePost(url) {
+            val response = networkClient().post(url) {
                 setBody(body)
                 contentType(ContentType.Application.Json)
-            }.execute { response ->
-                if (!response.status.isSuccess()) {
-                    emit(ApiState.Error("HTTP ${response.status.value}: ${response.status.description}"))
-                    emit(ApiState.Done)
-                    return@execute
-                }
+            }
 
-                withContext(Dispatchers.IO) {
-                    val channel = response.bodyAsChannel()
-                    while (!channel.isClosedForRead) {
-                        val line = channel.readUTF8Line() ?: break
-                        if (line.startsWith("data: ")) {
-                            val data = line.removePrefix("data: ").trim()
-                            if (data == "[DONE]") {
-                                emit(ApiState.Done)
-                                return@withContext
-                            }
-                            if (data.isBlank()) continue
+            if (!response.status.isSuccess()) {
+                emit(ApiState.Error("HTTP ${response.status.value}: ${response.status.description}"))
+                emit(ApiState.Done)
+                return@flow
+            }
 
-                            try {
-                                val json = JSONObject(data)
-                                val content = json.optString("content")
-                                    ?: json.optString("message")
-                                    ?: json.optString("text")
-                                    ?: data
-                                if (content.isNotBlank()) {
-                                    emit(ApiState.Success(content))
-                                }
-                            } catch (_: Exception) {
-                                if (data.isNotBlank()) {
-                                    emit(ApiState.Success(data))
-                                }
-                            }
+            val channel = response.bodyAsChannel()
+            while (!channel.isClosedForRead) {
+                val line = channel.readUTF8Line() ?: break
+                if (line.startsWith("data: ")) {
+                    val data = line.removePrefix("data: ").trim()
+                    if (data == "[DONE]") {
+                        emit(ApiState.Done)
+                        return@flow
+                    }
+                    if (data.isBlank()) continue
+
+                    try {
+                        val json = JSONObject(data)
+                        val content = json.optString("content").takeIf { it.isNotEmpty() }
+                            ?: json.optString("message").takeIf { it.isNotEmpty() }
+                            ?: json.optString("text").takeIf { it.isNotEmpty() }
+                            ?: data
+                        if (content.isNotBlank()) {
+                            emit(ApiState.Success(content))
+                        }
+                    } catch (_: Exception) {
+                        if (data.isNotBlank()) {
+                            emit(ApiState.Success(data))
                         }
                     }
-                    emit(ApiState.Done)
                 }
             }
+            emit(ApiState.Done)
         } catch (e: Exception) {
             emit(ApiState.Error(e.message ?: "Unknown error"))
             emit(ApiState.Done)
