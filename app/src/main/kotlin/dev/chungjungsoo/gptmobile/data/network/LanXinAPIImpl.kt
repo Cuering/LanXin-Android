@@ -33,7 +33,7 @@ class LanXinAPIImpl @Inject constructor(
         this.apiUrl = apiUrl.trimEnd('/')
     }
 
-    override fun streamChat(
+    override suspend fun streamChat(
         message: String,
         username: String,
         sessionId: String?,
