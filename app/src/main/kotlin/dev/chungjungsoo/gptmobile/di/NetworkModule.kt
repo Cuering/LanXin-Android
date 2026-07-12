@@ -1,9 +1,5 @@
 package com.lanxin.android.di
 
-import dagger.Module
-import dagger.Provides
-import dagger.hilt.InstallIn
-import dagger.hilt.components.SingletonComponent
 import com.lanxin.android.data.network.AnthropicAPI
 import com.lanxin.android.data.network.AnthropicAPIImpl
 import com.lanxin.android.data.network.GoogleAPI
@@ -16,6 +12,10 @@ import com.lanxin.android.data.network.LanXinAuthClient
 import com.lanxin.android.data.network.NetworkClient
 import com.lanxin.android.data.network.OpenAIAPI
 import com.lanxin.android.data.network.OpenAIAPIImpl
+import dagger.Module
+import dagger.Provides
+import dagger.hilt.InstallIn
+import dagger.hilt.components.SingletonComponent
 import io.ktor.client.engine.cio.CIO
 import javax.inject.Singleton
 

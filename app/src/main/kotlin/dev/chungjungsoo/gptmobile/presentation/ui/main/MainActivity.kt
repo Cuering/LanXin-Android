@@ -11,13 +11,13 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
-import dagger.hilt.android.AndroidEntryPoint
 import com.lanxin.android.presentation.common.LocalDynamicTheme
 import com.lanxin.android.presentation.common.LocalThemeMode
 import com.lanxin.android.presentation.common.Route
 import com.lanxin.android.presentation.common.SetupNavGraph
 import com.lanxin.android.presentation.common.ThemeSettingProvider
 import com.lanxin.android.presentation.theme.LanXinTheme
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 
 @AndroidEntryPoint

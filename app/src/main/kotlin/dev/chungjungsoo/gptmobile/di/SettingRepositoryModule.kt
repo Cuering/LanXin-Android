@@ -1,14 +1,14 @@
 package com.lanxin.android.di
 
-import dagger.Module
-import dagger.Provides
-import dagger.hilt.InstallIn
-import dagger.hilt.components.SingletonComponent
 import com.lanxin.android.data.database.dao.ChatPlatformModelV2Dao
 import com.lanxin.android.data.database.dao.PlatformV2Dao
 import com.lanxin.android.data.datastore.SettingDataSource
 import com.lanxin.android.data.repository.SettingRepository
 import com.lanxin.android.data.repository.SettingRepositoryImpl
+import dagger.Module
+import dagger.Provides
+import dagger.hilt.InstallIn
+import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
 @Module

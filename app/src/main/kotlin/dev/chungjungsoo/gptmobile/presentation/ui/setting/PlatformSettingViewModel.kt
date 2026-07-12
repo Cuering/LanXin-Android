@@ -3,10 +3,10 @@ package com.lanxin.android.presentation.ui.setting
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import dagger.hilt.android.lifecycle.HiltViewModel
 import com.lanxin.android.data.database.entity.PlatformV2
 import com.lanxin.android.data.model.GeminiSafetySettings
 import com.lanxin.android.data.repository.SettingRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

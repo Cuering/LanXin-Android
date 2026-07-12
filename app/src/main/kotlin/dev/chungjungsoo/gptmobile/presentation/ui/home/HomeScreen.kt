@@ -6,8 +6,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -219,7 +219,8 @@ fun HomeScreen(
                             )
                         }
                     },
-                    supportingContent = { Text(text = stringResource(R.string.using_certain_platform, usingPlatform)) }
+supportingContent = { Text(text = stringResource(R.string.using_certain_platform, usingPlatform,
+) }
                 )
             }
         }
@@ -301,7 +302,8 @@ fun HomeTopAppBar(
                 isSelectionMode -> {
                     Text(
                         modifier = Modifier.padding(4.dp),
-                        text = stringResource(R.string.chats_selected, selectedChats),
+text = stringResource(R.string.chats_selected, selectedChats,
+,
                         maxLines = 1,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                         overflow = TextOverflow.Ellipsis

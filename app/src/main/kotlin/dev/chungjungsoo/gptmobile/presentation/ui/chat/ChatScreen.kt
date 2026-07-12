@@ -175,7 +175,8 @@ fun ChatScreen(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() }
             ) { focusManager.clearFocus() },
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+contentWindowInsets = WindowInsets(0, 0, 0, 0,
+,
         topBar = {
             ChatTopBar(
                 chatRoom.title,
@@ -185,7 +186,8 @@ fun ChatScreen(
                 scrollBehavior,
                 chatViewModel::openChatTitleDialog,
                 chatViewModel::openChatModelDialog,
-                onExportChatItemClick = { exportChat(context, chatViewModel) }
+onExportChatItemClick = { exportChat(context, chatViewModel,
+ }
             )
         }
     ) { innerPadding ->
@@ -209,7 +211,8 @@ fun ChatScreen(
 
                     items(
                         count = historicalMessageCount,
-                        key = { index -> chatMessagePairKey(groupedMessages.userMessages[index], index) }
+key = { index -> chatMessagePairKey(groupedMessages.userMessages[index], index,
+ }
                     ) { index ->
                         ChatMessagePair(
                             messageIndex = index,
@@ -240,7 +243,8 @@ fun ChatScreen(
                     }
 
                     if (lastMessageIndex >= 0) {
-                        item(key = chatMessagePairKey(groupedMessages.userMessages[lastMessageIndex], lastMessageIndex)) {
+item(key = chatMessagePairKey(groupedMessages.userMessages[lastMessageIndex], lastMessageIndex,
+) {
                             ChatMessagePair(
                                 messageIndex = lastMessageIndex,
                                 message = groupedMessages.userMessages[lastMessageIndex],
@@ -396,13 +400,18 @@ private fun ChatMessagePair(
     maximumUserChatBubbleWidth: Dp,
     maximumOpponentChatBubbleWidth: Dp,
     onEditQuestion: (MessageV2) -> Unit,
-    onEditAssistant: (Int, Int) -> Unit,
+onEditAssistant: (Int, Int,
+ -> Unit,
     onCopyText: (String) -> Unit,
-    onPlatformClick: (Int, Int) -> Unit,
+onPlatformClick: (Int, Int,
+ -> Unit,
     onSelectText: (String) -> Unit,
-    onRetry: (Int, Int) -> Unit,
-    onShowPreviousRevision: (Int, Int) -> Unit,
-    onShowNextRevision: (Int, Int) -> Unit
+onRetry: (Int, Int,
+ -> Unit,
+onShowPreviousRevision: (Int, Int,
+ -> Unit,
+onShowNextRevision: (Int, Int,
+ -> Unit
 ) {
     val selectedAssistantMessage = assistantMessages.getOrNull(platformIndexState)
     val assistantContent = selectedAssistantMessage?.effectiveContent() ?: ""
@@ -468,7 +477,8 @@ private fun ChatMessagePair(
                                 isLoading = isActiveMessage && loadingStates[platformIndex] == ChatViewModel.LoadingState.Loading,
                                 name = enabledPlatformLookup[uid]?.name ?: stringResource(R.string.unknown),
                                 selected = platformIndexState == platformIndex,
-                                onPlatformClick = { onPlatformClick(messageIndex, platformIndex) }
+onPlatformClick = { onPlatformClick(messageIndex, platformIndex,
+ }
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                         }
@@ -507,10 +517,14 @@ private fun ChatMessagePair(
                 canShowNextRevision = canShowNextRevision,
                 onCopyClick = { onCopyText(assistantContent) },
                 onSelectClick = { onSelectText(assistantContent) },
-                onRetryClick = { onRetry(messageIndex, platformIndexState) },
-                onEditClick = { onEditAssistant(messageIndex, platformIndexState) },
-                onShowPreviousRevision = { onShowPreviousRevision(messageIndex, platformIndexState) },
-                onShowNextRevision = { onShowNextRevision(messageIndex, platformIndexState) }
+onRetryClick = { onRetry(messageIndex, platformIndexState,
+ },
+onEditClick = { onEditAssistant(messageIndex, platformIndexState,
+ },
+onShowPreviousRevision = { onShowPreviousRevision(messageIndex, platformIndexState,
+ },
+onShowNextRevision = { onShowNextRevision(messageIndex, platformIndexState,
+ }
             )
         }
     }
@@ -909,9 +923,9 @@ internal fun copyFileToAppDirectory(context: Context, uri: android.net.Uri): Str
             val nameWithoutExt = sanitizedFileName.substringBeforeLast(".")
             val ext = sanitizedFileName.substringAfterLast(".", "")
             val uniqueName = if (ext.isNotEmpty()) {
-                "${nameWithoutExt}_${System.currentTimeMillis()}.$ext"
+                "$nameWithoutExt_${System.currentTimeMillis()}.$ext"
             } else {
-                "${sanitizedFileName}_${System.currentTimeMillis()}"
+                "$sanitizedFileName_${System.currentTimeMillis()}"
             }
             targetFile = File(attachmentsDir, uniqueName)
         }
@@ -940,7 +954,8 @@ internal fun copyFileToAppDirectory(context: Context, uri: android.net.Uri): Str
 private fun getFileName(context: Context, uri: android.net.Uri): String {
     var fileName = "attachment_${System.currentTimeMillis()}"
 
-    context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+context.contentResolver.query(uri, null, null, null, null,
+?.use { cursor ->
         val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
         if (cursor.moveToFirst() && nameIndex != -1) {
             fileName = cursor.getString(nameIndex) ?: fileName
