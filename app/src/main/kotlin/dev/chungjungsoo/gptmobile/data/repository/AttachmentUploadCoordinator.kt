@@ -44,6 +44,7 @@ class AttachmentUploadCoordinator @Inject constructor(
             ClientType.OPENAI -> message.attachments.map { ensureOpenAIRef(it, platform.uid) }
             ClientType.ANTHROPIC -> message.attachments.map { ensureAnthropicRef(it, platform.uid) }
             ClientType.GOOGLE -> message.attachments.map { ensureGoogleRef(it, platform.uid) }
+            ClientType.LANXIN -> message.attachments
             else -> message.attachments
         }
         return if (updatedAttachments == message.attachments) message else message.copy(attachments = updatedAttachments)

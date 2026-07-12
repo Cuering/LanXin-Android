@@ -9,6 +9,7 @@ object ModelConstants {
     val googleModels = linkedSetOf("gemini-1.5-pro-latest", "gemini-1.5-flash-latest", "gemini-1.0-pro")
     val groqModels = linkedSetOf("llama-3.2-3b-preview", "llama-3.2-1b-preview", "llama-3.1-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it")
     val ollamaModels = linkedSetOf<String>()
+    val lanxinModels = linkedSetOf("兰心")
 
     const val OPENAI_API_URL = "http://你的服务器IP:6185/v1/"
     const val ANTHROPIC_API_URL = "https://api.anthropic.com/v1/"
@@ -16,6 +17,7 @@ object ModelConstants {
     const val GROQ_API_URL = "https://api.groq.com/openai/v1/"
     const val OPENROUTER_API_URL = "https://openrouter.ai/api/v1/"
     const val OLLAMA_API_URL = "http://localhost:11434/v1/"
+    const val LANXIN_API_URL = "http://111.228.54.127:6185"
 
     fun getDefaultAPIUrl(apiType: ApiType) = when (apiType) {
         ApiType.OPENAI -> OPENAI_API_URL
@@ -23,6 +25,7 @@ object ModelConstants {
         ApiType.GOOGLE -> GOOGLE_API_URL
         ApiType.GROQ -> GROQ_API_URL
         ApiType.OLLAMA -> ""
+        ApiType.LANXIN -> LANXIN_API_URL
     }
 
     fun normalizeLegacyAPIUrl(apiUrl: String): String = when (apiUrl.trim()) {

@@ -11,6 +11,7 @@ import com.lanxin.android.data.model.ThemeMode
 
 @Composable
 fun getPlatformTitleResources(): Map<ApiType, String> = mapOf(
+    ApiType.LANXIN to stringResource(R.string.lanxin),
     ApiType.OPENAI to stringResource(R.string.openai),
     ApiType.ANTHROPIC to stringResource(R.string.anthropic),
     ApiType.GOOGLE to stringResource(R.string.google),
@@ -20,6 +21,7 @@ fun getPlatformTitleResources(): Map<ApiType, String> = mapOf(
 
 @Composable
 fun getPlatformDescriptionResources(): Map<ApiType, String> = mapOf(
+    ApiType.LANXIN to stringResource(R.string.lanxin_description),
     ApiType.OPENAI to stringResource(R.string.openai_description),
     ApiType.ANTHROPIC to stringResource(R.string.anthropic_description),
     ApiType.GOOGLE to stringResource(R.string.google_description),
@@ -29,6 +31,7 @@ fun getPlatformDescriptionResources(): Map<ApiType, String> = mapOf(
 
 @Composable
 fun getPlatformAPILabelResources(): Map<ApiType, String> = mapOf(
+    ApiType.LANXIN to stringResource(R.string.lanxin_api_key),
     ApiType.OPENAI to stringResource(R.string.openai_api_key),
     ApiType.ANTHROPIC to stringResource(R.string.anthropic_api_key),
     ApiType.GOOGLE to stringResource(R.string.google_api_key),
@@ -38,6 +41,7 @@ fun getPlatformAPILabelResources(): Map<ApiType, String> = mapOf(
 
 @Composable
 fun getPlatformHelpLinkResources(): Map<ApiType, String> = mapOf(
+    ApiType.LANXIN to stringResource(R.string.lanxin_api_help),
     ApiType.OPENAI to stringResource(R.string.openai_api_help),
     ApiType.ANTHROPIC to stringResource(R.string.anthropic_api_help),
     ApiType.GOOGLE to stringResource(R.string.google_api_help),
@@ -95,6 +99,7 @@ fun generateGroqModelList(models: LinkedHashSet<String>) = models.mapIndexed { i
 
 @Composable
 fun getAPIModelSelectTitle(apiType: ApiType) = when (apiType) {
+    ApiType.LANXIN -> stringResource(R.string.select_lanxin_model)
     ApiType.OPENAI -> stringResource(R.string.select_openai_model)
     ApiType.ANTHROPIC -> stringResource(R.string.select_anthropic_model)
     ApiType.GOOGLE -> stringResource(R.string.select_google_model)
@@ -104,6 +109,7 @@ fun getAPIModelSelectTitle(apiType: ApiType) = when (apiType) {
 
 @Composable
 fun getAPIModelSelectDescription(apiType: ApiType) = when (apiType) {
+    ApiType.LANXIN -> stringResource(id = R.string.select_lanxin_model_description)
     ApiType.OPENAI -> stringResource(R.string.select_openai_model_description)
     ApiType.ANTHROPIC -> stringResource(R.string.select_anthropic_model_description)
     ApiType.GOOGLE -> stringResource(R.string.select_google_model_description)
@@ -126,6 +132,7 @@ fun getThemeModeTitle(theme: ThemeMode) = when (theme) {
 
 @Composable
 fun getPlatformSettingTitle(apiType: ApiType) = when (apiType) {
+    ApiType.LANXIN -> stringResource(R.string.lanxin_setting)
     ApiType.OPENAI -> stringResource(R.string.openai_setting)
     ApiType.ANTHROPIC -> stringResource(R.string.anthropic_setting)
     ApiType.GOOGLE -> stringResource(R.string.google_setting)
@@ -135,6 +142,7 @@ fun getPlatformSettingTitle(apiType: ApiType) = when (apiType) {
 
 @Composable
 fun getPlatformSettingDescription(apiType: ApiType) = when (apiType) {
+    ApiType.LANXIN -> stringResource(R.string.platform_setting_description)
     ApiType.OPENAI -> stringResource(R.string.platform_setting_description)
     ApiType.ANTHROPIC -> stringResource(R.string.platform_setting_description)
     ApiType.GOOGLE -> stringResource(R.string.platform_setting_description)
@@ -144,6 +152,7 @@ fun getPlatformSettingDescription(apiType: ApiType) = when (apiType) {
 
 @Composable
 fun getPlatformAPIBrandText(apiType: ApiType) = when (apiType) {
+    ApiType.LANXIN -> stringResource(R.string.lanxin_brand_text)
     ApiType.OPENAI -> stringResource(R.string.openai_brand_text)
     ApiType.ANTHROPIC -> stringResource(R.string.anthropic_brand_text)
     ApiType.GOOGLE -> stringResource(R.string.google_brand_text)
@@ -159,4 +168,5 @@ fun getClientTypeDisplayName(clientType: ClientType): String = when (clientType)
     ClientType.OPENROUTER -> "OpenRouter"
     ClientType.OLLAMA -> "Ollama"
     ClientType.CUSTOM -> "Custom"
+    ClientType.LANXIN -> "兰心"
 }

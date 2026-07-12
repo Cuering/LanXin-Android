@@ -27,6 +27,7 @@ class SettingRepositoryImpl @Inject constructor(
             ApiType.GOOGLE -> settingDataSource.getAPIUrl(apiType) ?: ModelConstants.GOOGLE_API_URL
             ApiType.GROQ -> settingDataSource.getAPIUrl(apiType) ?: ModelConstants.GROQ_API_URL
             ApiType.OLLAMA -> settingDataSource.getAPIUrl(apiType) ?: ""
+            ApiType.LANXIN -> settingDataSource.getAPIUrl(apiType) ?: ModelConstants.LANXIN_API_URL
         }
         val token = settingDataSource.getToken(apiType)
         val model = settingDataSource.getModel(apiType)
@@ -38,6 +39,7 @@ class SettingRepositoryImpl @Inject constructor(
             ApiType.GOOGLE -> settingDataSource.getSystemPrompt(ApiType.GOOGLE) ?: ModelConstants.DEFAULT_PROMPT
             ApiType.GROQ -> settingDataSource.getSystemPrompt(ApiType.GROQ) ?: ModelConstants.DEFAULT_PROMPT
             ApiType.OLLAMA -> settingDataSource.getSystemPrompt(ApiType.OLLAMA) ?: ModelConstants.DEFAULT_PROMPT
+            ApiType.LANXIN -> settingDataSource.getSystemPrompt(ApiType.LANXIN) ?: ModelConstants.DEFAULT_PROMPT
         }
 
         Platform(
@@ -74,6 +76,7 @@ class SettingRepositoryImpl @Inject constructor(
                         ApiType.GOOGLE -> "Google"
                         ApiType.GROQ -> "Groq"
                         ApiType.OLLAMA -> "Ollama"
+                        ApiType.LANXIN -> "兰心"
                     },
                     compatibleType = when (platform.name) {
                         ApiType.OPENAI -> ClientType.OPENAI
@@ -81,6 +84,7 @@ class SettingRepositoryImpl @Inject constructor(
                         ApiType.GOOGLE -> ClientType.GOOGLE
                         ApiType.GROQ -> ClientType.GROQ
                         ApiType.OLLAMA -> ClientType.OLLAMA
+                        ApiType.LANXIN -> ClientType.LANXIN
                     },
                     enabled = platform.enabled,
                     apiUrl = ModelConstants.normalizeLegacyAPIUrl(platform.apiUrl),

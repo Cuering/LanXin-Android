@@ -39,4 +39,8 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideGoogleAPI(networkClient: NetworkClient): GoogleAPI = GoogleAPIImpl(networkClient)
+
+    @Provides
+    @Singleton
+    fun provideLanXinAPI(): LanXinAPI = LanXinAPIImpl()
 }

@@ -162,6 +162,7 @@ fun AddPlatformScreen(
                                     ClientType.OLLAMA -> ModelConstants.OLLAMA_API_URL
                                     ClientType.OPENROUTER -> ModelConstants.OPENROUTER_API_URL
                                     ClientType.CUSTOM -> ""
+                                    ClientType.LANXIN -> ModelConstants.LANXIN_API_URL
                                 }
                                 clientTypeExpanded = false
                             }
@@ -289,6 +290,7 @@ private fun getClientTypeName(clientType: ClientType): String = when (clientType
     ClientType.OLLAMA -> "Ollama"
     ClientType.OPENROUTER -> "OpenRouter"
     ClientType.CUSTOM -> stringResource(R.string.custom)
+    ClientType.LANXIN -> "兰心"
 }
 
 @Composable
@@ -300,6 +302,7 @@ private fun getClientTypeDescription(clientType: ClientType): String = when (cli
     ClientType.OLLAMA -> stringResource(R.string.client_type_ollama_desc)
     ClientType.OPENROUTER -> stringResource(R.string.client_type_openrouter_desc)
     ClientType.CUSTOM -> stringResource(R.string.client_type_custom_desc)
+    ClientType.LANXIN -> "专属定制的兰心 AI 助理"
 }
 
 @Composable
@@ -311,4 +314,5 @@ private fun getModelPlaceholder(clientType: ClientType): String = when (clientTy
     ClientType.OLLAMA -> "gpt-oss"
     ClientType.OPENROUTER -> "openai/gpt-4o"
     ClientType.CUSTOM -> stringResource(R.string.model_name)
+    ClientType.LANXIN -> "兰心"
 }

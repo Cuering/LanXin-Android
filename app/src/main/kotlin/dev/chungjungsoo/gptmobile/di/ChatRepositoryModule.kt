@@ -15,6 +15,7 @@ import com.lanxin.android.data.database.dao.MessageV2Dao
 import com.lanxin.android.data.network.AnthropicAPI
 import com.lanxin.android.data.network.GoogleAPI
 import com.lanxin.android.data.network.GroqAPI
+import com.lanxin.android.data.network.LanXinAPI
 import com.lanxin.android.data.network.OpenAIAPI
 import com.lanxin.android.data.repository.ChatRepository
 import com.lanxin.android.data.repository.ChatRepositoryImpl
@@ -39,6 +40,7 @@ object ChatRepositoryModule {
         groqAPI: GroqAPI,
         anthropicAPI: AnthropicAPI,
         googleAPI: GoogleAPI,
+        lanXinAPI: LanXinAPI,
         attachmentUploadCoordinator: com.lanxin.android.data.repository.AttachmentUploadCoordinator,
         contextBuilder: ContextBuilder
     ): ChatRepository = ChatRepositoryImpl(
@@ -53,6 +55,7 @@ object ChatRepositoryModule {
         groqAPI,
         anthropicAPI,
         googleAPI,
+        lanXinAPI,
         attachmentUploadCoordinator,
         contextBuilder
     )

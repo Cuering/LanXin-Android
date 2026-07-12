@@ -41,6 +41,11 @@ data class PlatformTypeInfo(
 
 private val platformTypes = listOf(
     PlatformTypeInfo(
+        clientType = ClientType.LANXIN,
+        titleResId = R.string.lanxin,
+        descriptionResId = R.string.lanxin_description
+    ),
+    PlatformTypeInfo(
         clientType = ClientType.OPENAI,
         titleResId = R.string.openai,
         descriptionResId = R.string.openai_description

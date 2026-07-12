@@ -7,6 +7,14 @@
     <string name="platform_select_description">Choose the platform you want to use. You can change this later in settings. More platforms to be supported.</string>
     <string name="sample_item_title">Item 1</string>
     <string name="sample_item_description">Item description</string>
+    <string name="lanxin" translatable="false">兰心</string>
+    <string name="lanxin_description">你的专属温柔助理</string>
+    <string name="lanxin_api_key">兰心 API Key</string>
+    <string name="lanxin_api_help">登录后自动获取</string>
+    <string name="select_lanxin_model" translatable="false">选择兰心模型</string>
+    <string name="select_lanxin_model_description" translatable="false">输入你想用的模型名</string>
+    <string name="lanxin_setting" translatable="false">兰心设置</string>
+    <string name="lanxin_brand_text" translatable="false">兰心 - 你的专属温柔助理</string>
     <string name="openai" translatable="false">OpenAI</string>
     <string name="anthropic" translatable="false">Anthropic</string>
     <string name="google" translatable="false">Google</string>

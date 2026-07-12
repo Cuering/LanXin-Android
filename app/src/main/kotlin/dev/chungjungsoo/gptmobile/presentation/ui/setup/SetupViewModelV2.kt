@@ -7,6 +7,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import com.lanxin.android.data.ModelConstants
 import com.lanxin.android.data.database.entity.PlatformV2
 import com.lanxin.android.data.model.ClientType
+import com.lanxin.android.data.network.LanXinAuthClient
 import com.lanxin.android.data.repository.SettingRepository
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,7 +25,8 @@ sealed class SaveStatus {
 
 @HiltViewModel
 class SetupViewModelV2 @Inject constructor(
-    private val settingRepository: SettingRepository
+    private val settingRepository: SettingRepository,
+    val lanXinAuthClient: LanXinAuthClient
 ) : ViewModel() {
 
     private val _platforms = MutableStateFlow<List<PlatformV2>>(emptyList())
@@ -51,6 +53,13 @@ class SetupViewModelV2 @Inject constructor(
 
     private val _saveStatus = MutableStateFlow<SaveStatus>(SaveStatus.Idle)
     val saveStatus: StateFlow<SaveStatus> = _saveStatus.asStateFlow()
+
+    // Login dialog state
+    private val _showLoginDialog = MutableStateFlow(false)
+    val showLoginDialog: StateFlow<Boolean> = _showLoginDialog.asStateFlow()
+
+    private val _loginStatus = MutableStateFlow<SaveStatus>(SaveStatus.Idle)
+    val loginStatus: StateFlow<SaveStatus> = _loginStatus.asStateFlow()
 
     init {
         loadPlatforms()
@@ -152,6 +161,34 @@ class SetupViewModelV2 @Inject constructor(
         }
     }
 
+    // ==== Login functions for LANXIN ====
+    fun showLoginDialog() {
+        _showLoginDialog.value = true
+        _loginStatus.value = SaveStatus.Idle
+    }
+
+    fun dismissLoginDialog() {
+        _showLoginDialog.value = false
+        _loginStatus.value = SaveStatus.Idle
+    }
+
+    fun performLogin(username: String, password: String) {
+        val url = _apiUrl.value.trim()
+        if (url.isBlank() || username.isBlank() || password.isBlank()) return
+
+        viewModelScope.launch {
+            _loginStatus.value = SaveStatus.Saving
+            val result = lanXinAuthClient.login(url, username, password)
+            if (result.success && result.token != null) {
+                _apiKey.value = result.token
+                _loginStatus.value = SaveStatus.Success
+                _showLoginDialog.value = false
+            } else {
+                _loginStatus.value = SaveStatus.Error(result.message)
+            }
+        }
+    }
+
     fun canProceedFromStep(step: Int): Boolean = when (step) {
         0 -> _platformName.value.isNotBlank() && _apiUrl.value.isNotBlank()
 
@@ -173,6 +210,7 @@ class SetupViewModelV2 @Inject constructor(
         ClientType.OLLAMA -> "Ollama"
         ClientType.OPENROUTER -> "OpenRouter"
         ClientType.CUSTOM -> ""
+        ClientType.LANXIN -> "兰心"
     }
 
     private fun getDefaultApiUrl(clientType: ClientType): String = when (clientType) {
@@ -183,6 +221,7 @@ class SetupViewModelV2 @Inject constructor(
         ClientType.OLLAMA -> ModelConstants.OLLAMA_API_URL
         ClientType.OPENROUTER -> ModelConstants.OPENROUTER_API_URL
         ClientType.CUSTOM -> ""
+        ClientType.LANXIN -> ModelConstants.LANXIN_API_URL
     }
 
     companion object {

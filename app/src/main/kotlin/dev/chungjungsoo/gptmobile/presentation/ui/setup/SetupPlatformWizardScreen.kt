@@ -161,7 +161,8 @@ fun SetupPlatformWizardScreen(
                         ApiKeyStep(
                             clientType = selectedClientType,
                             apiKey = currentApiKey,
-                            onApiKeyChange = setupViewModel::updateApiKey
+                            onApiKeyChange = setupViewModel::updateApiKey,
+                            onLoginClick = { setupViewModel.showLoginDialog() }
                         )
                     }
 
@@ -199,6 +200,17 @@ fun SetupPlatformWizardScreen(
                 isLastStep = wizardStep == WIZARD_TOTAL_STEPS - 1
             )
         }
+    }
+
+    // LanXin login dialog
+    val showLogin by setupViewModel.showLoginDialog.collectAsStateWithLifecycle()
+    if (showLogin) {
+        LanXinLoginDialog(
+            authClient = setupViewModel.lanXinAuthClient,
+            apiUrl = setupViewModel.apiUrl.value,
+            onTokenReceived = { token -> setupViewModel.updateApiKey(token) },
+            onDismiss = { setupViewModel.dismissLoginDialog() }
+        )
     }
 }
 
@@ -357,6 +369,7 @@ private fun ApiKeyStep(
     clientType: ClientType?,
     apiKey: String,
     onApiKeyChange: (String) -> Unit,
+    onLoginClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -403,6 +416,23 @@ private fun ApiKeyStep(
                 Text(stringResource(R.string.api_key_supporting))
             }
         )
+
+        // Login button for LANXIN
+        if (clientType == ClientType.LANXIN) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                onClick = onLoginClick,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("登录 AstrBot 获取 Token")
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "点击后输入 AstrBot 的账号密码，登录成功自动填入 Token",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
 
         // Help link based on client type
         clientType?.let { type ->
@@ -532,4 +562,5 @@ private fun getApiHelpUrl(clientType: ClientType): String? = when (clientType) {
     ClientType.OLLAMA -> "https://ollama.com/blog/openai-compatibility"
     ClientType.OPENROUTER -> "https://openrouter.ai/keys"
     ClientType.CUSTOM -> null
+    ClientType.LANXIN -> null
 }

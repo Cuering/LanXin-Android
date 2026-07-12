@@ -55,6 +55,7 @@ import com.lanxin.android.data.model.GeminiSafetySettings
 import com.lanxin.android.data.network.AnthropicAPI
 import com.lanxin.android.data.network.GoogleAPI
 import com.lanxin.android.data.network.GroqAPI
+import com.lanxin.android.data.network.LanXinAPI
 import com.lanxin.android.data.network.OpenAIAPI
 import com.lanxin.android.util.AttachmentPayloadCache
 import com.lanxin.android.util.FileUtils
@@ -81,6 +82,7 @@ class ChatRepositoryImpl @Inject constructor(
     private val groqAPI: GroqAPI,
     private val anthropicAPI: AnthropicAPI,
     private val googleAPI: GoogleAPI,
+    private val lanXinAPI: LanXinAPI,
     private val attachmentUploadCoordinator: AttachmentUploadCoordinator,
     private val contextBuilder: ContextBuilder
 ) : ChatRepository {
@@ -142,6 +144,10 @@ class ChatRepositoryImpl @Inject constructor(
 
         ClientType.ANTHROPIC -> {
             completeChatWithAnthropic(userMessages, assistantMessages, platform)
+        }
+
+        ClientType.LANXIN -> {
+            completeChatWithLanXin(userMessages, assistantMessages, platform)
         }
 
         ClientType.GOOGLE -> {
@@ -689,6 +695,31 @@ class ChatRepositoryImpl @Inject constructor(
         }
     } catch (e: Exception) {
         flowOf(ApiState.Error(e.message ?: "Failed to complete chat"))
+    }
+
+    private suspend fun completeChatWithLanXin(
+        userMessages: List<MessageV2>,
+        assistantMessages: List<List<MessageV2>>,
+        platform: PlatformV2
+    ): Flow<ApiState> = try {
+        lanXinAPI.setToken(platform.token)
+        lanXinAPI.setAPIUrl(platform.apiUrl)
+
+        val latestUserMessage = userMessages.lastOrNull()?.content ?: ""
+        val sessionId = userMessages.firstOrNull()?.chatId?.toString()
+
+        lanXinAPI.streamChat(
+            message = latestUserMessage,
+            username = "default_user",
+            sessionId = sessionId,
+            timeoutSeconds = platform.timeout
+        ).catch { e ->
+            emit(ApiState.Error(e.message ?: "Network error"))
+        }.onCompletion {
+            emit(ApiState.Done)
+        }
+    } catch (e: Exception) {
+        flowOf(ApiState.Error(e.message ?: "Failed to chat with LanXin"))
     }
 
     private companion object {
