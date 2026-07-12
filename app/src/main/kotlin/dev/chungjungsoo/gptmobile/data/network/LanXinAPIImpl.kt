@@ -93,8 +93,9 @@ class LanXinAPIImpl @Inject constructor(
         return JSONObject().apply {
             put("username", username)
             put("message", message)
-sessionId?.let { put("session_id", it,
- }
+            sessionId?.let {
+                put("session_id", it)
+            }
             put("platform", JSONObject().apply {
                 put("platform", "webchat")
                 put("user_id", "lanxin_app")
