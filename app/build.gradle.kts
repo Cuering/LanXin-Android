@@ -99,6 +99,7 @@ dependencies {
     implementation(libs.ktor.client.cio)
     implementation(libs.ktor.logging)
     implementation(libs.ktor.serialization)
+    implementation(libs.ktor.client.sse)
 
     // License page UI
     implementation(libs.auto.license.core)
