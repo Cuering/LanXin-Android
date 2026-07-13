@@ -2,12 +2,14 @@ package com.lanxin.android.presentation
 
 import android.app.Activity
 import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.os.Bundle
 import android.widget.Button
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import com.lanxin.android.R
 
 /**
  * 崩溃信息展示页
