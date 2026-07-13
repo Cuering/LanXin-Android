@@ -89,8 +89,8 @@ class SkillEngine @Inject constructor(
         return formatSkillActivation(skill, args)
     }
 
-    private fun buildSkillTool(skill: Skill): ToolDef =
-        ToolDef(
+    private fun buildSkillTool(skill: Skill): ToolDef {
+        return ToolDef(
             name = skill.name,
             description = "加载并执行技能「${skill.name}」: ${skill.description}",
             parameters = buildJsonObject {
@@ -119,8 +119,8 @@ class SkillEngine @Inject constructor(
         )
     }
 
-    private fun buildSkillListTool(): ToolDef =
-        ToolDef(
+    private fun buildSkillListTool(): ToolDef {
+        return ToolDef(
             name = TOOL_SKILL_LIST,
             description = "列出当前可用的全部 Skill（能力指令包）及其描述",
             parameters = buildJsonObject {
@@ -151,8 +151,8 @@ class SkillEngine @Inject constructor(
         )
     }
 
-    private fun buildSkillLoadTool(): ToolDef =
-        ToolDef(
+    private fun buildSkillLoadTool(): ToolDef {
+        return ToolDef(
             name = TOOL_SKILL_LOAD,
             description = "按名称加载指定 Skill 的完整指令（SKILL.md），用于按多步骤流程执行任务",
             parameters = buildJsonObject {

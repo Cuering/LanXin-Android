@@ -77,8 +77,10 @@ object SkillMdParser {
                     while (i < lines.size) {
                         val next = lines[i]
                         // 缩进行或空行属于多行值；遇到新 key 结束
-                        if (next.isNotEmpty() && !next.startsWith(" ") && !next.startsWith("\t")
-                            &&                             Regex("""^[A-Za-z0-9_-]+\s*:""").containsMatchIn(next)
+                        if (next.isNotEmpty() &&
+                            !next.startsWith(" ") &&
+                            !next.startsWith("\t") &&
+                            Regex("""^[A-Za-z0-9_-]+\s*:""").containsMatchIn(next)
                         ) {
                             break
                         }
