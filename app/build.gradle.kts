@@ -11,6 +11,7 @@ plugins {
     alias(libs.plugins.kotlin.ksp)
     alias(libs.plugins.kotlin.parcelize)
     alias(libs.plugins.auto.license)
+    alias(libs.plugins.ktlint)
     kotlin(libs.plugins.kotlin.serialization.get().pluginId).version(libs.versions.kotlin)
 }
 
@@ -136,5 +137,14 @@ aboutLibraries {
     // Remove the "generated" timestamp to allow for reproducible builds
     export {
         excludeFields.add("generated")
+    }
+}
+
+ktlint {
+    android.set(true)
+    ignoreFailures.set(false)
+    reporters {
+        reporter(org.jlleitschuh.gradle.core.ReporterType.PLAIN)
+        reporter(org.jlleitschuh.gradle.core.ReporterType.CHECKSTYLE)
     }
 }
