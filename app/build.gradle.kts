@@ -39,6 +39,15 @@ extensions.configure<ApplicationExtension> {
         disable += "MissingTranslation"
     }
 
+    signingConfigs {
+        register("debug") {
+            storeFile = rootProject.file("debug-keystore.jks")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
