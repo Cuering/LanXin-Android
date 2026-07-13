@@ -447,8 +447,7 @@ class ChatRepositoryImpl @Inject constructor(
         // Add file content (images)
         message.attachments.forEach { attachment ->
             val filePath = attachment.preparedFilePath.ifBlank { attachment.localFilePath }
-val mimeType = attachment.mimeType.ifBlank { FileUtils.getMimeType(context, filePath,
- }
+            val mimeType = attachment.mimeType.ifBlank { FileUtils.getMimeType(context, filePath) }
             val encodedImage = getEncodedAttachment(filePath, mimeType)
             if (encodedImage != null) {
                 content.add(
@@ -472,8 +471,7 @@ val mimeType = attachment.mimeType.ifBlank { FileUtils.getMimeType(context, file
         // Check if there are any image files
         val imageAttachments = message.attachments.filter { attachment ->
             val filePath = attachment.preparedFilePath.ifBlank { attachment.localFilePath }
-val mimeType = attachment.mimeType.ifBlank { FileUtils.getMimeType(context, filePath,
- }
+            val mimeType = attachment.mimeType.ifBlank { FileUtils.getMimeType(context, filePath) }
             FileUtils.isImage(mimeType)
         }
 
@@ -500,8 +498,7 @@ val mimeType = attachment.mimeType.ifBlank { FileUtils.getMimeType(context, file
                 parts.add(ResponseContentPart.imageFile(providerRef.remoteId))
             } else {
                 val filePath = attachment.preparedFilePath.ifBlank { attachment.localFilePath }
-val mimeType = attachment.mimeType.ifBlank { FileUtils.getMimeType(context, filePath,
- }
+                val mimeType = attachment.mimeType.ifBlank { FileUtils.getMimeType(context, filePath) }
                 val encodedImage = getEncodedAttachment(filePath, mimeType)
                 if (encodedImage != null) {
                     parts.add(
@@ -604,8 +601,7 @@ val mimeType = attachment.mimeType.ifBlank { FileUtils.getMimeType(context, file
                 content.add(AnthropicImageContent(source = ImageSource.file(providerRef.remoteId)))
             } else {
                 val filePath = attachment.preparedFilePath.ifBlank { attachment.localFilePath }
-val mimeType = attachment.mimeType.ifBlank { FileUtils.getMimeType(context, filePath,
- }
+                val mimeType = attachment.mimeType.ifBlank { FileUtils.getMimeType(context, filePath) }
                 val encodedImage = getEncodedAttachment(filePath, mimeType)
                 if (encodedImage != null) {
                     val mediaType = when {
@@ -765,8 +761,7 @@ val mimeType = attachment.mimeType.ifBlank { FileUtils.getMimeType(context, file
                 parts.add(Part.fileData(providerRef.mimeType, providerRef.remoteId))
             } else {
                 val filePath = attachment.preparedFilePath.ifBlank { attachment.localFilePath }
-val mimeType = attachment.mimeType.ifBlank { FileUtils.getMimeType(context, filePath,
- }
+                val mimeType = attachment.mimeType.ifBlank { FileUtils.getMimeType(context, filePath) }
                 val encodedImage = getEncodedAttachment(filePath, mimeType)
                 if (encodedImage != null) {
                     parts.add(Part.inlineData(encodedImage.mimeType, encodedImage.base64Data))
@@ -782,10 +777,10 @@ val mimeType = attachment.mimeType.ifBlank { FileUtils.getMimeType(context, file
         AttachmentPayloadCache.get(filePath)?.let { return it }
 
         return withContext(Dispatchers.IO) {
-FileUtils.encodeFileForUpload(context, filePath, mimeType,
-?.also { encodedImage ->
-                AttachmentPayloadCache.put(filePath, encodedImage)
-            }
+            FileUtils.encodeFileForUpload(context, filePath, mimeType)
+                ?.also { encodedImage ->
+                    AttachmentPayloadCache.put(filePath, encodedImage)
+                }
         }
     }
 
@@ -793,12 +788,10 @@ FileUtils.encodeFileForUpload(context, filePath, mimeType,
         messages: List<MessageV2>,
         platform: PlatformV2
     ): List<MessageV2> {
-val updatedMessages = messages.map { attachmentUploadCoordinator.ensureMessageAttachmentsForPlatform(it, platform,
- }
+        val updatedMessages = messages.map { attachmentUploadCoordinator.ensureMessageAttachmentsForPlatform(it, platform) }
         val changedMessages = updatedMessages
             .zip(messages)
-.mapNotNull { (updated, original,
- -> updated.takeIf { it != original } }
+            .mapNotNull { (updated, original) -> updated.takeIf { it != original } }
 
         if (changedMessages.isNotEmpty()) {
             messageV2Dao.editMessages(*changedMessages.toTypedArray())
@@ -843,8 +836,7 @@ val updatedMessages = messages.map { attachmentUploadCoordinator.ensureMessageAt
     override suspend fun saveChatPlatformModels(chatId: Int, models: Map<String, String>) {
         val rows = models
             .filterKeys { it.isNotBlank() }
-.map { (platformUid, model,
- ->
+            .map { (platformUid, model) ->
                 ChatPlatformModelV2(
                     chatId = chatId,
                     platformUid = platformUid,
