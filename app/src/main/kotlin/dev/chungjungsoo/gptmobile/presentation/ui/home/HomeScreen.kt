@@ -539,7 +539,7 @@ fun EnablePlatformWarningText(onGoToSettings: () -> Unit = {}) {
         )
         Spacer(modifier = Modifier.height(8.dp))
         TextButton(onClick = onGoToSettings) {
-            Text(stringResource(R.string.go_to_settings))
+            Text(stringResource(R.string.settings))
         }
     }
 }
