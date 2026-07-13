@@ -906,9 +906,9 @@ internal fun copyFileToAppDirectory(context: Context, uri: android.net.Uri): Str
             val nameWithoutExt = sanitizedFileName.substringBeforeLast(".")
             val ext = sanitizedFileName.substringAfterLast(".", "")
             val uniqueName = if (ext.isNotEmpty()) {
-                "$nameWithoutExt_${System.currentTimeMillis()}.$ext"
+                "${nameWithoutExt}_${System.currentTimeMillis()}.$ext"
             } else {
-                "$sanitizedFileName_${System.currentTimeMillis()}"
+                "${sanitizedFileName}_${System.currentTimeMillis()}"
             }
             targetFile = File(attachmentsDir, uniqueName)
         }
