@@ -16,7 +16,7 @@ import androidx.navigation.navArgument
 import androidx.navigation.navigation
 import com.lanxin.android.presentation.ui.chat.ChatScreen
 import com.lanxin.android.presentation.ui.home.HomeScreen
-import com.lanxin.android.presentation.ui.memory.MemoryScreen
+import com.lanxin.android.plugins.memory.presentation.ui.memory.MemoryScreen
 import com.lanxin.android.presentation.ui.migrate.MigrateScreen
 import com.lanxin.android.presentation.ui.setting.AboutScreen
 import com.lanxin.android.presentation.ui.setting.AddPlatformScreen

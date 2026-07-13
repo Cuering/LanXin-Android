@@ -2,6 +2,8 @@ package com.lanxin.android.presentation
 
 import android.app.Application
 import android.content.Context
+import com.lanxin.android.plugin.PluginManager
+import com.lanxin.android.plugins.memory.MemoryPlugin
 import dagger.hilt.android.HiltAndroidApp
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -12,4 +14,16 @@ class LanXinApp : Application() {
     @Inject
     @ApplicationContext
     lateinit var context: Context
+
+    @Inject
+    lateinit var pluginManager: PluginManager
+
+    @Inject
+    lateinit var memoryPlugin: MemoryPlugin
+
+    override fun onCreate() {
+        super.onCreate()
+        pluginManager.register(memoryPlugin)
+        pluginManager.initializeAll(this)
+    }
 }

@@ -1,4 +1,4 @@
-package com.lanxin.android.data.memory
+package com.lanxin.android.plugins.memory.data.memory
 
 import androidx.room.Dao
 import androidx.room.Delete
@@ -57,6 +57,24 @@ interface MemoryDao {
 
     @Query("SELECT COUNT(*) FROM memory_nodes")
     suspend fun getTotalCountOnce(): Int
+
+    @Query("SELECT * FROM memory_nodes ORDER BY importance DESC, created_at DESC")
+    suspend fun getAllMemoriesOnce(): List<MemoryEntity>
+
+    @Query("SELECT id FROM memory_nodes")
+    suspend fun getAllIds(): List<Long>
+
+    @Query("SELECT EXISTS(SELECT 1 FROM memory_nodes WHERE content = :content AND type = :type LIMIT 1)")
+    suspend fun existsByContentAndType(content: String, type: String): Boolean
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertMemoryIgnore(memory: MemoryEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertMemories(memories: List<MemoryEntity>)
+
+    @Query("DELETE FROM memory_nodes")
+    suspend fun deleteAll()
 }
 
 data class TypeCount(

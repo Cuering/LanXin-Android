@@ -45,8 +45,8 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.MenuBook
-import com.lanxin.android.data.memory.MemoryType
-import com.lanxin.android.presentation.ui.memory.AddMemoryDialog
+import com.lanxin.android.plugins.memory.data.memory.MemoryType
+import com.lanxin.android.plugins.memory.presentation.ui.memory.AddMemoryDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem

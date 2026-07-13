@@ -16,11 +16,11 @@ import com.lanxin.android.data.database.entity.effectiveThoughts
 import com.lanxin.android.data.database.entity.resetActiveRevision
 import com.lanxin.android.data.database.entity.selectRevision
 import com.lanxin.android.data.database.entity.snapshotLatestAssistantRevision
-import com.lanxin.android.data.memory.MemoryRepository
+import com.lanxin.android.plugins.memory.data.memory.MemoryRepository
 import com.lanxin.android.data.repository.AttachmentUploadCoordinator
 import com.lanxin.android.data.repository.ChatRepository
 import com.lanxin.android.data.repository.SettingRepository
-import com.lanxin.android.domain.memory.MemoryInjector
+import com.lanxin.android.plugins.memory.domain.memory.MemoryInjector
 import com.lanxin.android.util.AttachmentPayloadCache
 import com.lanxin.android.util.FileUtils
 import com.lanxin.android.util.getPlatformName

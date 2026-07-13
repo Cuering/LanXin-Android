@@ -1,4 +1,4 @@
-package com.lanxin.android.presentation.ui.memory
+package com.lanxin.android.plugins.memory.presentation.ui.memory
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -26,8 +26,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.lanxin.android.data.memory.MemoryEntity
-import com.lanxin.android.data.memory.MemoryType
+import com.lanxin.android.plugins.memory.data.memory.MemoryEntity
+import com.lanxin.android.plugins.memory.data.memory.MemoryType
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable

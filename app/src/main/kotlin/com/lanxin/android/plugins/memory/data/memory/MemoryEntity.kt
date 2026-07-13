@@ -1,4 +1,4 @@
-package com.lanxin.android.data.memory
+package com.lanxin.android.plugins.memory.data.memory
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity

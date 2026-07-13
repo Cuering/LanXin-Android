@@ -1,7 +1,7 @@
-package com.lanxin.android.domain.memory
+package com.lanxin.android.plugins.memory.domain.memory
 
-import com.lanxin.android.data.memory.MemoryRepository
-import com.lanxin.android.data.memory.MemoryType
+import com.lanxin.android.plugins.memory.data.memory.MemoryRepository
+import com.lanxin.android.plugins.memory.data.memory.MemoryType
 import javax.inject.Inject
 import javax.inject.Singleton
 

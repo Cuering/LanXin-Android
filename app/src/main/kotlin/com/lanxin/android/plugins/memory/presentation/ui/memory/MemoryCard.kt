@@ -1,4 +1,4 @@
-package com.lanxin.android.presentation.ui.memory
+package com.lanxin.android.plugins.memory.presentation.ui.memory
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -30,8 +30,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.lanxin.android.data.memory.MemoryEntity
-import com.lanxin.android.data.memory.MemoryType
+import com.lanxin.android.plugins.memory.data.memory.MemoryEntity
+import com.lanxin.android.plugins.memory.data.memory.MemoryType
 import java.util.concurrent.TimeUnit
 
 // 妹居物语风格类型颜色

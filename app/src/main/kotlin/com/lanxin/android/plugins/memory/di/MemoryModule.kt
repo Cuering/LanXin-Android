@@ -1,9 +1,8 @@
-package com.lanxin.android.di
+package com.lanxin.android.plugins.memory.di
 
 import android.content.Context
-import com.lanxin.android.data.memory.MemoryDao
-import com.lanxin.android.data.memory.MemoryDatabase
-import com.lanxin.android.data.memory.MemoryRepository
+import com.lanxin.android.plugins.memory.data.memory.MemoryDao
+import com.lanxin.android.plugins.memory.data.memory.MemoryDatabase
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -23,5 +22,5 @@ object MemoryModule {
     @Provides
     fun provideMemoryDao(db: MemoryDatabase): MemoryDao = db.memoryDao()
 
-    // MemoryRepository 使用 @Inject constructor + @Singleton，无需额外 provide
+    // MemoryRepository / MemoryPlugin 使用 @Inject constructor + @Singleton，无需额外 provide
 }
