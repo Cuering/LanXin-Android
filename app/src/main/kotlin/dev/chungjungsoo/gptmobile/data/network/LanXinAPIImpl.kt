@@ -1,6 +1,7 @@
 package com.lanxin.android.data.network
 
 import com.lanxin.android.data.dto.ApiState
+import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsChannel
@@ -47,6 +48,9 @@ class LanXinAPIImpl @Inject constructor(
             val response = networkClient().post(url) {
                 setBody(body)
                 contentType(ContentType.Application.Json)
+                if (token.isNotBlank()) {
+                    header("X-API-Key", token)
+                }
             }
 
             if (!response.status.isSuccess()) {
