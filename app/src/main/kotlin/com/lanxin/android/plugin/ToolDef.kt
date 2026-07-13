@@ -1,6 +1,7 @@
 package com.lanxin.android.plugin
 
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
 
 /**
  * MCP 工具定义。

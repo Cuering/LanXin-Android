@@ -48,6 +48,11 @@ class PluginManager @Inject constructor(
     }
 
     /**
+     * 获取所有已注册的插件列表。
+     */
+    fun getPlugins(): List<LanXinPlugin> = plugins.values.toList()
+
+    /**
      * 按 ID 获取插件。
      */
     @Suppress("UNCHECKED_CAST")
