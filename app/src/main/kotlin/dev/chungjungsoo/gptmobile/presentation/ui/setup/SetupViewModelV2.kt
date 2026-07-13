@@ -181,6 +181,7 @@ class SetupViewModelV2 @Inject constructor(
             val result = lanXinAuthClient.login(url, username, password)
             if (result.success && result.token != null) {
                 _apiKey.value = result.token
+                settingRepository.setLanXinUserName(username)
                 _loginStatus.value = SaveStatus.Success
                 _showLoginDialog.value = false
             } else {
