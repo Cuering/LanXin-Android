@@ -26,6 +26,7 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.MenuBook
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
@@ -82,6 +83,7 @@ import com.lanxin.android.util.getPlatformName
 fun HomeScreen(
     homeViewModel: HomeViewModel = hiltViewModel(),
     settingOnClick: () -> Unit,
+    memoryOnClick: () -> Unit = {},
     onExistingChatClick: (ChatRoomV2) -> Unit,
     navigateToNewChat: (enabledPlatforms: List<String>) -> Unit
 ) {
@@ -129,6 +131,7 @@ fun HomeScreen(
                         settingOnClick()
                     }
                 },
+                memoryOnClick = memoryOnClick,
                 duplicateOnClick = {
                     homeViewModel.duplicateSelectedChat()
                     Toast.makeText(context, duplicatedChatMessage, Toast.LENGTH_SHORT).show()
@@ -258,6 +261,7 @@ fun HomeTopAppBar(
     selectedChats: Int,
     scrollBehavior: TopAppBarScrollBehavior,
     actionOnClick: () -> Unit,
+    memoryOnClick: () -> Unit = {},
     duplicateOnClick: () -> Unit,
     navigationOnClick: () -> Unit,
     onSearchQueryChanged: (String) -> Unit,
@@ -387,6 +391,15 @@ fun HomeTopAppBar(
                 }
 
                 !isSearchMode -> {
+                    IconButton(
+                        modifier = Modifier.padding(4.dp),
+                        onClick = memoryOnClick
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.MenuBook,
+                            contentDescription = "记忆"
+                        )
+                    }
                     IconButton(
                         modifier = Modifier.padding(4.dp),
                         onClick = actionOnClick

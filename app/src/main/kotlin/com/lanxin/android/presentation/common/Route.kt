@@ -36,4 +36,6 @@ object Route {
     const val LICENSE = "license"
 
     const val MIGRATE_V2 = "migrate_v2"
+
+    const val MEMORY_LIST = "memory_list"
 }
