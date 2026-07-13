@@ -39,6 +39,18 @@ extensions.configure<ApplicationExtension> {
         disable += "MissingTranslation"
     }
 
+    signingConfigs {
+        getByName("debug") {
+            val debugKeystore = rootProject.file("debug-keystore.jks")
+            if (debugKeystore.exists()) {
+                storeFile = debugKeystore
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true

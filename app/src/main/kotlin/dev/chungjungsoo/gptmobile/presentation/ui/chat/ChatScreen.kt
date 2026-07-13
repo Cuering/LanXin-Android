@@ -160,11 +160,10 @@ fun ChatScreen(
         }
     }
 
-    // Auto-scroll to bottom when keyboard opens
     val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
     LaunchedEffect(imeVisible) {
         if (imeVisible) {
-            delay(100) // Small delay to let keyboard animation start
+            delay(100)
             animateScrollToLatestMessage()
         }
     }
@@ -175,8 +174,7 @@ fun ChatScreen(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() }
             ) { focusManager.clearFocus() },
-contentWindowInsets = WindowInsets(0, 0, 0, 0,
-,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             ChatTopBar(
                 chatRoom.title,
@@ -186,8 +184,7 @@ contentWindowInsets = WindowInsets(0, 0, 0, 0,
                 scrollBehavior,
                 chatViewModel::openChatTitleDialog,
                 chatViewModel::openChatModelDialog,
-onExportChatItemClick = { exportChat(context, chatViewModel,
- }
+                onExportChatItemClick = { exportChat(context, chatViewModel) }
             )
         }
     ) { innerPadding ->
@@ -211,8 +208,7 @@ onExportChatItemClick = { exportChat(context, chatViewModel,
 
                     items(
                         count = historicalMessageCount,
-key = { index -> chatMessagePairKey(groupedMessages.userMessages[index], index,
- }
+                        key = { index -> chatMessagePairKey(groupedMessages.userMessages[index], index) }
                     ) { index ->
                         ChatMessagePair(
                             messageIndex = index,
@@ -243,8 +239,7 @@ key = { index -> chatMessagePairKey(groupedMessages.userMessages[index], index,
                     }
 
                     if (lastMessageIndex >= 0) {
-item(key = chatMessagePairKey(groupedMessages.userMessages[lastMessageIndex], lastMessageIndex,
-) {
+                        item(key = chatMessagePairKey(groupedMessages.userMessages[lastMessageIndex], lastMessageIndex)) {
                             ChatMessagePair(
                                 messageIndex = lastMessageIndex,
                                 message = groupedMessages.userMessages[lastMessageIndex],
@@ -400,18 +395,13 @@ private fun ChatMessagePair(
     maximumUserChatBubbleWidth: Dp,
     maximumOpponentChatBubbleWidth: Dp,
     onEditQuestion: (MessageV2) -> Unit,
-onEditAssistant: (Int, Int,
- -> Unit,
+    onEditAssistant: (Int, Int) -> Unit,
     onCopyText: (String) -> Unit,
-onPlatformClick: (Int, Int,
- -> Unit,
+    onPlatformClick: (Int, Int) -> Unit,
     onSelectText: (String) -> Unit,
-onRetry: (Int, Int,
- -> Unit,
-onShowPreviousRevision: (Int, Int,
- -> Unit,
-onShowNextRevision: (Int, Int,
- -> Unit
+    onRetry: (Int, Int) -> Unit,
+    onShowPreviousRevision: (Int, Int) -> Unit,
+    onShowNextRevision: (Int, Int) -> Unit
 ) {
     val selectedAssistantMessage = assistantMessages.getOrNull(platformIndexState)
     val assistantContent = selectedAssistantMessage?.effectiveContent() ?: ""
@@ -477,8 +467,7 @@ onShowNextRevision: (Int, Int,
                                 isLoading = isActiveMessage && loadingStates[platformIndex] == ChatViewModel.LoadingState.Loading,
                                 name = enabledPlatformLookup[uid]?.name ?: stringResource(R.string.unknown),
                                 selected = platformIndexState == platformIndex,
-onPlatformClick = { onPlatformClick(messageIndex, platformIndex,
- }
+                                onPlatformClick = { onPlatformClick(messageIndex, platformIndex) }
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                         }
@@ -517,14 +506,10 @@ onPlatformClick = { onPlatformClick(messageIndex, platformIndex,
                 canShowNextRevision = canShowNextRevision,
                 onCopyClick = { onCopyText(assistantContent) },
                 onSelectClick = { onSelectText(assistantContent) },
-onRetryClick = { onRetry(messageIndex, platformIndexState,
- },
-onEditClick = { onEditAssistant(messageIndex, platformIndexState,
- },
-onShowPreviousRevision = { onShowPreviousRevision(messageIndex, platformIndexState,
- },
-onShowNextRevision = { onShowNextRevision(messageIndex, platformIndexState,
- }
+                onRetryClick = { onRetry(messageIndex, platformIndexState) },
+                onEditClick = { onEditAssistant(messageIndex, platformIndexState) },
+                onShowPreviousRevision = { onShowPreviousRevision(messageIndex, platformIndexState) },
+                onShowNextRevision = { onShowNextRevision(messageIndex, platformIndexState) }
             )
         }
     }
@@ -608,7 +593,6 @@ fun ChatDropdownMenu(
             text = { Text(text = stringResource(R.string.update_chat_title)) },
             onClick = onChatTitleItemClick
         )
-        /* Export Chat */
         DropdownMenuItem(
             enabled = isMenuItemEnabled,
             text = { Text(text = stringResource(R.string.export_chat)) },
@@ -918,19 +902,17 @@ internal fun copyFileToAppDirectory(context: Context, uri: android.net.Uri): Str
 
         var targetFile = File(attachmentsDir, sanitizedFileName)
 
-        // If file exists, append timestamp to avoid overwrites
         if (targetFile.exists()) {
             val nameWithoutExt = sanitizedFileName.substringBeforeLast(".")
             val ext = sanitizedFileName.substringAfterLast(".", "")
             val uniqueName = if (ext.isNotEmpty()) {
-                "$nameWithoutExt_${System.currentTimeMillis()}.$ext"
+                "${nameWithoutExt}_${System.currentTimeMillis()}.$ext"
             } else {
-                "$sanitizedFileName_${System.currentTimeMillis()}"
+                "${sanitizedFileName}_${System.currentTimeMillis()}"
             }
             targetFile = File(attachmentsDir, uniqueName)
         }
 
-        // Verify canonical path is within attachments directory to prevent path traversal
         val attachmentsDirCanonical = attachmentsDir.canonicalPath
         val targetFileCanonical = targetFile.canonicalPath
         if (!targetFileCanonical.startsWith(attachmentsDirCanonical + File.separator) &&
@@ -954,8 +936,7 @@ internal fun copyFileToAppDirectory(context: Context, uri: android.net.Uri): Str
 private fun getFileName(context: Context, uri: android.net.Uri): String {
     var fileName = "attachment_${System.currentTimeMillis()}"
 
-context.contentResolver.query(uri, null, null, null, null,
-?.use { cursor ->
+    context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
         val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
         if (cursor.moveToFirst() && nameIndex != -1) {
             fileName = cursor.getString(nameIndex) ?: fileName
@@ -968,19 +949,16 @@ context.contentResolver.query(uri, null, null, null, null,
 private fun sanitizeFileName(fileName: String): String {
     val maxLength = 200
 
-    // Remove path separators and ".." segments
     val withoutPathTraversal = fileName
         .replace("..", "")
         .replace("/", "")
         .replace("\\", "")
 
-    // Keep only safe characters: alphanumerics, dash, underscore, dot
     val sanitized = withoutPathTraversal
         .filter { it.isLetterOrDigit() || it == '-' || it == '_' || it == '.' }
         .take(maxLength)
         .trim('.')
 
-    // If sanitized name is empty, generate a fallback
     return sanitized.ifEmpty { "attachment_${System.currentTimeMillis()}" }
 }
 

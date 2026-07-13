@@ -89,17 +89,18 @@ class LanXinAPIImpl @Inject constructor(
         }
     }.flowOn(Dispatchers.IO)
 
-    private fun buildJsonMessage(message: String, username: String, sessionId: String?): String {
-        return JSONObject().apply {
+    private fun buildJsonMessage(message: String, username: String, sessionId: String?): String =
+        JSONObject().apply {
             put("username", username)
             put("message", message)
-sessionId?.let { put("session_id", it,
- }
-            put("platform", JSONObject().apply {
-                put("platform", "webchat")
-                put("user_id", "lanxin_app")
-                put("group_name", "default")
-            })
+            sessionId?.let { put("session_id", it) }
+            put(
+                "platform",
+                JSONObject().apply {
+                    put("platform", "webchat")
+                    put("user_id", "lanxin_app")
+                    put("group_name", "default")
+                }
+            )
         }.toString()
-    }
 }

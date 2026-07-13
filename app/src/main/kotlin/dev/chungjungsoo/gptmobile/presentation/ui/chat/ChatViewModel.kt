@@ -89,42 +89,32 @@ class ChatViewModel @Inject constructor(
     private val _chatPlatformModels = MutableStateFlow<Map<String, String>>(emptyMap())
     val chatPlatformModels = _chatPlatformModels.asStateFlow()
 
-    // All platforms configured in app (including disabled)
     private val _platformsInApp = MutableStateFlow(listOf<PlatformV2>())
     val platformsInApp = _platformsInApp.asStateFlow()
 
-    // Enabled platforms list in app
     private val _enabledPlatformsInApp = MutableStateFlow(listOf<PlatformV2>())
     val enabledPlatformsInApp = _enabledPlatformsInApp.asStateFlow()
 
-    // User input used for the chat composer
     val question = TextFieldState()
 
-    // Selected attachment drafts for current message
     private val _selectedAttachments = MutableStateFlow(listOf<ChatAttachmentDraft>())
     val selectedAttachments = _selectedAttachments.asStateFlow()
 
     private val _attachmentNotice = MutableStateFlow<String?>(null)
     val attachmentNotice = _attachmentNotice.asStateFlow()
 
-    // Chat messages currently in the chat room
     private val _groupedMessages = MutableStateFlow(GroupedMessages())
     val groupedMessages = _groupedMessages.asStateFlow()
 
-    // Each chat states for assistant chat messages
-    // Index of the currently shown message's platform - default is 0 (first platform)
     private val _indexStates = MutableStateFlow(listOf<Int>())
     val indexStates = _indexStates.asStateFlow()
 
-    // Loading states for each platform
     private val _loadingStates = MutableStateFlow(List<LoadingState>(enabledPlatformsInChat.size) { LoadingState.Idle })
     val loadingStates = _loadingStates.asStateFlow()
 
-    // Used for text data to show in SelectText Bottom Sheet
     private val _selectedText = MutableStateFlow("")
     val selectedText = _selectedText.asStateFlow()
 
-    // State for the message loading state (From the database)
     private val _isLoaded = MutableStateFlow(false)
     val isLoaded = _isLoaded.asStateFlow()
 
@@ -237,8 +227,7 @@ class ChatViewModel @Inject constructor(
     fun updateChatPlatformModels(models: Map<String, String>) {
         val sanitizedModels = models
             .filterKeys { it in enabledPlatformsInChat }
-.mapValues { (_, model,
- -> model.trim() }
+            .mapValues { (_, model) -> model.trim() }
 
         _chatPlatformModels.update { it + sanitizedModels }
 
@@ -292,7 +281,6 @@ class ChatViewModel @Inject constructor(
     }
 
     fun updateChatTitle(title: String) {
-        // Should be only used for changing chat title after the chatroom is created.
         if (_chatRoom.value.id > 0) {
             _chatRoom.update { it.copy(title = title) }
             viewModelScope.launch {
@@ -302,7 +290,6 @@ class ChatViewModel @Inject constructor(
     }
 
     fun updateChatPlatformIndex(assistantIndex: Int, platformIndex: Int) {
-        // Change the message shown in the screen to another platform
         if (assistantIndex >= _indexStates.value.size || assistantIndex < 0) return
         if (platformIndex >= enabledPlatformsInChat.size || platformIndex < 0) return
 
@@ -375,22 +362,18 @@ class ChatViewModel @Inject constructor(
         val userMessages = _groupedMessages.value.userMessages
         val assistantMessages = _groupedMessages.value.assistantMessages
 
-        // Find the index of the message being edited
         val messageIndex = userMessages.indexOfFirst { it.id == editedMessage.id }
         if (messageIndex == -1) return false
 
-        // Update the message content
         val updatedUserMessages = userMessages.toMutableList()
         updatedUserMessages[messageIndex] = editedMessage.copy(
             attachments = attachments.mapNotNull { it.attachment },
             createdAt = currentTimeStamp
         )
 
-        // Remove all messages after the edited question (both user and assistant messages)
         val remainingUserMessages = updatedUserMessages.take(messageIndex + 1)
         val remainingAssistantMessages = assistantMessages.take(messageIndex)
 
-        // Update the grouped messages
         _groupedMessages.update {
             GroupedMessages(
                 userMessages = remainingUserMessages,
@@ -398,7 +381,6 @@ class ChatViewModel @Inject constructor(
             )
         }
 
-        // Add empty assistant message slots for the edited question
         _groupedMessages.update {
             it.copy(
                 assistantMessages = it.assistantMessages + listOf(
@@ -407,7 +389,6 @@ class ChatViewModel @Inject constructor(
             )
         }
 
-        // Update index states to match the new message count - trim the end part
         val removedMessagesCount = userMessages.size - remainingUserMessages.size
         _indexStates.update {
             val currentStates = it.toMutableList()
@@ -415,7 +396,6 @@ class ChatViewModel @Inject constructor(
             currentStates
         }
 
-        // Start new conversation from the edited question
         completeChat()
         return true
     }
@@ -471,30 +451,35 @@ class ChatViewModel @Inject constructor(
     }
 
     fun showPreviousAssistantRevision(turnIndex: Int, platformIndex: Int) {
-updateAssistantRevisionSelection(turnIndex, platformIndex,
- { message ->
-            when {
-                message.revisions.isEmpty() -> message.activeRevisionIndex
-                message.activeRevisionIndex == ACTIVE_REVISION_LATEST -> 0
-                message.activeRevisionIndex < message.revisions.lastIndex -> message.activeRevisionIndex + 1
-                else -> message.activeRevisionIndex
+        updateAssistantRevisionSelection(
+            turnIndex,
+            platformIndex,
+            { message ->
+                when {
+                    message.revisions.isEmpty() -> message.activeRevisionIndex
+                    message.activeRevisionIndex == ACTIVE_REVISION_LATEST -> 0
+                    message.activeRevisionIndex < message.revisions.lastIndex -> message.activeRevisionIndex + 1
+                    else -> message.activeRevisionIndex
+                }
             }
-        }
+        )
     }
 
     fun showNextAssistantRevision(turnIndex: Int, platformIndex: Int) {
-updateAssistantRevisionSelection(turnIndex, platformIndex,
- { message ->
-            when {
-                message.activeRevisionIndex == ACTIVE_REVISION_LATEST -> ACTIVE_REVISION_LATEST
-                message.activeRevisionIndex == 0 -> ACTIVE_REVISION_LATEST
-                else -> message.activeRevisionIndex - 1
+        updateAssistantRevisionSelection(
+            turnIndex,
+            platformIndex,
+            { message ->
+                when {
+                    message.activeRevisionIndex == ACTIVE_REVISION_LATEST -> ACTIVE_REVISION_LATEST
+                    message.activeRevisionIndex == 0 -> ACTIVE_REVISION_LATEST
+                    else -> message.activeRevisionIndex - 1
+                }
             }
-        }
+        )
     }
 
     fun exportChat(): Pair<String, String> {
-        // Build the chat history in Markdown format
         val chatHistoryMarkdown = buildString {
             appendLine("# Chat Export: \"${chatRoom.value.title}\"")
             appendLine()
@@ -520,17 +505,14 @@ updateAssistantRevisionSelection(turnIndex, platformIndex,
             }
         }
 
-        // Save the Markdown file
         val fileName = "export_${chatRoom.value.title}_${System.currentTimeMillis()}.md"
         return Pair(fileName, chatHistoryMarkdown)
     }
 
     private fun completeChat() {
-        // Update all the platform loading states to Loading
         _loadingStates.update { List(enabledPlatformsInChat.size) { LoadingState.Loading } }
         val turnIndex = _groupedMessages.value.assistantMessages.lastIndex
 
-        // Send chat completion requests
         enabledPlatformsInChat.forEachIndexed { idx, platformUid ->
             val platform = _enabledPlatformsInApp.value.firstOrNull { it.uid == platformUid } ?: return@forEachIndexed
             val platformWithChatModel = resolvePlatformModel(platform)
@@ -630,8 +612,7 @@ updateAssistantRevisionSelection(turnIndex, platformIndex,
                     .sumOf { FileUtils.getFileSize(context, it.sourceFilePath).coerceAtLeast(0L) }
             }
 
-if (FileUtils.wouldExceedTotalUploadLimit(currentDraftBytes, fileSize,
-) {
+            if (FileUtils.wouldExceedTotalUploadLimit(currentDraftBytes, fileSize)) {
                 rejectDraftAttachment(
                     currentAttachments = currentAttachments,
                     updateAttachments = updateAttachments,
@@ -756,10 +737,6 @@ if (FileUtils.wouldExceedTotalUploadLimit(currentDraftBytes, fileSize,
             ?.let { java.io.File(it).delete() }
     }
 
-    /**
-     * Assistant revisions are stored newest-first: revisions[0] is the newest
-     * saved answer, and ACTIVE_REVISION_LATEST points at the live content.
-     */
     private fun updateAssistantRevisionSelection(
         turnIndex: Int,
         platformIndex: Int,
@@ -784,18 +761,16 @@ if (FileUtils.wouldExceedTotalUploadLimit(currentDraftBytes, fileSize,
     }
 
     private suspend fun fetchMessages() {
-        // If the room isn't new
         if (chatRoomId != 0) {
             _groupedMessages.update { fetchGroupedMessages(chatRoomId) }
             if (_groupedMessages.value.assistantMessages.size != _indexStates.value.size) {
                 _indexStates.update { List(_groupedMessages.value.assistantMessages.size) { 0 } }
             }
             _loadingStates.update { List(enabledPlatformsInChat.size) { LoadingState.Idle } }
-            _isLoaded.update { true } // Finish fetching
+            _isLoaded.update { true }
             return
         }
 
-        // When message id should sync after saving chats
         if (_chatRoom.value.id != 0) {
             _groupedMessages.update { fetchGroupedMessages(_chatRoom.value.id) }
             return
@@ -859,8 +834,7 @@ if (FileUtils.wouldExceedTotalUploadLimit(currentDraftBytes, fileSize,
             emptyMap()
         }
 
-val mergedModels = defaultModels.mapValues { (uid, defaultModel,
- ->
+        val mergedModels = defaultModels.mapValues { (uid, defaultModel) ->
             persistedModels[uid]?.takeIf { it.isNotBlank() } ?: defaultModel
         }
 
@@ -898,7 +872,6 @@ val mergedModels = defaultModels.mapValues { (uid, defaultModel,
                         }
                     }
 
-                    // Sync message ids
                     fetchMessages()
                 }
             }
@@ -960,10 +933,10 @@ internal fun createRetryAssistantMessage(
     currentMessage: MessageV2,
     chatId: Int,
     platformUid: String
-): MessageV2 = createEmptyAssistantMessage(chatId, platformUid,
-.copy(
-    revisions = currentMessage.revisions
-)
+): MessageV2 = createEmptyAssistantMessage(chatId, platformUid)
+    .copy(
+        revisions = currentMessage.revisions
+    )
 
 internal fun normalizeAssistantRow(
     assistantMessages: List<MessageV2>,

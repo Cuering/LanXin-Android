@@ -3,7 +3,6 @@ package com.lanxin.android.presentation
 import android.content.Context
 import android.content.Intent
 import android.os.Build
-import android.os.Bundle
 import java.io.PrintWriter
 import java.io.StringWriter
 import java.text.SimpleDateFormat
@@ -58,12 +57,10 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
         return sw.toString()
     }
 
-    private fun getDeviceInfo(): String {
-        return buildString {
-            appendLine("设备型号：${Build.MODEL}")
-            appendLine("品牌：${Build.BRAND}")
-            appendLine("系统版本：Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
-            appendLine("应用包名：${context?.packageName}")
-        }
+    private fun getDeviceInfo(): String = buildString {
+        appendLine("设备型号：${Build.MODEL}")
+        appendLine("品牌：${Build.BRAND}")
+        appendLine("系统版本：Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
+        appendLine("应用包名：${context?.packageName}")
     }
 }

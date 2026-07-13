@@ -204,10 +204,11 @@ fun SetupPlatformWizardScreen(
 
     // LanXin login dialog
     val showLogin by setupViewModel.showLoginDialog.collectAsStateWithLifecycle()
+    val loginApiUrl by setupViewModel.apiUrl.collectAsStateWithLifecycle()
     if (showLogin) {
         LanXinLoginDialog(
             authClient = setupViewModel.lanXinAuthClient,
-            apiUrl = setupViewModel.apiUrl.value,
+            apiUrl = loginApiUrl,
             onTokenReceived = { token -> setupViewModel.updateApiKey(token) },
             onDismiss = { setupViewModel.dismissLoginDialog() }
         )
