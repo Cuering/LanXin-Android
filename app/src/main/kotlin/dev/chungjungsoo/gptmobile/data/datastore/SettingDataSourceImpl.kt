@@ -75,6 +75,17 @@ class SettingDataSourceImpl @Inject constructor(
     )
     private val dynamicThemeKey = intPreferencesKey("dynamic_mode")
     private val themeModeKey = intPreferencesKey("theme_mode")
+    private val lanxinUserNameKey = stringPreferencesKey("lanxin_username")
+
+    override suspend fun setLanXinUserName(name: String) {
+        dataStore.edit { pref ->
+            pref[lanxinUserNameKey] = name
+        }
+    }
+
+    override suspend fun getLanXinUserName(): String? = dataStore.data.map { pref ->
+        pref[lanxinUserNameKey]
+    }.first()
 
     override suspend fun updateDynamicTheme(theme: DynamicTheme) {
         dataStore.edit { pref ->
