@@ -1,7 +1,7 @@
 name: Debug build APK
 
 on:
-  pull_request_target:
+  pull_request:
     branches:
       - "main"
     paths-ignore:
@@ -22,9 +22,6 @@ jobs:
   run:
     name: Build debug APK
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ github.workspace }}
 
     permissions:
       pull-requests: write
@@ -32,9 +29,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.ref }}
-          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
 
       - name: Setup JDK
         uses: actions/setup-java@v5
@@ -47,7 +41,6 @@ jobs:
         run: |
           echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
           keytool -genkeypair -v -keystore debug-keystore.jks -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Android Debug,O=Android,C=US"
-          ls -la debug-keystore.jks
 
       - name: Build debug APK
         run: |
@@ -62,7 +55,7 @@ jobs:
           path: ${{ github.workspace }}/app/build/outputs/apk/debug/app-debug.apk
 
       - name: Comment APK Link
-        if: github.event_name == "pull_request_target"
+        if: github.event_name == "pull_request"
         uses: thollander/actions-comment-pull-request@v3
         with:
           comment_tag: apk
