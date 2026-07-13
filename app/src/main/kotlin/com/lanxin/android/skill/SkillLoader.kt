@@ -144,8 +144,8 @@ class SkillLoader @Inject constructor(
             .toList()
     }
 
-    private fun readAssetText(path: String): String? {
-        return try {
+    private fun readAssetText(path: String): String? =
+        try {
             appContext.assets.open(path).use { input ->
                 input.readBytes().toString(Charset.forName("UTF-8"))
             }
