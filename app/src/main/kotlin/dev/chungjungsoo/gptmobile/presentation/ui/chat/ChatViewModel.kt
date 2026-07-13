@@ -237,8 +237,7 @@ class ChatViewModel @Inject constructor(
     fun updateChatPlatformModels(models: Map<String, String>) {
         val sanitizedModels = models
             .filterKeys { it in enabledPlatformsInChat }
-.mapValues { (_, model,
- -> model.trim() }
+            .mapValues { (_, model) -> model.trim() }
 
         _chatPlatformModels.update { it + sanitizedModels }
 
@@ -356,7 +355,7 @@ class ChatViewModel @Inject constructor(
     }
 
     fun consumeAttachmentNotice() {
-        _attachmentNotice.update { null }
+        _attachmentNotice.update { false }
     }
 
     fun notifyAttachmentCopyFailed() {
@@ -471,26 +470,28 @@ class ChatViewModel @Inject constructor(
     }
 
     fun showPreviousAssistantRevision(turnIndex: Int, platformIndex: Int) {
-updateAssistantRevisionSelection(turnIndex, platformIndex,
- { message ->
-            when {
-                message.revisions.isEmpty() -> message.activeRevisionIndex
-                message.activeRevisionIndex == ACTIVE_REVISION_LATEST -> 0
-                message.activeRevisionIndex < message.revisions.lastIndex -> message.activeRevisionIndex + 1
-                else -> message.activeRevisionIndex
+        updateAssistantRevisionSelection(turnIndex, platformIndex,
+            { message ->
+                when {
+                    message.revisions.isEmpty() -> message.activeRevisionIndex
+                    message.activeRevisionIndex == ACTIVE_REVISION_LATEST -> 0
+                    message.activeRevisionIndex < message.revisions.lastIndex -> message.activeRevisionIndex + 1
+                    else -> message.activeRevisionIndex
+                }
             }
-        }
+        )
     }
 
     fun showNextAssistantRevision(turnIndex: Int, platformIndex: Int) {
-updateAssistantRevisionSelection(turnIndex, platformIndex,
- { message ->
-            when {
-                message.activeRevisionIndex == ACTIVE_REVISION_LATEST -> ACTIVE_REVISION_LATEST
-                message.activeRevisionIndex == 0 -> ACTIVE_REVISION_LATEST
-                else -> message.activeRevisionIndex - 1
+        updateAssistantRevisionSelection(turnIndex, platformIndex,
+            { message ->
+                when {
+                    message.activeRevisionIndex == ACTIVE_REVISION_LATEST -> ACTIVE_REVISION_LATEST
+                    message.activeRevisionIndex == 0 -> ACTIVE_REVISION_LATEST
+                    else -> message.activeRevisionIndex - 1
+                }
             }
-        }
+        )
     }
 
     fun exportChat(): Pair<String, String> {
@@ -630,8 +631,7 @@ updateAssistantRevisionSelection(turnIndex, platformIndex,
                     .sumOf { FileUtils.getFileSize(context, it.sourceFilePath).coerceAtLeast(0L) }
             }
 
-if (FileUtils.wouldExceedTotalUploadLimit(currentDraftBytes, fileSize,
-) {
+            if (FileUtils.wouldExceedTotalUploadLimit(currentDraftBytes, fileSize)) {
                 rejectDraftAttachment(
                     currentAttachments = currentAttachments,
                     updateAttachments = updateAttachments,
@@ -859,8 +859,7 @@ if (FileUtils.wouldExceedTotalUploadLimit(currentDraftBytes, fileSize,
             emptyMap()
         }
 
-val mergedModels = defaultModels.mapValues { (uid, defaultModel,
- ->
+        val mergedModels = defaultModels.mapValues { (uid, defaultModel) ->
             persistedModels[uid]?.takeIf { it.isNotBlank() } ?: defaultModel
         }
 
@@ -960,7 +959,7 @@ internal fun createRetryAssistantMessage(
     currentMessage: MessageV2,
     chatId: Int,
     platformUid: String
-): MessageV2 = createEmptyAssistantMessage(chatId, platformUid,
+): MessageV2 = createEmptyAssistantMessage(chatId, platformUid)
 .copy(
     revisions = currentMessage.revisions
 )
