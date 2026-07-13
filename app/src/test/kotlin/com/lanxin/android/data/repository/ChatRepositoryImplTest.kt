@@ -26,6 +26,7 @@ import com.lanxin.android.data.model.ClientType
 import com.lanxin.android.data.model.GeminiSafetySettings
 import com.lanxin.android.data.network.AnthropicAPI
 import com.lanxin.android.data.network.GoogleAPI
+import com.lanxin.android.data.network.LanXinAPI
 import com.lanxin.android.data.network.GroqAPI
 import com.lanxin.android.data.network.OpenAIAPI
 import com.lanxin.android.data.network.UploadedProviderFile
@@ -327,7 +328,8 @@ class ChatRepositoryImplTest {
     private fun createRepository(
         groqAPI: GroqAPI = FakeGroqAPI(emptyFlow()),
         openAIAPI: OpenAIAPI = RecordingOpenAIAPI(),
-        googleAPI: GoogleAPI = FakeGoogleAPI()
+        googleAPI: GoogleAPI = FakeGoogleAPI(),
+        lanXinAPI: LanXinAPI = FakeLanXinAPI()
     ): ChatRepositoryImpl = ChatRepositoryImpl(
         context = ContextWrapper(null),
         chatRoomDao = proxy(),
@@ -340,6 +342,7 @@ class ChatRepositoryImplTest {
         groqAPI = groqAPI,
         anthropicAPI = FakeAnthropicAPI(),
         googleAPI = googleAPI,
+        lanXinAPI = lanXinAPI,
         attachmentUploadCoordinator = AttachmentUploadCoordinator(
             openAIAPI,
             FakeAnthropicAPI(),
@@ -483,5 +486,18 @@ class ChatRepositoryImplTest {
         ): UploadedProviderFile = UploadedProviderFile(id = "google-file", mimeType = mimeType)
 
         override suspend fun isFileAvailable(fileName: String): Boolean = false
+    }
+
+    private class FakeLanXinAPI : LanXinAPI {
+        override fun setToken(token: String) = Unit
+
+        override fun setAPIUrl(apiUrl: String) = Unit
+
+        override suspend fun streamChat(
+            message: String,
+            username: String,
+            sessionId: String?,
+            timeoutSeconds: Int
+        ): Flow<ApiState> = emptyFlow()
     }
 }
