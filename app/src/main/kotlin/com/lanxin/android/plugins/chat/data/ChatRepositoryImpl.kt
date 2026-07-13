@@ -56,6 +56,7 @@ import com.lanxin.android.data.network.GoogleAPI
 import com.lanxin.android.data.network.GroqAPI
 import com.lanxin.android.data.network.LanXinAPI
 import com.lanxin.android.data.network.OpenAIAPI
+import com.lanxin.android.data.repository.SettingRepository
 import com.lanxin.android.util.AttachmentPayloadCache
 import com.lanxin.android.util.FileUtils
 import com.lanxin.android.util.stripAssistantErrorNote
