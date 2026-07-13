@@ -154,7 +154,6 @@ fun HomeScreen(
                 NewChatButton(expanded = listState.isScrollingUp(), onClick = {
                     val enabledApiTypes = platformState.filter { it.enabled }.map { it.uid }
                     if (enabledApiTypes.size == 1) {
-                        // Navigate to new chat directly if only one platform is enabled
                         navigateToNewChat(enabledApiTypes)
                     } else {
                         homeViewModel.openSelectModelDialog()
@@ -219,8 +218,7 @@ fun HomeScreen(
                             )
                         }
                     },
-supportingContent = { Text(text = stringResource(R.string.using_certain_platform, usingPlatform,
-) }
+                    supportingContent = { Text(text = stringResource(R.string.using_certain_platform, usingPlatform)) }
                 )
             }
         }
@@ -302,8 +300,7 @@ fun HomeTopAppBar(
                 isSelectionMode -> {
                     Text(
                         modifier = Modifier.padding(4.dp),
-text = stringResource(R.string.chats_selected, selectedChats,
-,
+                        text = stringResource(R.string.chats_selected, selectedChats),
                         maxLines = 1,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                         overflow = TextOverflow.Ellipsis
@@ -540,9 +537,9 @@ fun EnablePlatformWarningText(onGoToSettings: () -> Unit = {}) {
             textAlign = TextAlign.Center,
             text = stringResource(R.string.enable_at_leat_one_platform)
         )
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         TextButton(onClick = onGoToSettings) {
-            Text("去设置")
+            Text(stringResource(R.string.go_to_settings))
         }
     }
 }
@@ -552,14 +549,7 @@ fun DeleteWarningDialog(
     onDismissRequest: () -> Unit,
     onConfirm: () -> Unit
 ) {
-    val configuration = LocalWindowInfo.current
-    val screenWidth = with(LocalDensity.current) { configuration.containerSize.width.toDp() }
-    val screenHeight = with(LocalDensity.current) { configuration.containerSize.height.toDp() }
     AlertDialog(
-        properties = DialogProperties(usePlatformDefaultWidth = false),
-        modifier = Modifier
-            .widthIn(max = screenWidth - 40.dp)
-            .heightIn(max = screenHeight - 80.dp),
         title = {
             Text(
                 text = stringResource(R.string.delete_selected_chats),
