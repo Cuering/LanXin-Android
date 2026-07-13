@@ -22,6 +22,9 @@ jobs:
   run:
     name: Build debug APK
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}
 
     permissions:
       pull-requests: write
@@ -44,6 +47,7 @@ jobs:
         run: |
           echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
           keytool -genkeypair -v -keystore debug-keystore.jks -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Android Debug,O=Android,C=US"
+          ls -la debug-keystore.jks
 
       - name: Build debug APK
         run: |
