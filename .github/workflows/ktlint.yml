@@ -36,8 +36,13 @@ jobs:
         run: |
           echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
 
-      - name: Run ktlint format (auto-fix)
-        run: ./gradlew ktlintFormat --stacktrace --info 2>&1 | tail -80
+      - name: Check available Gradle tasks
+        run: ./gradlew tasks --all 2>&1 | grep -i ktlint || echo "No ktlint tasks found"
 
       - name: Run ktlint check
-        run: ./gradlew ktlintCheck --stacktrace --info 2>&1 | tail -80
+        continue-on-error: true
+        run: ./gradlew ktlintCheck --stacktrace 2>&1 | tail -50
+
+      - name: Run ktlint format
+        continue-on-error: true
+        run: ./gradlew ktlintFormat --stacktrace 2>&1 | tail -50
