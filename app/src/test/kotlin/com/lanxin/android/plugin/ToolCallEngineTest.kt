@@ -2,6 +2,9 @@ package com.lanxin.android.plugin
 
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -10,14 +13,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ToolCallEngineTest {
-
-    private fun engineWithTools(vararg tools: ToolDef): ToolCallEngine {
-        val manager = PluginManager(appContext = FakeContext())
-        // 直接通过反射/内部路径不可用，这里用自定义 stub 引擎测纯解析逻辑
-        return ToolCallEngine(manager).also {
-            // 无工具也能测解析；执行路由另测
-        }
-    }
 
     @Test
     fun `parseToolCalls extracts name and arguments`() {
@@ -33,8 +28,8 @@ class ToolCallEngineTest {
         val calls = engine.parseToolCalls(text)
         assertEquals(1, calls.size)
         assertEquals("memory_recall", calls[0].name)
-        assertEquals("咖啡", calls[0].arguments["keyword"].toString().trim('"'))
-        assertEquals("3", calls[0].arguments["limit"].toString().trim('"'))
+        assertEquals("咖啡", calls[0].arguments["keyword"]?.jsonPrimitive?.contentOrNull)
+        assertEquals(3, calls[0].arguments["limit"]?.jsonPrimitive?.intOrNull)
     }
 
     @Test
@@ -48,7 +43,7 @@ class ToolCallEngineTest {
         val calls = engine.parseToolCalls(text)
         assertEquals(2, calls.size)
         assertEquals("memory_store", calls[0].name)
-        assertEquals("喜欢绿茶", calls[0].arguments["content"].toString().trim('"'))
+        assertEquals("喜欢绿茶", calls[0].arguments["content"]?.jsonPrimitive?.contentOrNull)
         assertEquals("memory_recall", calls[1].name)
     }
 
@@ -116,7 +111,7 @@ class ToolCallEngineTest {
                         description = "echo args",
                         handler = { args ->
                             buildJsonObject {
-                                put("echo", args["msg"].toString().trim('"'))
+                                put("echo", args["msg"]?.jsonPrimitive?.contentOrNull ?: "")
                             }
                         }
                     )
@@ -137,7 +132,7 @@ class ToolCallEngineTest {
         )
         assertEquals(1, results.size)
         assertEquals("echo", results[0].name)
-        assertEquals("hi", results[0].result["echo"].toString().trim('"'))
+        assertEquals("hi", results[0].result["echo"]?.jsonPrimitive?.contentOrNull)
     }
 
     @Test
@@ -176,7 +171,7 @@ class ToolCallEngineTest {
         assertTrue(round != null)
         assertEquals(1, round!!.calls.size)
         assertEquals(1, round.results.size)
-        assertEquals("0", round.results[0].result["count"].toString())
+        assertEquals(0, round.results[0].result["count"]?.jsonPrimitive?.intOrNull)
         assertTrue(round.followUpUserMessage.contains("[工具结果]"))
         assertFalse(round.cleanedAssistantText.contains("tool_call"))
     }

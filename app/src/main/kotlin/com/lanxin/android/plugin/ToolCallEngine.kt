@@ -169,20 +169,23 @@ class ToolCallEngine @Inject constructor(
         return try {
             val element = json.parseToJsonElement(body)
             val obj = element.jsonObject
-            val name = obj["name"]?.toString()?.trim('"')?.trim().orEmpty()
+            val name = when (val nameEl = obj["name"]) {
+                is kotlinx.serialization.json.JsonPrimitive -> nameEl.content.trim()
+                else -> nameEl?.toString()?.trim('"')?.trim().orEmpty()
+            }
             if (name.isBlank()) return null
 
             val argumentsElement = obj["arguments"] ?: obj["parameters"]
             val arguments = when (argumentsElement) {
                 is JsonObject -> argumentsElement
-                null -> buildJsonObject { }
-                else -> {
-                    // 兼容 arguments 是字符串形式的 JSON
-                    val text = argumentsElement.toString().trim().trim('"')
+                is kotlinx.serialization.json.JsonPrimitive -> {
+                    val text = argumentsElement.content.trim()
                     runCatching {
                         json.parseToJsonElement(text).jsonObject
                     }.getOrElse { buildJsonObject { } }
                 }
+                null -> buildJsonObject { }
+                else -> buildJsonObject { }
             }
 
             ToolCallRequest(name = name, arguments = arguments, raw = raw)

@@ -20,6 +20,7 @@ import com.lanxin.android.plugins.memory.data.memory.MemoryRepository
 import com.lanxin.android.plugins.chat.data.AttachmentUploadCoordinator
 import com.lanxin.android.plugins.chat.data.ChatRepository
 import com.lanxin.android.data.repository.SettingRepository
+import com.lanxin.android.plugin.ToolCallEngine
 import com.lanxin.android.plugins.memory.domain.memory.MemoryInjector
 import com.lanxin.android.util.AttachmentPayloadCache
 import com.lanxin.android.util.FileUtils
@@ -43,7 +44,8 @@ class ChatViewModel @Inject constructor(
     private val settingRepository: SettingRepository,
     private val attachmentUploadCoordinator: AttachmentUploadCoordinator,
     private val memoryRepository: MemoryRepository,
-    private val memoryInjector: MemoryInjector
+    private val memoryInjector: MemoryInjector,
+    private val toolCallEngine: ToolCallEngine
 ) : ViewModel() {
     sealed class LoadingState {
         data object Idle : LoadingState()
@@ -268,18 +270,12 @@ class ChatViewModel @Inject constructor(
 
         viewModelScope.launch {
             val retryContext = groupedMessagesThroughTurn(_groupedMessages.value, turnIndex)
-            val userMessages = injectMemoryIntoLastUserMessage(retryContext.userMessages)
-            chatRepository.completeChat(
-                userMessages,
-                retryContext.assistantMessages,
-                platformWithChatModel
-            ).handleStates(
-                messageFlow = _groupedMessages,
+            runChatWithTools(
+                userMessages = retryContext.userMessages,
+                assistantMessages = retryContext.assistantMessages,
+                platform = platformWithChatModel,
                 turnIndex = turnIndex,
-                platformIdx = platformIndex,
-                onLoadingComplete = {
-                    _loadingStates.update { it.toMutableList().apply { this[platformIndex] = LoadingState.Idle } }
-                },
+                platformIndex = platformIndex,
                 revisionToAppendOnSuccess = revisionToAppendOnSuccess
             )
         }
@@ -522,21 +518,130 @@ class ChatViewModel @Inject constructor(
             val platform = _enabledPlatformsInApp.value.firstOrNull { it.uid == platformUid } ?: return@forEachIndexed
             val platformWithChatModel = resolvePlatformModel(platform)
             viewModelScope.launch {
-                val userMessages = injectMemoryIntoLastUserMessage(_groupedMessages.value.userMessages)
-                chatRepository.completeChat(
-                    userMessages,
-                    _groupedMessages.value.assistantMessages,
-                    platformWithChatModel
-                ).handleStates(
-                    messageFlow = _groupedMessages,
+                runChatWithTools(
+                    userMessages = _groupedMessages.value.userMessages,
+                    assistantMessages = _groupedMessages.value.assistantMessages,
+                    platform = platformWithChatModel,
                     turnIndex = turnIndex,
-                    platformIdx = idx,
-                    onLoadingComplete = {
-                        _loadingStates.update { it.toMutableList().apply { this[idx] = LoadingState.Idle } }
-                    }
+                    platformIndex = idx
                 )
             }
         }
+    }
+
+    /**
+     * 带 MCP 工具调用循环的对话完成：
+     * 1. 注入记忆 + 工具系统提示词
+     * 2. 流式请求模型并更新 UI
+     * 3. 若回复含 tool_call，路由到 PluginManager 并回填，再请求（最多 [MAX_TOOL_ROUNDS] 轮）
+     * 4. 工具中间态不写入聊天历史，最终回复覆盖同一 assistant 槽位
+     */
+    private suspend fun runChatWithTools(
+        userMessages: List<MessageV2>,
+        assistantMessages: List<List<MessageV2>>,
+        platform: PlatformV2,
+        turnIndex: Int,
+        platformIndex: Int,
+        revisionToAppendOnSuccess: com.lanxin.android.plugins.chat.data.entity.AssistantRevision? = null
+    ) {
+        val platformWithTools = platform.copy(
+            systemPrompt = toolCallEngine.mergeSystemPrompt(platform.systemPrompt)
+        )
+
+        var workingUserMessages = injectMemoryIntoLastUserMessage(userMessages)
+        var workingAssistantMessages = assistantMessages
+        var remainingRounds = MAX_TOOL_ROUNDS
+        var pendingRevision = revisionToAppendOnSuccess
+
+        try {
+            while (true) {
+                chatRepository.completeChat(
+                    workingUserMessages,
+                    workingAssistantMessages,
+                    platformWithTools
+                ).handleStates(
+                    messageFlow = _groupedMessages,
+                    turnIndex = turnIndex,
+                    platformIdx = platformIndex,
+                    onLoadingComplete = {},
+                    revisionToAppendOnSuccess = pendingRevision
+                )
+
+                val assistantText = _groupedMessages.value
+                    .assistantMessages
+                    .getOrNull(turnIndex)
+                    ?.getOrNull(platformIndex)
+                    ?.content
+                    .orEmpty()
+
+                if (remainingRounds <= 0) break
+
+                val toolRound = toolCallEngine.processAssistantReply(assistantText) ?: break
+
+                // 清理助手消息中的 tool_call 标签（用户可见的中间提示）
+                val cleaned = toolRound.cleanedAssistantText
+                _groupedMessages.update { grouped ->
+                    updateAssistantSlot(
+                        groupedMessages = grouped,
+                        turnIndex = turnIndex,
+                        platformIndex = platformIndex
+                    ) { current ->
+                        current.copy(content = cleaned)
+                    }
+                }
+
+                // 构造下一轮模型上下文：历史 + 本轮清理后的 assistant + 工具结果 user + 空 assistant
+                val historyUsers = workingUserMessages
+                val historyAssistants = workingAssistantMessages.toMutableList()
+
+                // 确保当前 turn 的 assistant 槽有清理后的内容
+                if (turnIndex in historyAssistants.indices) {
+                    val row = historyAssistants[turnIndex].toMutableList()
+                    if (platformIndex in row.indices) {
+                        row[platformIndex] = row[platformIndex].copy(content = cleaned)
+                        historyAssistants[turnIndex] = row
+                    }
+                }
+
+                val toolUserMessage = MessageV2(
+                    chatId = chatRoomId,
+                    content = toolRound.followUpUserMessage,
+                    platformType = null,
+                    createdAt = currentTimeStamp
+                )
+                val placeholderAssistant = MessageV2(
+                    chatId = chatRoomId,
+                    content = "",
+                    platformType = platform.uid
+                )
+
+                workingUserMessages = historyUsers + toolUserMessage
+                workingAssistantMessages = historyAssistants + listOf(listOf(placeholderAssistant))
+
+                // 下一轮覆盖同一 UI 槽位，不再追加 revision
+                pendingRevision = null
+                remainingRounds -= 1
+
+                // 清空 UI 槽位，准备接收最终/下一轮回复
+                _groupedMessages.update { grouped ->
+                    updateAssistantSlot(
+                        groupedMessages = grouped,
+                        turnIndex = turnIndex,
+                        platformIndex = platformIndex
+                    ) { current ->
+                        current.copy(content = "", thoughts = "")
+                    }
+                }
+            }
+        } finally {
+            _loadingStates.update {
+                it.toMutableList().apply { this[platformIndex] = LoadingState.Idle }
+            }
+        }
+    }
+
+    private companion object {
+        private const val MAX_TOOL_ROUNDS = 3
     }
 
     /**

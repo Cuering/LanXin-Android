@@ -7,7 +7,6 @@ import com.lanxin.android.plugins.memory.data.memory.MemoryRepository
 import com.lanxin.android.plugins.memory.data.memory.MemoryType
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -32,35 +31,20 @@ class MemoryPlugin @Inject constructor(
                 name = "memory_recall",
                 description = "根据关键词检索本地记忆，返回相关记忆条目列表",
                 parameters = buildJsonObject {
-                    put(
-                        "type",
-                        "object"
-                    )
-                    put(
-                        "properties",
-                        buildJsonObject {
-                            put(
-                                "keyword",
-                                buildJsonObject {
-                                    put("type", "string")
-                                    put("description", "检索关键词")
-                                }
-                            )
-                            put(
-                                "limit",
-                                buildJsonObject {
-                                    put("type", "integer")
-                                    put("description", "最多返回条数，默认 5")
-                                }
-                            )
-                        }
-                    )
-                    put(
-                        "required",
-                        buildJsonArray {
-                            add(JsonPrimitive("keyword"))
-                        }
-                    )
+                    put("type", "object")
+                    put("properties", buildJsonObject {
+                        put("keyword", buildJsonObject {
+                            put("type", "string")
+                            put("description", "检索关键词")
+                        })
+                        put("limit", buildJsonObject {
+                            put("type", "integer")
+                            put("description", "最多返回条数，默认 5")
+                        })
+                    })
+                    put("required", buildJsonArray {
+                        add(JsonPrimitive("keyword"))
+                    })
                 },
                 handler = { args ->
                     val keyword = args["keyword"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
@@ -74,22 +58,17 @@ class MemoryPlugin @Inject constructor(
                     val memories = memoryRepository.searchMemories(keyword).take(limit)
                     buildJsonObject {
                         put("count", memories.size)
-                        put(
-                            "memories",
-                            buildJsonArray {
-                                memories.forEach { memory ->
-                                    add(
-                                        buildJsonObject {
-                                            put("id", memory.id)
-                                            put("content", memory.content)
-                                            put("type", memory.type)
-                                            put("type_label", MemoryType.displayName(memory.type))
-                                            put("importance", memory.importance)
-                                        }
-                                    )
-                                }
+                        put("memories", buildJsonArray {
+                            memories.forEach { memory ->
+                                add(buildJsonObject {
+                                    put("id", memory.id)
+                                    put("content", memory.content)
+                                    put("type", memory.type)
+                                    put("type_label", MemoryType.displayName(memory.type))
+                                    put("importance", memory.importance)
+                                })
                             }
-                        )
+                        })
                     }
                 }
             )
@@ -101,41 +80,23 @@ class MemoryPlugin @Inject constructor(
                 description = "将一条信息写入本地记忆库",
                 parameters = buildJsonObject {
                     put("type", "object")
-                    put(
-                        "properties",
-                        buildJsonObject {
-                            put(
-                                "content",
-                                buildJsonObject {
-                                    put("type", "string")
-                                    put("description", "要记住的内容")
-                                }
-                            )
-                            put(
-                                "type",
-                                buildJsonObject {
-                                    put("type", "string")
-                                    put(
-                                        "description",
-                                        "记忆类型: preference/factual/daily/chat/insight/instruction，默认 chat"
-                                    )
-                                }
-                            )
-                            put(
-                                "importance",
-                                buildJsonObject {
-                                    put("type", "number")
-                                    put("description", "重要程度 1-10，默认 5")
-                                }
-                            )
-                        }
-                    )
-                    put(
-                        "required",
-                        buildJsonArray {
-                            add(JsonPrimitive("content"))
-                        }
-                    )
+                    put("properties", buildJsonObject {
+                        put("content", buildJsonObject {
+                            put("type", "string")
+                            put("description", "要记住的内容")
+                        })
+                        put("type", buildJsonObject {
+                            put("type", "string")
+                            put("description", "记忆类型: preference/factual/daily/chat/insight/instruction，默认 chat")
+                        })
+                        put("importance", buildJsonObject {
+                            put("type", "number")
+                            put("description", "重要程度 1-10，默认 5")
+                        })
+                    })
+                    put("required", buildJsonArray {
+                        add(JsonPrimitive("content"))
+                    })
                 },
                 handler = { args ->
                     val content = args["content"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
