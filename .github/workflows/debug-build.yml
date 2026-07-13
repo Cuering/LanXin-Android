@@ -27,10 +27,11 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Setup JDK
-        uses: actions/setup-java@v5
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
         with:
           distribution: "oracle"
           java-version: "17"
@@ -46,7 +47,7 @@ jobs:
           ./gradlew assembleDebug
 
       - name: Upload debug APK
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         id: artifact-upload-step
         with:
           name: debug-${{ github.sha }}
@@ -58,4 +59,4 @@ jobs:
         with:
           comment_tag: apk
           message: |
-            Build complete! Here's the debug APK: ${{ steps.artifact-upload-step.outputs.artifact-url }}
+            Build complete! Here is the debug APK: ${{ steps.artifact-upload-step.outputs.artifact-url }}
