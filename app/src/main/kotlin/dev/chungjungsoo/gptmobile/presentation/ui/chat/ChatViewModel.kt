@@ -451,7 +451,9 @@ class ChatViewModel @Inject constructor(
     }
 
     fun showPreviousAssistantRevision(turnIndex: Int, platformIndex: Int) {
-        updateAssistantRevisionSelection(turnIndex, platformIndex,
+        updateAssistantRevisionSelection(
+            turnIndex,
+            platformIndex,
             { message ->
                 when {
                     message.revisions.isEmpty() -> message.activeRevisionIndex
@@ -464,7 +466,9 @@ class ChatViewModel @Inject constructor(
     }
 
     fun showNextAssistantRevision(turnIndex: Int, platformIndex: Int) {
-        updateAssistantRevisionSelection(turnIndex, platformIndex,
+        updateAssistantRevisionSelection(
+            turnIndex,
+            platformIndex,
             { message ->
                 when {
                     message.activeRevisionIndex == ACTIVE_REVISION_LATEST -> ACTIVE_REVISION_LATEST
