@@ -18,6 +18,9 @@ jobs:
       actions: read
       contents: read
 
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+
     strategy:
       fail-fast: false
       matrix:
@@ -36,22 +39,35 @@ jobs:
         java-version: '17'
         cache: 'gradle'
 
-    - name: Setup Android SDK
-      uses: android-actions/setup-android@v3
+    - name: Setup local.properties
+      run: |
+        echo "sdk.dir=$ANDROID_HOME" > local.properties
+        cat local.properties
 
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
+    - name: Install Android SDK components
+      run: |
+        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+        sdkmanager --list_installed || true
 
     - name: Diagnostic info
       run: |
-        echo "=== Java version ==="
-        java -version
-        echo "=== ANDROID_HOME ==="
-        echo "$ANDROID_HOME"
-        echo "=== Installed SDK platforms ==="
-        ls $ANDROID_HOME/platforms/ 2>/dev/null || echo "No platforms dir"
-        echo "=== Gradle version ==="
-        ./gradlew --version
+        {
+          echo "### CI Environment Diagnostic"
+          echo ""
+          echo "**Java version:**"
+          java -version 2>&1
+          echo ""
+          echo "**ANDROID_HOME:** $ANDROID_HOME"
+          echo ""
+          echo "**Installed SDK platforms:**"
+          ls $ANDROID_HOME/platforms/ 2>/dev/null || echo "No platforms"
+          echo ""
+          echo "**Installed build-tools:**"
+          ls $ANDROID_HOME/build-tools/ 2>/dev/null || echo "No build-tools"
+          echo ""
+          echo "**Gradle version:**"
+          ./gradlew --version 2>/dev/null || echo "gradlew not available"
+        } >> $GITHUB_STEP_SUMMARY
 
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v4
@@ -60,7 +76,7 @@ jobs:
         build-mode: ${{ matrix.build-mode }}
 
     - name: Build debug APK
-      run: ./gradlew assembleDebug --stacktrace
+      run: ./gradlew assembleDebug --stacktrace 2>&1 | tail -100
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v4
