@@ -132,7 +132,8 @@ class SetupViewModelV2 @Inject constructor(
                     systemPrompt = ModelConstants.DEFAULT_PROMPT,
                     stream = true,
                     reasoning = false,
-                    timeout = 30
+                    // LanXin goes through full AstrBot agent (tools/search); need longer socket timeout
+                    timeout = if (clientType == ClientType.LANXIN) 180 else 30
                 )
                 settingRepository.addPlatformV2(platform)
                 loadPlatforms()
