@@ -1,6 +1,6 @@
 package com.lanxin.android.data.repository
 
-import com.lanxin.android.data.database.entity.PlatformV2
+import com.lanxin.android.plugins.chat.data.entity.PlatformV2
 import com.lanxin.android.data.dto.Platform
 import com.lanxin.android.data.dto.ThemeSetting
 

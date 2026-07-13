@@ -40,7 +40,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.lanxin.android.R
 import com.lanxin.android.data.ModelConstants
-import com.lanxin.android.data.database.entity.PlatformV2
+import com.lanxin.android.plugins.chat.data.entity.PlatformV2
 import com.lanxin.android.data.model.ClientType
 
 @OptIn(ExperimentalMaterial3Api::class)

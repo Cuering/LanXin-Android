@@ -3,9 +3,9 @@ package com.lanxin.android.presentation.ui.home
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.lanxin.android.data.database.entity.ChatRoomV2
-import com.lanxin.android.data.database.entity.PlatformV2
-import com.lanxin.android.data.repository.ChatRepository
+import com.lanxin.android.plugins.chat.data.entity.ChatRoomV2
+import com.lanxin.android.plugins.chat.data.entity.PlatformV2
+import com.lanxin.android.plugins.chat.data.ChatRepository
 import com.lanxin.android.data.repository.SettingRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject

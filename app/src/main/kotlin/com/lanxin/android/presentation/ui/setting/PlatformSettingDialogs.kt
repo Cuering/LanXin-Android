@@ -35,7 +35,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import com.lanxin.android.R
-import com.lanxin.android.data.database.entity.PlatformV2
+import com.lanxin.android.plugins.chat.data.entity.PlatformV2
 import com.lanxin.android.data.model.GeminiSafetySettings
 import com.lanxin.android.util.isValidUrl
 import kotlin.math.roundToInt

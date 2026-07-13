@@ -2,7 +2,7 @@ package com.lanxin.android.presentation.ui.setting
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.lanxin.android.data.database.entity.PlatformV2
+import com.lanxin.android.plugins.chat.data.entity.PlatformV2
 import com.lanxin.android.data.repository.SettingRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject

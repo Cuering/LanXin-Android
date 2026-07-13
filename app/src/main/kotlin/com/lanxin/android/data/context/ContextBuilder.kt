@@ -1,9 +1,9 @@
 package com.lanxin.android.data.context
 
-import com.lanxin.android.data.database.entity.ACTIVE_REVISION_LATEST
-import com.lanxin.android.data.database.entity.MessageV2
-import com.lanxin.android.data.database.entity.PlatformV2
-import com.lanxin.android.data.database.entity.effectiveContent
+import com.lanxin.android.plugins.chat.data.entity.ACTIVE_REVISION_LATEST
+import com.lanxin.android.plugins.chat.data.entity.MessageV2
+import com.lanxin.android.plugins.chat.data.entity.PlatformV2
+import com.lanxin.android.plugins.chat.data.entity.effectiveContent
 import com.lanxin.android.util.isAssistantErrorMessage
 import com.lanxin.android.util.stripAssistantErrorNote
 import javax.inject.Inject

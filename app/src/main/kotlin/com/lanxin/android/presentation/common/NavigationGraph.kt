@@ -16,6 +16,7 @@ import androidx.navigation.navArgument
 import androidx.navigation.navigation
 import com.lanxin.android.presentation.ui.chat.ChatScreen
 import com.lanxin.android.presentation.ui.home.HomeScreen
+import com.lanxin.android.plugins.logger.presentation.ui.LoggerScreen
 import com.lanxin.android.plugins.memory.presentation.ui.memory.MemoryScreen
 import com.lanxin.android.presentation.ui.migrate.MigrateScreen
 import com.lanxin.android.presentation.ui.setting.AboutScreen
@@ -47,12 +48,21 @@ fun SetupNavGraph(navController: NavHostController) {
         settingNavigation(navController)
         chatScreenNavigation(navController)
         memoryScreenNavigation(navController)
+        loggerScreenNavigation(navController)
     }
 }
 
 fun NavGraphBuilder.memoryScreenNavigation(navController: NavHostController) {
     composable(Route.MEMORY_LIST) {
         MemoryScreen(
+            onBackAction = { navController.navigateUp() }
+        )
+    }
+}
+
+fun NavGraphBuilder.loggerScreenNavigation(navController: NavHostController) {
+    composable(Route.LOGGER) {
+        LoggerScreen(
             onBackAction = { navController.navigateUp() }
         )
     }
@@ -183,7 +193,8 @@ fun NavGraphBuilder.settingNavigation(navController: NavHostController) {
                         Route.PLATFORM_SETTINGS.replace("{platformUid}", platformUid)
                     )
                 },
-                onNavigateToAboutPage = { navController.navigate(Route.ABOUT_PAGE) }
+                onNavigateToAboutPage = { navController.navigate(Route.ABOUT_PAGE) },
+                onNavigateToLogger = { navController.navigate(Route.LOGGER) }
             )
         }
         composable(Route.ADD_PLATFORM) {

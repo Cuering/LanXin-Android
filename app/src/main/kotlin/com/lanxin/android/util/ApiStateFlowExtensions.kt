@@ -1,7 +1,7 @@
 package com.lanxin.android.util
 
-import com.lanxin.android.data.database.entity.AssistantRevision
-import com.lanxin.android.data.database.entity.resetActiveRevision
+import com.lanxin.android.plugins.chat.data.entity.AssistantRevision
+import com.lanxin.android.plugins.chat.data.entity.resetActiveRevision
 import com.lanxin.android.data.dto.ApiState
 import com.lanxin.android.presentation.ui.chat.ChatViewModel
 import com.lanxin.android.presentation.ui.chat.updateAssistantSlot

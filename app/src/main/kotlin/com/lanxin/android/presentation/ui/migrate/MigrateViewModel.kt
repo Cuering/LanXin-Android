@@ -3,7 +3,7 @@ package com.lanxin.android.presentation.ui.migrate
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.lanxin.android.data.repository.ChatRepository
+import com.lanxin.android.plugins.chat.data.ChatRepository
 import com.lanxin.android.data.repository.SettingRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject

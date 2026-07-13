@@ -1,9 +1,11 @@
 package com.lanxin.android.data.repository
 
+import com.lanxin.android.plugins.chat.data.AttachmentUploadCoordinator
+import com.lanxin.android.plugins.chat.data.ChatRepositoryImpl
 import android.content.ContextWrapper
 import com.lanxin.android.data.context.ContextBuilder
-import com.lanxin.android.data.database.entity.MessageV2
-import com.lanxin.android.data.database.entity.PlatformV2
+import com.lanxin.android.plugins.chat.data.entity.MessageV2
+import com.lanxin.android.plugins.chat.data.entity.PlatformV2
 import com.lanxin.android.data.dto.ApiState
 import com.lanxin.android.data.dto.anthropic.request.MessageRequest
 import com.lanxin.android.data.dto.anthropic.response.MessageResponseChunk

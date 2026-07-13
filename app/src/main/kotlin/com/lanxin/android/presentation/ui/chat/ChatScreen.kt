@@ -93,11 +93,11 @@ import androidx.core.content.FileProvider.getUriForFile
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lanxin.android.R
-import com.lanxin.android.data.database.entity.ACTIVE_REVISION_LATEST
-import com.lanxin.android.data.database.entity.MessageV2
-import com.lanxin.android.data.database.entity.PlatformV2
-import com.lanxin.android.data.database.entity.effectiveContent
-import com.lanxin.android.data.database.entity.effectiveThoughts
+import com.lanxin.android.plugins.chat.data.entity.ACTIVE_REVISION_LATEST
+import com.lanxin.android.plugins.chat.data.entity.MessageV2
+import com.lanxin.android.plugins.chat.data.entity.PlatformV2
+import com.lanxin.android.plugins.chat.data.entity.effectiveContent
+import com.lanxin.android.plugins.chat.data.entity.effectiveThoughts
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay

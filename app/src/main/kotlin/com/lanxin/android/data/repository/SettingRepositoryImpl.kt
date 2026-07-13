@@ -1,9 +1,9 @@
 package com.lanxin.android.data.repository
 
 import com.lanxin.android.data.ModelConstants
-import com.lanxin.android.data.database.dao.ChatPlatformModelV2Dao
-import com.lanxin.android.data.database.dao.PlatformV2Dao
-import com.lanxin.android.data.database.entity.PlatformV2
+import com.lanxin.android.plugins.chat.data.dao.ChatPlatformModelV2Dao
+import com.lanxin.android.plugins.chat.data.dao.PlatformV2Dao
+import com.lanxin.android.plugins.chat.data.entity.PlatformV2
 import com.lanxin.android.data.datastore.SettingDataSource
 import com.lanxin.android.data.dto.Platform
 import com.lanxin.android.data.dto.ThemeSetting

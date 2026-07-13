@@ -38,4 +38,6 @@ object Route {
     const val MIGRATE_V2 = "migrate_v2"
 
     const val MEMORY_LIST = "memory_list"
+
+    const val LOGGER = "logger"
 }

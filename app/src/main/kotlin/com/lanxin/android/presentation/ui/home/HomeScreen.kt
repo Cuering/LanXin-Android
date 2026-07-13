@@ -73,8 +73,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lanxin.android.R
-import com.lanxin.android.data.database.entity.ChatRoomV2
-import com.lanxin.android.data.database.entity.PlatformV2
+import com.lanxin.android.plugins.chat.data.entity.ChatRoomV2
+import com.lanxin.android.plugins.chat.data.entity.PlatformV2
 import com.lanxin.android.presentation.common.PlatformCheckBoxItem
 import com.lanxin.android.util.getPlatformName
 

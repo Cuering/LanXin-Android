@@ -35,7 +35,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lanxin.android.R
-import com.lanxin.android.data.database.entity.PlatformV2
+import com.lanxin.android.plugins.chat.data.entity.PlatformV2
 import com.lanxin.android.data.model.DynamicTheme
 import com.lanxin.android.data.model.ThemeMode
 import com.lanxin.android.presentation.common.LocalDynamicTheme
@@ -47,16 +47,25 @@ import com.lanxin.android.util.getClientTypeDisplayName
 import com.lanxin.android.util.getDynamicThemeTitle
 import com.lanxin.android.util.getThemeModeTitle
 import com.lanxin.android.util.pinnedExitUntilCollapsedScrollBehavior
+import com.lanxin.android.core.updater.ui.DownloadProgressDialog
+import com.lanxin.android.core.updater.ui.UpdateConfirmDialog
+import com.lanxin.android.core.updater.ui.VersionSelectDialog
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingScreen(
     modifier: Modifier = Modifier,
     settingViewModel: SettingViewModelV2 = hiltViewModel(),
+    updateViewModel: UpdateViewModel = hiltViewModel(),
     onNavigationClick: () -> Unit,
     onNavigateToAddPlatform: () -> Unit,
     onNavigateToPlatformSetting: (String) -> Unit,
-    onNavigateToAboutPage: () -> Unit
+    onNavigateToAboutPage: () -> Unit,
+    onNavigateToLogger: () -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
     val scrollBehavior = pinnedExitUntilCollapsedScrollBehavior(
@@ -121,6 +130,47 @@ fun SettingScreen(
             }
 
             AboutPageItem(onItemClick = onNavigateToAboutPage)
+
+            SettingItem(
+                title = "检查更新",
+                description = "从 GitHub Releases 检查 / 回退版本",
+                onItemClick = { updateViewModel.openVersionDialog() },
+                showTrailingIcon = true,
+                showLeadingIcon = false
+            )
+
+            SettingItem(
+                title = "日志查看",
+                description = "浏览、过滤与导出本地日志",
+                onItemClick = onNavigateToLogger,
+                showTrailingIcon = true,
+                showLeadingIcon = false
+            )
+
+            val updateState by updateViewModel.uiState.collectAsStateWithLifecycle()
+            if (updateState.showVersionDialog) {
+                VersionSelectDialog(
+                    currentVersion = updateState.currentVersion,
+                    releases = updateState.releases,
+                    onSelect = updateViewModel::onReleaseSelected,
+                    onDismiss = updateViewModel::dismissDialogs
+                )
+            }
+            if (updateState.showConfirmDialog && updateState.selectedRelease != null) {
+                UpdateConfirmDialog(
+                    release = updateState.selectedRelease!!,
+                    onConfirm = updateViewModel::confirmAndInstall,
+                    onDismiss = updateViewModel::dismissDialogs
+                )
+            }
+            if (updateState.showProgressDialog) {
+                DownloadProgressDialog(
+                    percent = updateState.downloadPercent,
+                    downloadedBytes = updateState.downloadedBytes,
+                    totalBytes = updateState.totalBytes,
+                    onCancel = updateViewModel::cancelDownload
+                )
+            }
 
             if (dialogState.isThemeDialogOpen) {
                 ThemeSettingDialog(settingViewModel)

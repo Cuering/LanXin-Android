@@ -1,12 +1,12 @@
 package com.lanxin.android.presentation.ui.chat
 
-import com.lanxin.android.data.database.entity.ACTIVE_REVISION_LATEST
-import com.lanxin.android.data.database.entity.AssistantRevision
-import com.lanxin.android.data.database.entity.MessageV2
-import com.lanxin.android.data.database.entity.effectiveContent
-import com.lanxin.android.data.database.entity.effectiveThoughts
-import com.lanxin.android.data.database.entity.resetActiveRevision
-import com.lanxin.android.data.database.entity.selectRevision
+import com.lanxin.android.plugins.chat.data.entity.ACTIVE_REVISION_LATEST
+import com.lanxin.android.plugins.chat.data.entity.AssistantRevision
+import com.lanxin.android.plugins.chat.data.entity.MessageV2
+import com.lanxin.android.plugins.chat.data.entity.effectiveContent
+import com.lanxin.android.plugins.chat.data.entity.effectiveThoughts
+import com.lanxin.android.plugins.chat.data.entity.resetActiveRevision
+import com.lanxin.android.plugins.chat.data.entity.selectRevision
 import com.lanxin.android.data.model.ChatAttachment
 import com.lanxin.android.data.repository.hasSendableAssistantPayload
 import org.junit.Assert.assertEquals

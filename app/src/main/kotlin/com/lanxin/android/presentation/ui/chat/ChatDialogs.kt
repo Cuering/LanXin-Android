@@ -28,9 +28,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import com.lanxin.android.R
-import com.lanxin.android.data.database.entity.MessageV2
-import com.lanxin.android.data.database.entity.effectiveContent
-import com.lanxin.android.data.database.entity.effectiveThoughts
+import com.lanxin.android.plugins.chat.data.entity.MessageV2
+import com.lanxin.android.plugins.chat.data.entity.effectiveContent
+import com.lanxin.android.plugins.chat.data.entity.effectiveThoughts
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext

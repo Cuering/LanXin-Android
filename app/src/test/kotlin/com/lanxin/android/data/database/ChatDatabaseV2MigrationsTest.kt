@@ -1,9 +1,10 @@
 package com.lanxin.android.data.database
 
+import com.lanxin.android.plugins.chat.data.ChatDatabaseV2Migrations
 import com.lanxin.android.data.ModelConstants
-import com.lanxin.android.data.database.entity.AssistantRevisionListConverter
-import com.lanxin.android.data.database.entity.ChatAttachmentListConverter
-import com.lanxin.android.data.database.entity.PlatformV2
+import com.lanxin.android.plugins.chat.data.entity.AssistantRevisionListConverter
+import com.lanxin.android.plugins.chat.data.entity.ChatAttachmentListConverter
+import com.lanxin.android.plugins.chat.data.entity.PlatformV2
 import com.lanxin.android.data.model.ClientType
 import com.lanxin.android.data.model.GeminiSafetySettings
 import org.junit.Assert.assertEquals

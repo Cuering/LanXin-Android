@@ -4,7 +4,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lanxin.android.data.ModelConstants
-import com.lanxin.android.data.database.entity.PlatformV2
+import com.lanxin.android.plugins.chat.data.entity.PlatformV2
 import com.lanxin.android.data.model.ClientType
 import com.lanxin.android.data.network.LanXinAuthClient
 import com.lanxin.android.data.repository.SettingRepository

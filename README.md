@@ -1,98 +1,48 @@
-<div align="center">
+# LanXin Android
 
-<img width="200" height="200" style="display: block;" src="./images/logo.png">
+在手机上运行的 AI 助理 APP。基于 GPT Mobile 改造，引入插件化架构，借鉴 AstrBot 设计思路。
 
-# GPT Mobile
+## 功能
 
-### Chat Assistant for Android that supports chatting with multiple models at once.
+- 多模型提供商：OpenAI / Anthropic / Google / Groq / Ollama 等
+- 本地聊天历史（`plugins/chat`）
+- 本地记忆系统（`plugins/memory`）
+- 自动更新 / 版本回退 + 数据备份还原（`core/updater`）
+- 日志系统 + 日志查看插件（`core/log` + `plugins/logger`）
+- Material You / 深色模式
 
-<p>
-  <a href="https://mailchi.mp/kotlinweekly/kotlin-weekly-431"><img alt="Kotlin Weekly" src="https://img.shields.io/badge/Kotlin%20Weekly-%23431-blue"/></a>
-  <img alt="Android" src="https://img.shields.io/badge/Platform-Android-green.svg"/>
-  <img alt="GitHub Actions Workflow Status" src="https://img.shields.io/github/actions/workflow/status/Taewan-P/gpt_mobile/release-build.yml">
-  <a href="https://hosted.weblate.org/engage/gptmobile/"><img src="https://hosted.weblate.org/widget/gptmobile/gptmobile/svg-badge.svg" alt="Translation status" /></a>
-  <a href="https://github.com/Taewan-P/gpt_mobile/releases/"><img alt="GitHub Releases Total Downloads" src="https://img.shields.io/github/downloads/Taewan-P/gpt_mobile/total?label=Downloads&logo=github"/></a>
-  <a href="https://github.com/Taewan-P/gpt_mobile/releases/latest/"><img alt="GitHub Releases (latest by date)" src="https://img.shields.io/github/v/release/Taewan-P/gpt_mobile?color=black&label=Stable&logo=github"/></a>
-</p>
+## 架构（三层）
 
+```
+core/        原生内核（engine / provider / config / log / updater …）
+builtin/     内置功能（persona / statistics … Phase 2）
+plugins/     可拔插插件（memory / chat / logger）
+app/         壳应用（Compose UI 入口）
+```
 
-</div>
+详见 [ARCHITECTURE.md](./ARCHITECTURE.md)。
 
+## 构建
 
-## Screenshots
+```bash
+./gradlew assembleDebug
+./gradlew test
+```
 
-<div align="center">
+- Min SDK 31 / Target SDK 37
+- Kotlin + Jetpack Compose + Hilt + Room + Ktor
 
-<img style="display: block;" src="./images/screenshots.webp">
+## 模块文档
 
-</div>
-
-## Demos
-
-
-| <video src="https://github.com/Taewan-P/gpt_mobile/assets/27392567/96229e6d-6795-48b4-a915-aca915bd2527"/> | <video src="https://github.com/Taewan-P/gpt_mobile/assets/27392567/1cc13413-7320-4f6f-ace9-de76de58adcc"/> | <video src="https://github.com/Taewan-P/gpt_mobile/assets/27392567/546e2694-953d-4d67-937f-a29fba81046f"/> |
-|------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------|
-
-
-## Features
-
-- **Chat with multiple models at once**
-  - Uses official APIs for each platforms
-  - Supported platforms:
-    - OpenAI GPT
-    - Anthropic Claude
-    - Google Gemini
-    - Groq
-    - Ollama
-  - Can customize temperature, top p (Nucleus sampling), and system prompt
-  - Custom API URLs, Custom Models are also supported
-- Local chat history
-  - Chat history is **only saved locally**
-  - Only sends to official API servers while chatting
-- [Material You](https://m3.material.io/) style UI, Icons
-  - Supports dark mode, system dynamic theming **without Activity restart**
-- Per app language setting for Android 13+
-- 100% Kotlin, Jetpack Compose, Single Activity, [Modern App Architecture](https://developer.android.com/topic/architecture#modern-app-architecture) in Android developers documentation
-
-
-## To be supported
-
-- More platforms
-- Image, file support for multimodal models
-
-If you have any feature requests, please open an issue.
-
-
-## Downloads
-
-You can download the app from the following sites:
-
-[<img height="80" alt="Get it on F-Droid" src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png"/>](https://f-droid.org/packages/dev.chungjungsoo.gptmobile)
-[<img height="80" alt='Get it on Google Play' src='https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png'/>](https://play.google.com/store/apps/details?id=dev.chungjungsoo.gptmobile&utm_source=github&utm_campaign=gh-readme)
-[<img height="80" alt='Get it on GitHub' src='https://raw.githubusercontent.com/Kunzisoft/Github-badge/main/get-it-on-github.png'/>](https://github.com/Taewan-P/gpt_mobile/releases)
-
-Cross platform updates are supported. However, GitHub Releases will be the fastest track among the platforms since there is no verification/auditing process. (Probably 1 week difference?)
-
-
-
-## Contributions
-
-Contributions are welcome! The contribution guideline is not yet available, but I will be happy to review it! 💯
-
-For translations, we are using [Hosted Weblate](https://hosted.weblate.org/engage/gptmobile/). If you want your language supported, help us translate the app!
-
-<a href="https://hosted.weblate.org/engage/gptmobile/">
-  <img src="https://hosted.weblate.org/widget/gptmobile/gptmobile/multi-auto.svg" alt="Translation status" />
-</a>
-
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=Taewan-P/gpt_mobile&type=Timeline)](https://star-history.com/#Taewan-P/gpt_mobile&Timeline)
-
+| 文档 | 说明 |
+|------|------|
+| [ARCHITECTURE.md](./ARCHITECTURE.md) | 架构定稿 |
+| [core/log/README.md](./core/log/README.md) | 日志底层 |
+| [core/updater/README.md](./core/updater/README.md) | 更新与备份 |
+| [plugins/memory/README.md](./plugins/memory/README.md) | 记忆插件 |
+| [plugins/chat/README.md](./plugins/chat/README.md) | 对话插件 |
+| [plugins/logger/README.md](./plugins/logger/README.md) | 日志查看 UI |
 
 ## License
 
-See [LICENSE](./LICENSE) for details.
-
-[F-Droid Icon License](https://gitlab.com/fdroid/artwork/-/blob/master/fdroid-logo-2015/README.md)
+见 [LICENSE](./LICENSE)。
