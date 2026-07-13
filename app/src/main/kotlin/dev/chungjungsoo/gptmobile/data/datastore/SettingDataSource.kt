@@ -23,4 +23,8 @@ interface SettingDataSource {
     suspend fun getTemperature(apiType: ApiType): Float?
     suspend fun getTopP(apiType: ApiType): Float?
     suspend fun getSystemPrompt(apiType: ApiType): String?
+
+    // === LanXin username storage ===
+    suspend fun setLanXinUserName(name: String)
+    suspend fun getLanXinUserName(): String?
 }
