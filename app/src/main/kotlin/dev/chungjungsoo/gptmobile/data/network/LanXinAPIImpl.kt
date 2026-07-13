@@ -113,12 +113,21 @@ class LanXinAPIImpl @Inject constructor(
      * AstrBot SSE events look like:
      * {"type":"plain","data":"能","streaming":true}
      * {"type":"complete","data":"完整回复"}
+     * {"type":"think","data":"思考过程",...}
+     * {"type":"plain","data":"{...}","chain_type":"tool_call"}  → 工具调用，跳过
+     * {"type":"plain","data":"{...}","chain_type":"tool_call_result"}  → 工具结果，跳过
      * {"type":"session_id", ...} / agent_stats / message_saved / end → ignore for chat text
      */
     private fun handleSsePayload(payload: String): ApiState? {
         return try {
             val json = JSONObject(payload)
             val type = json.optString("type")
+            val chainType = json.optString("chain_type")
+
+            // 工具调用/结果事件：type=plain 但 chain_type 标记为 tool_call，跳过避免显示原始 JSON
+            if (chainType == "tool_call" || chainType == "tool_call_result") {
+                return null
+            }
 
             when (type) {
                 "plain" -> {
@@ -135,6 +144,9 @@ class LanXinAPIImpl @Inject constructor(
                     }
                     ApiState.Error(msg)
                 }
+
+                // 思考过程：暂时隐藏（以后可用 Thinking 状态展示）
+                "think" -> null
 
                 // control / meta events
                 "session_id",
