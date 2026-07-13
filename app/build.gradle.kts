@@ -143,8 +143,4 @@ aboutLibraries {
 ktlint {
     android.set(true)
     ignoreFailures.set(false)
-    reporters {
-        reporter(org.jlleitschuh.gradle.core.ReporterType.PLAIN)
-        reporter(org.jlleitschuh.gradle.core.ReporterType.CHECKSTYLE)
-    }
 }
