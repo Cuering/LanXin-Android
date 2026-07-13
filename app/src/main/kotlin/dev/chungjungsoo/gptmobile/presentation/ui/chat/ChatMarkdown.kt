@@ -86,20 +86,17 @@ fun ChatMarkdown(
     val highlightsBuilder = remember(isDarkTheme) {
         Highlights.Builder().theme(SyntaxThemes.atom(isDarkTheme))
     }
-val combinedMarkdown = remember(parsed.blocks, displayMathNonce,
- {
+    val combinedMarkdown = remember(parsed.blocks, displayMathNonce) {
         buildCombinedMarkdown(parsed.blocks, displayMathNonce)
     }
     val inlineMathByPlaceholder = remember(parsed.inlineMath) {
         parsed.inlineMath.associateBy { it.placeholder }
     }
-val displayMathByPlaceholder = remember(parsed.blocks, displayMathNonce,
- {
+    val displayMathByPlaceholder = remember(parsed.blocks, displayMathNonce) {
         parsed.blocks
             .filterIsInstance<ChatMarkdownBlock.DisplayMath>()
             .mapIndexed { index, block ->
-createDisplayMathPlaceholder(index, displayMathNonce,
- to block
+                createDisplayMathPlaceholder(index, displayMathNonce) to block
             }
             .toMap()
     }
@@ -127,16 +124,14 @@ createDisplayMathPlaceholder(index, displayMathNonce,
             }
         }
     }
-val copyCodeToClipboard: (String,
- -> Unit = remember(clipboard, scope) {
+    val copyCodeToClipboard: (String) -> Unit = remember(clipboard, scope) {
         { code ->
             scope.launch {
                 clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(CLIPBOARD_LABEL_CODE, code)))
             }
         }
     }
-val components = remember(highlightsBuilder, copyCodeToClipboard, displayMathByPlaceholder, annotator,
- {
+    val components = remember(highlightsBuilder, copyCodeToClipboard, displayMathByPlaceholder, annotator) {
         markdownComponents(
             codeBlock = {
                 MarkdownCodeBlock(it.content, it.node, it.typography.code) { code, language, style ->
@@ -347,8 +342,7 @@ private fun appendTextWithInlineMath(
             return
         }
 
-val (placeholder, start,
- = nextToken
+        val (placeholder, start) = nextToken
         if (start > cursor) {
             builder.append(text.substring(cursor, start))
         }
@@ -357,8 +351,7 @@ val (placeholder, start,
     }
 }
 
-private fun inlineMathWidth(tex: String,
- = (tex.length.coerceIn(2, 24) * 0.55f).em
+private fun inlineMathWidth(tex: String) = (tex.length.coerceIn(2, 24) * 0.55f).em
 
 private fun inlineMathHeight(tex: String) = when {
     tex.containsDisplaySizedMath() -> 3.2.em
