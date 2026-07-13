@@ -1,78 +1,88 @@
 package com.lanxin.android.plugin
 
 import android.content.Context
-import android.util.Log
-import androidx.compose.runtime.Composable
-import javax.inject.Inject
-import javax.inject.Singleton
+import kotlinx.coroutines.*
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import java.io.File
 
 /**
- * 插件管理器，负责注册、初始化、调度所有插件。
+ * 插件管理器。
+ *
+ * 负责插件的注册、加载、生命周期管理，
+ * 以及 MCP 工具的注册与调度。
  */
-@Singleton
-class PluginManager @Inject constructor() {
+class PluginManager(
+    private val appContext: Context,
+    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+) {
 
-    private val plugins = mutableListOf<LanXinPlugin>()
-
-    /** 所有已注册的插件（只读） */
-    fun getPlugins(): List<LanXinPlugin> = plugins.toList()
-
-    /** 按 ID 查找插件 */
-    fun getPlugin(id: String): LanXinPlugin? = plugins.find { it.id == id }
+    private val plugins = mutableMapOf<String, LanXinPlugin>()
+    private val tools = mutableMapOf<String, ToolDef>()
 
     /**
-     * 注册一个插件（由 DI 模块或应用启动时调用）。
+     * 注册一个内置插件。
      */
-    fun register(plugin: LanXinPlugin) {
-        if (plugins.any { it.id == plugin.id }) {
-            Log.w(TAG, "插件已存在，跳过注册: ${plugin.id}")
-            return
+    suspend fun register(plugin: LanXinPlugin): PluginManager {
+        require(plugin.id !in plugins) { "插件 ${plugin.id} 已注册" }
+        val ctx = createContext(plugin.id)
+        plugin.onLoad(ctx)
+        plugins[plugin.id] = plugin
+        return this
+    }
+
+    /**
+     * 按 ID 获取插件。
+     */
+    @Suppress("UNCHECKED_CAST")
+    fun <T : LanXinPlugin> get(id: String): T? {
+        return plugins[id] as? T
+    }
+
+    /**
+     * 获取所有已注册的工具。
+     */
+    fun getTools(): List<ToolDef> = tools.values.toList()
+
+    /**
+     * 调用指定工具。
+     *
+     * @return 工具执行结果，若工具不存在返回错误。
+     */
+    suspend fun callTool(name: String, args: JsonObject): JsonObject {
+        val tool = tools[name]
+            ?: return buildJsonObject { put("error", "工具 $name 未找到") }
+        return try {
+            tool.handler(args)
+        } catch (e: Exception) {
+            buildJsonObject { put("error", "工具执行异常: ${e.message}") }
         }
-        plugins.add(plugin)
-        Log.i(TAG, "插件已注册: ${plugin.id} (${plugin.name})")
     }
 
     /**
-     * 初始化所有已注册的插件。
+     * 卸载所有插件，释放资源。
      */
-    fun initializeAll(context: Context) {
-        plugins.forEach { plugin ->
-            try {
-                plugin.onInitialize(context)
-                Log.i(TAG, "插件已初始化: ${plugin.id}")
-            } catch (e: Exception) {
-                Log.e(TAG, "插件初始化失败: ${plugin.id}", e)
-            }
+    suspend fun destroy() {
+        plugins.values.forEach { it.onUnload() }
+        plugins.clear()
+        tools.clear()
+        scope.cancel()
+    }
+
+    // ── 内部 ──
+
+    private fun createContext(pluginId: String): PluginContext = object : PluginContext {
+
+        override fun registerTool(tool: ToolDef) {
+            tools[tool.name] = tool
         }
-    }
 
-    /**
-     * 对消息依次执行所有插件的预处理钩子。
-     * 插件按注册顺序执行，后一个接收前一个的输出。
-     */
-    fun preprocessMessage(message: String): String {
-        var result = message
-        for (plugin in plugins) {
-            try {
-                val modified = plugin.onMessagePreprocess(result)
-                if (modified != null) {
-                    result = modified
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "插件预处理异常: ${plugin.id}", e)
-            }
+        override val filesDir: File
+            get() = File(appContext.filesDir, "plugins/$pluginId").also { it.mkdirs() }
+
+        override suspend fun sendMessage(message: String) {
+            // TODO: 对接 AI 核心消息通道
         }
-        return result
-    }
-
-    /**
-     * 获取所有插件提供的设置页。
-     */
-    fun getSettingsScreens(): List<Pair<LanXinPlugin, @Composable (() -> Unit)?>> {
-        return plugins.map { it to it.settingsScreen }
-    }
-
-    companion object {
-        private const val TAG = "PluginManager"
     }
 }
