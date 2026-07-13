@@ -43,7 +43,7 @@ fun DownloadProgressDialog(
                         progress = { percent / 100f },
                         modifier = Modifier.fillMaxWidth()
                     )
-                    Spacer(Modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                     Text("$percent%  (${formatBytes(downloadedBytes)} / ${formatBytes(totalBytes)})")
                 } else {
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
