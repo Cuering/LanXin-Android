@@ -44,6 +44,9 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.MenuBook
+import com.lanxin.android.data.memory.MemoryType
+import com.lanxin.android.presentation.ui.memory.AddMemoryDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -136,6 +139,7 @@ fun ChatScreen(
     val isIdle = loadingStates.all { it == ChatViewModel.LoadingState.Idle }
     val context = LocalContext.current
     val lastMessageIndex = groupedMessages.userMessages.lastIndex
+    var rememberContent by remember { mutableStateOf<String?>(null) }
 
     val scope = rememberCoroutineScope()
 
@@ -230,6 +234,7 @@ fun ChatScreen(
                                     clipboardManager.setClipEntry(ClipEntry(ClipData.newPlainText(copiedText, copiedText)))
                                 }
                             },
+                            onRemember = { content -> rememberContent = content },
                             onPlatformClick = chatViewModel::updateChatPlatformIndex,
                             onSelectText = chatViewModel::openSelectTextSheet,
                             onRetry = chatViewModel::retryChat,
@@ -260,6 +265,7 @@ fun ChatScreen(
                                         clipboardManager.setClipEntry(ClipEntry(ClipData.newPlainText(copiedText, copiedText)))
                                     }
                                 },
+                                onRemember = { content -> rememberContent = content },
                                 onPlatformClick = chatViewModel::updateChatPlatformIndex,
                                 onSelectText = chatViewModel::openSelectTextSheet,
                                 onRetry = chatViewModel::retryChat,
@@ -377,6 +383,18 @@ fun ChatScreen(
                 }
             }
         }
+
+        rememberContent?.let { content ->
+            AddMemoryDialog(
+                initialContent = content,
+                initialType = MemoryType.CHAT,
+                onDismiss = { rememberContent = null },
+                onConfirm = { memContent, type, importance ->
+                    chatViewModel.rememberMessage(memContent, type, importance)
+                    rememberContent = null
+                }
+            )
+        }
     }
 }
 
@@ -397,6 +415,7 @@ private fun ChatMessagePair(
     onEditQuestion: (MessageV2) -> Unit,
     onEditAssistant: (Int, Int) -> Unit,
     onCopyText: (String) -> Unit,
+    onRemember: (String) -> Unit = {},
     onPlatformClick: (Int, Int) -> Unit,
     onSelectText: (String) -> Unit,
     onRetry: (Int, Int) -> Unit,
@@ -438,7 +457,8 @@ private fun ChatMessagePair(
                     canEdit = canUseChat && isIdle,
                     onDismissRequest = { isDropDownMenuExpanded = false },
                     onEditItemClick = { onEditQuestion(message) },
-                    onCopyItemClick = { onCopyText(message.content) }
+                    onCopyItemClick = { onCopyText(message.content) },
+                    onRememberItemClick = { onRemember(message.content) }
                 )
             }
         }
@@ -610,7 +630,8 @@ fun ChatBubbleDropdownMenu(
     canEdit: Boolean,
     onDismissRequest: () -> Unit,
     onEditItemClick: () -> Unit,
-    onCopyItemClick: () -> Unit
+    onCopyItemClick: () -> Unit,
+    onRememberItemClick: () -> Unit = {}
 ) {
     DropdownMenu(
         modifier = Modifier.wrapContentSize(),
@@ -641,6 +662,19 @@ fun ChatBubbleDropdownMenu(
             text = { Text(text = stringResource(R.string.copy_text)) },
             onClick = {
                 onCopyItemClick.invoke()
+                onDismissRequest.invoke()
+            }
+        )
+        DropdownMenuItem(
+            leadingIcon = {
+                Icon(
+                    Icons.Rounded.MenuBook,
+                    contentDescription = "记入记忆"
+                )
+            },
+            text = { Text(text = "记入记忆") },
+            onClick = {
+                onRememberItemClick.invoke()
                 onDismissRequest.invoke()
             }
         )

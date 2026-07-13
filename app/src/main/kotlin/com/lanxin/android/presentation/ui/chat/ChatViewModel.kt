@@ -16,9 +16,11 @@ import com.lanxin.android.data.database.entity.effectiveThoughts
 import com.lanxin.android.data.database.entity.resetActiveRevision
 import com.lanxin.android.data.database.entity.selectRevision
 import com.lanxin.android.data.database.entity.snapshotLatestAssistantRevision
+import com.lanxin.android.data.memory.MemoryRepository
 import com.lanxin.android.data.repository.AttachmentUploadCoordinator
 import com.lanxin.android.data.repository.ChatRepository
 import com.lanxin.android.data.repository.SettingRepository
+import com.lanxin.android.domain.memory.MemoryInjector
 import com.lanxin.android.util.AttachmentPayloadCache
 import com.lanxin.android.util.FileUtils
 import com.lanxin.android.util.getPlatformName
@@ -39,7 +41,9 @@ class ChatViewModel @Inject constructor(
     @param:ApplicationContext private val context: Context,
     private val chatRepository: ChatRepository,
     private val settingRepository: SettingRepository,
-    private val attachmentUploadCoordinator: AttachmentUploadCoordinator
+    private val attachmentUploadCoordinator: AttachmentUploadCoordinator,
+    private val memoryRepository: MemoryRepository,
+    private val memoryInjector: MemoryInjector
 ) : ViewModel() {
     sealed class LoadingState {
         data object Idle : LoadingState()
@@ -264,8 +268,9 @@ class ChatViewModel @Inject constructor(
 
         viewModelScope.launch {
             val retryContext = groupedMessagesThroughTurn(_groupedMessages.value, turnIndex)
+            val userMessages = injectMemoryIntoLastUserMessage(retryContext.userMessages)
             chatRepository.completeChat(
-                retryContext.userMessages,
+                userMessages,
                 retryContext.assistantMessages,
                 platformWithChatModel
             ).handleStates(
@@ -517,8 +522,9 @@ class ChatViewModel @Inject constructor(
             val platform = _enabledPlatformsInApp.value.firstOrNull { it.uid == platformUid } ?: return@forEachIndexed
             val platformWithChatModel = resolvePlatformModel(platform)
             viewModelScope.launch {
+                val userMessages = injectMemoryIntoLastUserMessage(_groupedMessages.value.userMessages)
                 chatRepository.completeChat(
-                    _groupedMessages.value.userMessages,
+                    userMessages,
                     _groupedMessages.value.assistantMessages,
                     platformWithChatModel
                 ).handleStates(
@@ -530,6 +536,25 @@ class ChatViewModel @Inject constructor(
                     }
                 )
             }
+        }
+    }
+
+    /**
+     * 仅在发给模型时注入记忆，界面仍显示用户原始消息。
+     */
+    private suspend fun injectMemoryIntoLastUserMessage(userMessages: List<MessageV2>): List<MessageV2> {
+        if (userMessages.isEmpty()) return userMessages
+        val last = userMessages.last()
+        val enriched = memoryInjector.inject(last.content)
+        if (enriched == last.content) return userMessages
+        return userMessages.dropLast(1) + last.copy(content = enriched)
+    }
+
+    fun rememberMessage(content: String, type: String, importance: Float = 3f) {
+        if (content.isBlank()) return
+        viewModelScope.launch {
+            memoryRepository.addMemory(content.trim(), type, importance)
+            _attachmentNotice.update { "已记入记忆" }
         }
     }
 

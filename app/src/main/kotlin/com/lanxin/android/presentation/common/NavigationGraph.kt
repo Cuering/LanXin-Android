@@ -16,6 +16,7 @@ import androidx.navigation.navArgument
 import androidx.navigation.navigation
 import com.lanxin.android.presentation.ui.chat.ChatScreen
 import com.lanxin.android.presentation.ui.home.HomeScreen
+import com.lanxin.android.presentation.ui.memory.MemoryScreen
 import com.lanxin.android.presentation.ui.migrate.MigrateScreen
 import com.lanxin.android.presentation.ui.setting.AboutScreen
 import com.lanxin.android.presentation.ui.setting.AddPlatformScreen
@@ -45,6 +46,15 @@ fun SetupNavGraph(navController: NavHostController) {
         setupNavigation(navController)
         settingNavigation(navController)
         chatScreenNavigation(navController)
+        memoryScreenNavigation(navController)
+    }
+}
+
+fun NavGraphBuilder.memoryScreenNavigation(navController: NavHostController) {
+    composable(Route.MEMORY_LIST) {
+        MemoryScreen(
+            onBackAction = { navController.navigateUp() }
+        )
     }
 }
 
@@ -122,6 +132,7 @@ fun NavGraphBuilder.homeScreenNavigation(navController: NavHostController) {
     composable(Route.CHAT_LIST) {
         HomeScreen(
             settingOnClick = { navController.navigate(Route.SETTING_ROUTE) { launchSingleTop = true } },
+            memoryOnClick = { navController.navigate(Route.MEMORY_LIST) { launchSingleTop = true } },
             onExistingChatClick = { chatRoom ->
                 val enabledPlatformString = chatRoom.enabledPlatform.joinToString(",")
                 navController.navigate(
