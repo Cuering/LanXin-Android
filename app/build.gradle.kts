@@ -39,15 +39,6 @@ extensions.configure<ApplicationExtension> {
         disable += "MissingTranslation"
     }
 
-    signingConfigs {
-        getByName("debug") {
-            storeFile = rootProject.file("debug-keystore.jks")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
-        }
-    }
-
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -56,9 +47,6 @@ extensions.configure<ApplicationExtension> {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-        }
-        debug {
-            signingConfig = signingConfigs.getByName("debug")
         }
     }
     compileOptions {
