@@ -40,9 +40,12 @@ jobs:
           java-version: "17"
           cache: "gradle"
 
-      - name: Setup local.properties
+      - name: Setup local.properties and debug keystore
         run: |
-          echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          keytool -genkeypair -v -keystore debug-keystore.jks -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US"
 
       - name: Build debug APK
         run: |
