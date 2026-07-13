@@ -9,8 +9,6 @@ on:
       - "**.md"
       - "LICENSE"
       - ".idea/**"
-      - ".github/**"
-      - ".editorconfig"
       - "images/**"
       - "metadata/**"
 
@@ -22,6 +20,8 @@ jobs:
     steps:
       - name: Clone repo
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Run ktlint
         uses: ScaCap/action-ktlint@master
@@ -30,3 +30,4 @@ jobs:
           filter_mode: diff_context
           github_token: ${{ secrets.github_token }}
           reporter: github-check
+          fail_on_error: true

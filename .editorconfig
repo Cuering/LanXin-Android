@@ -19,11 +19,15 @@ max_line_length = off
 ktlint_function_naming_ignore_when_annotated_with=Composable
 compose_allowed_state_holder_names = .*ViewModel,.*Presenter,.*Component
 
-# Disable strict ktlint rules that fail on existing codebase / merge-commit full scan
+# Disable strict ktlint rules that fail on existing codebase / merge-commit full scan.
+# NOTE: trailing-comma-* depend on wrapping — if wrapping is disabled they must be too,
+# otherwise ktlint 1.3.1 crashes with IllegalStateException.
 ktlint_standard_no-wildcard-imports = disabled
 ktlint_standard_function-expression-body = disabled
 ktlint_standard_import-ordering = disabled
 ktlint_standard_wrapping = disabled
+ktlint_standard_trailing-comma-on-call-site = disabled
+ktlint_standard_trailing-comma-on-declaration-site = disabled
 ktlint_standard_no-unused-imports = disabled
 ktlint_standard_no-consecutive-blank-lines = disabled
 ktlint_standard_property-naming = disabled
