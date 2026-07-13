@@ -18,10 +18,15 @@ on:
       - "main"
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   run:
     name: Build debug APK
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     permissions:
       pull-requests: write
@@ -51,7 +56,7 @@ jobs:
       - name: Build debug APK
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --no-daemon --build-cache -Pci
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v7
