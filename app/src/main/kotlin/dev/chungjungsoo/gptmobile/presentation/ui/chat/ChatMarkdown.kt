@@ -443,7 +443,7 @@ private fun StringBuilder.currentLinePrefix(): String? {
 private fun createDisplayMathPlaceholder(
     index: Int,
     nonce: String
-): String = "\uE000$DISPLAY_MATH_PLACEHOLDER_PREFIX$nonce_$index$DISPLAY_MATH_PLACEHOLDER_SUFFIX\uE001"
+): String = "\uE000$DISPLAY_MATH_PLACEHOLDER_PREFIX${nonce}_$index$DISPLAY_MATH_PLACEHOLDER_SUFFIX\uE001"
 
 @Composable
 private fun chatMarkdownTypography() = markdownTypography(
