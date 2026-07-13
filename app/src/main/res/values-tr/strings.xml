@@ -131,8 +131,8 @@
     <string name="f_droid_icon">F-Droid Simgesi</string>
     <string name="play_store_icon">Play Store Simgesi</string>
     <string name="github_link" translatable="false">https://github.com/Taewan-P/lanxin</string>
-    <string name="f_droid_link" translatable="false">https://f-droid.org/packages/dev.chungjungsoo.gptmobile/</string>
-    <string name="play_store_link" translatable="false">https://play.google.com/store/apps/details?id=dev.chungjungsoo.gptmobile</string>
+    <string name="f_droid_link" translatable="false">https://f-droid.org/packages/com.lanxin.android/</string>
+    <string name="play_store_link" translatable="false">https://play.google.com/store/apps/details?id=com.lanxin.android</string>
     <string name="bug_report_link" translatable="false">https://github.com/Taewan-P/lanxin/issues/new/choose</string>
     <string name="feedback_link" translatable="false">https://github.com/Taewan-P/lanxin/discussions/new/choose</string>
     <string name="api_url">API URL’si</string>
