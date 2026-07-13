@@ -40,9 +40,10 @@ jobs:
           java-version: "17"
           cache: "gradle"
 
-      - name: Setup local.properties
+      - name: Setup local.properties and debug keystore
         run: |
           echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
+          keytool -genkeypair -v -keystore debug-keystore.jks -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Android Debug,O=Android,C=US"
 
       - name: Build debug APK
         run: |
@@ -57,7 +58,7 @@ jobs:
           path: ${{ github.workspace }}/app/build/outputs/apk/debug/app-debug.apk
 
       - name: Comment APK Link
-        if: github.event_name == 'pull_request_target'
+        if: github.event_name == "pull_request_target"
         uses: thollander/actions-comment-pull-request@v3
         with:
           comment_tag: apk
