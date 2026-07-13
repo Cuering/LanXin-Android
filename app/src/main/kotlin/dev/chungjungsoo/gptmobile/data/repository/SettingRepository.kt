@@ -17,4 +17,8 @@ interface SettingRepository {
     suspend fun updatePlatformV2(platform: PlatformV2)
     suspend fun deletePlatformV2(platform: PlatformV2)
     suspend fun getPlatformV2ById(id: Int): PlatformV2?
+
+    // LanXin username
+    suspend fun setLanXinUserName(name: String)
+    suspend fun getLanXinUserName(): String?
 }

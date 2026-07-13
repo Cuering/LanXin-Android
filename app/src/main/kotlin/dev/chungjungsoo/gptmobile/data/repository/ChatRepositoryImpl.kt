@@ -707,10 +707,11 @@ class ChatRepositoryImpl @Inject constructor(
 
         val latestUserMessage = userMessages.lastOrNull()?.content ?: ""
         val sessionId = userMessages.firstOrNull()?.chatId?.toString()
+        val username = settingRepository.getLanXinUserName() ?: "default_user"
 
         lanXinAPI.streamChat(
             message = latestUserMessage,
-            username = "default_user",
+            username = username,
             sessionId = sessionId,
             timeoutSeconds = platform.timeout
         ).catch { e ->
