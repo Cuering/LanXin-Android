@@ -40,7 +40,7 @@ extensions.configure<ApplicationExtension> {
     }
 
     signingConfigs {
-        register("debug") {
+        getByName("debug") {
             storeFile = rootProject.file("debug-keystore.jks")
             storePassword = "android"
             keyAlias = "androiddebugkey"
