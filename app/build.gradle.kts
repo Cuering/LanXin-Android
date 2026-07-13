@@ -41,10 +41,13 @@ extensions.configure<ApplicationExtension> {
 
     signingConfigs {
         getByName("debug") {
-            storeFile = rootProject.file("debug-keystore.jks")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
+            val debugKeystore = rootProject.file("debug-keystore.jks")
+            if (debugKeystore.exists()) {
+                storeFile = debugKeystore
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
         }
     }
 
