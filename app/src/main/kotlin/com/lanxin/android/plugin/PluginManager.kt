@@ -1,11 +1,14 @@
 package com.lanxin.android.plugin
 
 import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.io.File
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * 插件管理器。
@@ -13,23 +16,35 @@ import java.io.File
  * 负责插件的注册、加载、生命周期管理，
  * 以及 MCP 工具的注册与调度。
  */
-class PluginManager(
-    private val appContext: Context,
-    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+@Singleton
+class PluginManager @Inject constructor(
+    @ApplicationContext private val appContext: Context
 ) {
 
     private val plugins = mutableMapOf<String, LanXinPlugin>()
     private val tools = mutableMapOf<String, ToolDef>()
+    private val loadedIds = mutableSetOf<String>()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     /**
-     * 注册一个内置插件。
+     * 注册一个插件（非挂起，可在 DI @Provides 中调用）。
      */
-    suspend fun register(plugin: LanXinPlugin): PluginManager {
-        require(plugin.id !in plugins) { "插件 ${plugin.id} 已注册" }
-        val ctx = createContext(plugin.id)
-        plugin.onLoad(ctx)
+    fun register(plugin: LanXinPlugin): PluginManager {
         plugins[plugin.id] = plugin
         return this
+    }
+
+    /**
+     * 加载所有已注册的插件（调用 onLoad）。
+     * 幂等：已加载过的插件不会重复加载。
+     */
+    suspend fun loadAll() {
+        for ((id, plugin) in plugins) {
+            if (id !in loadedIds) {
+                plugin.onLoad(createContext(id))
+                loadedIds.add(id)
+            }
+        }
     }
 
     /**
@@ -47,8 +62,6 @@ class PluginManager(
 
     /**
      * 调用指定工具。
-     *
-     * @return 工具执行结果，若工具不存在返回错误。
      */
     suspend fun callTool(name: String, args: JsonObject): JsonObject {
         val tool = tools[name]
@@ -67,6 +80,7 @@ class PluginManager(
         plugins.values.forEach { it.onUnload() }
         plugins.clear()
         tools.clear()
+        loadedIds.clear()
         scope.cancel()
     }
 

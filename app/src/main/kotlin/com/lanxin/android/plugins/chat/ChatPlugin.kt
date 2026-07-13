@@ -4,6 +4,7 @@ import android.content.Context
 import com.lanxin.android.core.engine.BackupContributor
 import com.lanxin.android.core.engine.ChatHistoryProvider
 import com.lanxin.android.plugin.LanXinPlugin
+import com.lanxin.android.plugin.PluginContext
 import com.lanxin.android.plugins.chat.data.ChatHistoryProviderImpl
 import com.lanxin.android.plugins.chat.data.dao.MessageV2Dao
 import java.io.File
@@ -21,8 +22,8 @@ class ChatPlugin @Inject constructor(
     override val version = "1.0.0"
     override val description = "本地聊天历史管理、搜索与导出"
 
-    override fun onInitialize(context: Context) {
-        // Room 自动初始化，无需额外操作
+    override suspend fun onLoad(context: PluginContext) {
+        // TODO: 注册聊天相关的 MCP 工具
     }
 
     override fun getBackupFiles(context: Context): List<File> {

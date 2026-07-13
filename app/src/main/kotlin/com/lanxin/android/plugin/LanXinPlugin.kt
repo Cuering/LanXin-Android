@@ -16,6 +16,9 @@ interface LanXinPlugin {
     /** 插件版本号 */
     val version: String
 
+    /** 插件描述 */
+    val description: String
+
     /**
      * 插件被加载时调用。
      * 在此注册工具、初始化资源。
