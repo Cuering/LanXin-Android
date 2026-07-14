@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -36,7 +37,11 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -182,7 +187,9 @@ private fun PersonaCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text(
                             text = persona.name,
                             style = MaterialTheme.typography.titleMedium
@@ -200,15 +207,74 @@ private fun PersonaCard(
                             Icon(
                                 Icons.Filled.Check,
                                 contentDescription = "当前选中",
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }
+                    Spacer(Modifier.height(4.dp))
+
+                    // 元信息标签行
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (!persona.beginDialogs.isNullOrEmpty()) {
+                            AssistChip(
+                                onClick = { },
+                                label = { Text("预设对话", style = MaterialTheme.typography.labelSmall) },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Filled.Tune,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                },
+                                colors = AssistChipDefaults.assistChipColors(
+                                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+                                )
+                            )
+                        }
+                        if (persona.tools != null) {
+                            val label = if (persona.tools.isEmpty()) "工具:禁用" else "工具:${persona.tools.size}"
+                            AssistChip(
+                                onClick = { },
+                                label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                                colors = AssistChipDefaults.assistChipColors(
+                                    containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                                )
+                            )
+                        }
+                        if (persona.skills != null) {
+                            val label = if (persona.skills.isEmpty()) "技能:禁用" else "技能:${persona.skills.size}"
+                            AssistChip(
+                                onClick = { },
+                                label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                                colors = AssistChipDefaults.assistChipColors(
+                                    containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                                )
+                            )
+                        }
+                        if (!persona.customErrorMessage.isNullOrBlank()) {
+                            AssistChip(
+                                onClick = { },
+                                label = { Text("自定义报错", style = MaterialTheme.typography.labelSmall) },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Filled.Warning,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                },
+                                colors = AssistChipDefaults.assistChipColors(
+                                    containerColor = MaterialTheme.colorScheme.errorContainer
+                                )
+                            )
+                        }
+                    }
+
                     Spacer(Modifier.height(6.dp))
                     Text(
                         text = persona.systemPrompt,
                         style = MaterialTheme.typography.bodyMedium,
-                        maxLines = 3,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

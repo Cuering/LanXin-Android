@@ -18,6 +18,7 @@ package com.lanxin.android.builtin.persona.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.lanxin.android.builtin.persona.domain.BuiltinPersonas
 import com.lanxin.android.builtin.persona.domain.Persona
 import com.lanxin.android.builtin.persona.domain.PersonaRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -42,7 +43,7 @@ class PersonaViewModel @Inject constructor(
         .stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5000),
-            com.lanxin.android.builtin.persona.domain.BuiltinPersonas.DEFAULT_ID
+            BuiltinPersonas.DEFAULT_ID
         )
 
     private val _snackbarMessage = MutableStateFlow<String?>(null)
@@ -66,7 +67,16 @@ class PersonaViewModel @Inject constructor(
         }
     }
 
-    fun savePersona(id: String?, name: String, systemPrompt: String, onDone: (String) -> Unit) {
+    fun savePersona(
+        id: String?,
+        name: String,
+        systemPrompt: String,
+        beginDialogs: List<String>? = null,
+        tools: List<String>? = null,
+        skills: List<String>? = null,
+        customErrorMessage: String? = null,
+        onDone: (String) -> Unit
+    ) {
         viewModelScope.launch {
             val trimmedName = name.trim()
             val trimmedPrompt = systemPrompt.trim()
@@ -80,11 +90,26 @@ class PersonaViewModel @Inject constructor(
             }
 
             if (id.isNullOrBlank()) {
-                val created = personaRepository.createPersona(trimmedName, trimmedPrompt)
+                val created = personaRepository.createPersona(
+                    name = trimmedName,
+                    systemPrompt = trimmedPrompt,
+                    beginDialogs = beginDialogs,
+                    tools = tools,
+                    skills = skills,
+                    customErrorMessage = customErrorMessage
+                )
                 _snackbarMessage.update { "人格已创建" }
                 onDone(created.id)
             } else {
-                val ok = personaRepository.updatePersona(id, trimmedName, trimmedPrompt)
+                val ok = personaRepository.updatePersona(
+                    id = id,
+                    name = trimmedName,
+                    systemPrompt = trimmedPrompt,
+                    beginDialogs = beginDialogs,
+                    tools = tools,
+                    skills = skills,
+                    customErrorMessage = customErrorMessage
+                )
                 _snackbarMessage.update {
                     if (ok) "人格已更新" else "更新失败"
                 }

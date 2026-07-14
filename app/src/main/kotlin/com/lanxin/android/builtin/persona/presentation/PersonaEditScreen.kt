@@ -58,6 +58,10 @@ fun PersonaEditScreen(
     val isEdit = !personaId.isNullOrBlank()
     var name by remember { mutableStateOf("") }
     var systemPrompt by remember { mutableStateOf("") }
+    var beginDialogsText by remember { mutableStateOf("") }
+    var toolsText by remember { mutableStateOf("") }
+    var skillsText by remember { mutableStateOf("") }
+    var customErrorMessage by remember { mutableStateOf("") }
     var loaded by remember { mutableStateOf(!isEdit) }
     val snackbarMessage by viewModel.snackbarMessage.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -68,6 +72,10 @@ fun PersonaEditScreen(
             if (persona != null) {
                 name = persona.name
                 systemPrompt = persona.systemPrompt
+                beginDialogsText = persona.beginDialogs?.joinToString("\n") ?: ""
+                toolsText = persona.tools?.joinToString(", ") ?: ""
+                skillsText = persona.skills?.joinToString(", ") ?: ""
+                customErrorMessage = persona.customErrorMessage ?: ""
             }
             loaded = true
         }
@@ -113,25 +121,83 @@ fun PersonaEditScreen(
                 label = { Text("名称") },
                 singleLine = true
             )
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             OutlinedTextField(
                 value = systemPrompt,
                 onValueChange = { systemPrompt = it },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(240.dp),
+                    .height(180.dp),
                 label = { Text("System Prompt") },
-                supportingText = {
-                    Text("该文本会作为 system 消息注入对话")
-                }
+                supportingText = { Text("该文本会作为 system 消息注入对话") }
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            OutlinedTextField(
+                value = beginDialogsText,
+                onValueChange = { beginDialogsText = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp),
+                label = { Text("预设对话（beginDialogs）") },
+                supportingText = { Text("每行一条，交替 user/assistant，留空表示无") }
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            OutlinedTextField(
+                value = toolsText,
+                onValueChange = { toolsText = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("工具列表（tools）") },
+                supportingText = { Text("逗号分隔。留空=全部，空列表=禁用（输入后清空）") },
+                singleLine = true
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            OutlinedTextField(
+                value = skillsText,
+                onValueChange = { skillsText = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("技能列表（skills）") },
+                supportingText = { Text("逗号分隔。留空=全部，空列表=禁用") },
+                singleLine = true
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            OutlinedTextField(
+                value = customErrorMessage,
+                onValueChange = { customErrorMessage = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("自定义报错回复") },
+                supportingText = { Text("API 失败时用此消息回复用户，留空使用默认文案") },
+                singleLine = true
             )
             Spacer(modifier = Modifier.height(24.dp))
             Button(
                 onClick = {
+                    val parsedBeginDialogs = beginDialogsText
+                        .lines()
+                        .map { it.trim() }
+                        .filter { it.isNotEmpty() }
+                        .ifEmpty { null }
+                    val parsedTools = toolsText
+                        .split(",", "，")
+                        .map { it.trim() }
+                        .filter { it.isNotEmpty() }
+                        .ifEmpty {
+                            if (toolsText.isBlank()) null else emptyList()
+                        }
+                    val parsedSkills = skillsText
+                        .split(",", "，")
+                        .map { it.trim() }
+                        .filter { it.isNotEmpty() }
+                        .ifEmpty {
+                            if (skillsText.isBlank()) null else emptyList()
+                        }
                     viewModel.savePersona(
                         id = personaId,
                         name = name,
                         systemPrompt = systemPrompt,
+                        beginDialogs = parsedBeginDialogs,
+                        tools = parsedTools,
+                        skills = parsedSkills,
+                        customErrorMessage = customErrorMessage.trim().ifBlank { null },
                         onDone = { onSaved() }
                     )
                 },
