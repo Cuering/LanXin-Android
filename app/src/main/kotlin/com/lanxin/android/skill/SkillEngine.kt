@@ -55,7 +55,10 @@ class SkillEngine @Inject constructor(
     fun installSkills(loaded: List<Skill>, context: PluginContext) {
         skills.clear()
         loaded.forEach { skills[it.name] = it }
-        Log.i(TAG, "loaded ${skills.size} skills: ${skills.keys.joinToString()}")
+        // 单测 JVM 环境未 mock android.util.Log，避免直接调用
+        runCatching {
+            Log.i(TAG, "loaded ${skills.size} skills: ${skills.keys.joinToString()}")
+        }
 
         context.registerTool(buildSkillListTool())
         context.registerTool(buildSkillLoadTool())
