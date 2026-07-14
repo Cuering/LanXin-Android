@@ -57,11 +57,9 @@ class ConfigTool @Inject constructor(
         return buildJsonObject {
             put("ok", true)
             put("updated", true)
-            put("has_token", snap["has_token"])
-            put("token_masked", snap["token_masked"])
-            put("default_owner", snap["default_owner"])
-            put("default_repo", snap["default_repo"])
-            put("base_url", snap["base_url"])
+            for ((key, value) in snap) {
+                if (key != "ok") put(key, value)
+            }
         }
     }
 }

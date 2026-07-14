@@ -297,7 +297,14 @@ class GithubApi @Inject constructor(
                     val existingSha = existing["sha"]?.jsonPrimitive?.contentOrNull
                     if (existingSha != null) {
                         return@withContext putFile(
-                            owner, repo, path, content, message, branch, existingSha, contentIsBase64
+                            owner = owner,
+                            repo = repo,
+                            path = path,
+                            content = content,
+                            message = message,
+                            branch = branch,
+                            sha = existingSha,
+                            contentIsBase64 = contentIsBase64
                         )
                     }
                 }
