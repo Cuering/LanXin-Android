@@ -65,8 +65,8 @@ extensions.configure<ApplicationExtension> {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
     buildFeatures {
         compose = true
@@ -89,8 +89,13 @@ ksp {
 }
 
 // kapt 与 KSP 共存：Room/Hilt 用 KSP，ObjectBox 用 kapt
+// markdown-renderer / highlights 为 Java 21 字节码，kapt stub 需用 21 解析
 kapt {
     correctErrorTypes = true
+    javacOptions {
+        option("-source", "21")
+        option("-target", "21")
+    }
 }
 
 dependencies {
