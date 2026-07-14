@@ -40,4 +40,8 @@ object Route {
     const val MEMORY_LIST = "memory_list"
 
     const val LOGGER = "logger"
+
+    const val PERSONA_LIST = "persona_list"
+    const val PERSONA_CREATE = "persona_create"
+    const val PERSONA_EDIT = "persona_edit/{personaId}"
 }

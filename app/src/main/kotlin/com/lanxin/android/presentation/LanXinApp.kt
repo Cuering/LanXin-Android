@@ -1,6 +1,7 @@
 package com.lanxin.android.presentation
 
 import android.app.Application
+import com.lanxin.android.builtin.persona.di.PersonaPluginRegistration
 import com.lanxin.android.core.log.LogManager
 import com.lanxin.android.plugin.PluginManager
 import com.lanxin.android.plugins.chat.di.ChatPluginRegistration
@@ -8,11 +9,11 @@ import com.lanxin.android.plugins.logger.di.LoggerPluginRegistration
 import com.lanxin.android.plugins.memory.di.MemoryPluginRegistration
 import com.lanxin.android.skill.SkillEngineRegistration
 import dagger.hilt.android.HiltAndroidApp
+import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 @HiltAndroidApp
 class LanXinApp : Application() {
@@ -35,6 +36,9 @@ class LanXinApp : Application() {
 
     @Inject
     lateinit var skillEngineRegistration: SkillEngineRegistration
+
+    @Inject
+    lateinit var personaPluginRegistration: PersonaPluginRegistration
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 

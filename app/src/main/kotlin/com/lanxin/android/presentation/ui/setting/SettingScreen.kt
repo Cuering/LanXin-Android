@@ -65,7 +65,8 @@ fun SettingScreen(
     onNavigateToAddPlatform: () -> Unit,
     onNavigateToPlatformSetting: (String) -> Unit,
     onNavigateToAboutPage: () -> Unit,
-    onNavigateToLogger: () -> Unit = {}
+    onNavigateToLogger: () -> Unit = {},
+    onNavigateToPersona: () -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
     val scrollBehavior = pinnedExitUntilCollapsedScrollBehavior(
@@ -130,6 +131,14 @@ fun SettingScreen(
             }
 
             AboutPageItem(onItemClick = onNavigateToAboutPage)
+
+            SettingItem(
+                title = "人格设定",
+                description = "切换或自定义 AI 人格 / system prompt",
+                onItemClick = onNavigateToPersona,
+                showTrailingIcon = true,
+                showLeadingIcon = false
+            )
 
             SettingItem(
                 title = "检查更新",

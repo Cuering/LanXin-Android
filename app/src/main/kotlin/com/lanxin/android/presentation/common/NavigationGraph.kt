@@ -14,10 +14,12 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import androidx.navigation.navigation
-import com.lanxin.android.presentation.ui.chat.ChatScreen
-import com.lanxin.android.presentation.ui.home.HomeScreen
+import com.lanxin.android.builtin.persona.presentation.PersonaEditScreen
+import com.lanxin.android.builtin.persona.presentation.PersonaListScreen
 import com.lanxin.android.plugins.logger.presentation.ui.LoggerScreen
 import com.lanxin.android.plugins.memory.presentation.ui.memory.MemoryScreen
+import com.lanxin.android.presentation.ui.chat.ChatScreen
+import com.lanxin.android.presentation.ui.home.HomeScreen
 import com.lanxin.android.presentation.ui.migrate.MigrateScreen
 import com.lanxin.android.presentation.ui.setting.AboutScreen
 import com.lanxin.android.presentation.ui.setting.AddPlatformScreen
@@ -49,6 +51,44 @@ fun SetupNavGraph(navController: NavHostController) {
         chatScreenNavigation(navController)
         memoryScreenNavigation(navController)
         loggerScreenNavigation(navController)
+        personaScreenNavigation(navController)
+    }
+}
+
+fun NavGraphBuilder.personaScreenNavigation(navController: NavHostController) {
+    composable(Route.PERSONA_LIST) {
+        PersonaListScreen(
+            onBackAction = { navController.navigateUp() },
+            onNavigateToEdit = { personaId ->
+                if (personaId.isNullOrBlank()) {
+                    navController.navigate(Route.PERSONA_CREATE)
+                } else {
+                    navController.navigate(
+                        Route.PERSONA_EDIT.replace("{personaId}", personaId)
+                    )
+                }
+            }
+        )
+    }
+    composable(Route.PERSONA_CREATE) {
+        PersonaEditScreen(
+            personaId = null,
+            onBackAction = { navController.navigateUp() },
+            onSaved = { navController.navigateUp() }
+        )
+    }
+    composable(
+        route = Route.PERSONA_EDIT,
+        arguments = listOf(
+            navArgument("personaId") { type = NavType.StringType }
+        )
+    ) { entry ->
+        val personaId = entry.arguments?.getString("personaId")
+        PersonaEditScreen(
+            personaId = personaId,
+            onBackAction = { navController.navigateUp() },
+            onSaved = { navController.navigateUp() }
+        )
     }
 }
 
@@ -194,7 +234,8 @@ fun NavGraphBuilder.settingNavigation(navController: NavHostController) {
                     )
                 },
                 onNavigateToAboutPage = { navController.navigate(Route.ABOUT_PAGE) },
-                onNavigateToLogger = { navController.navigate(Route.LOGGER) }
+                onNavigateToLogger = { navController.navigate(Route.LOGGER) },
+                onNavigateToPersona = { navController.navigate(Route.PERSONA_LIST) }
             )
         }
         composable(Route.ADD_PLATFORM) {

@@ -6,7 +6,7 @@
 > - Step② 三大插件迁移（memory / chat / logger）✅
 > - Step③ MCP 工具调用引擎 + 记忆工具 ✅
 > - Step④ Skill 加载器（SkillLoader / SkillEngine）✅
-> - Step⑤ Persona 人格设定 🚧 开发中
+> - Step⑤ Persona 人格设定 ✅
 
 ---
 
@@ -41,7 +41,7 @@ LanXin-Android/
 │   └── util/               工具类（VersionComparator 等）
 │
 ├── builtin/                [内置功能] — 随包提供，不可卸载
-│   ├── persona/            人格设定 🚧 开发中
+│   ├── persona/            人格设定 ✅
 │   ├── statistics/         数据统计 🔥 Phase 2
 │   ├── scheduler/          定时任务/提醒 ⏳ Phase 2
 │   └── knowledge/          知识库 ⏳ Phase 3（初期可对接云端）
@@ -53,7 +53,7 @@ LanXin-Android/
 │
 ├── app/                    [壳应用]
 │   ├── LanXinApp.kt        初始化入口
-│   ├── builtin/            内置功能实现（persona / statistics 等）
+│   ├── builtin/            内置功能实现（persona ✅ / statistics 等）
 │   ├── skill/              Skill 加载器（SkillLoader / SkillEngine / SkillMdParser ✅）
 │   ├── presentation/
 │   │   ├── theme/          主题
@@ -145,7 +145,7 @@ getPlugin(id)          + 插件管理 UI           + 插件市场（可选）
 | `core/log/` | ✅ Phase 1 | 低 | 复刻 AstrBot LogManager |
 | `plugins/logger/` | ✅ Phase 1 | 低 | 日志浏览 UI |
 | `app/skill/` | ✅ Phase 1 | 低 | Skill 加载器（Step④） |
-| `builtin/persona/` | 🚧 开发中 | 低 | Step⑤ 通过系统提示词实现 |
+| `builtin/persona/` | ✅ Phase 2 | 低 | Step⑤ 人格 system prompt + MCP 工具 + 设置页 |
 | `builtin/statistics/` | 🔥 Phase 2 | 低 | 对话轮数、token 估算 |
 | `builtin/scheduler/` | ⏳ Phase 2 | 中 | 需要后台 Service + 通知权限 |
 | `builtin/knowledge/` | ⏳ Phase 3 | 高 | 初期对接云端，本地向量检索延后 |
