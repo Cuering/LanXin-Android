@@ -115,8 +115,9 @@ fun TaskListScreen(
             false
         }
         missingExactAlarm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            !am.canScheduleExactAlarms()
+            val alarmManager =
+                context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            alarmManager.canScheduleExactAlarms().not()
         } else {
             false
         }
@@ -246,7 +247,7 @@ private fun PermissionBanner(
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.Warning, contentDescription = null)
-                Spacer(Modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Text("权限提醒", style = MaterialTheme.typography.titleSmall)
             }
             Spacer(modifier = Modifier.height(6.dp))

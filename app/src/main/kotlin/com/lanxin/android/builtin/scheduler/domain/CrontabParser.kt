@@ -178,8 +178,8 @@ class CrontabParser {
         }
         val weekPart = when {
             daysOfWeek.size == 7 -> null
-            daysOfWeek == listOf(1, 2, 3, 4, 5) -> "工作日"
-            daysOfWeek == listOf(0, 6) -> "周末"
+            daysOfWeek == WEEKDAYS -> "工作日"
+            daysOfWeek == WEEKEND -> "周末"
             else -> "星期 ${daysOfWeek.joinToString(",") { DOW_LABELS[it] ?: it.toString() }}"
         }
         return listOfNotNull(dayPart, weekPart).joinToString(" / ").ifBlank { "每天" }
@@ -193,18 +193,39 @@ class CrontabParser {
 
     companion object {
         private val MONTH_ALIASES = mapOf(
-            "JAN" to 1, "FEB" to 2, "MAR" to 3, "APR" to 4,
-            "MAY" to 5, "JUN" to 6, "JUL" to 7, "AUG" to 8,
-            "SEP" to 9, "OCT" to 10, "NOV" to 11, "DEC" to 12
+            "JAN" to 1,
+            "FEB" to 2,
+            "MAR" to 3,
+            "APR" to 4,
+            "MAY" to 5,
+            "JUN" to 6,
+            "JUL" to 7,
+            "AUG" to 8,
+            "SEP" to 9,
+            "OCT" to 10,
+            "NOV" to 11,
+            "DEC" to 12
         )
         private val DOW_ALIASES = mapOf(
-            "SUN" to 0, "MON" to 1, "TUE" to 2, "WED" to 3,
-            "THU" to 4, "FRI" to 5, "SAT" to 6
+            "SUN" to 0,
+            "MON" to 1,
+            "TUE" to 2,
+            "WED" to 3,
+            "THU" to 4,
+            "FRI" to 5,
+            "SAT" to 6
         )
         private val DOW_LABELS = mapOf(
-            0 to "日", 1 to "一", 2 to "二", 3 to "三",
-            4 to "四", 5 to "五", 6 to "六"
+            0 to "日",
+            1 to "一",
+            2 to "二",
+            3 to "三",
+            4 to "四",
+            5 to "五",
+            6 to "六"
         )
+        private val WEEKDAYS = listOf(1, 2, 3, 4, 5)
+        private val WEEKEND = listOf(0, 6)
 
         /** 常用预设：名称 → cron */
         val PRESETS: List<Pair<String, String>> = listOf(
