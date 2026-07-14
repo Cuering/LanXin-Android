@@ -44,6 +44,4 @@ object Route {
     const val PERSONA_LIST = "persona_list"
     const val PERSONA_CREATE = "persona_create"
     const val PERSONA_EDIT = "persona_edit/{personaId}"
-
-    const val STATISTICS = "statistics"
 }
