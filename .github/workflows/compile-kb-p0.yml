@@ -49,43 +49,47 @@ jobs:
           exit 1
 
       - name: Run unit tests
+        id: test
         continue-on-error: true
         run: |
+          mkdir -p /tmp/test-artifacts
           ./gradlew :app:testDebugUnitTest --no-daemon --stacktrace 2>&1 | tee /tmp/test.log
           echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+          cp -r app/build/test-results/testDebugUnitTest/ /tmp/test-artifacts/ 2>/dev/null || true
 
-      - name: Show test failures
+      - name: Show test output
         if: always()
         run: |
-          echo "=== Test exit code: ${{ steps.test.outputs.exit_code || 'N/A' }} ==="
-          if grep -q "FAILED\|failures\|errors" /tmp/test.log 2>/dev/null; then
-            echo ""
-            echo "=== FAILING TESTS ==="
-            grep -A 5 "FAILED" /tmp/test.log | head -100
-            echo ""
-            echo "=== TEST SUMMARY ==="
-            grep -E "(tests|PASSED|FAILED|failures|BUILD)" /tmp/test.log | tail -20
-          fi
+          echo "### Test Step Exit Code: ${{ steps.test.outputs.exit_code }} ###"
           echo ""
-          echo "=== Last 80 lines ==="
-          tail -80 /tmp/test.log
+          echo "=== FAILED TESTS ==="
+          grep -E "(FAILED|failed|✗)" /tmp/test.log | head -50 || echo "(no FAILED lines found)"
+          echo ""
+          echo "=== TEST SUMMARY ==="
+          grep -E "(BUILD|tests? (completed|run)|PASSED|FAILURE|SUCCESS)" /tmp/test.log | tail -20
+          echo ""
+          echo "=== STACK TRACES ==="
+          grep -A 10 "Exception\|AssertionError\|ComparisonFailure\|RuntimeException" /tmp/test.log | head -150 || echo "(no exceptions found)"
+          echo ""
+          echo "=== LAST 100 LINES ==="
+          tail -100 /tmp/test.log
 
-      - name: Upload test report
+      - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-results
-          path: app/build/reports/tests/testDebugUnitTest/
+          path: /tmp/test-artifacts/
           retention-days: 3
 
       - name: Check test result
         run: |
           exit_code="${{ steps.test.outputs.exit_code }}"
           if [ "$exit_code" != "0" ] && [ -n "$exit_code" ]; then
-            echo "Tests failed with exit code $exit_code"
+            echo "❌ Tests failed with exit code $exit_code"
             exit 1
           fi
-          echo "Tests passed"
+          echo "✅ Tests passed"
 
       - name: Upload generated MyObjectBox
         uses: actions/upload-artifact@v4
