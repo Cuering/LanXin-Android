@@ -17,6 +17,7 @@
 package com.lanxin.android.builtin.knowledge
 
 import com.lanxin.android.builtin.knowledge.domain.EmbeddingService
+import com.lanxin.android.builtin.knowledge.domain.TextChunker
 import com.lanxin.android.builtin.knowledge.domain.VectorPipeline
 import com.lanxin.android.builtin.knowledge.domain.VectorSource
 import com.lanxin.android.builtin.knowledge.domain.VectorStore
@@ -41,18 +42,20 @@ import kotlinx.serialization.json.put
  * - kb_index：将文本向量化并写入 ObjectBox（source 默认 knowledge）
  * - kb_search：语义检索 Top-K
  * - kb_latency：测量 embed+search 端到端延迟
+ * - kb_chunk：预览文本滑动窗口分段结果（不入库）
  */
 @Singleton
 class KnowledgePlugin @Inject constructor(
     private val embeddingService: EmbeddingService,
     private val vectorStore: VectorStore,
-    private val pipeline: VectorPipeline
+    private val pipeline: VectorPipeline,
+    private val textChunker: TextChunker
 ) : LanXinPlugin {
 
     override val id = "lanxin.knowledge"
     override val name = "知识库"
-    override val version = "0.1.0"
-    override val description = "端侧向量检索（GTE-small + ObjectBox），P0 管道打通 MCP 工具"
+    override val version = "0.2.0"
+    override val description = "端侧向量检索 + 文档导入分段（GTE-small + ObjectBox）"
 
     override suspend fun onLoad(context: PluginContext) {
         // 后台预热，不阻塞插件加载
@@ -72,7 +75,9 @@ class KnowledgePlugin @Inject constructor(
                         put("embedding_ready", embeddingService.isReady)
                         put("dimensions", embeddingService.dimensions)
                         put("vector_count", vectorStore.count())
-                        put("phase", "P0")
+                        put("phase", "P2")
+                        put("chunk_window", TextChunker.DEFAULT_WINDOW)
+                        put("chunk_overlap", TextChunker.DEFAULT_OVERLAP)
                     }
                 }
             )
@@ -219,6 +224,58 @@ class KnowledgePlugin @Inject constructor(
                             put("target_ms", 50)
                             put("pass", ms < 50)
                             put("embedding_ready", embeddingService.isReady)
+                        }
+                    }.toToolResult()
+                }
+            )
+        )
+
+        context.registerTool(
+            ToolDef(
+                name = "kb_chunk",
+                description = "预览文本滑动窗口分段（默认 512/50），不入库",
+                parameters = buildJsonObject {
+                    put("type", "object")
+                    put(
+                        "properties",
+                        buildJsonObject {
+                            put("text", stringProp("待分段文本"))
+                            put("window", intProp("窗口 token，默认 512"))
+                            put("overlap", intProp("重叠 token，默认 50"))
+                        }
+                    )
+                    put("required", buildJsonArray { add(JsonPrimitive("text")) })
+                },
+                handler = { args ->
+                    runCatching {
+                        val text = args.string("text") ?: error("text 缺失")
+                        val window = args.int("window") ?: TextChunker.DEFAULT_WINDOW
+                        val overlap = args.int("overlap") ?: TextChunker.DEFAULT_OVERLAP
+                        val chunks = textChunker.chunk(text, window, overlap)
+                        buildJsonObject {
+                            put("ok", true)
+                            put("count", chunks.size)
+                            put("window", window)
+                            put("overlap", overlap)
+                            put(
+                                "chunks",
+                                buildJsonArray {
+                                    chunks.take(20).forEach { c ->
+                                        add(
+                                            buildJsonObject {
+                                                put("index", c.index)
+                                                put("start", c.startOffset)
+                                                put("end", c.endOffset)
+                                                put(
+                                                    "preview",
+                                                    c.text.take(120)
+                                                )
+                                                put("length", c.text.length)
+                                            }
+                                        )
+                                    }
+                                }
+                            )
                         }
                     }.toToolResult()
                 }

@@ -47,6 +47,8 @@ object Route {
 
     const val STATISTICS = "statistics"
 
+    const val KNOWLEDGE = "knowledge"
+
     const val TASK_LIST = "task_list"
     const val TASK_CREATE = "task_create"
     const val TASK_EDIT = "task_edit/{taskId}"

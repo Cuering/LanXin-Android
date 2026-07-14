@@ -14,6 +14,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import androidx.navigation.navigation
+import com.lanxin.android.builtin.knowledge.presentation.KnowledgeScreen
 import com.lanxin.android.builtin.persona.presentation.PersonaEditScreen
 import com.lanxin.android.builtin.persona.presentation.PersonaListScreen
 import com.lanxin.android.builtin.scheduler.presentation.TaskEditScreen
@@ -56,6 +57,7 @@ fun SetupNavGraph(navController: NavHostController) {
         loggerScreenNavigation(navController)
         personaScreenNavigation(navController)
         statisticsScreenNavigation(navController)
+        knowledgeScreenNavigation(navController)
         schedulerScreenNavigation(navController)
     }
 }
@@ -63,6 +65,14 @@ fun SetupNavGraph(navController: NavHostController) {
 fun NavGraphBuilder.statisticsScreenNavigation(navController: NavHostController) {
     composable(Route.STATISTICS) {
         StatisticsScreen(
+            onBackAction = { navController.navigateUp() }
+        )
+    }
+}
+
+fun NavGraphBuilder.knowledgeScreenNavigation(navController: NavHostController) {
+    composable(Route.KNOWLEDGE) {
+        KnowledgeScreen(
             onBackAction = { navController.navigateUp() }
         )
     }
@@ -287,6 +297,7 @@ fun NavGraphBuilder.settingNavigation(navController: NavHostController) {
                 onNavigateToLogger = { navController.navigate(Route.LOGGER) },
                 onNavigateToPersona = { navController.navigate(Route.PERSONA_LIST) },
                 onNavigateToStatistics = { navController.navigate(Route.STATISTICS) },
+                onNavigateToKnowledge = { navController.navigate(Route.KNOWLEDGE) },
                 onNavigateToScheduler = { navController.navigate(Route.TASK_LIST) }
             )
         }
