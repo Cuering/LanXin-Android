@@ -1,0 +1,50 @@
+# 知识库 P0 编译验证
+# 触发：push 到 feat/knowledge-base，手动也可
+# 目的：触发 ObjectBox 注解处理器生成 MyObjectBox
+
+name: Compile KB P0
+
+on:
+  push:
+    branches: [feat/knowledge-base]
+  workflow_dispatch:
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: 21
+          distribution: temurin
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Create assets model dir
+        run: |
+          mkdir -p app/src/main/assets/models/gte-small
+          touch app/src/main/assets/models/gte-small/.gitkeep
+
+      - name: Compile Debug (including ObjectBox annotation processing)
+        run: ./gradlew :app:compileDebugKotlin --no-daemon --stacktrace
+
+      - name: Run unit tests
+        run: ./gradlew :app:testDebugUnitTest --no-daemon --stacktrace
+
+      - name: Upload generated MyObjectBox
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-sources
+          path: app/build/generated/source/
+          retention-days: 7
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-apk
+          path: app/build/outputs/apk/debug/
+          retention-days: 7

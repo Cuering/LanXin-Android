@@ -12,6 +12,7 @@ plugins {
     alias(libs.plugins.kotlin.parcelize)
     alias(libs.plugins.auto.license)
     kotlin(libs.plugins.kotlin.serialization.get().pluginId).version(libs.versions.kotlin)
+    alias(libs.plugins.objectbox)
 }
 
 extensions.configure<ApplicationExtension> {
@@ -135,6 +136,13 @@ dependencies {
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.hilt.work)
     ksp(libs.androidx.hilt.compiler)
+
+    // ONNX Runtime Mobile（GTE-small 推理）
+    implementation(libs.onnxruntime.android)
+
+    // ObjectBox VectorDB（HNSW 向量检索）
+    implementation(libs.objectbox.android)
+    implementation(libs.objectbox.kotlin)
 
     // Serialization
     implementation(libs.kotlin.serialization)

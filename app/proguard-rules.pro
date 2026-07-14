@@ -15,6 +15,18 @@
 -dontwarn org.apache.log4j.**
 -dontwarn org.apache.logging.log4j.**
 
+# ONNX Runtime
+-keep class ai.onnxruntime.** { *; }
+-dontwarn ai.onnxruntime.**
+
+# ObjectBox
+-keep class io.objectbox.** { *; }
+-keep class com.lanxin.android.builtin.knowledge.data.** { *; }
+-keepclassmembers class * {
+    @io.objectbox.annotation.* <fields>;
+}
+-dontwarn io.objectbox.**
+
 # If your project uses WebView with JS, uncomment the following
 # and specify the fully qualified class name to the JavaScript interface
 # class:
