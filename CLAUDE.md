@@ -59,7 +59,7 @@ GPT Mobile is an Android chat application that supports chatting with multiple A
 
 - **Min SDK**: 31 (Android 12)
 - **Target SDK**: 35
-- **Java Version**: 17
+- **Java Version**: 21
 - **Build System**: Gradle with Kotlin DSL
 - **Material You**: Dynamic theming support without activity restart
 - **Internationalization**: Multiple language support via string resources
