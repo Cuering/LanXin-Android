@@ -30,7 +30,23 @@ jobs:
           touch app/src/main/assets/models/gte-small/.gitkeep
 
       - name: Compile Debug (including ObjectBox annotation processing)
-        run: ./gradlew :app:compileDebugKotlin --no-daemon --stacktrace
+        id: compile
+        continue-on-error: true
+        run: |
+          ./gradlew :app:compileDebugKotlin --no-daemon --stacktrace 2>&1 | tee /tmp/gradle.log
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Show Gradle errors if failed
+        if: steps.compile.outputs.exit_code != '0'
+        run: |
+          echo "=== Last 100 lines of Gradle output ==="
+          tail -100 /tmp/gradle.log
+          echo "=== Search for ERROR/FAIL ==="
+          grep -n -i "error:" /tmp/gradle.log | tail -20 || true
+          grep -n "FAIL" /tmp/gradle.log | tail -20 || true
+          grep -n "Exception" /tmp/gradle.log | tail -20 || true
+          grep -n "What went wrong" /tmp/gradle.log | tail -10 || true
+          exit 1
 
       - name: Run unit tests
         run: ./gradlew :app:testDebugUnitTest --no-daemon --stacktrace
