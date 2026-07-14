@@ -52,7 +52,7 @@ abstract class PersonaDatabase : RoomDatabase() {
                     PersonaDatabase::class.java,
                     "lanxin_persona.db"
                 ).addMigrations(MIGRATION_1_2)
-                 .build()
+                    .build()
                 INSTANCE = instance
                 instance
             }
