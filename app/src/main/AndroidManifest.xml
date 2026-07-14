@@ -4,6 +4,12 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <queries>
         <package android:name="com.google.android.aicore" />
@@ -31,6 +37,10 @@
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="com.lanxin.android.scheduler.CHAT" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
         </activity>
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -40,6 +50,42 @@
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
+        </provider>
+
+        <receiver
+            android:name=".builtin.scheduler.worker.AlarmReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.lanxin.android.scheduler.ACTION_FIRE" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".builtin.scheduler.worker.BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- WorkManager 前台服务类型声明 -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            android:exported="false"
+            tools:node="merge" />
+
+        <!-- 使用 Application 实现的 Configuration.Provider，禁用默认 WorkManager 初始化 -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
         </provider>
     </application>
 

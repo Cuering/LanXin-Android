@@ -9,6 +9,7 @@
 - 本地记忆系统（`plugins/memory`）
 - 人格设定：切换 / 自定义 AI system prompt（`builtin/persona`）
 - 数据统计：对话轮数、token 估算、按日活跃度（`builtin/statistics`）
+- 定时任务：周期/一次性 BASIC 回调与 ACTIVE_AGENT 提醒（`builtin/scheduler`）
 - 自动更新 / 版本回退 + 数据备份还原（`core/updater`）
 - 日志系统 + 日志查看插件（`core/log` + `plugins/logger`）
 - Skill 加载器（`app/skill`）
@@ -18,7 +19,7 @@
 
 ```
 core/        原生内核（engine / provider / config / log / updater …）
-builtin/     内置功能（persona ✅ / statistics ✅）
+builtin/     内置功能（persona ✅ / statistics ✅ / scheduler ✅）
 plugins/     可拔插插件（memory / chat / logger）
 app/         壳应用（Compose UI 入口）
 ```
@@ -47,6 +48,7 @@ app/         壳应用（Compose UI 入口）
 | [plugins/logger/README.md](./plugins/logger/README.md) | 日志查看 UI |
 | [builtin/persona/README.md](./builtin/persona/README.md) | 人格设定 |
 | [builtin/statistics/README.md](./builtin/statistics/README.md) | 数据统计 |
+| [builtin/scheduler/README.md](./builtin/scheduler/README.md) | 定时任务 |
 
 ## License
 

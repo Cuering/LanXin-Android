@@ -164,6 +164,14 @@ fun ChatScreen(
         }
     }
 
+    // ACTIVE_AGENT 通知唤起：预填 / 自动发送 prompt
+    LaunchedEffect(isLoaded) {
+        if (!isLoaded) return@LaunchedEffect
+        val pending = com.lanxin.android.builtin.scheduler.domain.PendingSchedulerChat.consume()
+            ?: return@LaunchedEffect
+        chatViewModel.applySchedulerPrompt(pending.prompt, pending.autoStart)
+    }
+
     val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
     LaunchedEffect(imeVisible) {
         if (imeVisible) {

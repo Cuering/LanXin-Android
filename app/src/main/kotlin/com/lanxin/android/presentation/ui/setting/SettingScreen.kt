@@ -67,7 +67,8 @@ fun SettingScreen(
     onNavigateToAboutPage: () -> Unit,
     onNavigateToLogger: () -> Unit = {},
     onNavigateToPersona: () -> Unit = {},
-    onNavigateToStatistics: () -> Unit = {}
+    onNavigateToStatistics: () -> Unit = {},
+    onNavigateToScheduler: () -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
     val scrollBehavior = pinnedExitUntilCollapsedScrollBehavior(
@@ -145,6 +146,14 @@ fun SettingScreen(
                 title = "数据统计",
                 description = "对话轮数、token 估算与按日活跃度",
                 onItemClick = onNavigateToStatistics,
+                showTrailingIcon = true,
+                showLeadingIcon = false
+            )
+
+            SettingItem(
+                title = "定时任务",
+                description = "周期/一次性提醒与 BASIC 回调自动执行",
+                onItemClick = onNavigateToScheduler,
                 showTrailingIcon = true,
                 showLeadingIcon = false
             )

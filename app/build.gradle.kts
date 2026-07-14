@@ -131,6 +131,11 @@ dependencies {
     ksp(libs.room.compiler)
     implementation(libs.room.ktx)
 
+    // WorkManager + Hilt Worker（scheduler 模块）
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.hilt.work)
+    ksp(libs.androidx.hilt.compiler)
+
     // Serialization
     implementation(libs.kotlin.serialization)
 
