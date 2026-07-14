@@ -17,6 +17,9 @@ import com.lanxin.android.plugins.chat.data.entity.resetActiveRevision
 import com.lanxin.android.plugins.chat.data.entity.selectRevision
 import com.lanxin.android.plugins.chat.data.entity.snapshotLatestAssistantRevision
 import com.lanxin.android.builtin.persona.domain.PersonaRepository
+import com.lanxin.android.builtin.statistics.domain.ChatTurnStatEvent
+import com.lanxin.android.builtin.statistics.domain.ProviderStat
+import com.lanxin.android.builtin.statistics.domain.StatisticsRepository
 import com.lanxin.android.data.repository.SettingRepository
 import com.lanxin.android.plugin.ToolCallEngine
 import com.lanxin.android.plugins.chat.data.AttachmentUploadCoordinator
@@ -47,7 +50,8 @@ class ChatViewModel @Inject constructor(
     private val memoryRepository: MemoryRepository,
     private val memoryInjector: MemoryInjector,
     private val toolCallEngine: ToolCallEngine,
-    private val personaRepository: PersonaRepository
+    private val personaRepository: PersonaRepository,
+    private val statisticsRepository: StatisticsRepository
 ) : ViewModel() {
     sealed class LoadingState {
         data object Idle : LoadingState()
@@ -555,6 +559,9 @@ class ChatViewModel @Inject constructor(
         var workingAssistantMessages = assistantMessages
         var remainingRounds = MAX_TOOL_ROUNDS
         var pendingRevision = revisionToAppendOnSuccess
+        val turnStartMs = System.currentTimeMillis()
+        var lastAssistantText = ""
+        var recordedError = false
 
         try {
             while (true) {
@@ -576,6 +583,10 @@ class ChatViewModel @Inject constructor(
                     ?.getOrNull(platformIndex)
                     ?.content
                     .orEmpty()
+                lastAssistantText = assistantText
+                if (assistantText.contains("[Response stopped:")) {
+                    recordedError = true
+                }
 
                 if (remainingRounds <= 0) break
 
@@ -636,9 +647,50 @@ class ChatViewModel @Inject constructor(
                     }
                 }
             }
+        } catch (t: Throwable) {
+            recordedError = true
+            throw t
         } finally {
+            recordChatTurnStats(
+                platform = platform,
+                userMessages = workingUserMessages,
+                assistantText = lastAssistantText,
+                startTimeMs = turnStartMs,
+                isError = recordedError,
+                countAsMessage = platformIndex == 0
+            )
             _loadingStates.update {
                 it.toMutableList().apply { this[platformIndex] = LoadingState.Idle }
+            }
+        }
+    }
+
+    private fun recordChatTurnStats(
+        platform: PlatformV2,
+        userMessages: List<MessageV2>,
+        assistantText: String,
+        startTimeMs: Long,
+        isError: Boolean,
+        countAsMessage: Boolean
+    ) {
+        val inputTexts = buildList {
+            userMessages.forEach { add(it.content) }
+        }
+        val status = if (isError) ProviderStat.STATUS_ERROR else ProviderStat.STATUS_COMPLETED
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                statisticsRepository.recordChatTurn(
+                    ChatTurnStatEvent(
+                        providerId = platform.name.ifBlank { platform.uid },
+                        providerModel = platform.model,
+                        chatId = chatRoomId.takeIf { it > 0 },
+                        status = status,
+                        inputTexts = inputTexts,
+                        outputText = assistantText,
+                        startTimeMs = startTimeMs,
+                        countAsMessage = countAsMessage
+                    )
+                )
             }
         }
     }

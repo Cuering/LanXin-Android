@@ -16,6 +16,7 @@ import androidx.navigation.navArgument
 import androidx.navigation.navigation
 import com.lanxin.android.builtin.persona.presentation.PersonaEditScreen
 import com.lanxin.android.builtin.persona.presentation.PersonaListScreen
+import com.lanxin.android.builtin.statistics.presentation.StatisticsScreen
 import com.lanxin.android.plugins.logger.presentation.ui.LoggerScreen
 import com.lanxin.android.plugins.memory.presentation.ui.memory.MemoryScreen
 import com.lanxin.android.presentation.ui.chat.ChatScreen
@@ -52,6 +53,15 @@ fun SetupNavGraph(navController: NavHostController) {
         memoryScreenNavigation(navController)
         loggerScreenNavigation(navController)
         personaScreenNavigation(navController)
+        statisticsScreenNavigation(navController)
+    }
+}
+
+fun NavGraphBuilder.statisticsScreenNavigation(navController: NavHostController) {
+    composable(Route.STATISTICS) {
+        StatisticsScreen(
+            onBackAction = { navController.navigateUp() }
+        )
     }
 }
 
@@ -235,7 +245,8 @@ fun NavGraphBuilder.settingNavigation(navController: NavHostController) {
                 },
                 onNavigateToAboutPage = { navController.navigate(Route.ABOUT_PAGE) },
                 onNavigateToLogger = { navController.navigate(Route.LOGGER) },
-                onNavigateToPersona = { navController.navigate(Route.PERSONA_LIST) }
+                onNavigateToPersona = { navController.navigate(Route.PERSONA_LIST) },
+                onNavigateToStatistics = { navController.navigate(Route.STATISTICS) }
             )
         }
         composable(Route.ADD_PLATFORM) {
