@@ -8,7 +8,7 @@ import com.lanxin.android.plugins.chat.data.entity.effectiveThoughts
 import com.lanxin.android.plugins.chat.data.entity.resetActiveRevision
 import com.lanxin.android.plugins.chat.data.entity.selectRevision
 import com.lanxin.android.data.model.ChatAttachment
-import com.lanxin.android.data.repository.hasSendableAssistantPayload
+import com.lanxin.android.plugins.chat.data.hasSendableAssistantPayload
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
