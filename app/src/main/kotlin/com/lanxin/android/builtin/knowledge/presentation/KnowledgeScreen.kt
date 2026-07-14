@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
@@ -46,8 +47,10 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -56,15 +59,20 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
+import androidx.compose.ui.Modifier.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.lanxin.android.builtin.knowledge.data.AutoKnowledgeSettings
+import com.lanxin.android.builtin.knowledge.domain.AutoKnowledgeMath
 import com.lanxin.android.builtin.knowledge.domain.DocumentTypes
 import com.lanxin.android.builtin.knowledge.domain.ImportPhase
 import com.lanxin.android.builtin.knowledge.domain.ImportProgress
+import com.lanxin.android.builtin.knowledge.domain.KnowledgeCategory
 import com.lanxin.android.builtin.knowledge.domain.TextChunker
+import com.lanxin.android.plugins.memory.data.memory.MemoryEntity
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -77,6 +85,11 @@ fun KnowledgeScreen(
     val embeddingReady by viewModel.embeddingReady.collectAsStateWithLifecycle()
     val snackbarMessage by viewModel.snackbarMessage.collectAsStateWithLifecycle()
     val clearConfirm by viewModel.clearConfirm.collectAsStateWithLifecycle()
+    val autoEnabled by viewModel.autoKnowledgeEnabled.collectAsStateWithLifecycle()
+    val windowSize by viewModel.historyWindowSize.collectAsStateWithLifecycle()
+    val showAutoList by viewModel.showAutoList.collectAsStateWithLifecycle()
+    val autoItems by viewModel.autoKnowledgeItems.collectAsStateWithLifecycle()
+    val clearAutoConfirm by viewModel.clearAutoConfirm.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
     val openDocumentLauncher = rememberLauncherForActivityResult(
@@ -95,9 +108,17 @@ fun KnowledgeScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("知识库") },
+                title = { Text(if (showAutoList) "已抽取知识" else "知识库") },
                 navigationIcon = {
-                    IconButton(onClick = onBackAction) {
+                    IconButton(
+                        onClick = {
+                            if (showAutoList) {
+                                viewModel.hideAutoKnowledgeList()
+                            } else {
+                                onBackAction()
+                            }
+                        }
+                    ) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "返回"
@@ -105,50 +126,73 @@ fun KnowledgeScreen(
                     }
                 },
                 actions = {
-                    IconButton(
-                        onClick = viewModel::refreshStatus,
-                        enabled = !progress.isRunning
-                    ) {
-                        Icon(Icons.Filled.Refresh, contentDescription = "刷新")
-                    }
-                    IconButton(
-                        onClick = viewModel::requestClear,
-                        enabled = !progress.isRunning && vectorCount > 0
-                    ) {
-                        Icon(Icons.Filled.Delete, contentDescription = "清空")
+                    if (!showAutoList) {
+                        IconButton(
+                            onClick = viewModel::refreshStatus,
+                            enabled = !progress.isRunning
+                        ) {
+                            Icon(Icons.Filled.Refresh, contentDescription = "刷新")
+                        }
+                        IconButton(
+                            onClick = viewModel::requestClear,
+                            enabled = !progress.isRunning && vectorCount > 0
+                        ) {
+                            Icon(Icons.Filled.Delete, contentDescription = "清空")
+                        }
                     }
                 }
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            item {
-                StatusCard(
-                    vectorCount = vectorCount,
-                    embeddingReady = embeddingReady
-                )
-            }
+        if (showAutoList) {
+            AutoKnowledgeList(
+                items = autoItems,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                onClear = viewModel::requestClearAuto
+            )
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                item {
+                    StatusCard(
+                        vectorCount = vectorCount,
+                        embeddingReady = embeddingReady
+                    )
+                }
 
-            item {
-                ImportCard(
-                    progress = progress,
-                    enabled = !progress.isRunning,
-                    onImportClick = {
-                        openDocumentLauncher.launch(DocumentTypes.MIME_TYPES)
-                    },
-                    onReset = viewModel::resetProgress
-                )
-            }
+                item {
+                    AutoKnowledgeCard(
+                        enabled = autoEnabled,
+                        windowSize = windowSize,
+                        onEnabledChange = viewModel::setAutoKnowledgeEnabled,
+                        onWindowChange = viewModel::setHistoryWindowSize,
+                        onViewList = viewModel::showAutoKnowledgeList,
+                        onClear = viewModel::requestClearAuto
+                    )
+                }
 
-            item {
-                HelpCard()
+                item {
+                    ImportCard(
+                        progress = progress,
+                        enabled = !progress.isRunning,
+                        onImportClick = {
+                            openDocumentLauncher.launch(DocumentTypes.MIME_TYPES)
+                        },
+                        onReset = viewModel::resetProgress
+                    )
+                }
+
+                item {
+                    HelpCard()
+                }
             }
         }
     }
@@ -167,6 +211,26 @@ fun KnowledgeScreen(
             },
             dismissButton = {
                 TextButton(onClick = viewModel::cancelClear) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
+    if (clearAutoConfirm) {
+        AlertDialog(
+            onDismissRequest = viewModel::cancelClearAuto,
+            title = { Text("清空自动知识？") },
+            text = {
+                Text("仅删除对话自动抽取的知识点（source=auto_knowledge），文档导入条目不受影响。")
+            },
+            confirmButton = {
+                TextButton(onClick = viewModel::confirmClearAuto) {
+                    Text("清空")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::cancelClearAuto) {
                     Text("取消")
                 }
             }
@@ -201,6 +265,163 @@ private fun StatusCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+    }
+}
+
+@Composable
+private fun AutoKnowledgeCard(
+    enabled: Boolean,
+    windowSize: Int,
+    onEnabledChange: (Boolean) -> Unit,
+    onWindowChange: (Int) -> Unit,
+    onViewList: () -> Unit,
+    onClear: () -> Unit
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Text(
+                text = "自动知识积累",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "对话成功后自动抽取偏好 / 事实 / 事件 / 决策 / 观点",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("启用自动积累")
+                Switch(
+                    checked = enabled,
+                    onCheckedChange = onEnabledChange
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "抽取对话条数：$windowSize",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Slider(
+                value = windowSize.toFloat(),
+                onValueChange = { onWindowChange(it.roundToInt()) },
+                valueRange = AutoKnowledgeSettings.MIN_WINDOW.toFloat()..
+                    AutoKnowledgeSettings.MAX_WINDOW.toFloat(),
+                steps = AutoKnowledgeSettings.MAX_WINDOW - AutoKnowledgeSettings.MIN_WINDOW - 1,
+                enabled = enabled
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onViewList,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("查看已抽取")
+                }
+                OutlinedButton(
+                    onClick = onClear,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("清空自动知识")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AutoKnowledgeList(
+    items: List<MemoryEntity>,
+    modifier: Modifier = Modifier,
+    onClear: () -> Unit
+) {
+    LazyColumn(
+        modifier = modifier,
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "共 ${items.size} 条",
+                    style = MaterialTheme.typography.titleSmall
+                )
+                if (items.isNotEmpty()) {
+                    TextButton(onClick = onClear) {
+                        Text("清空")
+                    }
+                }
+            }
+        }
+        if (items.isEmpty()) {
+            item {
+                Text(
+                    text = "暂无自动抽取的知识",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else {
+            items(items, key = { it.id }) { entity ->
+                AutoKnowledgeItemCard(entity)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AutoKnowledgeItemCard(entity: MemoryEntity) {
+    val meta = AutoKnowledgeMath.decodeMetadata(entity.metadata)
+    val typeLabel = KnowledgeCategory.displayName(
+        meta?.knowledgeType ?: entity.type
+    )
+    val tags = meta?.tags.orEmpty()
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = typeLabel,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = "重要度 ${String.format("%.0f", entity.importance)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = entity.content,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            if (tags.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = tags.joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
@@ -287,7 +508,6 @@ private fun ProgressSection(progress: ImportProgress) {
     }
     Spacer(modifier = Modifier.height(8.dp))
 
-    // 与 UpdateDialogs / SetupPlatformWizard 保持一致的 progress lambda API
     val fraction = if (progress.phase == ImportPhase.FAILED) {
         0f
     } else {
@@ -351,6 +571,7 @@ private fun HelpCard() {
                 text = "• 文本按约 512 token 窗口、50 token 重叠切分\n" +
                     "• 同一文件再次导入会覆盖对应条目\n" +
                     "• PDF 依赖内置启发式提取，扫描件可能失败\n" +
+                    "• 对话自动知识：相似度 >0.85 跳过，0.70~0.85 合并\n" +
                     "• 入库后可通过语义检索（kb_search）调用",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
