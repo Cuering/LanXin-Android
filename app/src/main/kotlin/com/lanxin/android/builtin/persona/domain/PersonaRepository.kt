@@ -27,13 +27,15 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /**
- * 人格仓库：Room 存人格列表，DataStore 存当前选中 personaId。
+ * 人格仓库（对齐 AstrBot PersonaManager 功能）。
+ * Room 存人格列表，DataStore 存当前选中 personaId。
  */
 @Singleton
 class PersonaRepository @Inject constructor(
@@ -52,16 +54,14 @@ class PersonaRepository @Inject constructor(
         prefs[currentPersonaIdKey] ?: BuiltinPersonas.DEFAULT_ID
     }
 
-    val currentPersona: Flow<Persona?> = kotlinx.coroutines.flow.combine(
+    val currentPersona: Flow<Persona?> = combine(
         personas,
         currentPersonaId
     ) { list, id ->
         list.find { it.id == id } ?: list.find { it.id == BuiltinPersonas.DEFAULT_ID }
     }
 
-    /**
-     * 确保内置人格已写入 DB（幂等）。
-     */
+    /** 确保内置人格已写入 DB（幂等）。 */
     suspend fun ensureSeeded() = seedMutex.withLock {
         dao.insertAllIgnore(BuiltinPersonas.ALL.map { it.toEntity() })
         if (dao.count() == 0) {
@@ -99,13 +99,28 @@ class PersonaRepository @Inject constructor(
         return true
     }
 
-    suspend fun createPersona(name: String, systemPrompt: String): Persona {
+    suspend fun createPersona(
+        name: String,
+        systemPrompt: String,
+        beginDialogs: List<String>? = null,
+        tools: List<String>? = null,
+        skills: List<String>? = null,
+        customErrorMessage: String? = null,
+        folderId: String? = null,
+        sortOrder: Int = 0
+    ): Persona {
         ensureSeeded()
         val now = System.currentTimeMillis()
         val persona = Persona(
             id = UUID.randomUUID().toString(),
             name = name.trim(),
             systemPrompt = systemPrompt.trim(),
+            beginDialogs = beginDialogs,
+            tools = tools,
+            skills = skills,
+            customErrorMessage = customErrorMessage?.trim()?.ifBlank { null },
+            folderId = folderId,
+            sortOrder = sortOrder,
             isBuiltin = false,
             createdAt = now,
             updatedAt = now
@@ -114,13 +129,28 @@ class PersonaRepository @Inject constructor(
         return persona
     }
 
-    suspend fun updatePersona(id: String, name: String, systemPrompt: String): Boolean {
+    suspend fun updatePersona(
+        id: String,
+        name: String,
+        systemPrompt: String,
+        beginDialogs: List<String>? = null,
+        tools: List<String>? = null,
+        skills: List<String>? = null,
+        customErrorMessage: String? = null,
+        folderId: String? = null,
+        sortOrder: Int = 0
+    ): Boolean {
         ensureSeeded()
         val existing = dao.getPersonaById(id) ?: return false
-        // 内置人格允许改 prompt/name，但 isBuiltin 保持
         val updated = existing.copy(
             name = name.trim(),
             systemPrompt = systemPrompt.trim(),
+            beginDialogs = beginDialogs,
+            tools = tools,
+            skills = skills,
+            customErrorMessage = customErrorMessage?.trim()?.ifBlank { null },
+            folderId = folderId,
+            sortOrder = sortOrder,
             updatedAt = System.currentTimeMillis()
         )
         dao.upsert(updated)
@@ -141,5 +171,24 @@ class PersonaRepository @Inject constructor(
             }
         }
         return deleted > 0
+    }
+
+    /** 按文件夹获取人格列表 */
+    suspend fun getPersonasByFolder(folderId: String?): List<Persona> {
+        ensureSeeded()
+        return dao.getPersonasByFolder(folderId).map { it.toDomain() }
+    }
+
+    /** 移动人格到指定文件夹 */
+    suspend fun movePersonaToFolder(personaId: String, folderId: String?): Boolean {
+        ensureSeeded()
+        val existing = dao.getPersonaById(personaId) ?: return false
+        dao.upsert(existing.copy(folderId = folderId))
+        return true
+    }
+
+    /** 删除文件夹时，将其中人格移出 */
+    suspend fun removeFolderFromPersonas(folderId: String) {
+        dao.movePersonasOutOfFolder(folderId)
     }
 }

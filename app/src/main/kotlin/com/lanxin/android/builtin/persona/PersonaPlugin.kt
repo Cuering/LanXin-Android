@@ -16,21 +16,28 @@
 
 package com.lanxin.android.builtin.persona
 
+import com.lanxin.android.builtin.persona.domain.FALLBACK_SYSTEM_PROMPT
 import com.lanxin.android.builtin.persona.domain.PersonaRepository
 import com.lanxin.android.plugin.LanXinPlugin
 import com.lanxin.android.plugin.PluginContext
 import com.lanxin.android.plugin.ToolDef
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
 /**
- * 人格设定插件：注册 MCP 工具 persona_list / persona_switch / persona_current。
+ * 人格设定插件（对齐 AstrBot Persona 系统）。
+ * 注册 MCP 工具：persona_list / persona_get / persona_set / persona_create / persona_delete
+ * 兼容旧名：persona_switch / persona_current
  */
 @Singleton
 class PersonaPlugin @Inject constructor(
@@ -39,16 +46,17 @@ class PersonaPlugin @Inject constructor(
 
     override val id = "lanxin.persona"
     override val name = "人格设定"
-    override val version = "1.0.0"
-    override val description = "管理 AI 人格预设，切换后注入 system prompt"
+    override val version = "1.1.0"
+    override val description = "管理 AI 人格预设，支持 beginDialogs / tools / skills 过滤"
 
     override suspend fun onLoad(context: PluginContext) {
         personaRepository.ensureSeeded()
 
+        // ── persona_list ──
         context.registerTool(
             ToolDef(
                 name = "persona_list",
-                description = "列出所有可用人格（预设 + 自定义），标注当前选中项",
+                description = "列出所有可用人格（预设 + 自定义），标注当前项及 beginDialogs/tools/skills 等信息",
                 parameters = buildJsonObject {
                     put("type", "object")
                     put("properties", buildJsonObject { })
@@ -63,15 +71,7 @@ class PersonaPlugin @Inject constructor(
                             "personas",
                             buildJsonArray {
                                 all.forEach { p ->
-                                    add(
-                                        buildJsonObject {
-                                            put("id", p.id)
-                                            put("name", p.name)
-                                            put("system_prompt", p.systemPrompt)
-                                            put("is_builtin", p.isBuiltin)
-                                            put("is_current", p.id == current.id)
-                                        }
-                                    )
+                                    add(buildPersonaJson(p, current.id))
                                 }
                             }
                         )
@@ -80,43 +80,55 @@ class PersonaPlugin @Inject constructor(
             )
         )
 
+        // ── persona_get ──
         context.registerTool(
             ToolDef(
-                name = "persona_switch",
-                description = "切换当前人格，后续对话将使用该人格的 system prompt",
+                name = "persona_get",
+                description = "按 id 获取人格详情，包含 systemPrompt / beginDialogs / tools / skills / customErrorMessage",
                 parameters = buildJsonObject {
                     put("type", "object")
-                    put(
-                        "properties",
-                        buildJsonObject {
-                            put(
-                                "persona_id",
-                                buildJsonObject {
-                                    put("type", "string")
-                                    put("description", "目标人格 ID（可用 persona_list 查询）")
-                                }
-                            )
-                        }
-                    )
-                    put(
-                        "required",
-                        buildJsonArray {
-                            add(JsonPrimitive("persona_id"))
-                        }
-                    )
+                    put("properties", buildJsonObject {
+                        put("persona_id", buildJsonObject {
+                            put("type", "string")
+                            put("description", "人格 ID（可用 persona_list 查询）")
+                        })
+                    })
+                    put("required", buildJsonArray { add(JsonPrimitive("persona_id")) })
+                },
+                handler = { args ->
+                    val personaId = args["persona_id"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
+                    val p = personaRepository.getById(personaId)
+                    if (p == null) {
+                        return@ToolDef buildJsonObject { put("error", "人格不存在: $personaId") }
+                    }
+                    buildPersonaJson(p, p.id)
+                }
+            )
+        )
+
+        // ── persona_set (别名：persona_switch) ──
+        context.registerTool(
+            ToolDef(
+                name = "persona_set",
+                description = "设置当前人格。兼容旧名 persona_switch。后续对话将使用该人格的 system prompt",
+                parameters = buildJsonObject {
+                    put("type", "object")
+                    put("properties", buildJsonObject {
+                        put("persona_id", buildJsonObject {
+                            put("type", "string")
+                            put("description", "目标人格 ID")
+                        })
+                    })
+                    put("required", buildJsonArray { add(JsonPrimitive("persona_id")) })
                 },
                 handler = { args ->
                     val personaId = args["persona_id"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
                     if (personaId.isBlank()) {
-                        return@ToolDef buildJsonObject {
-                            put("error", "persona_id 不能为空")
-                        }
+                        return@ToolDef buildJsonObject { put("error", "persona_id 不能为空") }
                     }
                     val ok = personaRepository.switchPersona(personaId)
                     if (!ok) {
-                        return@ToolDef buildJsonObject {
-                            put("error", "人格不存在: $personaId")
-                        }
+                        return@ToolDef buildJsonObject { put("error", "人格不存在: $personaId") }
                     }
                     val current = personaRepository.getCurrent()
                     buildJsonObject {
@@ -128,24 +140,200 @@ class PersonaPlugin @Inject constructor(
             )
         )
 
+        // ── persona_switch (兼容旧名) ──
+        context.registerTool(
+            ToolDef(
+                name = "persona_switch",
+                description = "[兼容旧名] 切换当前人格，等同 persona_set",
+                parameters = buildJsonObject {
+                    put("type", "object")
+                    put("properties", buildJsonObject {
+                        put("persona_id", buildJsonObject {
+                            put("type", "string")
+                            put("description", "目标人格 ID")
+                        })
+                    })
+                    put("required", buildJsonArray { add(JsonPrimitive("persona_id")) })
+                },
+                handler = { args ->
+                    val personaId = args["persona_id"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
+                    if (personaId.isBlank()) {
+                        return@ToolDef buildJsonObject { put("error", "persona_id 不能为空") }
+                    }
+                    val ok = personaRepository.switchPersona(personaId)
+                    if (!ok) {
+                        return@ToolDef buildJsonObject { put("error", "人格不存在: $personaId") }
+                    }
+                    val current = personaRepository.getCurrent()
+                    buildJsonObject {
+                        put("ok", true)
+                        put("id", current.id)
+                        put("name", current.name)
+                    }
+                }
+            )
+        )
+
+        // ── persona_current ──
         context.registerTool(
             ToolDef(
                 name = "persona_current",
-                description = "获取当前选中的人格信息与 system prompt",
+                description = "获取当前选中的人格完整信息",
                 parameters = buildJsonObject {
                     put("type", "object")
                     put("properties", buildJsonObject { })
                 },
                 handler = {
                     val current = personaRepository.getCurrent()
+                    buildPersonaJson(current, current.id)
+                }
+            )
+        )
+
+        // ── persona_create ──
+        context.registerTool(
+            ToolDef(
+                name = "persona_create",
+                description = "创建新的人格。system_prompt 必填，其他可选。tools/skills 为 null 表示全部可用，[] 表示禁用",
+                parameters = buildJsonObject {
+                    put("type", "object")
+                    put("properties", buildJsonObject {
+                        put("name", buildJsonObject {
+                            put("type", "string")
+                            put("description", "显示名称")
+                        })
+                        put("system_prompt", buildJsonObject {
+                            put("type", "string")
+                            put("description", "系统提示词")
+                        })
+                        put("begin_dialogs", buildJsonObject {
+                            put("type", "array")
+                            put("items", buildJsonObject { put("type", "string") })
+                            put("description", "预设对话（偶数字符串，交替 user/assistant）")
+                        })
+                        put("tools", buildJsonObject {
+                            put("type", "array")
+                            put("items", buildJsonObject { put("type", "string") })
+                            put("description", "工具列表（null=全部，[]=禁用）")
+                        })
+                        put("skills", buildJsonObject {
+                            put("type", "array")
+                            put("items", buildJsonObject { put("type", "string") })
+                            put("description", "技能列表（null=全部，[]=禁用）")
+                        })
+                        put("custom_error_message", buildJsonObject {
+                            put("type", "string")
+                            put("description", "自定义报错回复")
+                        })
+                    })
+                    put("required", buildJsonArray {
+                        add(JsonPrimitive("name"))
+                        add(JsonPrimitive("system_prompt"))
+                    })
+                },
+                handler = { args ->
+                    val name = args["name"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
+                    val systemPrompt = args["system_prompt"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
+                    if (name.isBlank() || systemPrompt.isBlank()) {
+                        return@ToolDef buildJsonObject {
+                            put("error", "name 和 system_prompt 不能为空")
+                        }
+                    }
+                    val beginDialogs = parseStringList(args["begin_dialogs"])
+                    val tools = parseStringList(args["tools"])
+                    val skills = parseStringList(args["skills"])
+                    val customErrorMessage = args["custom_error_message"]?.jsonPrimitive?.contentOrNull
+                    val persona = personaRepository.createPersona(
+                        name = name,
+                        systemPrompt = systemPrompt,
+                        beginDialogs = beginDialogs,
+                        tools = tools,
+                        skills = skills,
+                        customErrorMessage = customErrorMessage
+                    )
                     buildJsonObject {
-                        put("id", current.id)
-                        put("name", current.name)
-                        put("system_prompt", current.systemPrompt)
-                        put("is_builtin", current.isBuiltin)
+                        put("ok", true)
+                        put("id", persona.id)
+                        put("name", persona.name)
                     }
                 }
             )
         )
+
+        // ── persona_delete ──
+        context.registerTool(
+            ToolDef(
+                name = "persona_delete",
+                description = "删除指定人格（仅限自定义人格，内置人格不可删除）",
+                parameters = buildJsonObject {
+                    put("type", "object")
+                    put("properties", buildJsonObject {
+                        put("persona_id", buildJsonObject {
+                            put("type", "string")
+                            put("description", "要删除的人格 ID")
+                        })
+                    })
+                    put("required", buildJsonArray { add(JsonPrimitive("persona_id")) })
+                },
+                handler = { args ->
+                    val personaId = args["persona_id"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
+                    if (personaId.isBlank()) {
+                        return@ToolDef buildJsonObject { put("error", "persona_id 不能为空") }
+                    }
+                    val ok = personaRepository.deletePersona(personaId)
+                    if (!ok) {
+                        return@ToolDef buildJsonObject { put("error", "删除失败（可能为内置人格或不存在）") }
+                    }
+                    buildJsonObject { put("ok", true) }
+                }
+            )
+        )
+    }
+
+    private fun buildPersonaJson(p: com.lanxin.android.builtin.persona.domain.Persona, currentId: String) =
+        buildJsonObject {
+            put("id", p.id)
+            put("name", p.name)
+            put("system_prompt", p.systemPrompt)
+            put("is_builtin", p.isBuiltin)
+            put("is_current", p.id == currentId)
+            put("sort_order", p.sortOrder)
+            if (p.beginDialogs != null) {
+                put("begin_dialogs", buildJsonArray {
+                    p.beginDialogs.forEach { add(JsonPrimitive(it)) }
+                })
+            } else {
+                put("begin_dialogs", JsonNull)
+            }
+            if (p.tools != null) {
+                put("tools", buildJsonArray {
+                    p.tools.forEach { add(JsonPrimitive(it)) }
+                })
+            } else {
+                put("tools", JsonNull)
+            }
+            if (p.skills != null) {
+                put("skills", buildJsonArray {
+                    p.skills.forEach { add(JsonPrimitive(it)) }
+                })
+            } else {
+                put("skills", JsonNull)
+            }
+            if (p.customErrorMessage != null) {
+                put("custom_error_message", JsonPrimitive(p.customErrorMessage))
+            } else {
+                put("custom_error_message", JsonNull)
+            }
+            if (p.folderId != null) {
+                put("folder_id", JsonPrimitive(p.folderId))
+            }
+        }
+
+    /** 解析 JSON 参数中的字符串列表。null/不存在的字段返回 null，空数组返回空列表。 */
+    private fun parseStringList(element: JsonElement?): List<String>? {
+        if (element == null || element is JsonNull) return null
+        val arr = element.jsonArray
+        if (arr.isEmpty()) return emptyList()
+        return arr.map { it.jsonPrimitive.content }
     }
 }
