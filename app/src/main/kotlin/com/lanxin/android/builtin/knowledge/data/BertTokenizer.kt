@@ -197,6 +197,7 @@ class BertTokenizer private constructor(
 
         /** 测试用最小 tokenizer */
         fun createMinimalForTest(): BertTokenizer {
+            // BERT/WordPiece 会把 CJK 按单字切分，因此词表需包含单字
             val vocab = mapOf(
                 "[PAD]" to 0,
                 "[UNK]" to 100,
@@ -204,8 +205,10 @@ class BertTokenizer private constructor(
                 "[SEP]" to 102,
                 "hello" to 7592,
                 "world" to 2088,
-                "你好" to 2000,
-                "世界" to 2001,
+                "你" to 2000,
+                "好" to 2001,
+                "世" to 2002,
+                "界" to 2003,
                 "##ing" to 3000
             )
             return BertTokenizer(vocab, 100, 101, 102, 0, doLowerCase = true)
