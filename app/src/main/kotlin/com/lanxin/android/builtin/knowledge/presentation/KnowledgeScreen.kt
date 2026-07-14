@@ -56,7 +56,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
+import androidx.compose.ui.Modifier.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -185,13 +185,15 @@ private fun StatusCard(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
         )
     ) {
-        Column(Modifier = Modifier.padding(16.dp)) {
+        Column(
+            Modifier.padding(16.dp)
+        ) {
             Text(
                 text = "管道状态",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(Modifier = Modifier.height(8.dp))
             Text("嵌入模型：${if (embeddingReady) "就绪" else "未就绪 / 预热中"}")
             Text("向量条目：$vectorCount")
             Text(
@@ -210,14 +212,18 @@ private fun ImportCard(
     onImportClick: () -> Unit,
     onReset: () -> Unit
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
+    Card(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            Modifier.padding(16.dp)
+        ) {
             Text(
                 text = "导入文档",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(Modifier = Modifier.height(4.dp))
             Text(
                 text = "支持 .txt / .md / .pdf，自动分段并向量化入库",
                 style = MaterialTheme.typography.bodyMedium,
@@ -281,18 +287,16 @@ private fun ProgressSection(progress: ImportProgress) {
     }
     Spacer(modifier = Modifier.height(8.dp))
 
-    if (progress.phase == ImportPhase.FAILED) {
-        LinearProgressIndicator(
-            progress = { 0f },
-            modifier = Modifier.fillMaxWidth(),
-            color = MaterialTheme.colorScheme.error
-        )
+    // 与 UpdateDialogs / SetupPlatformWizard 保持一致的 progress lambda API
+    val fraction = if (progress.phase == ImportPhase.FAILED) {
+        0f
     } else {
-        LinearProgressIndicator(
-            progress = { progress.fraction.coerceIn(0f, 1f) },
-            modifier = Modifier.fillMaxWidth()
-        )
+        progress.fraction.coerceIn(0f, 1f)
     }
+    LinearProgressIndicator(
+        progress = { fraction },
+        modifier = Modifier.fillMaxWidth()
+    )
 
     if (progress.totalChunks > 0) {
         Spacer(modifier = Modifier.height(8.dp))
@@ -334,7 +338,9 @@ private fun HelpCard() {
             containerColor = MaterialTheme.colorScheme.surface
         )
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(
+            Modifier.padding(16.dp)
+        ) {
             Text(
                 text = "说明",
                 style = MaterialTheme.typography.titleSmall,
