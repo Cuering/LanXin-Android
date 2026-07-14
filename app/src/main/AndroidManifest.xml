@@ -69,6 +69,13 @@
             </intent-filter>
         </receiver>
 
+        <!-- WorkManager 前台服务类型声明 -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            android:exported="false"
+            tools:node="merge" />
+
         <!-- 使用 Application 实现的 Configuration.Provider，禁用默认 WorkManager 初始化 -->
         <provider
             android:name="androidx.startup.InitializationProvider"
