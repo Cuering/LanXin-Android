@@ -80,42 +80,6 @@ class MemoryInjector @Inject constructor(
     }
 
     /**
-     * Reciprocal Rank Fusion：两路按排名累加 1/(k+rank)，再取 topK。
-     *
-     * 语义路只有文本预览，若能与关键词结果 content 对齐则复用 MemoryEntity
-     * （保留 type 标签）；纯语义命中则降级为 type=chat 的伪实体。
-     */
-    internal fun reciprocalRankFusion(
-        keywordResults: List<MemoryEntity>,
-        semanticTexts: List<String>,
-        k: Int = RRF_K,
-        topK: Int = 5
-    ): List<MemoryEntity> {
-        val scores = mutableMapOf<String, Double>()
-        val entityByContent = LinkedHashMap<String, MemoryEntity>()
-
-        keywordResults.forEachIndexed { index, entity ->
-            val key = entity.content
-            scores[key] = scores.getOrDefault(key, 0.0) + 1.0 / (k + index + 1)
-            entityByContent.putIfAbsent(key, entity)
-        }
-
-        semanticTexts.forEachIndexed { index, text ->
-            if (text.isBlank()) return@forEachIndexed
-            scores[text] = scores.getOrDefault(text, 0.0) + 1.0 / (k + index + 1)
-            entityByContent.putIfAbsent(
-                text,
-                MemoryEntity(content = text, type = MemoryType.CHAT)
-            )
-        }
-
-        return scores.entries
-            .sortedByDescending { it.value }
-            .take(topK)
-            .mapNotNull { entityByContent[it.key] }
-    }
-
-    /**
      * 提取检索关键词：取前 20 个字或整句。
      */
     private fun extractKeyword(text: String): String {
@@ -126,5 +90,41 @@ class MemoryInjector @Inject constructor(
     companion object {
         /** RRF 平滑常数，经典取值 60。 */
         const val RRF_K = 60
+
+        /**
+         * Reciprocal Rank Fusion：两路按排名累加 1/(k+rank)，再取 topK。
+         *
+         * 语义路只有文本预览，若能与关键词结果 content 对齐则复用 MemoryEntity
+         * （保留 type 标签）；纯语义命中则降级为 type=chat 的伪实体。
+         */
+        fun reciprocalRankFusion(
+            keywordResults: List<MemoryEntity>,
+            semanticTexts: List<String>,
+            k: Int = RRF_K,
+            topK: Int = 5
+        ): List<MemoryEntity> {
+            val scores = mutableMapOf<String, Double>()
+            val entityByContent = LinkedHashMap<String, MemoryEntity>()
+
+            keywordResults.forEachIndexed { index, entity ->
+                val key = entity.content
+                scores[key] = scores.getOrDefault(key, 0.0) + 1.0 / (k + index + 1)
+                entityByContent.putIfAbsent(key, entity)
+            }
+
+            semanticTexts.forEachIndexed { index, text ->
+                if (text.isBlank()) return@forEachIndexed
+                scores[text] = scores.getOrDefault(text, 0.0) + 1.0 / (k + index + 1)
+                entityByContent.putIfAbsent(
+                    text,
+                    MemoryEntity(content = text, type = MemoryType.CHAT)
+                )
+            }
+
+            return scores.entries
+                .sortedByDescending { it.value }
+                .take(topK)
+                .mapNotNull { entityByContent[it.key] }
+        }
     }
 }
