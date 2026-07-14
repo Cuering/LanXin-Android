@@ -19,18 +19,23 @@ package com.lanxin.android.builtin.knowledge.presentation
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.lanxin.android.builtin.knowledge.data.AutoKnowledgeSettings
+import com.lanxin.android.builtin.knowledge.domain.AutoKnowledgeService
 import com.lanxin.android.builtin.knowledge.domain.EmbeddingService
 import com.lanxin.android.builtin.knowledge.domain.ImportPhase
 import com.lanxin.android.builtin.knowledge.domain.ImportProgress
 import com.lanxin.android.builtin.knowledge.domain.KnowledgeImportService
 import com.lanxin.android.builtin.knowledge.domain.VectorPipeline
 import com.lanxin.android.builtin.knowledge.domain.VectorStore
+import com.lanxin.android.plugins.memory.data.memory.MemoryEntity
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -39,7 +44,9 @@ class KnowledgeViewModel @Inject constructor(
     private val importService: KnowledgeImportService,
     private val vectorStore: VectorStore,
     private val embeddingService: EmbeddingService,
-    private val pipeline: VectorPipeline
+    private val pipeline: VectorPipeline,
+    private val autoKnowledgeSettings: AutoKnowledgeSettings,
+    private val autoKnowledgeService: AutoKnowledgeService
 ) : ViewModel() {
 
     private val _progress = MutableStateFlow(ImportProgress())
@@ -57,6 +64,25 @@ class KnowledgeViewModel @Inject constructor(
     private val _clearConfirm = MutableStateFlow(false)
     val clearConfirm: StateFlow<Boolean> = _clearConfirm.asStateFlow()
 
+    val autoKnowledgeEnabled: StateFlow<Boolean> = autoKnowledgeSettings.enabledFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+
+    val historyWindowSize: StateFlow<Int> = autoKnowledgeSettings.historyWindowSizeFlow
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            AutoKnowledgeSettings.DEFAULT_WINDOW
+        )
+
+    private val _autoKnowledgeItems = MutableStateFlow<List<MemoryEntity>>(emptyList())
+    val autoKnowledgeItems: StateFlow<List<MemoryEntity>> = _autoKnowledgeItems.asStateFlow()
+
+    private val _showAutoList = MutableStateFlow(false)
+    val showAutoList: StateFlow<Boolean> = _showAutoList.asStateFlow()
+
+    private val _clearAutoConfirm = MutableStateFlow(false)
+    val clearAutoConfirm: StateFlow<Boolean> = _clearAutoConfirm.asStateFlow()
+
     private var importJob: Job? = null
 
     init {
@@ -68,7 +94,60 @@ class KnowledgeViewModel @Inject constructor(
             runCatching { pipeline.warmUp() }
             _embeddingReady.value = embeddingService.isReady
             _vectorCount.value = runCatching { vectorStore.count() }.getOrDefault(0L)
+            if (_showAutoList.value) {
+                refreshAutoList()
+            }
         }
+    }
+
+    fun setAutoKnowledgeEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            autoKnowledgeSettings.setEnabled(enabled)
+        }
+    }
+
+    fun setHistoryWindowSize(size: Int) {
+        viewModelScope.launch {
+            autoKnowledgeSettings.setHistoryWindowSize(size)
+        }
+    }
+
+    fun showAutoKnowledgeList() {
+        _showAutoList.value = true
+        viewModelScope.launch { refreshAutoList() }
+    }
+
+    fun hideAutoKnowledgeList() {
+        _showAutoList.value = false
+    }
+
+    fun requestClearAuto() {
+        _clearAutoConfirm.value = true
+    }
+
+    fun cancelClearAuto() {
+        _clearAutoConfirm.value = false
+    }
+
+    fun confirmClearAuto() {
+        viewModelScope.launch {
+            _clearAutoConfirm.value = false
+            runCatching {
+                autoKnowledgeService.clearStored()
+            }.onSuccess { n ->
+                _autoKnowledgeItems.value = emptyList()
+                _vectorCount.value = runCatching { vectorStore.count() }.getOrDefault(0L)
+                _snackbarMessage.value = "已清空自动知识（$n 条）"
+            }.onFailure {
+                _snackbarMessage.value = "清空自动知识失败：${it.message ?: "未知错误"}"
+            }
+        }
+    }
+
+    private suspend fun refreshAutoList() {
+        _autoKnowledgeItems.value = runCatching {
+            autoKnowledgeService.listStored()
+        }.getOrDefault(emptyList())
     }
 
     fun importFromUri(uri: Uri?) {

@@ -7,6 +7,15 @@ import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.lanxin.android.builtin.knowledge.domain.AutoKnowledgeService
+import com.lanxin.android.builtin.persona.domain.PersonaRepository
+import com.lanxin.android.builtin.statistics.domain.ChatTurnStatEvent
+import com.lanxin.android.builtin.statistics.domain.ProviderStat
+import com.lanxin.android.builtin.statistics.domain.StatisticsRepository
+import com.lanxin.android.data.repository.SettingRepository
+import com.lanxin.android.plugin.ToolCallEngine
+import com.lanxin.android.plugins.chat.data.AttachmentUploadCoordinator
+import com.lanxin.android.plugins.chat.data.ChatRepository
 import com.lanxin.android.plugins.chat.data.entity.ACTIVE_REVISION_LATEST
 import com.lanxin.android.plugins.chat.data.entity.ChatRoomV2
 import com.lanxin.android.plugins.chat.data.entity.MessageV2
@@ -16,14 +25,6 @@ import com.lanxin.android.plugins.chat.data.entity.effectiveThoughts
 import com.lanxin.android.plugins.chat.data.entity.resetActiveRevision
 import com.lanxin.android.plugins.chat.data.entity.selectRevision
 import com.lanxin.android.plugins.chat.data.entity.snapshotLatestAssistantRevision
-import com.lanxin.android.builtin.persona.domain.PersonaRepository
-import com.lanxin.android.builtin.statistics.domain.ChatTurnStatEvent
-import com.lanxin.android.builtin.statistics.domain.ProviderStat
-import com.lanxin.android.builtin.statistics.domain.StatisticsRepository
-import com.lanxin.android.data.repository.SettingRepository
-import com.lanxin.android.plugin.ToolCallEngine
-import com.lanxin.android.plugins.chat.data.AttachmentUploadCoordinator
-import com.lanxin.android.plugins.chat.data.ChatRepository
 import com.lanxin.android.plugins.memory.data.memory.MemoryRepository
 import com.lanxin.android.plugins.memory.domain.memory.MemoryInjector
 import com.lanxin.android.util.AttachmentPayloadCache
@@ -51,7 +52,8 @@ class ChatViewModel @Inject constructor(
     private val memoryInjector: MemoryInjector,
     private val toolCallEngine: ToolCallEngine,
     private val personaRepository: PersonaRepository,
-    private val statisticsRepository: StatisticsRepository
+    private val statisticsRepository: StatisticsRepository,
+    private val autoKnowledgeService: AutoKnowledgeService
 ) : ViewModel() {
     sealed class LoadingState {
         data object Idle : LoadingState()
@@ -561,6 +563,7 @@ class ChatViewModel @Inject constructor(
      * 2. 流式请求模型并更新 UI
      * 3. 若回复含 tool_call，路由到 PluginManager 并回填，再请求（最多 [MAX_TOOL_ROUNDS] 轮）
      * 4. 工具中间态不写入聊天历史，最终回复覆盖同一 assistant 槽位
+     * 5. 首个平台成功回复后异步抽取自动知识（P3，静默失败）
      */
     private suspend fun runChatWithTools(
         userMessages: List<MessageV2>,
@@ -679,8 +682,27 @@ class ChatViewModel @Inject constructor(
                 isError = recordedError,
                 countAsMessage = platformIndex == 0
             )
+            // P3：首个平台成功回复后异步抽取知识，静默失败
+            if (!recordedError && platformIndex == 0 && lastAssistantText.isNotBlank()) {
+                maybeExtractAutoKnowledge(platformIndex)
+            }
             _loadingStates.update {
                 it.toMutableList().apply { this[platformIndex] = LoadingState.Idle }
+            }
+        }
+    }
+
+    private fun maybeExtractAutoKnowledge(platformIndex: Int) {
+        val snapshot = _groupedMessages.value
+        val sessionId = _chatRoom.value.id.toString().ifBlank { chatRoomId.toString() }
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val recent = autoKnowledgeService.toConversationMessages(
+                    userMessages = snapshot.userMessages,
+                    assistantMessages = snapshot.assistantMessages,
+                    platformIndex = platformIndex
+                )
+                autoKnowledgeService.extractAndStore(sessionId, recent)
             }
         }
     }
