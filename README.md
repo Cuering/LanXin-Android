@@ -7,15 +7,17 @@
 - 多模型提供商：OpenAI / Anthropic / Google / Groq / Ollama 等
 - 本地聊天历史（`plugins/chat`）
 - 本地记忆系统（`plugins/memory`）
+- 人格设定：切换 / 自定义 AI system prompt（`builtin/persona`）
 - 自动更新 / 版本回退 + 数据备份还原（`core/updater`）
 - 日志系统 + 日志查看插件（`core/log` + `plugins/logger`）
+- Skill 加载器（`app/skill`）
 - Material You / 深色模式
 
 ## 架构（三层）
 
 ```
 core/        原生内核（engine / provider / config / log / updater …）
-builtin/     内置功能（persona / statistics … Phase 2）
+builtin/     内置功能（persona ✅ / statistics …）
 plugins/     可拔插插件（memory / chat / logger）
 app/         壳应用（Compose UI 入口）
 ```
@@ -42,6 +44,7 @@ app/         壳应用（Compose UI 入口）
 | [plugins/memory/README.md](./plugins/memory/README.md) | 记忆插件 |
 | [plugins/chat/README.md](./plugins/chat/README.md) | 对话插件 |
 | [plugins/logger/README.md](./plugins/logger/README.md) | 日志查看 UI |
+| [builtin/persona/README.md](./builtin/persona/README.md) | 人格设定 |
 
 ## License
 
