@@ -27,6 +27,11 @@
 .cxx
 app/release/**
 app/build/**
+
+# ONNX / embedding models (large binaries, place locally)
+app/src/main/assets/models/**
+!app/src/main/assets/models/.gitkeep
+*.onnx
 .idea/copilot.data.migration.ask.xml
 .idea/copilot.data.migration.agent.xml
 .idea/copilot.data.migration.edit.xml

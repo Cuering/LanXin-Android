@@ -1,6 +1,5 @@
 package com.lanxin.android.skill
 
-import android.util.Log
 import com.lanxin.android.plugin.LanXinPlugin
 import com.lanxin.android.plugin.PluginContext
 import com.lanxin.android.plugin.ToolDef
@@ -55,7 +54,7 @@ class SkillEngine @Inject constructor(
     fun installSkills(loaded: List<Skill>, context: PluginContext) {
         skills.clear()
         loaded.forEach { skills[it.name] = it }
-        Log.i(TAG, "loaded ${skills.size} skills: ${skills.keys.joinToString()}")
+        // 不使用 android.util.Log：JVM 单测中 android.jar 为 stub，Log 会抛 RuntimeException
 
         context.registerTool(buildSkillListTool())
         context.registerTool(buildSkillLoadTool())
@@ -244,7 +243,6 @@ class SkillEngine @Inject constructor(
     }
 
     companion object {
-        private const val TAG = "SkillEngine"
         const val TOOL_SKILL_LIST = "skill_list"
         const val TOOL_SKILL_LOAD = "skill_load"
     }

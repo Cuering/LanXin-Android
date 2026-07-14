@@ -1,7 +1,6 @@
 package com.lanxin.android.skill
 
 import android.content.Context
-import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.nio.charset.Charset
@@ -46,8 +45,7 @@ class SkillLoader @Inject constructor(
     fun loadFromAssets(root: String = ASSETS_ROOT): List<Skill> {
         val names = try {
             appContext.assets.list(root)?.toList().orEmpty()
-        } catch (e: Exception) {
-            Log.w(TAG, "list assets/$root failed: ${e.message}")
+        } catch (_: Exception) {
             emptyList()
         }
         return names.mapNotNull { dirName ->
@@ -69,11 +67,9 @@ class SkillLoader @Inject constructor(
     fun loadSkillFromDirectory(dir: File, source: SkillSource = SkillSource.FILES): Skill? {
         val skillMd = File(dir, SKILL_MD)
         if (!skillMd.isFile) {
-            Log.w(TAG, "skip ${dir.name}: missing $SKILL_MD")
             return null
         }
         val raw = runCatching { skillMd.readText(Charsets.UTF_8) }.getOrElse {
-            Log.w(TAG, "read ${skillMd.path} failed: ${it.message}")
             return null
         }
         val scripts = loadScriptsFromDir(File(dir, "scripts"))
@@ -155,7 +151,6 @@ class SkillLoader @Inject constructor(
     }
 
     companion object {
-        private const val TAG = "SkillLoader"
         const val ASSETS_ROOT = "skills"
         const val FILES_ROOT = "skills"
         const val SKILL_MD = "SKILL.md"

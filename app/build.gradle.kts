@@ -9,9 +9,12 @@ plugins {
     alias(libs.plugins.android.hilt)
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.kotlin.ksp)
+    // ObjectBox 代码生成依赖 kapt（官方示例要求 kapt + objectbox 插件）
+    alias(libs.plugins.kotlin.kapt)
     alias(libs.plugins.kotlin.parcelize)
     alias(libs.plugins.auto.license)
-    kotlin(libs.plugins.kotlin.serialization.get().pluginId).version(libs.versions.kotlin)
+    alias(libs.plugins.objectbox)
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.3.21"
 }
 
 extensions.configure<ApplicationExtension> {
@@ -75,10 +78,19 @@ extensions.configure<ApplicationExtension> {
             excludes += "META-INF/io.netty.versions.properties"
         }
     }
+    testOptions {
+        // JVM 单测对 android.* 方法返回默认值，避免 Log 等未 mock 导致失败
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
+}
+
+// kapt 与 KSP 共存：Room/Hilt 用 KSP，ObjectBox 用 kapt
+kapt {
+    correctErrorTypes = true
 }
 
 dependencies {
@@ -86,8 +98,8 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
-    implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.compose.viewmodel)
+    implementation(platform("androidx.compose:compose-bom:2026.06.00"))
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
@@ -105,13 +117,12 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose.android)
     ksp(libs.hilt.compiler)
 
-    // Ktor
+    // Ktor (SSE is built into ktor-client-core 3.x, no separate artifact)
     implementation(libs.ktor.content.negotiation)
     implementation(libs.ktor.core)
     implementation(libs.ktor.client.cio)
     implementation(libs.ktor.logging)
     implementation(libs.ktor.serialization)
-    implementation(libs.ktor.sse)
 
     // License page UI
     implementation(libs.auto.license.core)
@@ -136,6 +147,14 @@ dependencies {
     implementation(libs.androidx.hilt.work)
     ksp(libs.androidx.hilt.compiler)
 
+    // ONNX Runtime Mobile（GTE-small 推理）
+    implementation(libs.onnxruntime.android)
+
+    // ObjectBox VectorDB（HNSW 向量检索）
+    // objectbox 插件会自动添加 objectbox-processor 到 kapt
+    implementation(libs.objectbox.android)
+    implementation(libs.objectbox.kotlin)
+
     // Serialization
     implementation(libs.kotlin.serialization)
 
@@ -143,7 +162,7 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(platform("androidx.compose:compose-bom:2026.06.00"))
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
