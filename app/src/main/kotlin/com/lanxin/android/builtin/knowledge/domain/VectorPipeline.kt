@@ -89,3 +89,5 @@ class VectorPipeline @Inject constructor(
         private const val TAG = "VectorPipeline"
     }
 }
+
+// verified: JDK 21 setup in codeql.yml
