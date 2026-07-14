@@ -2,6 +2,7 @@ package com.lanxin.android.presentation
 
 import android.app.Application
 import com.lanxin.android.builtin.persona.di.PersonaPluginRegistration
+import com.lanxin.android.builtin.statistics.di.StatisticsPluginRegistration
 import com.lanxin.android.core.log.LogManager
 import com.lanxin.android.plugin.PluginManager
 import com.lanxin.android.plugins.chat.di.ChatPluginRegistration
@@ -39,6 +40,9 @@ class LanXinApp : Application() {
 
     @Inject
     lateinit var personaPluginRegistration: PersonaPluginRegistration
+
+    @Inject
+    lateinit var statisticsPluginRegistration: StatisticsPluginRegistration
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
