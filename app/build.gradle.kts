@@ -78,6 +78,10 @@ extensions.configure<ApplicationExtension> {
             excludes += "META-INF/io.netty.versions.properties"
         }
     }
+    testOptions {
+        // JVM 单测对 android.* 方法返回默认值，避免 Log 等未 mock 导致失败
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 ksp {
