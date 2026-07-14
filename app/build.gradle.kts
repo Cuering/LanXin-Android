@@ -9,6 +9,8 @@ plugins {
     alias(libs.plugins.android.hilt)
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.kotlin.ksp)
+    // ObjectBox 代码生成依赖 kapt（官方示例要求 kapt + objectbox 插件）
+    alias(libs.plugins.kotlin.kapt)
     alias(libs.plugins.kotlin.parcelize)
     alias(libs.plugins.auto.license)
     alias(libs.plugins.objectbox)
@@ -82,6 +84,11 @@ ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
 
+// kapt 与 KSP 共存：Room/Hilt 用 KSP，ObjectBox 用 kapt
+kapt {
+    correctErrorTypes = true
+}
+
 dependencies {
     // Android
     implementation(libs.androidx.core.ktx)
@@ -140,6 +147,7 @@ dependencies {
     implementation(libs.onnxruntime.android)
 
     // ObjectBox VectorDB（HNSW 向量检索）
+    // objectbox 插件会自动添加 objectbox-processor 到 kapt
     implementation(libs.objectbox.android)
     implementation(libs.objectbox.kotlin)
 
