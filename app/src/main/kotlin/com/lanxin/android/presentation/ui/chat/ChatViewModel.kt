@@ -661,9 +661,7 @@ class ChatViewModel @Inject constructor(
             personaPrompt.isEmpty() -> platform
             platform.isEmpty() -> personaPrompt
             personaPrompt == platform -> personaPrompt
-            else -> "$personaPrompt
-
-$platform"
+            else -> "$personaPrompt\n\n$platform"
         }
     }
 
