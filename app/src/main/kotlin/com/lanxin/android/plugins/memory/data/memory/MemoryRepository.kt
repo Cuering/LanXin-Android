@@ -11,6 +11,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 
@@ -27,6 +28,38 @@ class MemoryRepository @Inject constructor(
     fun getAllMemories(): Flow<List<MemoryEntity>> = dao.getAllMemories()
 
     fun getMemoriesByType(type: String): Flow<List<MemoryEntity>> = dao.getMemoriesByType(type)
+
+    /**
+     * 按 type 同步拉取（P3 自动知识列表）。
+     */
+    suspend fun getByType(type: String): List<MemoryEntity> = withContext(Dispatchers.IO) {
+        dao.getMemoriesByType(type).first()
+    }
+
+    /**
+     * 删除指定 type 的全部记忆，返回删除条数。
+     */
+    suspend fun clearByType(type: String): Int = withContext(Dispatchers.IO) {
+        val items = dao.getMemoriesByType(type).first()
+        items.forEach { dao.deleteMemoryById(it.id) }
+        items.size
+    }
+
+    /**
+     * P3：自动知识条目。metadata 含 source=auto_knowledge，type 为分类。
+     * 因 type 本身是 preference/fact/...，按 metadata 过滤。
+     */
+    suspend fun getAutoKnowledge(): List<MemoryEntity> = withContext(Dispatchers.IO) {
+        dao.getAllMemoriesOnce().filter { entity ->
+            entity.metadata?.contains("auto_knowledge") == true
+        }
+    }
+
+    suspend fun clearAutoKnowledge(): Int = withContext(Dispatchers.IO) {
+        val items = getAutoKnowledge()
+        items.forEach { dao.deleteMemoryById(it.id) }
+        items.size
+    }
 
     suspend fun searchMemories(keyword: String): List<MemoryEntity> {
         if (keyword.isBlank()) return emptyList()

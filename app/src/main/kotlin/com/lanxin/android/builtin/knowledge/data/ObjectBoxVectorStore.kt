@@ -111,6 +111,17 @@ class ObjectBoxVectorStore @Inject constructor(
             Unit
         }
 
+    override suspend fun deleteBySource(source: String) = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            val b = box()
+            val found = b.query(VectorItem_.source.equal(source)).build().find()
+            if (found.isNotEmpty()) {
+                b.remove(found)
+            }
+        }
+        Unit
+    }
+
     override suspend fun search(
         query: FloatArray,
         topK: Int,

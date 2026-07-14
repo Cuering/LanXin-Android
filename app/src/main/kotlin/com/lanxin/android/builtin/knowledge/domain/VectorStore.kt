@@ -35,6 +35,9 @@ interface VectorStore {
     /** 按业务 id + source 删除 */
     suspend fun deleteByExternal(externalId: Long, source: String)
 
+    /** 按 source 批量删除（P3 清空自动知识） */
+    suspend fun deleteBySource(source: String)
+
     /** 余弦近邻搜索 */
     suspend fun search(
         query: FloatArray,
@@ -67,4 +70,5 @@ data class VectorHit(
 object VectorSource {
     const val MEMORY = "memory"
     const val KNOWLEDGE = "knowledge"
+    const val AUTO_KNOWLEDGE = "auto_knowledge"
 }
