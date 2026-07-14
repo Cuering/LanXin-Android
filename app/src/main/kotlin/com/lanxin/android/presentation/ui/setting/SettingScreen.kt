@@ -68,6 +68,7 @@ fun SettingScreen(
     onNavigateToLogger: () -> Unit = {},
     onNavigateToPersona: () -> Unit = {},
     onNavigateToStatistics: () -> Unit = {},
+    onNavigateToKnowledge: () -> Unit = {},
     onNavigateToScheduler: () -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
@@ -146,6 +147,14 @@ fun SettingScreen(
                 title = "数据统计",
                 description = "对话轮数、token 估算与按日活跃度",
                 onItemClick = onNavigateToStatistics,
+                showTrailingIcon = true,
+                showLeadingIcon = false
+            )
+
+            SettingItem(
+                title = "知识库",
+                description = "导入 txt/md/pdf，滑动窗口分段并向量化入库",
+                onItemClick = onNavigateToKnowledge,
                 showTrailingIcon = true,
                 showLeadingIcon = false
             )

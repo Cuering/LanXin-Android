@@ -16,11 +16,11 @@
 
 package com.lanxin.android.builtin.knowledge.di
 
-import com.lanxin.android.builtin.knowledge.KnowledgePlugin
+import com.lanxin.android.builtin.knowledge.data.CompositeDocumentParser
 import com.lanxin.android.builtin.knowledge.data.ObjectBoxVectorStore
 import com.lanxin.android.builtin.knowledge.data.OnnxEmbeddingService
+import com.lanxin.android.builtin.knowledge.domain.DocumentParser
 import com.lanxin.android.builtin.knowledge.domain.EmbeddingService
-import com.lanxin.android.builtin.knowledge.domain.VectorPipeline
 import com.lanxin.android.builtin.knowledge.domain.VectorStore
 import dagger.Binds
 import dagger.Module
@@ -48,5 +48,10 @@ abstract class KnowledgeModule {
     @Singleton
     abstract fun bindVectorStore(impl: ObjectBoxVectorStore): VectorStore
 
-    // VectorPipeline 和 KnowledgePlugin 使用 @Inject constructor 自动解析
+    @Binds
+    @Singleton
+    abstract fun bindDocumentParser(impl: CompositeDocumentParser): DocumentParser
+
+    // VectorPipeline / KnowledgePlugin / TextChunker / KnowledgeImportService
+    // 使用 @Inject constructor 自动解析
 }
