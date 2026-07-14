@@ -66,7 +66,8 @@ fun SettingScreen(
     onNavigateToPlatformSetting: (String) -> Unit,
     onNavigateToAboutPage: () -> Unit,
     onNavigateToLogger: () -> Unit = {},
-    onNavigateToPersona: () -> Unit = {}
+    onNavigateToPersona: () -> Unit = {},
+    onNavigateToStatistics: () -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
     val scrollBehavior = pinnedExitUntilCollapsedScrollBehavior(
@@ -136,6 +137,14 @@ fun SettingScreen(
                 title = "人格设定",
                 description = "切换或自定义 AI 人格 / system prompt",
                 onItemClick = onNavigateToPersona,
+                showTrailingIcon = true,
+                showLeadingIcon = false
+            )
+
+            SettingItem(
+                title = "数据统计",
+                description = "对话轮数、token 估算与按日活跃度",
+                onItemClick = onNavigateToStatistics,
                 showTrailingIcon = true,
                 showLeadingIcon = false
             )
