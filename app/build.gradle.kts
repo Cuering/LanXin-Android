@@ -11,8 +11,8 @@ plugins {
     alias(libs.plugins.kotlin.ksp)
     alias(libs.plugins.kotlin.parcelize)
     alias(libs.plugins.auto.license)
-    kotlin(libs.plugins.kotlin.serialization.get().pluginId).version(libs.versions.kotlin)
     alias(libs.plugins.objectbox)
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.3.21"
 }
 
 extensions.configure<ApplicationExtension> {
@@ -152,7 +152,7 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
-    androidTestImplementation(libs.androidx.ui.test.junit4)
+    androidTestImplementation(libs.androidx.ui.test.juniv4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 }
