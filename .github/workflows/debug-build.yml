@@ -41,7 +41,10 @@ jobs:
       - name: Setup JDK
         uses: actions/setup-java@v5
         with:
-          distribution: "oracle"
+          # Oracle distro on GHA currently resolves to JDK 17 even when java-version: 21,
+          # which breaks kapt on Java 21 bytecode (markdown-renderer / highlights).
+          # Temurin is proven working in android-ci.yml.
+          distribution: "temurin"
           java-version: "21"
           cache: "gradle"
 
