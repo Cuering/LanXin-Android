@@ -25,14 +25,17 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface PersonaDao {
-    @Query("SELECT * FROM personas ORDER BY is_builtin DESC, updated_at DESC")
+    @Query("SELECT * FROM personas ORDER BY sort_order ASC, is_builtin DESC, updated_at DESC")
     fun getAllPersonas(): Flow<List<PersonaEntity>>
 
-    @Query("SELECT * FROM personas ORDER BY is_builtin DESC, updated_at DESC")
+    @Query("SELECT * FROM personas ORDER BY sort_order ASC, is_builtin DESC, updated_at DESC")
     suspend fun getAllPersonasOnce(): List<PersonaEntity>
 
     @Query("SELECT * FROM personas WHERE id = :id LIMIT 1")
     suspend fun getPersonaById(id: String): PersonaEntity?
+
+    @Query("SELECT * FROM personas WHERE folder_id = :folderId ORDER BY sort_order ASC")
+    suspend fun getPersonasByFolder(folderId: String?): List<PersonaEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(persona: PersonaEntity)
@@ -48,6 +51,9 @@ interface PersonaDao {
 
     @Query("DELETE FROM personas WHERE id = :id AND is_builtin = 0")
     suspend fun deleteById(id: String): Int
+
+    @Query("UPDATE personas SET folder_id = NULL WHERE folder_id = :folderId")
+    suspend fun movePersonasOutOfFolder(folderId: String)
 
     @Query("SELECT COUNT(*) FROM personas")
     suspend fun count(): Int

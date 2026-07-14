@@ -20,8 +20,10 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [PersonaEntity::class], version = 1, exportSchema = false)
+@Database(entities = [PersonaEntity::class], version = 2, exportSchema = false)
 abstract class PersonaDatabase : RoomDatabase() {
     abstract fun personaDao(): PersonaDao
 
@@ -29,13 +31,26 @@ abstract class PersonaDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: PersonaDatabase? = null
 
+        /**
+         * Migration 1→2: 添加 AstrBot 对齐字段。
+         */
+        val MIGRATION_1_2 = Migration(1, 2) { db ->
+            db.execSQL("ALTER TABLE personas ADD COLUMN begin_dialogs TEXT DEFAULT NULL")
+            db.execSQL("ALTER TABLE personas ADD COLUMN tools TEXT DEFAULT NULL")
+            db.execSQL("ALTER TABLE personas ADD COLUMN skills TEXT DEFAULT NULL")
+            db.execSQL("ALTER TABLE personas ADD COLUMN custom_error_message TEXT DEFAULT NULL")
+            db.execSQL("ALTER TABLE personas ADD COLUMN folder_id TEXT DEFAULT NULL")
+            db.execSQL("ALTER TABLE personas ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0")
+        }
+
         fun getInstance(context: Context): PersonaDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     PersonaDatabase::class.java,
                     "lanxin_persona.db"
-                ).build()
+                ).addMigrations(MIGRATION_1_2)
+                 .build()
                 INSTANCE = instance
                 instance
             }
