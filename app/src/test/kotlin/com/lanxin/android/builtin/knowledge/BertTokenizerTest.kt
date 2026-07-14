@@ -42,11 +42,13 @@ class BertTokenizerTest {
     }
 
     @Test
-    fun `chinese characters are not split`() {
+    fun `chinese characters are tokenized per character`() {
+        // BERT WordPiece 对 CJK 按单字切分：你好 → 你 + 好
         val encoding = tokenizer.encode("\u4f60\u597d")
-        assertEquals(101L, encoding.inputIds[0])
-        assertEquals(2000L, encoding.inputIds[1])
-        assertEquals(102L, encoding.inputIds[2])
+        assertEquals(101L, encoding.inputIds[0]) // [CLS]
+        assertEquals(2000L, encoding.inputIds[1]) // 你
+        assertEquals(2001L, encoding.inputIds[2]) // 好
+        assertEquals(102L, encoding.inputIds[3]) // [SEP]
     }
 
     @Test
