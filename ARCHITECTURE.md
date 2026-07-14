@@ -1,7 +1,12 @@
 # LanXin Android 架构设计（定稿 v1.0）
 
 > 基于 GPT Mobile 源码改造，引入插件化架构，借鉴 AstrBot 设计思路。
-> 当前状态：**Phase 1 已落地（chat 搬迁 / updater / log / logger）**
+> 当前状态：**Phase 1 落地完成 → 进入 Phase 2**
+> - Step① Plugin 框架 ✅
+> - Step② 三大插件迁移（memory / chat / logger）✅
+> - Step③ MCP 工具调用引擎 + 记忆工具 ✅
+> - Step④ Skill 加载器（SkillLoader / SkillEngine）✅
+> - builtin/persona 人格设定 ✅
 
 ---
 
@@ -36,18 +41,20 @@ LanXin-Android/
 │   └── util/               工具类（VersionComparator 等）
 │
 ├── builtin/                [内置功能] — 随包提供，非必需，但同模板
-│   ├── persona/            人格设定 🔥 优先
-│   ├── statistics/         数据统计 🔥 优先
+│   ├── persona/            人格设定 ✅
+│   ├── statistics/         数据统计 🔥 Phase 2
 │   ├── scheduler/          定时任务/提醒 ⏳ Phase 2
 │   └── knowledge/          知识库 ⏳ Phase 3（初期可对接云端）
 │
 ├── plugins/                [外部插件] — 可选增强，可拔插
-│   ├── memory/             记忆系统（已迁入 ✅）
-│   ├── chat/               聊天历史管理（待搬 📋）
-│   └── logger/             日志查看 UI
+│   ├── memory/             记忆系统 ✅
+│   ├── chat/               聊天历史管理 ✅
+│   └── logger/             日志查看 UI ✅
 │
 ├── app/                    [壳应用]
 │   ├── LanXinApp.kt        初始化入口
+│   ├── builtin/            内置功能实现（persona ✅ / statistics 等）
+│   ├── skill/              Skill 加载器 ✅
 │   ├── presentation/
 │   │   ├── theme/          主题
 │   │   ├── ui/
@@ -135,7 +142,8 @@ getPlugin(id)          + 插件管理 UI           + 插件市场（可选）
 | `core/updater/` | ✅ Phase 1 | 中 | 版本检查 + 下载 + 备份 + 回退 |
 | `core/log/` | ✅ Phase 1 | 低 | 复刻 AstrBot LogManager |
 | `plugins/logger/` | ✅ Phase 1 | 低 | 日志浏览 UI |
-| `builtin/persona/` | 🔥 Phase 2 | 低 | 通过系统提示词实现 |
+| `app/skill/` | ✅ Phase 1 | 低 | Skill 加载器 |
+| `builtin/persona/` | ✅ Phase 2 | 低 | 人格 system prompt + MCP 工具 + 设置页 |
 | `builtin/statistics/` | 🔥 Phase 2 | 低 | 对话轮数、token 估算 |
 | `builtin/scheduler/` | ⏳ Phase 2 | 中 | 需要后台 Service + 通知权限 |
 | `builtin/knowledge/` | ⏳ Phase 3 | 高 | 初期对接云端，本地向量检索延后 |

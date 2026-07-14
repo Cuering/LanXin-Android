@@ -16,11 +16,12 @@ import com.lanxin.android.plugins.chat.data.entity.effectiveThoughts
 import com.lanxin.android.plugins.chat.data.entity.resetActiveRevision
 import com.lanxin.android.plugins.chat.data.entity.selectRevision
 import com.lanxin.android.plugins.chat.data.entity.snapshotLatestAssistantRevision
-import com.lanxin.android.plugins.memory.data.memory.MemoryRepository
-import com.lanxin.android.plugins.chat.data.AttachmentUploadCoordinator
-import com.lanxin.android.plugins.chat.data.ChatRepository
+import com.lanxin.android.builtin.persona.domain.PersonaRepository
 import com.lanxin.android.data.repository.SettingRepository
 import com.lanxin.android.plugin.ToolCallEngine
+import com.lanxin.android.plugins.chat.data.AttachmentUploadCoordinator
+import com.lanxin.android.plugins.chat.data.ChatRepository
+import com.lanxin.android.plugins.memory.data.memory.MemoryRepository
 import com.lanxin.android.plugins.memory.domain.memory.MemoryInjector
 import com.lanxin.android.util.AttachmentPayloadCache
 import com.lanxin.android.util.FileUtils
@@ -45,7 +46,8 @@ class ChatViewModel @Inject constructor(
     private val attachmentUploadCoordinator: AttachmentUploadCoordinator,
     private val memoryRepository: MemoryRepository,
     private val memoryInjector: MemoryInjector,
-    private val toolCallEngine: ToolCallEngine
+    private val toolCallEngine: ToolCallEngine,
+    private val personaRepository: PersonaRepository
 ) : ViewModel() {
     sealed class LoadingState {
         data object Idle : LoadingState()
@@ -531,7 +533,7 @@ class ChatViewModel @Inject constructor(
 
     /**
      * 带 MCP 工具调用循环的对话完成：
-     * 1. 注入记忆 + 工具系统提示词
+     * 1. 注入人格 system prompt + 记忆 + 工具系统提示词
      * 2. 流式请求模型并更新 UI
      * 3. 若回复含 tool_call，路由到 PluginManager 并回填，再请求（最多 [MAX_TOOL_ROUNDS] 轮）
      * 4. 工具中间态不写入聊天历史，最终回复覆盖同一 assistant 槽位
@@ -544,8 +546,9 @@ class ChatViewModel @Inject constructor(
         platformIndex: Int,
         revisionToAppendOnSuccess: com.lanxin.android.plugins.chat.data.entity.AssistantRevision? = null
     ) {
+        val baseSystemPrompt = resolveSystemPrompt(platform.systemPrompt)
         val platformWithTools = platform.copy(
-            systemPrompt = toolCallEngine.mergeSystemPrompt(platform.systemPrompt)
+            systemPrompt = toolCallEngine.mergeSystemPrompt(baseSystemPrompt)
         )
 
         var workingUserMessages = injectMemoryIntoLastUserMessage(userMessages)
@@ -642,6 +645,26 @@ class ChatViewModel @Inject constructor(
 
     private companion object {
         private const val MAX_TOOL_ROUNDS = 3
+    }
+
+    /**
+     * 解析最终 system prompt：
+     * - 当前人格 prompt 优先作为底座
+     * - 若平台自身也配置了 systemPrompt，则拼在人格之后
+     */
+    private suspend fun resolveSystemPrompt(platformPrompt: String?): String {
+        val personaPrompt = runCatching {
+            personaRepository.getCurrentSystemPrompt()
+        }.getOrDefault("").trim()
+        val platform = platformPrompt?.trim().orEmpty()
+        return when {
+            personaPrompt.isEmpty() -> platform
+            platform.isEmpty() -> personaPrompt
+            personaPrompt == platform -> personaPrompt
+            else -> "$personaPrompt
+
+$platform"
+        }
     }
 
     /**
