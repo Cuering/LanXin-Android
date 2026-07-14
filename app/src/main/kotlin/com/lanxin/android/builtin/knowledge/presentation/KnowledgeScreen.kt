@@ -59,7 +59,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier.Modifier
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -279,7 +279,9 @@ private fun AutoKnowledgeCard(
     onClear: () -> Unit
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
+        Column(
+            Modifier.padding(16.dp)
+        ) {
             Text(
                 text = "自动知识积累",
                 style = MaterialTheme.typography.titleMedium,
@@ -393,7 +395,9 @@ private fun AutoKnowledgeItemCard(entity: MemoryEntity) {
     )
     val tags = meta?.tags.orEmpty()
     Card(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(12.dp)) {
+        Column(
+            Modifier.padding(12.dp)
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
