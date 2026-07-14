@@ -7,4 +7,5 @@ plugins {
     alias(libs.plugins.kotlin.parcelize) apply false
     alias(libs.plugins.auto.license) apply false
     alias(libs.plugins.objectbox) apply false
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.3.21" apply false
 }
