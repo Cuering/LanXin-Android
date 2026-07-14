@@ -172,6 +172,26 @@ class ChatViewModel @Inject constructor(
         sendQuestion(questionText, _selectedAttachments.value)
     }
 
+    /**
+     * 定时任务 ACTIVE_AGENT 通知唤起：预填输入框，可选自动发送。
+     */
+    fun applySchedulerPrompt(prompt: String, autoStart: Boolean) {
+        if (prompt.isBlank()) return
+        question.setTextAndPlaceCursorAtEnd(prompt)
+        if (autoStart) {
+            viewModelScope.launch {
+                var retries = 0
+                while (!_isLoaded.value && retries < 40) {
+                    kotlinx.coroutines.delay(50)
+                    retries++
+                }
+                if (question.text.toString().isNotBlank()) {
+                    askQuestion()
+                }
+            }
+        }
+    }
+
     override fun onCleared() {
         AttachmentPayloadCache.clear()
         super.onCleared()

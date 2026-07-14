@@ -16,6 +16,8 @@ import androidx.navigation.navArgument
 import androidx.navigation.navigation
 import com.lanxin.android.builtin.persona.presentation.PersonaEditScreen
 import com.lanxin.android.builtin.persona.presentation.PersonaListScreen
+import com.lanxin.android.builtin.scheduler.presentation.TaskEditScreen
+import com.lanxin.android.builtin.scheduler.presentation.TaskListScreen
 import com.lanxin.android.builtin.statistics.presentation.StatisticsScreen
 import com.lanxin.android.plugins.logger.presentation.ui.LoggerScreen
 import com.lanxin.android.plugins.memory.presentation.ui.memory.MemoryScreen
@@ -54,6 +56,7 @@ fun SetupNavGraph(navController: NavHostController) {
         loggerScreenNavigation(navController)
         personaScreenNavigation(navController)
         statisticsScreenNavigation(navController)
+        schedulerScreenNavigation(navController)
     }
 }
 
@@ -61,6 +64,43 @@ fun NavGraphBuilder.statisticsScreenNavigation(navController: NavHostController)
     composable(Route.STATISTICS) {
         StatisticsScreen(
             onBackAction = { navController.navigateUp() }
+        )
+    }
+}
+
+fun NavGraphBuilder.schedulerScreenNavigation(navController: NavHostController) {
+    composable(Route.TASK_LIST) {
+        TaskListScreen(
+            onBackAction = { navController.navigateUp() },
+            onNavigateToEdit = { taskId ->
+                if (taskId.isNullOrBlank()) {
+                    navController.navigate(Route.TASK_CREATE)
+                } else {
+                    navController.navigate(
+                        Route.TASK_EDIT.replace("{taskId}", taskId)
+                    )
+                }
+            }
+        )
+    }
+    composable(Route.TASK_CREATE) {
+        TaskEditScreen(
+            taskId = null,
+            onBackAction = { navController.navigateUp() },
+            onSaved = { navController.navigateUp() }
+        )
+    }
+    composable(
+        route = Route.TASK_EDIT,
+        arguments = listOf(
+            navArgument("taskId") { type = NavType.StringType }
+        )
+    ) { entry ->
+        val taskId = entry.arguments?.getString("taskId")
+        TaskEditScreen(
+            taskId = taskId,
+            onBackAction = { navController.navigateUp() },
+            onSaved = { navController.navigateUp() }
         )
     }
 }
@@ -246,7 +286,8 @@ fun NavGraphBuilder.settingNavigation(navController: NavHostController) {
                 onNavigateToAboutPage = { navController.navigate(Route.ABOUT_PAGE) },
                 onNavigateToLogger = { navController.navigate(Route.LOGGER) },
                 onNavigateToPersona = { navController.navigate(Route.PERSONA_LIST) },
-                onNavigateToStatistics = { navController.navigate(Route.STATISTICS) }
+                onNavigateToStatistics = { navController.navigate(Route.STATISTICS) },
+                onNavigateToScheduler = { navController.navigate(Route.TASK_LIST) }
             )
         }
         composable(Route.ADD_PLATFORM) {
