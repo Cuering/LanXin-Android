@@ -57,7 +57,8 @@ data class VectorHit(
     val externalId: Long,
     val source: String,
     val textPreview: String,
-    val score: Float  // 余弦相似度 [0,1]，越大越相似
+    // 余弦相似度 [0,1]，越大越相似
+    val score: Float,
 )
 
 /**
