@@ -100,6 +100,19 @@ class PersonaRepositoryTest {
     }
 
     @Test
+    fun `create persona with tools and skills`() = runBlocking {
+        repository.ensureSeeded()
+        val created = repository.createPersona(
+            name = "受限人格",
+            systemPrompt = "you are limited",
+            tools = listOf("tool_a"),
+            skills = emptyList()
+        )
+        assertEquals(listOf("tool_a"), created.tools)
+        assertEquals(emptyList<String>(), created.skills)
+    }
+
+    @Test
     fun `delete custom persona resets selection when needed`() = runBlocking {
         repository.ensureSeeded()
         val created = repository.createPersona("临时", "prompt")
@@ -125,13 +138,25 @@ class PersonaRepositoryTest {
         assertTrue(prompt.contains("专业"))
     }
 
+    @Test
+    fun `move persona between folders`() = runBlocking {
+        repository.ensureSeeded()
+        val p = repository.createPersona("测试", "hello", folderId = "folder_a")
+        assertEquals("folder_a", repository.getById(p.id)?.folderId)
+        repository.movePersonaToFolder(p.id, "folder_b")
+        assertEquals("folder_b", repository.getById(p.id)?.folderId)
+        repository.removeFolderFromPersonas("folder_b")
+        assertEquals(null, repository.getById(p.id)?.folderId)
+    }
+
     private class FakePersonaDao : PersonaDao {
         private val store = MutableStateFlow<Map<String, PersonaEntity>>(emptyMap())
 
         override fun getAllPersonas(): Flow<List<PersonaEntity>> =
             store.map { map ->
                 map.values.sortedWith(
-                    compareByDescending<PersonaEntity> { it.isBuiltin }
+                    compareBy<PersonaEntity> { it.sortOrder }
+                        .thenByDescending { it.isBuiltin }
                         .thenByDescending { it.updatedAt }
                 )
             }
@@ -140,6 +165,9 @@ class PersonaRepositoryTest {
             getAllPersonas().first()
 
         override suspend fun getPersonaById(id: String): PersonaEntity? = store.value[id]
+
+        override suspend fun getPersonasByFolder(folderId: String?): List<PersonaEntity> =
+            store.value.values.filter { it.folderId == folderId }
 
         override suspend fun upsert(persona: PersonaEntity) {
             store.update { it + (persona.id to persona) }
@@ -166,6 +194,14 @@ class PersonaRepositoryTest {
             if (existing.isBuiltin) return 0
             store.update { it - id }
             return 1
+        }
+
+        override suspend fun movePersonasOutOfFolder(folderId: String) {
+            store.update { map ->
+                map.mapValues { (_, v) ->
+                    if (v.folderId == folderId) v.copy(folderId = null) else v
+                }
+            }
         }
 
         override suspend fun count(): Int = store.value.size
