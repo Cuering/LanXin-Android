@@ -26,6 +26,7 @@ ktlint_standard_no-wildcard-imports = disabled
 ktlint_standard_function-expression-body = disabled
 ktlint_standard_import-ordering = disabled
 ktlint_standard_wrapping = disabled
+ktlint_standard_argument-list-wrapping = disabled
 ktlint_standard_trailing-comma-on-call-site = disabled
 ktlint_standard_trailing-comma-on-declaration-site = disabled
 ktlint_standard_no-unused-imports = disabled
