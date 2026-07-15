@@ -49,6 +49,7 @@ class AutoKnowledgeService @Inject constructor(
 
     /** 上次真正发起 LLM 抽取的时间戳，用于冷却降频。 */
     private val lastExtractAtMs = AtomicLong(0L)
+
     /** 成功对话触发计数；每 N 轮才真正抽。 */
     private val extractTurnCounter = AtomicInteger(0)
 
