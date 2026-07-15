@@ -163,4 +163,64 @@ class AutoKnowledgeMathTest {
         val s = AutoKnowledgeMath.stripMarkdownFence("```\n{\"a\":1}\n```")
         assertEquals("{\"a\":1}", s)
     }
+
+    @Test
+    fun `sanitizeMessages drops tool noise and errors`() {
+        val cleaned = AutoKnowledgeMath.sanitizeMessages(
+            listOf(
+                ConversationMessage("user", "我喜欢喝美式咖啡"),
+                ConversationMessage("assistant", "Error: Software caused connection abort"),
+                ConversationMessage("assistant", "工具: {\"stdout\": \"xxx\"}\n好的，已记下"),
+                ConversationMessage("user", "你是知识抽取器。从下列对话中提炼...\n堆了很多无关内容"),
+                ConversationMessage("assistant", "```\ncode\n```\n记下了你的偏好")
+            ),
+            maxMsgChars = 400,
+            maxTranscriptChars = 2400,
+            maxMessages = 6
+        )
+        val joined = cleaned.joinToString(" | ") { it.content }
+        assertTrue(cleaned.any { it.content.contains("美式咖啡") })
+        assertTrue(cleaned.none { it.content.startsWith("Error:") })
+        assertTrue(cleaned.none { it.content.startsWith("你是知识抽取器") })
+        assertTrue(cleaned.none { it.content.contains("工具:") })
+        assertTrue(joined.contains("记下了") || cleaned.any { it.role == "assistant" })
+    }
+
+    @Test
+    fun `sanitizeMessageContent truncates long text`() {
+        val long = "偏好" + "啊".repeat(500)
+        val out = AutoKnowledgeMath.sanitizeMessageContent(long, maxChars = 50)
+        assertTrue(out != null && out.length <= 50)
+        assertTrue(out!!.endsWith("…"))
+    }
+
+    @Test
+    fun `sanitizeMessages empty after greeting filter`() {
+        val cleaned = AutoKnowledgeMath.sanitizeMessages(
+            listOf(
+                ConversationMessage("user", "好的"),
+                ConversationMessage("assistant", "嗯"),
+                ConversationMessage("user", "ok"),
+                ConversationMessage("assistant", "done")
+            )
+        )
+        assertTrue(cleaned.isEmpty())
+    }
+
+    @Test
+    fun `buildExtractionPrompt sanitizes noise before transcript`() {
+        val noisyUser =
+            "<system_reminder>hidden</system_reminder>\n我更喜欢简洁回复"
+        val prompt = AutoKnowledgeMath.buildExtractionPrompt(
+            listOf(
+                ConversationMessage("user", "我更喜欢简洁回复"),
+                ConversationMessage("assistant", "Error: timeout"),
+                ConversationMessage("user", noisyUser)
+            )
+        )
+        assertTrue(prompt.contains("简洁回复"))
+        assertTrue(!prompt.contains("Error: timeout"))
+        assertTrue(!prompt.contains("hidden"))
+        assertTrue(prompt.contains("importance 0.0~1.0"))
+    }
 }

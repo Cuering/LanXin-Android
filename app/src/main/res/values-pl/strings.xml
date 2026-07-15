@@ -15,7 +15,7 @@
     <string name="gemini_1_5_flash_description">Szybki i uniwersalny model, wydajny w różnorodnych zadaniach.</string>
     <string name="gemini_1_0_pro_description">Przetwarzanie języka naturalnego, wieloetapowe dwukierunkowe rozmowy oraz pisanie kodu.</string>
     <string name="setup_complete">Konfiguracja zakończona!</string>
-    <string name="setup_complete_description">Zacznij korzystać z GPT Mobile!</string>
+    <string name="setup_complete_description">Zacznij korzystać z LanXin!</string>
     <string name="done">Gotowe</string>
     <string name="new_chat">Nowy czat</string>
     <string name="enable_at_leat_one_platform">Aby rozpocząć czat, wybierz przynajmniej jedną platformę.</string>

@@ -31,9 +31,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -42,7 +44,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lanxin.android.plugins.unifiedinbox.data.CrossSessionEntity
 import java.text.SimpleDateFormat
 import java.util.Date
-import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -252,9 +253,12 @@ private fun HistoryMessageCard(message: CrossSessionEntity) {
 
 @Composable
 private fun rememberTimeText(timeMs: Long): String {
-    return try {
-        SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(timeMs))
-    } catch (_: Exception) {
-        timeMs.toString()
+    val locale = LocalLocale.current.platformLocale
+    return remember(timeMs, locale) {
+        try {
+            SimpleDateFormat("yyyy-MM-dd HH:mm", locale).format(Date(timeMs))
+        } catch (_: Exception) {
+            timeMs.toString()
+        }
     }
 }

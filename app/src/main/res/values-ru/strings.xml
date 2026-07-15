@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">LanXin</string>
-    <string name="lanxin_introduction_logo">GPT Mobile логотип приветствия</string>
+    <string name="lanxin_introduction_logo">LanXin логотип приветствия</string>
     <string name="welcome_title">Лучший ИИ-ассистент\nпрямо в вашем\nсмартфоне.</string>
     <string name="welcome_description">Используйте наиболее подходящую\nвам модель. Спрашивайте о чём угодно!</string>
     <string name="get_started">Начать работу</string>
@@ -37,7 +37,7 @@
     <string name="gemini_1_5_flash_description">Высокая производительность и универсальность при решении широкого спектра задач.</string>
     <string name="gemini_1_0_pro_description">Задачи обработки естественного языка, многооборотный текстовый и программный чат, а также генерация кода.</string>
     <string name="setup_complete">Всё готово!</string>
-    <string name="setup_complete_description">Начнём использовать GPT Mobile!</string>
+    <string name="setup_complete_description">Начнём использовать LanXin!</string>
     <string name="done">Готово</string>
     <string name="setup_complete_logo">Логотип завершённой настройки</string>
     <string name="chats">Чаты</string>

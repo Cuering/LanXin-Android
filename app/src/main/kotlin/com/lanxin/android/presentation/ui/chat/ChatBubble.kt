@@ -218,7 +218,7 @@ fun LanXinIcon(loading: Boolean) {
             )
         }
         Image(
-            painter = painterResource(R.drawable.ic_gpt_mobile_no_padding),
+            painter = painterResource(R.drawable.ic_lanxin_no_padding),
             contentDescription = null,
             modifier = Modifier.size(24.dp)
         )

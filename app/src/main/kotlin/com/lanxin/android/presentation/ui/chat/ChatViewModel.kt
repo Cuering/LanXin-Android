@@ -14,6 +14,7 @@ import com.lanxin.android.builtin.persona.domain.PersonaRepository
 import com.lanxin.android.builtin.statistics.domain.ChatTurnStatEvent
 import com.lanxin.android.builtin.statistics.domain.ProviderStat
 import com.lanxin.android.builtin.statistics.domain.StatisticsRepository
+import com.lanxin.android.builtin.unifiedsearch.domain.UnifiedSearchService
 import com.lanxin.android.data.repository.SettingRepository
 import com.lanxin.android.plugin.ToolCallEngine
 import com.lanxin.android.plugin.ToolDef
@@ -54,6 +55,7 @@ class ChatViewModel @Inject constructor(
     private val attachmentUploadCoordinator: AttachmentUploadCoordinator,
     private val memoryRepository: MemoryRepository,
     private val memoryInjector: MemoryInjector,
+    private val unifiedSearchService: UnifiedSearchService,
     private val toolCallEngine: ToolCallEngine,
     private val personaRepository: PersonaRepository,
     private val statisticsRepository: StatisticsRepository,
@@ -708,6 +710,7 @@ class ChatViewModel @Inject constructor(
     private fun maybeExtractAutoKnowledge(platformIndex: Int) {
         val snapshot = _groupedMessages.value
         val sessionId = _chatRoom.value.id.toString().ifBlank { chatRoomId.toString() }
+        // 后台静默抽取：不改 UI，不插入会话消息；失败只打日志
         viewModelScope.launch(Dispatchers.IO) {
             runCatching {
                 val recent = autoKnowledgeService.toConversationMessages(
@@ -715,7 +718,11 @@ class ChatViewModel @Inject constructor(
                     assistantMessages = snapshot.assistantMessages,
                     platformIndex = platformIndex
                 )
-                autoKnowledgeService.extractAndStore(sessionId, recent)
+                // 只取尾部，进一步限制进入抽取的原始体量
+                val tail = if (recent.size > 20) recent.takeLast(20) else recent
+                autoKnowledgeService.extractAndStore(sessionId, tail)
+            }.onFailure { t ->
+                android.util.Log.w("ChatViewModel", "auto knowledge extract skipped", t)
             }
         }
     }
@@ -813,12 +820,18 @@ class ChatViewModel @Inject constructor(
     )
 
     /**
-     * 仅在发给模型时注入记忆，界面仍显示用户原始消息。
+     * 仅在发给模型时注入上下文，界面仍显示用户原始消息。
+     *
+     * Phase 4.4：优先走 UnifiedSearch 四路 RRF；关闭时回退 MemoryInjector。
      */
     private suspend fun injectMemoryIntoLastUserMessage(userMessages: List<MessageV2>): List<MessageV2> {
         if (userMessages.isEmpty()) return userMessages
         val last = userMessages.last()
-        val enriched = memoryInjector.inject(last.content)
+        val enriched = if (unifiedSearchService.enabled) {
+            unifiedSearchService.inject(last.content)
+        } else {
+            memoryInjector.inject(last.content)
+        }
         if (enriched == last.content) return userMessages
         return userMessages.dropLast(1) + last.copy(content = enriched)
     }

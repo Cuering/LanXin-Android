@@ -289,7 +289,7 @@ private fun AutoKnowledgeCard(
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "对话成功后自动抽取偏好 / 事实 / 事件 / 决策 / 观点",
+                text = "默认关闭。开启后会清洗噪声并降频抽取偏好 / 事实 / 事件 / 决策 / 观点",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

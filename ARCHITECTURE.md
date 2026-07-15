@@ -1,9 +1,10 @@
 # LanXin Android 架构设计（定稿 v1.0）
 
 > 基于 GPT Mobile 源码改造，引入插件化架构，借鉴 AstrBot 设计思路。
-> 当前状态：**Phase 1 ✅ → Phase 2 ✅ → Phase 3 ✅**
+> 当前状态：**Phase 1 ✅ → Phase 2 ✅ → Phase 3 ✅ → Phase 4 ✅**
 > - Step①~⑧ 全部完成
 > - 知识库 P0~P6、Unified Inbox 均已落地
+> - Phase 4：品牌换皮 + Memory 编辑 UI + UnifiedSearch 四路 RRF
 
 ---
 
@@ -44,7 +45,8 @@ LanXin-Android/
 │   ├── statistics/         数据统计 ✅
 │   ├── scheduler/          定时任务/提醒 ✅
 │   ├── platform/           手机平台工具 ✅
-│   └── knowledge/          知识库 ✅
+│   ├── knowledge/          知识库 ✅
+│   └── unified_search/     统一搜索（四路 RRF）✅
 │
 ├── plugins/                [外部插件] — 可选增强，可拔插
 │   ├── memory/             记忆系统 ✅
@@ -353,7 +355,7 @@ app/.../plugins/unifiedinbox/
 
 ---
 
-## 十三、统一搜索（Phase 4 核心交付）🔜
+## 十三、统一搜索（Phase 4 核心交付）✅
 
 > 将 memory / knowledge / chat / unified_inbox 四路合一，RRF 融合排序
 
@@ -390,25 +392,25 @@ app/.../plugins/unifiedinbox/
 - 各路由并行调用，超时 2s 降级
 - 零结果路由自动跳过（不注入空段）
 - 搜索页 UI 可查看各路由独立命中数
-- MemoryInjector 升级为 UnifiedMemoryInjector
+- ChatViewModel 优先 `UnifiedSearchService.inject()`；关闭时回退 `MemoryInjector`
 
 ---
 
 ## 十四、Phase 4~6 完整路线图
 
-### Phase 4 — 基础夯实（Foundation Overhaul）
+### Phase 4 — 基础夯实（Foundation Overhaul）✅
 
 **目标：** 补齐早期设计缺口，整合核心搜索体验
 
 | 步骤 | 内容 | 难度 | 预估 |
 |:----:|------|:----:|:----:|
-| **4.1** | 源码目录迁移 `dev/chungjungsoo/gptmobile` → `com/lanxin/android` | 🟢 低 | 1d |
-| **4.2** | 图标 / 启动屏换皮（兰心品牌） | 🟢 低 | 0.5d |
-| **4.3** | Memory 可编辑 UI：查看/编辑/删除记忆条目 | 🟡 中 | 2d |
-| **4.4** | 统一搜索（UnifiedSearch）：四路 RRF 融合 | 🟡 中 | 3d |
-| **4.5** | UnifiedSearch 设置页 + 各路由命中数展示 | 🟢 低 | 1d |
+| **4.1** | 源码目录迁移 `dev/chungjungsoo/gptmobile` → `com/lanxin/android` | 🟢 低 | 1d | ✅ |
+| **4.2** | 图标 / 启动屏换皮（兰心品牌） | 🟢 低 | 0.5d | ✅ |
+| **4.3** | Memory 可编辑 UI：查看/编辑/删除记忆条目 | 🟡 中 | 2d | ✅ |
+| **4.4** | 统一搜索（UnifiedSearch）：四路 RRF 融合 | 🟡 中 | 3d | ✅ |
+| **4.5** | UnifiedSearch 设置页 + 各路由命中数展示 | 🟢 低 | 1d | ✅ |
 
-**交付：** `builtin/unified_search` 模块 + Memory 编辑页 + 品牌换皮
+**交付：** `builtin/unified_search` 模块 + Memory 编辑页 + 品牌换皮 ✅
 
 ---
 
@@ -470,9 +472,9 @@ Phase 4（基础夯实）   Phase 5（平台扩展）     Phase 6（端侧智能
 
 | 原设计 | 归入 | 说明 |
 |--------|------|------|
-| 源码目录 → `com/lanxin/android` | **Phase 4.1** | 一直挂着没动 |
-| 图标/启动屏换皮 | **Phase 4.2** | GPT Mobile 原样未动 |
-| MemoryRepo 可编辑 UI + 向量 | **Phase 4.3** | 复用已有 knowledge 向量引擎 |
+| 源码目录 → `com/lanxin/android` | **Phase 4.1** | ✅ 已完成（仅剩品牌/文档清理已扫清） |
+| 图标/启动屏换皮 | **Phase 4.2** | ✅ 兰心图标/启动屏/strings 已换皮 |
+| MemoryRepo 可编辑 UI + 向量 | **Phase 4.3** | ✅ 列表/编辑/删除已就绪；注入走 UnifiedSearch |
 | 本地优先 / 离线兜底 | **Phase 6.1~6.3** | MNN + ChatRouter |
 | VoiceRepo / ASR + TTS | **Phase 6.4~6.5** | Sherpa-ONNX + Bert-VITS2 |
 | 桌宠 PetOverlay | **Phase 6.6~6.7** | 参考妹居 |
