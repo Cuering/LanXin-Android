@@ -130,18 +130,62 @@ class MemoryRepository @Inject constructor(
         }
     }
 
-    suspend fun exportToJsonSuspend(context: Context): File = withContext(Dispatchers.IO) {
-        val memories = dao.getAllMemoriesOnce()
+    /**
+     * 导出全部记忆为 JSON（既有签名，保持不变）。
+     */
+    suspend fun exportToJsonSuspend(context: Context): File =
+        exportToJsonSuspend(context, typeFilter = null)
+
+    /**
+     * P4：导出 JSON，可按 type / 导出分组过滤。
+     */
+    suspend fun exportToJsonSuspend(
+        context: Context,
+        typeFilter: String?
+    ): File = withContext(Dispatchers.IO) {
+        val items = loadExportItems(typeFilter)
         val payload = MemoryExportPayload(
             version = 1,
             exportedAt = System.currentTimeMillis(),
-            memories = memories.map { it.toExportItem() }
+            memories = items
         )
         val jsonText = json.encodeToString(MemoryExportPayload.serializer(), payload)
-        val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-        val file = File(context.cacheDir, "lanxin_memories_$stamp.json")
-        file.writeText(jsonText, Charsets.UTF_8)
-        file
+        writeCacheFile(context, "json", jsonText)
+    }
+
+    /**
+     * P4：导出全部记忆为 Markdown。
+     */
+    suspend fun exportToMarkdownSuspend(context: Context): File =
+        exportToMarkdownSuspend(context, typeFilter = null)
+
+    /**
+     * P4：导出 Markdown，可按 type / 导出分组过滤。
+     */
+    suspend fun exportToMarkdownSuspend(
+        context: Context,
+        typeFilter: String?
+    ): File = withContext(Dispatchers.IO) {
+        val exportedAt = System.currentTimeMillis()
+        val items = loadExportItems(typeFilter = null) // 全量取出，由 exporter 再过滤
+        val markdown = MemoryMarkdownExporter.build(
+            memories = items,
+            exportedAt = exportedAt,
+            typeFilter = typeFilter
+        )
+        writeCacheFile(context, "md", markdown)
+    }
+
+    /**
+     * P4：统一导出入口。
+     */
+    suspend fun exportSuspend(
+        context: Context,
+        format: MemoryExportFormat,
+        typeFilter: String? = null
+    ): File = when (format) {
+        MemoryExportFormat.JSON -> exportToJsonSuspend(context, typeFilter)
+        MemoryExportFormat.MARKDOWN -> exportToMarkdownSuspend(context, typeFilter)
     }
 
     /**
@@ -232,6 +276,19 @@ class MemoryRepository @Inject constructor(
             skipped = skipped,
             total = items.size
         )
+    }
+
+    private suspend fun loadExportItems(typeFilter: String?): List<MemoryExportItem> {
+        val all = dao.getAllMemoriesOnce().map { it.toExportItem() }
+        if (typeFilter.isNullOrBlank()) return all
+        return all.filter { MemoryMarkdownExporter.matchesTypeFilter(it, typeFilter) }
+    }
+
+    private fun writeCacheFile(context: Context, extension: String, text: String): File {
+        val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+        val file = File(context.cacheDir, "lanxin_memories_$stamp.$extension")
+        file.writeText(text, Charsets.UTF_8)
+        return file
     }
 
     private fun MemoryEntity.toExportItem(): MemoryExportItem = MemoryExportItem(
