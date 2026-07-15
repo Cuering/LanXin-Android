@@ -24,8 +24,6 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.lanxin.android.builtin.sync.domain.SyncConfig
 import java.util.UUID
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
@@ -34,8 +32,7 @@ import kotlinx.coroutines.flow.map
  *
  * 键前缀 `sync_`，与 github_ / token 命名空间隔离。
  */
-@Singleton
-class SyncPreferences @Inject constructor(
+class SyncPreferences(
     private val dataStore: DataStore<Preferences>
 ) {
     private val deviceIdKey = stringPreferencesKey(KEY_DEVICE_ID)

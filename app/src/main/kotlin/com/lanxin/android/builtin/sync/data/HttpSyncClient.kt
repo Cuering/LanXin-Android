@@ -27,8 +27,6 @@ import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
 import io.ktor.http.isSuccess
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -43,8 +41,7 @@ import kotlinx.serialization.json.Json
  * Note: no separate interface binding — KSP/Hilt failed to resolve
  * domain-level SyncClient/SyncApi as ERROR types; inject this class directly.
  */
-@Singleton
-class HttpSyncClient @Inject constructor(
+class HttpSyncClient(
     private val networkClient: NetworkClient,
     private val preferences: SyncPreferences
 ) {

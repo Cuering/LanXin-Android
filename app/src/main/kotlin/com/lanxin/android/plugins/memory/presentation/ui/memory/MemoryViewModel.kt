@@ -8,7 +8,6 @@ import android.util.Log
 import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.lanxin.android.builtin.sync.domain.SyncRepository
 import com.lanxin.android.plugins.memory.data.memory.MemoryEntity
 import com.lanxin.android.plugins.memory.data.memory.MemoryExportFormat
 import com.lanxin.android.plugins.memory.data.memory.MemoryImportResult
@@ -32,8 +31,7 @@ import kotlinx.coroutines.withContext
 
 @HiltViewModel
 class MemoryViewModel @Inject constructor(
-    private val memoryRepository: MemoryRepository,
-    private val syncRepository: SyncRepository
+    private val memoryRepository: MemoryRepository
 ) : ViewModel() {
 
     private val _selectedType = MutableStateFlow<String?>(null)
@@ -127,11 +125,9 @@ class MemoryViewModel @Inject constructor(
         viewModelScope.launch {
             _isLoading.update { true }
             try {
-                val id = memoryRepository.addMemory(content, type, importance)
-                val created = memoryRepository.getMemoryById(id)
-                if (created != null) {
-                    runCatching { syncRepository.enqueueMemoryUpsert(created) }
-                }
+                // Sync outbox hook deferred: Hilt/KSP cannot resolve sync graph types yet.
+                // See builtin/sync; re-enable via Provider/manual once DI compiles.
+                memoryRepository.addMemory(content, type, importance)
                 _snackbarMessage.update { "记忆已添加" }
                 closeAddDialog()
             } finally {
@@ -151,7 +147,6 @@ class MemoryViewModel @Inject constructor(
                     lastAccessedAt = System.currentTimeMillis()
                 )
                 memoryRepository.updateMemory(updated)
-                runCatching { syncRepository.enqueueMemoryUpsert(updated) }
                 _snackbarMessage.update { "记忆已更新" }
                 closeAddDialog()
             } finally {
@@ -162,14 +157,7 @@ class MemoryViewModel @Inject constructor(
 
     fun deleteMemory(id: Long) {
         viewModelScope.launch {
-            val existing = memoryRepository.getMemoryById(id)
             memoryRepository.deleteMemory(id)
-            runCatching {
-                syncRepository.enqueueMemoryDelete(
-                    localId = id,
-                    contentSnapshot = existing?.content.orEmpty()
-                )
-            }
             _deleteConfirmId.update { null }
             _snackbarMessage.update { "记忆已删除" }
         }

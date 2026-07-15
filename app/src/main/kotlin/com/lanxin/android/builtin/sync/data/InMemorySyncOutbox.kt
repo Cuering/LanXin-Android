@@ -20,8 +20,6 @@ import com.lanxin.android.builtin.sync.domain.SyncOutboxEntry
 import com.lanxin.android.builtin.sync.domain.SyncOutboxOp
 import com.lanxin.android.builtin.sync.domain.SyncItem
 import java.util.concurrent.atomic.AtomicLong
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -30,8 +28,7 @@ import kotlinx.coroutines.sync.withLock
  *
  * 后续可替换为 Room 持久化实现，接口保持 [enqueue]/[snapshot]/[removeByIds]。
  */
-@Singleton
-class InMemorySyncOutbox @Inject constructor() {
+class InMemorySyncOutbox {
 
     private val mutex = Mutex()
     private val seq = AtomicLong(1L)

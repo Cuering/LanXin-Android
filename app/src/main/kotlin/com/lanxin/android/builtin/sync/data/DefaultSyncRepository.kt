@@ -27,8 +27,6 @@ import com.lanxin.android.builtin.sync.domain.SyncPushRequest
 import com.lanxin.android.builtin.sync.domain.SyncRepository
 import com.lanxin.android.plugins.memory.data.memory.MemoryEntity
 import com.lanxin.android.plugins.memory.data.memory.MemoryRepository
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -45,8 +43,7 @@ import kotlinx.coroutines.withContext
  *
  * HTTP 层直接依赖 [HttpSyncClient]（避免 domain 接口在 KSP 中成为 ERROR type）。
  */
-@Singleton
-class DefaultSyncRepository @Inject constructor(
+class DefaultSyncRepository(
     private val syncClient: HttpSyncClient,
     private val preferences: SyncPreferences,
     private val outbox: InMemorySyncOutbox,
