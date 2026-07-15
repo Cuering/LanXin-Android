@@ -165,9 +165,9 @@ class Bm25Index(
          */
         fun fingerprintOf(items: List<SparseIndexItem>): Long {
             if (items.isEmpty()) return 0L
-            var h = items.size.toLong() * 0x9E3779B97F4A7C15L
+            var h = items.size.toLong() * 31
             for (item in items) {
-                h = h xor (item.documentId * 0xC2B2AE3D27D4EB4FL)
+                h = h xor item.documentId
                 h = h * 31 + item.text.length
                 h = h * 31 + item.source.hashCode()
             }
