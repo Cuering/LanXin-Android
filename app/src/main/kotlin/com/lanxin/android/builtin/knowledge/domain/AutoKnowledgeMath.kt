@@ -182,7 +182,8 @@ object AutoKnowledgeMath {
         // 整段丢弃的噪声
         if (NOISE_FULL_MATCH.containsMatchIn(s)) return null
         if (s.startsWith("你是知识抽取器")) return null
-        if (s.contains("Error: Software caused connection abort")) return null
+        // 任意 Error: 开头（含 Error: timeout / connection abort 等）
+        if (s.startsWith("Error:", ignoreCase = true)) return null
 
         // 去掉 system_reminder / tool 结果块
         s = SYSTEM_REMINDER_BLOCK.replace(s, " ")
