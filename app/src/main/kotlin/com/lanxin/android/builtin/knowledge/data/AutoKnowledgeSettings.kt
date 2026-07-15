@@ -66,20 +66,27 @@ class AutoKnowledgeSettings @Inject constructor(
     companion object {
         const val KEY_ENABLED = "auto_knowledge_enabled"
         const val KEY_WINDOW = "auto_knowledge_history_window"
+
         /** 默认关闭，避免噪声抽取污染主聊天链路。 */
         const val DEFAULT_ENABLED = false
+
         /** 默认只取最近 6 条（清洗后），降低无效堆砌。 */
         const val DEFAULT_WINDOW = 6
         const val MIN_WINDOW = 2
         const val MAX_WINDOW = 12
+
         /** 两次抽取最小间隔（毫秒）。 */
         const val COOLDOWN_MS = 60_000L
+
         /** 每 N 轮成功对话才尝试抽取（与冷却叠加）。 */
         const val EXTRACT_EVERY_N_TURNS = 3
+
         /** importance 低于该阈值不入库。 */
         const val MIN_IMPORTANCE = 0.6f
+
         /** 单条消息截断长度。 */
         const val MAX_MSG_CHARS = 400
+
         /** 整段 transcript 上限。 */
         const val MAX_TRANSCRIPT_CHARS = 2400
     }
