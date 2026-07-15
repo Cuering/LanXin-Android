@@ -37,7 +37,17 @@ object Tokenizer {
         "a", "an", "the", "and", "or", "but", "if", "in", "on", "at",
         "to", "for", "of", "as", "by", "with", "from", "is", "are",
         "was", "were", "be", "been", "being", "this", "that", "it",
-        "its", "we", "you", "he", "she", "they", "them", "our", "your"
+        "its", "we", "you", "he", "she", "they", "them", "our", "your",
+        "over", "under", "into", "onto", "about", "above", "below",
+        "up", "down", "out", "off", "again", "further", "then", "once",
+        "here", "there", "when", "where", "why", "how", "all", "each",
+        "few", "more", "most", "other", "some", "such", "no", "nor",
+        "not", "only", "own", "same", "so", "than", "too", "very",
+        "can", "will", "just", "don", "should", "now", "do", "does",
+        "did", "having", "have", "has", "had", "what", "which", "who",
+        "whom", "these", "those", "am", "i", "me", "my", "myself",
+        "himself", "herself", "itself", "ourselves", "yourselves",
+        "themselves", "his", "hers", "theirs", "their"
     )
 
     /**

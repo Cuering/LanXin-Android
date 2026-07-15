@@ -160,16 +160,21 @@ class Bm25Index(
         const val DEFAULT_B = 0.75
 
         /**
-         * 轻量指纹：size + 各 documentId xor + text length 累加。
-         * 避免大文本全量 hash，足以检测常规增删改。
+         * 轻量指纹：size + documentId xor + text/source 内容 hash。
+         * 必须纳入 text 内容本身，否则同 id/同长度文本改写会误判为 unchanged。
+         * 使用简单 31 乘数避免 signed Long 溢出不稳定。
          */
         fun fingerprintOf(items: List<SparseIndexItem>): Long {
             if (items.isEmpty()) return 0L
             var h = items.size.toLong() * 31
             for (item in items) {
                 h = h xor item.documentId
-                h = h * 31 + item.text.length
+                h = h * 31 + item.text.hashCode()
                 h = h * 31 + item.source.hashCode()
+                val payload = item.payload
+                if (payload != null) {
+                    h = h * 31 + payload.hashCode()
+                }
             }
             return h
         }
