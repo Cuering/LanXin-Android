@@ -156,22 +156,22 @@ object AutoKnowledgeMath {
             "$role: ${msg.content.trim()}"
         }
         return """
-你是知识抽取器。从下列对话中提炼有长期价值的知识点（用户偏好、事实、事件、决策、观点）。
-忽略寒暄、无意义闲聊、一次性指令。
+            你是知识抽取器。从下列对话中提炼有长期价值的知识点（用户偏好、事实、事件、决策、观点）。
+            忽略寒暄、无意义闲聊、一次性指令。
 
-严格输出 JSON（不要 markdown fence，不要解释）：
-{"knowledge_items":[{"content":"...","type":"preference|fact|event|decision|opinion","importance":0.0,"tags":["..."]}]}
+            严格输出 JSON（不要 markdown fence，不要解释）：
+            {"knowledge_items":[{"content":"...","type":"preference|fact|event|decision|opinion","importance":0.0,"tags":["..."]}]}
 
-规则：
-- content 用简洁中文陈述句
-- type 仅限 preference / fact / event / decision / opinion
-- importance 为 0.0~1.0
-- tags 为短标签数组，可为空
-- 若无可抽取知识，返回 {"knowledge_items":[]}
+            规则：
+            - content 用简洁中文陈述句
+            - type 仅限 preference / fact / event / decision / opinion
+            - importance 为 0.0~1.0
+            - tags 为短标签数组，可为空
+            - 若无可抽取知识，返回 {"knowledge_items":[]}
 
-对话：
-$transcript
-""".trimIndent()
+            对话：
+            $transcript
+        """.trimIndent()
     }
 
     fun stripMarkdownFence(raw: String): String {
