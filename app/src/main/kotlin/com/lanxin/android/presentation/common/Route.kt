@@ -52,4 +52,7 @@ object Route {
     const val TASK_LIST = "task_list"
     const val TASK_CREATE = "task_create"
     const val TASK_EDIT = "task_edit/{taskId}"
+
+    const val UNIFIED_INBOX = "unified_inbox"
+    const val UNIFIED_FILE_BROWSER = "unified_file_browser"
 }
