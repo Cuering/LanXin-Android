@@ -16,6 +16,7 @@
 
 package com.lanxin.android.builtin.sync.data
 
+import com.lanxin.android.builtin.sync.domain.SyncClient
 import com.lanxin.android.builtin.sync.domain.SyncPullRequest
 import com.lanxin.android.builtin.sync.domain.SyncPullResponse
 import com.lanxin.android.builtin.sync.domain.SyncPushRequest
@@ -44,7 +45,7 @@ import kotlinx.serialization.json.Json
 class HttpSyncClient @Inject constructor(
     private val networkClient: NetworkClient,
     private val preferences: SyncPreferences
-) {
+) : SyncClient {
 
     private val client get() = networkClient()
 
@@ -55,7 +56,7 @@ class HttpSyncClient @Inject constructor(
         explicitNulls = false
     }
 
-    suspend fun pull(request: SyncPullRequest): Result<SyncPullResponse> =
+    override suspend fun pull(request: SyncPullRequest): Result<SyncPullResponse> =
         withContext(Dispatchers.IO) {
             execute(
                 path = "/api/sync/pull",
@@ -65,7 +66,7 @@ class HttpSyncClient @Inject constructor(
             }
         }
 
-    suspend fun push(request: SyncPushRequest): Result<SyncPushResponse> =
+    override suspend fun push(request: SyncPushRequest): Result<SyncPushResponse> =
         withContext(Dispatchers.IO) {
             execute(
                 path = "/api/sync/push",
