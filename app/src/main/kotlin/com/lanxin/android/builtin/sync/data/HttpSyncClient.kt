@@ -27,21 +27,21 @@ import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
 import io.ktor.http.isSuccess
+import javax.inject.Inject
+import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 
 /**
- * Ktor HTTP client for AstrBot `/api/sync/*`.
+ * Ktor HTTP client for AstrBot sync endpoints.
  *
- * Endpoint:
+ * Endpoints:
  * - POST {baseUrl}/api/sync/pull
  * - POST {baseUrl}/api/sync/push
- *
- * Note: no separate interface binding — KSP/Hilt failed to resolve
- * domain-level SyncClient/SyncApi as ERROR types; inject this class directly.
  */
-class HttpSyncClient(
+@Singleton
+class HttpSyncClient @Inject constructor(
     private val networkClient: NetworkClient,
     private val preferences: SyncPreferences
 ) {
