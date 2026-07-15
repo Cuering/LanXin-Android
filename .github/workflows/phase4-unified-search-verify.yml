@@ -1,0 +1,53 @@
+name: Phase4 UnifiedSearch Verify
+
+on:
+  push:
+    branches: [main, 'feat/phase4*']
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/unifiedsearch/**'
+      - 'app/src/test/kotlin/com/lanxin/android/builtin/unifiedsearch/**'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/ChatViewModel.kt'
+      - '.github/workflows/phase4-unified-search-verify.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/unifiedsearch/**'
+      - 'app/src/test/kotlin/com/lanxin/android/builtin/unifiedsearch/**'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/ChatViewModel.kt'
+      - '.github/workflows/phase4-unified-search-verify.yml'
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run UnifiedSearch unit tests
+        run: |
+          ./gradlew testDebugUnitTest \
+            --tests "com.lanxin.android.builtin.unifiedsearch.UnifiedSearchServiceTest" \
+            --tests "com.lanxin.android.builtin.knowledge.sparse.SparseRrfTest" \
+            --stacktrace
+
+      - name: Brand residual check
+        run: |
+          set -e
+          # 代码/资源中不得残留启动器旧图标名与旧包名测试引用
+          if rg -n "ic_gpt_mobile|GptMobileStartScreen|dev\.chungjungsoo\.gptmobile" \
+              app/src AGENTS.md CLAUDE.md metadata --glob '!**/raw/**'; then
+            echo "Found GPT Mobile brand residual"
+            exit 1
+          fi
+          echo "Brand residual check passed"

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">جي بي تي موبايل</string>
-    <string name="lanxin_introduction_logo">شعار مقدمة GPT Mobile</string>
+    <string name="lanxin_introduction_logo">شعار مقدمة LanXin</string>
     <string name="get_started">البدء</string>
     <string name="platform_select_description">اختر النظام الأساسي الذي تريد استخدامه. يمكنك تغيير هذا لاحقًا في الإعدادات. سيتم دعم المزيد من المنصات.</string>
     <string name="openai_description">مُنشئ ChatGPT.</string>
@@ -30,7 +30,7 @@
     <string name="gemini_1_5_flash_description">أداء سريع ومتعدد الاستخدامات عبر مجموعة متنوعة من المهام.</string>
     <string name="gemini_1_0_pro_description">مهام اللغة الطبيعية، والدردشة النصية والبرمجية متعددة الأدوار، وإنشاء التعليمات البرمجية.</string>
     <string name="setup_complete">أنت جاهز!</string>
-    <string name="setup_complete_description">لنبدأ باستخدام GPT Mobile!</string>
+    <string name="setup_complete_description">لنبدأ باستخدام LanXin!</string>
     <string name="token_not_set">لم يتم تعيين الرمز المميز</string>
     <string name="token_set">تم تعيين الرمز المميز كـ %s*****</string>
     <string name="close">إغلاق</string>

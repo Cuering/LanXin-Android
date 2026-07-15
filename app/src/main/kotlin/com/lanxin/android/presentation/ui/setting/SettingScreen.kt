@@ -70,7 +70,8 @@ fun SettingScreen(
     onNavigateToStatistics: () -> Unit = {},
     onNavigateToKnowledge: () -> Unit = {},
     onNavigateToScheduler: () -> Unit = {},
-    onNavigateToUnifiedInbox: () -> Unit = {}
+    onNavigateToUnifiedInbox: () -> Unit = {},
+    onNavigateToUnifiedSearch: () -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
     val scrollBehavior = pinnedExitUntilCollapsedScrollBehavior(
@@ -172,6 +173,14 @@ fun SettingScreen(
                 title = "跨会话历史",
                 description = "聚合本地会话对话，跨工作区文件浏览",
                 onItemClick = onNavigateToUnifiedInbox,
+                showTrailingIcon = true,
+                showLeadingIcon = false
+            )
+
+            SettingItem(
+                title = "统一搜索",
+                description = "memory/knowledge/chat/跨会话 四路 RRF 融合与命中数",
+                onItemClick = onNavigateToUnifiedSearch,
                 showTrailingIcon = true,
                 showLeadingIcon = false
             )

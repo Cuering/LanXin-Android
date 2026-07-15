@@ -1,6 +1,6 @@
 <resources>
     <string name="app_name">兰心</string>
-    <string name="lanxin_introduction_logo">GPT Mobile Introduction Logo</string>
+    <string name="lanxin_introduction_logo">LanXin Introduction Logo</string>
     <string name="welcome_title">你的专属温柔助理\n兰心\n随时在你身边</string>
     <string name="welcome_description">哥哥好~ 我是兰心\n有什么需要帮忙的吗？</string>
     <string name="get_started">开始使用</string>
@@ -61,7 +61,7 @@
     <string name="gemini_1_5_flash_description">Fast and versatile performance across a diverse variety of tasks.</string>
     <string name="gemini_1_0_pro_description">Natural language tasks, multi-turn text and code chat, and code generation.</string>
     <string name="setup_complete">You’re all set!</string>
-    <string name="setup_complete_description">Let’s start using GPT Mobile!</string>
+    <string name="setup_complete_description">Let’s start using LanXin!</string>
     <string name="done">Done</string>
     <string name="setup_complete_logo">Setup Complete Logo</string>
     <string name="chats">Chats</string>

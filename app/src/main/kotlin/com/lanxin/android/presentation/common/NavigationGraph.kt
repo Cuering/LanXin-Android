@@ -20,6 +20,7 @@ import com.lanxin.android.builtin.persona.presentation.PersonaListScreen
 import com.lanxin.android.builtin.scheduler.presentation.TaskEditScreen
 import com.lanxin.android.builtin.scheduler.presentation.TaskListScreen
 import com.lanxin.android.builtin.statistics.presentation.StatisticsScreen
+import com.lanxin.android.builtin.unifiedsearch.presentation.UnifiedSearchScreen
 import com.lanxin.android.plugins.logger.presentation.ui.LoggerScreen
 import com.lanxin.android.plugins.memory.presentation.ui.memory.MemoryScreen
 import com.lanxin.android.plugins.unifiedinbox.presentation.CrossSessionHistoryScreen
@@ -62,6 +63,15 @@ fun SetupNavGraph(navController: NavHostController) {
         knowledgeScreenNavigation(navController)
         schedulerScreenNavigation(navController)
         unifiedInboxScreenNavigation(navController)
+        unifiedSearchScreenNavigation(navController)
+    }
+}
+
+fun NavGraphBuilder.unifiedSearchScreenNavigation(navController: NavHostController) {
+    composable(Route.UNIFIED_SEARCH) {
+        UnifiedSearchScreen(
+            onBackAction = { navController.navigateUp() }
+        )
     }
 }
 
@@ -318,7 +328,8 @@ fun NavGraphBuilder.settingNavigation(navController: NavHostController) {
                 onNavigateToStatistics = { navController.navigate(Route.STATISTICS) },
                 onNavigateToKnowledge = { navController.navigate(Route.KNOWLEDGE) },
                 onNavigateToScheduler = { navController.navigate(Route.TASK_LIST) },
-                onNavigateToUnifiedInbox = { navController.navigate(Route.UNIFIED_INBOX) }
+                onNavigateToUnifiedInbox = { navController.navigate(Route.UNIFIED_INBOX) },
+                onNavigateToUnifiedSearch = { navController.navigate(Route.UNIFIED_SEARCH) }
             )
         }
         composable(Route.ADD_PLATFORM) {
