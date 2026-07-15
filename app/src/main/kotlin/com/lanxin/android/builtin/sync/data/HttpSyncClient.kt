@@ -58,19 +58,25 @@ class HttpSyncClient @Inject constructor(
 
     override suspend fun pull(request: SyncPullRequest): Result<SyncPullResponse> =
         withContext(Dispatchers.IO) {
-            request("/api/sync/pull", json.encodeToString(SyncPullRequest.serializer(), request)) {
+            execute(
+                path = "/api/sync/pull",
+                body = json.encodeToString(SyncPullRequest.serializer(), request)
+            ) {
                 json.decodeFromString(SyncPullResponse.serializer(), it)
             }
         }
 
     override suspend fun push(request: SyncPushRequest): Result<SyncPushResponse> =
         withContext(Dispatchers.IO) {
-            request("/api/sync/push", json.encodeToString(SyncPushRequest.serializer(), request)) {
+            execute(
+                path = "/api/sync/push",
+                body = json.encodeToString(SyncPushRequest.serializer(), request)
+            ) {
                 json.decodeFromString(SyncPushResponse.serializer(), it)
             }
         }
 
-    private suspend fun <T> request(
+    private suspend fun <T> execute(
         path: String,
         body: String,
         parse: (String) -> T
