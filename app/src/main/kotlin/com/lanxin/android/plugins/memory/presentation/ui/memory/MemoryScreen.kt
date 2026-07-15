@@ -27,6 +27,8 @@ import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -55,6 +57,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.lanxin.android.plugins.memory.data.memory.MemoryExportFormat
 import com.lanxin.android.plugins.memory.data.memory.MemoryType
 import com.lanxin.android.plugins.memory.domain.memory.ImportStrategy
 import java.text.SimpleDateFormat
@@ -78,28 +81,57 @@ fun MemoryScreen(
     val isExporting by viewModel.isExporting.collectAsStateWithLifecycle()
     val isImporting by viewModel.isImporting.collectAsStateWithLifecycle()
     val showImportStrategyDialog by viewModel.showImportStrategyDialog.collectAsStateWithLifecycle()
+    val showExportFormatDialog by viewModel.showExportFormatDialog.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // SAF: ACTION_CREATE_DOCUMENT — 用户选择导出保存位置
-    val createDocumentLauncher = rememberLauncherForActivityResult(
+    // 两个 CreateDocument launcher：MIME 在 contract 构造时固定
+    val createJsonLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/json")
     ) { uri: Uri? ->
         if (uri != null) {
-            viewModel.exportMemoriesToUri(context, uri)
+            viewModel.exportMemoriesToUri(
+                context,
+                uri,
+                MemoryExportFormat.JSON
+            )
         }
     }
 
-    // SAF: ACTION_OPEN_DOCUMENT — 用户选择导入文件
+    val createMarkdownLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/markdown")
+    ) { uri: Uri? ->
+        if (uri != null) {
+            viewModel.exportMemoriesToUri(
+                context,
+                uri,
+                MemoryExportFormat.MARKDOWN
+            )
+        }
+    }
+
     val openDocumentLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         viewModel.onImportFileSelected(uri)
     }
 
+    var exportMenuExpanded by remember { mutableStateOf(false) }
+
     LaunchedEffect(snackbarMessage) {
         snackbarMessage?.let {
             snackbarHostState.showSnackbar(it)
             viewModel.clearSnackbar()
+        }
+    }
+
+    fun launchExport(format: MemoryExportFormat) {
+        viewModel.confirmExportFormat(format)
+        val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+        when (format) {
+            MemoryExportFormat.JSON ->
+                createJsonLauncher.launch("lanxin_memories_$stamp.json")
+            MemoryExportFormat.MARKDOWN ->
+                createMarkdownLauncher.launch("lanxin_memories_$stamp.md")
         }
     }
 
@@ -116,24 +148,48 @@ fun MemoryScreen(
                     }
                 },
                 actions = {
-                    // 📤 导出
-                    IconButton(
-                        onClick = {
-                            val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
-                                .format(Date())
-                            createDocumentLauncher.launch("lanxin_memories_$stamp.json")
-                        },
-                        enabled = !isExporting && !isImporting
-                    ) {
-                        if (isExporting) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp
+                    // 📤 导出全部（菜单：JSON / Markdown）
+                    Box {
+                        IconButton(
+                            onClick = { exportMenuExpanded = true },
+                            enabled = !isExporting && !isImporting
+                        ) {
+                            if (isExporting) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Icon(
+                                    Icons.Filled.FileUpload,
+                                    contentDescription = "导出全部"
+                                )
+                            }
+                        }
+                        DropdownMenu(
+                            expanded = exportMenuExpanded,
+                            onDismissRequest = { exportMenuExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("导出全部 · JSON") },
+                                onClick = {
+                                    exportMenuExpanded = false
+                                    launchExport(MemoryExportFormat.JSON)
+                                }
                             )
-                        } else {
-                            Icon(
-                                Icons.Filled.FileUpload,
-                                contentDescription = "导出记忆 📤"
+                            DropdownMenuItem(
+                                text = { Text("导出全部 · Markdown") },
+                                onClick = {
+                                    exportMenuExpanded = false
+                                    launchExport(MemoryExportFormat.MARKDOWN)
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("选择格式…") },
+                                onClick = {
+                                    exportMenuExpanded = false
+                                    viewModel.openExportFormatDialog()
+                                }
                             )
                         }
                     }
@@ -292,6 +348,87 @@ fun MemoryScreen(
             }
         )
     }
+
+    if (showExportFormatDialog) {
+        ExportFormatDialog(
+            currentTypeFilter = selectedType,
+            onDismiss = { viewModel.cancelExportFormatDialog() },
+            onConfirm = { format ->
+                launchExport(format)
+            }
+        )
+    }
+}
+
+@Composable
+private fun ExportFormatDialog(
+    currentTypeFilter: String?,
+    onDismiss: () -> Unit,
+    onConfirm: (MemoryExportFormat) -> Unit
+) {
+    var selected by remember { mutableStateOf(MemoryExportFormat.JSON) }
+    val filterLabel = if (currentTypeFilter.isNullOrBlank()) {
+        "全部类型"
+    } else {
+        MemoryType.displayName(currentTypeFilter)
+    }
+
+    val options = listOf(
+        MemoryExportFormat.JSON to ("JSON" to "机器可读，支持再导入"),
+        MemoryExportFormat.MARKDOWN to ("Markdown" to "按分组可读导出，便于备份阅读")
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("导出全部记忆") },
+        text = {
+            Column {
+                Text(
+                    text = "当前筛选：$filterLabel（导出时生效）",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+                options.forEach { (format, labels) ->
+                    val (title, subtitle) = labels
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectable(
+                                selected = selected == format,
+                                onClick = { selected = format },
+                                role = Role.RadioButton
+                            )
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = selected == format,
+                            onClick = { selected = format }
+                        )
+                        Column(modifier = Modifier.padding(start = 8.dp)) {
+                            Text(title, style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                subtitle,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(selected) }) {
+                Text("导出")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
 }
 
 @Composable
