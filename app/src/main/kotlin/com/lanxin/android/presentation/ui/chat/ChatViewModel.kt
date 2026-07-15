@@ -710,6 +710,7 @@ class ChatViewModel @Inject constructor(
     private fun maybeExtractAutoKnowledge(platformIndex: Int) {
         val snapshot = _groupedMessages.value
         val sessionId = _chatRoom.value.id.toString().ifBlank { chatRoomId.toString() }
+        // 后台静默抽取：不改 UI，不插入会话消息；失败只打日志
         viewModelScope.launch(Dispatchers.IO) {
             runCatching {
                 val recent = autoKnowledgeService.toConversationMessages(
@@ -717,7 +718,11 @@ class ChatViewModel @Inject constructor(
                     assistantMessages = snapshot.assistantMessages,
                     platformIndex = platformIndex
                 )
-                autoKnowledgeService.extractAndStore(sessionId, recent)
+                // 只取尾部，进一步限制进入抽取的原始体量
+                val tail = if (recent.size > 20) recent.takeLast(20) else recent
+                autoKnowledgeService.extractAndStore(sessionId, tail)
+            }.onFailure { t ->
+                android.util.Log.w("ChatViewModel", "auto knowledge extract skipped", t)
             }
         }
     }

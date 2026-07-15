@@ -27,6 +27,8 @@ import com.lanxin.android.plugins.memory.data.memory.MemoryRepository
 import com.lanxin.android.data.repository.SettingRepository
 import javax.inject.Inject
 import javax.inject.Singleton
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -45,6 +47,11 @@ class AutoKnowledgeService @Inject constructor(
     private val chatRepository: ChatRepository
 ) {
 
+    /** 上次真正发起 LLM 抽取的时间戳，用于冷却降频。 */
+    private val lastExtractAtMs = AtomicLong(0L)
+    /** 成功对话触发计数；每 N 轮才真正抽。 */
+    private val extractTurnCounter = AtomicInteger(0)
+
     /**
      * 从消息列表抽取知识并入库。
      * @return 成功新增（含 merge 更新）的条数；失败返回 success(0)
@@ -55,16 +62,44 @@ class AutoKnowledgeService @Inject constructor(
     ): Result<Int> = withContext(Dispatchers.IO) {
         runCatching {
             if (!settings.isEnabled()) return@runCatching 0
-            val cleaned = messages
-                .map { it.copy(content = it.content.trim()) }
-                .filter { it.content.isNotBlank() }
-            if (cleaned.isEmpty()) return@runCatching 0
+
+            // 每 N 轮才抽（默认 3）
+            val turn = extractTurnCounter.incrementAndGet()
+            val everyN = AutoKnowledgeSettings.EXTRACT_EVERY_N_TURNS.coerceAtLeast(1)
+            if (turn % everyN != 0) {
+                Log.d(TAG, "skip extract: turn=$turn not multiple of $everyN")
+                return@runCatching 0
+            }
+
+            // 冷却：避免高频打 LLM，污染主链路并堆噪声
+            val now = System.currentTimeMillis()
+            val last = lastExtractAtMs.get()
+            if (now - last < AutoKnowledgeSettings.COOLDOWN_MS) {
+                Log.d(TAG, "skip extract: cooldown ${now - last}ms < ${AutoKnowledgeSettings.COOLDOWN_MS}ms")
+                return@runCatching 0
+            }
 
             val window = settings.getHistoryWindowSize()
-            val windowed = cleaned.takeLast(window)
-            val prompt = AutoKnowledgeMath.buildExtractionPrompt(windowed)
+            val sanitized = AutoKnowledgeMath.sanitizeMessages(
+                messages = messages,
+                maxMsgChars = AutoKnowledgeSettings.MAX_MSG_CHARS,
+                maxTranscriptChars = AutoKnowledgeSettings.MAX_TRANSCRIPT_CHARS,
+                maxMessages = window
+            )
+            if (sanitized.isEmpty()) return@runCatching 0
+
+            // 若清洗后几乎只剩寒暄/空内容，直接跳过
+            val usefulChars = sanitized.sumOf { it.content.length }
+            if (usefulChars < 12) return@runCatching 0
+
+            // 真正发起 LLM 前记冷却，避免空结果连续打模型
+            lastExtractAtMs.set(now)
+
+            val prompt = AutoKnowledgeMath.buildExtractionPrompt(sanitized)
             val raw = callLlm(prompt) ?: return@runCatching 0
             val items = AutoKnowledgeMath.parseExtractionResponse(raw)
+                .filter { it.importance >= AutoKnowledgeSettings.MIN_IMPORTANCE }
+                .take(3)
             if (items.isEmpty()) return@runCatching 0
 
             runCatching { vectorPipeline.warmUp() }
@@ -94,7 +129,7 @@ class AutoKnowledgeService @Inject constructor(
         val n = minOf(userMessages.size, assistantMessages.size)
         for (i in 0 until n) {
             val u = userMessages[i].content.trim()
-            if (u.isNotBlank()) {
+            if (u.isNotBlank() && !u.startsWith("你是知识抽取器")) {
                 result.add(ConversationMessage(role = "user", content = u))
             }
             val a = assistantMessages[i]
@@ -102,7 +137,12 @@ class AutoKnowledgeService @Inject constructor(
                 ?.content
                 ?.trim()
                 .orEmpty()
-            if (a.isNotBlank() && !a.contains("[Response stopped:")) {
+            if (
+                a.isNotBlank() &&
+                !a.contains("[Response stopped:") &&
+                !a.startsWith("Error:") &&
+                !a.startsWith("你是知识抽取器")
+            ) {
                 result.add(ConversationMessage(role = "assistant", content = a))
             }
         }
@@ -215,6 +255,7 @@ class AutoKnowledgeService @Inject constructor(
 
     private suspend fun callLlm(prompt: String): String? {
         val platform = resolvePlatform() ?: return null
+        // chatId=0：不落当前会话气泡；仅作为后台抽取请求
         val userMsg = MessageV2(
             chatId = 0,
             content = prompt,
@@ -229,11 +270,17 @@ class AutoKnowledgeService @Inject constructor(
         )
         val sb = StringBuilder()
         var failed = false
+        // 抽取用更短超时 + 低温度，避免拖垮主链路
+        val extractionPlatform = platform.copy(
+            systemPrompt = EXTRACTION_SYSTEM_PROMPT,
+            temperature = minOf(platform.temperature ?: 0.2f, 0.2f),
+            timeout = minOf(if (platform.timeout > 0) platform.timeout else 60, 45)
+        )
         runCatching {
             chatRepository.completeChat(
                 userMessages = listOf(userMsg),
                 assistantMessages = listOf(assistantRow),
-                platform = platform.copy(systemPrompt = EXTRACTION_SYSTEM_PROMPT)
+                platform = extractionPlatform
             ).collect { state ->
                 when (state) {
                     is ApiState.Success -> sb.append(state.textChunk)
@@ -249,7 +296,10 @@ class AutoKnowledgeService @Inject constructor(
             failed = true
         }
         if (failed) return null
-        return sb.toString().trim().takeIf { it.isNotBlank() }
+        val raw = sb.toString().trim()
+        // 防止把错误文案当抽取结果
+        if (raw.startsWith("Error:", ignoreCase = true)) return null
+        return raw.takeIf { it.isNotBlank() }
     }
 
     private suspend fun resolvePlatform(): PlatformV2? {
