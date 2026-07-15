@@ -1,0 +1,72 @@
+# Phase 5.1 同步引擎验证：协议骨架 + 单测
+name: Phase5 Sync Verify
+
+on:
+  push:
+    branches: [main, 'feat/phase5*']
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/sync/**'
+      - 'app/src/test/kotlin/com/lanxin/android/builtin/sync/**'
+      - 'docs/sync-protocol.md'
+      - 'builtin/sync/**'
+      - '.github/workflows/phase5-sync-verify.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/sync/**'
+      - 'app/src/test/kotlin/com/lanxin/android/builtin/sync/**'
+      - 'docs/sync-protocol.md'
+      - 'builtin/sync/**'
+      - '.github/workflows/phase5-sync-verify.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: phase5-sync-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: Sync unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: gradle
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup local.properties and debug keystore
+        run: |
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+          rm -f debug-keystore.jks
+          keytool -genkeypair -v -keystore debug-keystore.jks -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Create assets model dir (models gitignored)
+        run: |
+          mkdir -p app/src/main/assets/models/gte-small
+          touch app/src/main/assets/models/gte-small/.gitkeep
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run sync unit tests
+        run: |
+          ./gradlew :app:testDebugUnitTest \
+            --tests "com.lanxin.android.builtin.sync.*" \
+            --no-daemon --stacktrace
+
+      - name: Protocol draft present
+        run: |
+          test -f docs/sync-protocol.md
+          test -f builtin/sync/README.md
+          rg -n "POST /api/sync/pull|LWW|SyncItem" docs/sync-protocol.md
