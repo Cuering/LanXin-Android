@@ -40,7 +40,7 @@ import kotlinx.serialization.json.put
  * - kb_status：查询状态/容量
  * - kb_embed：将文本转换为 384 维向量（返回头 8 个元素和 L2 范数）
  * - kb_index：将文本向量化并写入 ObjectBox（source 默认 knowledge）
- * - kb_search：语义检索 Top-K
+ * - kb_search：混合检索 Top-K（dense + sparse BM25 RRF，mode=hybrid/dense/sparse）
  * - kb_latency：测量 embed+search 端到端延迟
  * - kb_chunk：预览文本滑动窗口分段结果（不入库）
  */
@@ -157,7 +157,7 @@ class KnowledgePlugin @Inject constructor(
         context.registerTool(
             ToolDef(
                 name = "kb_search",
-                description = "语义检索 Top-K",
+                description = "混合检索 Top-K（dense 向量 + sparse BM25 RRF）",
                 parameters = buildJsonObject {
                     put("type", "object")
                     put(
@@ -166,6 +166,10 @@ class KnowledgePlugin @Inject constructor(
                             put("query", stringProp("搜索文本"))
                             put("top_k", intProp("返回数量，默认 5，上限 50"))
                             put("source", stringProp("可选限定来源 memory/knowledge"))
+                            put(
+                                "mode",
+                                stringProp("检索模式：hybrid(默认)/dense/sparse")
+                            )
                         }
                     )
                     put("required", buildJsonArray { add(JsonPrimitive("query")) })
@@ -175,10 +179,24 @@ class KnowledgePlugin @Inject constructor(
                         val query = args.string("query") ?: error("query 缺失")
                         val topK = (args.int("top_k") ?: 5).coerceIn(1, 50)
                         val source = args.string("source")
-                        val hits = pipeline.search(query, topK, source)
+                        val mode = args.string("mode") ?: "hybrid"
+                        val hits = when (mode) {
+                            "dense" -> pipeline.search(query, topK, source)
+                            "sparse" -> pipeline.searchSparse(query, topK, source).map { s ->
+                                com.lanxin.android.builtin.knowledge.domain.VectorHit(
+                                    id = s.documentId,
+                                    externalId = s.documentId,
+                                    source = s.source,
+                                    textPreview = s.text,
+                                    score = s.score.toFloat()
+                                )
+                            }
+                            else -> pipeline.searchHybrid(query, topK, source)
+                        }
                         buildJsonObject {
                             put("ok", true)
                             put("count", hits.size)
+                            put("mode", mode)
                             put(
                                 "hits",
                                 buildJsonArray {

@@ -45,6 +45,16 @@ interface VectorStore {
         source: String? = null
     ): List<VectorHit>
 
+    /**
+     * 稀疏（BM25 / FTS）检索。
+     * 默认空实现；支持 sparse 的存储可覆盖。
+     */
+    suspend fun searchSparse(
+        query: String,
+        topK: Int,
+        source: String? = null
+    ): List<VectorHit> = emptyList()
+
     /** 统计条目 */
     suspend fun count(source: String? = null): Long
 
