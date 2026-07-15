@@ -40,6 +40,7 @@ class KnowledgeImportService @Inject constructor(
     @ApplicationContext private val context: Context,
     private val documentParser: DocumentParser,
     private val textChunker: TextChunker,
+    private val markdownChunker: MarkdownChunker,
     private val pipeline: VectorPipeline,
     private val vectorStore: VectorStore
 ) {
@@ -115,8 +116,9 @@ class KnowledgeImportService @Inject constructor(
             )
         )
 
-        val chunks = textChunker.chunk(parsed.text)
-        if (chunks.isEmpty()) {
+        // .md / .markdown → 结构感知分段；其余 → 滑动窗口
+        val chunkTexts = chunkDocument(fileName, parsed.text)
+        if (chunkTexts.isEmpty()) {
             emit(
                 ImportProgress(
                     phase = ImportPhase.FAILED,
@@ -144,35 +146,35 @@ class KnowledgeImportService @Inject constructor(
                 fileName = fileName,
                 message = "向量化并入库…",
                 charCount = parsed.charCount,
-                totalChunks = chunks.size,
+                totalChunks = chunkTexts.size,
                 doneChunks = 0
             )
         )
 
         var success = 0
         var failed = 0
-        for ((idx, chunk) in chunks.withIndex()) {
+        for ((idx, chunkText) in chunkTexts.withIndex()) {
             val externalId = baseId + idx
             // source 用文件名便于过滤；同一文件重复导入会按 externalId+source upsert 覆盖
             val id = runCatching {
                 pipeline.index(
                     externalId = externalId,
                     source = sourceLabel,
-                    text = chunk.text
+                    text = chunkText
                 )
             }.getOrDefault(-1L)
 
             if (id > 0) success++ else failed++
 
             // 每 N 个或最后一个更新进度
-            if ((idx + 1) % PROGRESS_EVERY == 0 || idx + 1 == chunks.size) {
+            if ((idx + 1) % PROGRESS_EVERY == 0 || idx + 1 == chunkTexts.size) {
                 emit(
                     ImportProgress(
                         phase = ImportPhase.EMBEDDING,
                         fileName = fileName,
-                        message = "向量化 ${idx + 1}/${chunks.size}",
+                        message = "向量化 ${idx + 1}/${chunkTexts.size}",
                         charCount = parsed.charCount,
-                        totalChunks = chunks.size,
+                        totalChunks = chunkTexts.size,
                         doneChunks = idx + 1,
                         successCount = success,
                         failedCount = failed
@@ -191,8 +193,8 @@ class KnowledgeImportService @Inject constructor(
                 message = "导入完成：成功 $success 段" +
                     if (failed > 0) "，失败 $failed" else "",
                 charCount = parsed.charCount,
-                totalChunks = chunks.size,
-                doneChunks = chunks.size,
+                totalChunks = chunkTexts.size,
+                doneChunks = chunkTexts.size,
                 successCount = success,
                 failedCount = failed,
                 elapsedMs = elapsed,
@@ -200,6 +202,19 @@ class KnowledgeImportService @Inject constructor(
             )
         )
     }.flowOn(Dispatchers.IO)
+
+    /**
+     * 按扩展名选择分段策略。
+     * Markdown 走结构感知；其它走滑动窗口。
+     */
+    private fun chunkDocument(fileName: String, text: String): List<String> {
+        val ext = DocumentTypes.extensionOf(fileName)
+        return if (ext == "md" || ext == "markdown" || ext == "mdown") {
+            markdownChunker.chunk(text).map { it.text }
+        } else {
+            textChunker.chunk(text).map { it.text }
+        }
+    }
 
     suspend fun knowledgeCount(): Long = withContext(Dispatchers.IO) {
         // 统计所有 knowledge:* 与 source=knowledge
