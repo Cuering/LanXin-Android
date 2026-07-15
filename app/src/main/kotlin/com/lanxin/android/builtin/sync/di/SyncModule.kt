@@ -20,8 +20,8 @@ import com.lanxin.android.builtin.sync.data.DefaultSyncRepository
 import com.lanxin.android.builtin.sync.data.HttpSyncClient
 import com.lanxin.android.builtin.sync.domain.SyncClient
 import com.lanxin.android.builtin.sync.domain.SyncRepository
-import dagger.Binds
 import dagger.Module
+import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
@@ -33,13 +33,13 @@ import javax.inject.Singleton
  */
 @Module
 @InstallIn(SingletonComponent::class)
-abstract class SyncModule {
+object SyncModule {
 
-    @Binds
+    @Provides
     @Singleton
-    abstract fun bindSyncClient(impl: HttpSyncClient): SyncClient
+    fun provideSyncClient(impl: HttpSyncClient): SyncClient = impl
 
-    @Binds
+    @Provides
     @Singleton
-    abstract fun bindSyncRepository(impl: DefaultSyncRepository): SyncRepository
+    fun provideSyncRepository(impl: DefaultSyncRepository): SyncRepository = impl
 }
