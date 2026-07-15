@@ -1,0 +1,104 @@
+# 知识库 P5a 验证：BM25 稀疏检索 + 编译/单测
+# 触发：push 到 feat/p5-bm25-sparse，或 PR paths 命中
+
+name: P5a BM25 Sparse Verify
+
+on:
+  push:
+    branches: [feat/p5-bm25-sparse]
+  pull_request:
+    branches: [main]
+    paths:
+      - "app/src/main/kotlin/com/lanxin/android/builtin/knowledge/**"
+      - "app/src/test/kotlin/com/lanxin/android/builtin/knowledge/**"
+      - "app/src/main/kotlin/com/lanxin/android/plugins/memory/**"
+      - "app/src/test/kotlin/com/lanxin/android/plugins/memory/**"
+      - ".github/workflows/p5a-bm25-verify.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: p5a-bm25-verify-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Compile + Unit Test (P5a BM25)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: temurin
+          cache: gradle
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup local.properties and debug keystore
+        run: |
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+          rm -f debug-keystore.jks
+          keytool -genkeypair -v -keystore debug-keystore.jks -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Create assets model dir (models gitignored)
+        run: |
+          mkdir -p app/src/main/assets/models/gte-small
+          touch app/src/main/assets/models/gte-small/.gitkeep
+
+      - name: Compile Debug Kotlin
+        id: compile
+        continue-on-error: true
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:compileDebugKotlin --no-daemon --stacktrace 2>&1 | tee /tmp/compile.log
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Show compile errors if failed
+        if: steps.compile.outputs.exit_code != '0'
+        run: |
+          echo "=== Last 120 lines of compile log ==="
+          tail -120 /tmp/compile.log
+          echo "=== ERROR lines ==="
+          grep -n -iE "error:|e: |What went wrong|FAILED" /tmp/compile.log | tail -40 || true
+          exit 1
+
+      - name: Run sparse + knowledge + memory injector unit tests
+        id: test
+        continue-on-error: true
+        run: |
+          mkdir -p /tmp/test-artifacts
+          ./gradlew :app:testDebugUnitTest \
+            --tests "com.lanxin.android.builtin.knowledge.sparse.*" \
+            --tests "com.lanxin.android.builtin.knowledge.*" \
+            --tests "com.lanxin.android.plugins.memory.domain.memory.*" \
+            --no-daemon --stacktrace 2>&1 | tee /tmp/test.log
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+          cp -r app/build/test-results/testDebugUnitTest/ /tmp/test-artifacts/ 2>/dev/null || true
+
+      - name: Show test failures if failed
+        if: steps.test.outputs.exit_code != '0'
+        run: |
+          echo "=== Last 120 lines of test log ==="
+          tail -120 /tmp/test.log
+          echo "=== FAILED tests ==="
+          grep -n -iE "FAILED|error:|AssertionError|What went wrong" /tmp/test.log | tail -40 || true
+          exit 1
+
+      - name: Assemble Debug APK
+        run: |
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p5a-bm25-test-results
+          path: /tmp/test-artifacts
+          if-no-files-found: ignore

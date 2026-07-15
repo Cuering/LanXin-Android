@@ -30,6 +30,13 @@ class MemoryRepository @Inject constructor(
     fun getMemoriesByType(type: String): Flow<List<MemoryEntity>> = dao.getMemoriesByType(type)
 
     /**
+     * 同步拉取全部记忆（BM25 索引构建用）。
+     */
+    suspend fun getAllMemoriesOnce(): List<MemoryEntity> = withContext(Dispatchers.IO) {
+        dao.getAllMemoriesOnce()
+    }
+
+    /**
      * 按 type 同步拉取（P3 自动知识列表）。
      */
     suspend fun getByType(type: String): List<MemoryEntity> = withContext(Dispatchers.IO) {

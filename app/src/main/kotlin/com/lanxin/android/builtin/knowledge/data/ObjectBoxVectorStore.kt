@@ -122,6 +122,15 @@ class ObjectBoxVectorStore @Inject constructor(
         Unit
     }
 
+    /**
+     * ObjectBox 仅 dense；稀疏检索由 [com.lanxin.android.builtin.knowledge.data.sparse.SparseStore] 负责。
+     */
+    override suspend fun searchSparse(
+        query: String,
+        topK: Int,
+        source: String?
+    ): List<VectorHit> = emptyList()
+
     override suspend fun search(
         query: FloatArray,
         topK: Int,
