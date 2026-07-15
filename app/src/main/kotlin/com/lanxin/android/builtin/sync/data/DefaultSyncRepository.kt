@@ -17,7 +17,6 @@
 package com.lanxin.android.builtin.sync.data
 
 import com.lanxin.android.builtin.sync.domain.LwwResolver
-import com.lanxin.android.builtin.sync.domain.SyncApi
 import com.lanxin.android.builtin.sync.domain.SyncCycleResult
 import com.lanxin.android.builtin.sync.domain.SyncItem
 import com.lanxin.android.builtin.sync.domain.SyncItemMapper
@@ -43,10 +42,12 @@ import kotlinx.coroutines.withContext
  * - knowledge：接口预留，pull 时忽略非 memory（或仅记录）
  *
  * 不接入 ChatViewModel，不污染会话。
+ *
+ * HTTP 层直接依赖 [HttpSyncClient]（避免 domain 接口在 KSP 中成为 ERROR type）。
  */
 @Singleton
 class DefaultSyncRepository @Inject constructor(
-    private val syncApi: SyncApi,
+    private val syncClient: HttpSyncClient,
     private val preferences: SyncPreferences,
     private val outbox: InMemorySyncOutbox,
     private val memoryRepository: MemoryRepository
@@ -95,7 +96,7 @@ class DefaultSyncRepository @Inject constructor(
         var serverTime = preferences.getLastServerTime()
 
         if (pending.isNotEmpty()) {
-            val pushResult = syncApi.push(
+            val pushResult = syncClient.push(
                 SyncPushRequest(
                     deviceId = deviceId,
                     userId = userId,
@@ -131,7 +132,7 @@ class DefaultSyncRepository @Inject constructor(
 
         // 2) pull
         val since = preferences.getLastServerTime()
-        val pullResult = syncApi.pull(
+        val pullResult = syncClient.pull(
             SyncPullRequest(
                 deviceId = deviceId,
                 userId = userId,

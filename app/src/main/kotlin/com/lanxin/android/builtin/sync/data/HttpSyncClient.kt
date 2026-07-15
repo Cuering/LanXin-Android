@@ -16,7 +16,6 @@
 
 package com.lanxin.android.builtin.sync.data
 
-import com.lanxin.android.builtin.sync.domain.SyncApi
 import com.lanxin.android.builtin.sync.domain.SyncPullRequest
 import com.lanxin.android.builtin.sync.domain.SyncPullResponse
 import com.lanxin.android.builtin.sync.domain.SyncPushRequest
@@ -35,17 +34,20 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 
 /**
- * Ktor 实现的 SyncApi。
+ * Ktor HTTP client for AstrBot `/api/sync/*`.
  *
- * Endpoint：
+ * Endpoint:
  * - POST {baseUrl}/api/sync/pull
  * - POST {baseUrl}/api/sync/push
+ *
+ * Note: no separate interface binding — KSP/Hilt failed to resolve
+ * domain-level SyncClient/SyncApi as ERROR types; inject this class directly.
  */
 @Singleton
 class HttpSyncClient @Inject constructor(
     private val networkClient: NetworkClient,
     private val preferences: SyncPreferences
-) : SyncApi {
+) {
 
     private val client get() = networkClient()
 
@@ -56,7 +58,7 @@ class HttpSyncClient @Inject constructor(
         explicitNulls = false
     }
 
-    override suspend fun pull(request: SyncPullRequest): Result<SyncPullResponse> =
+    suspend fun pull(request: SyncPullRequest): Result<SyncPullResponse> =
         withContext(Dispatchers.IO) {
             execute(
                 path = "/api/sync/pull",
@@ -66,7 +68,7 @@ class HttpSyncClient @Inject constructor(
             }
         }
 
-    override suspend fun push(request: SyncPushRequest): Result<SyncPushResponse> =
+    suspend fun push(request: SyncPushRequest): Result<SyncPushResponse> =
         withContext(Dispatchers.IO) {
             execute(
                 path = "/api/sync/push",

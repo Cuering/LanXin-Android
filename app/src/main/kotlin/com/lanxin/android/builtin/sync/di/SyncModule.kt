@@ -17,29 +17,27 @@
 package com.lanxin.android.builtin.sync.di
 
 import com.lanxin.android.builtin.sync.data.DefaultSyncRepository
-import com.lanxin.android.builtin.sync.data.HttpSyncClient
-import com.lanxin.android.builtin.sync.domain.SyncApi
 import com.lanxin.android.builtin.sync.domain.SyncRepository
+import dagger.Binds
 import dagger.Module
-import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import dagger.hilt.migration.DisableInstallInCheck
 import javax.inject.Singleton
 
 /**
  * Phase 5.1 同步引擎 DI。
  *
- * SyncPreferences / InMemorySyncOutbox 使用 @Inject constructor，Hilt 自动提供。
+ * 对齐 KnowledgeModule：abstract + @Binds + @DisableInstallInCheck。
+ * HttpSyncClient / SyncPreferences / InMemorySyncOutbox 使用 @Inject constructor。
+ * 不绑定 HTTP 抽象接口（KSP 对 SyncClient/SyncApi 解析为 ERROR type）。
  */
 @Module
+@DisableInstallInCheck
 @InstallIn(SingletonComponent::class)
-object SyncModule {
+abstract class SyncModule {
 
-    @Provides
+    @Binds
     @Singleton
-    fun provideSyncApi(impl: HttpSyncClient): SyncApi = impl
-
-    @Provides
-    @Singleton
-    fun provideSyncRepository(impl: DefaultSyncRepository): SyncRepository = impl
+    abstract fun bindSyncRepository(impl: DefaultSyncRepository): SyncRepository
 }

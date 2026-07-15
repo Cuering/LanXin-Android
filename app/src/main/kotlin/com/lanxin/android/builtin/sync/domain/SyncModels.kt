@@ -134,15 +134,3 @@ data class SyncConfig(
     val isConfigured: Boolean
         get() = baseUrl.isNotBlank() && token.isNotBlank()
 }
-
-/**
- * 与 AstrBot `/api/sync/*` 通信的 HTTP 客户端抽象。
- *
- * 实现：`HttpSyncClient`（Ktor NetworkClient）。
- * 命名避开 `SyncClient`，防止与依赖库同名类型在 KSP/Hilt 中冲突。
- */
-interface SyncApi {
-    suspend fun pull(request: SyncPullRequest): Result<SyncPullResponse>
-
-    suspend fun push(request: SyncPushRequest): Result<SyncPushResponse>
-}
