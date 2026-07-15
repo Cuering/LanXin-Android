@@ -8,12 +8,16 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lanxin.android.builtin.knowledge.domain.AutoKnowledgeService
+import com.lanxin.android.builtin.persona.domain.PersonaCapabilityFilter
+import com.lanxin.android.builtin.persona.domain.PersonaMoodFormatter
 import com.lanxin.android.builtin.persona.domain.PersonaRepository
 import com.lanxin.android.builtin.statistics.domain.ChatTurnStatEvent
 import com.lanxin.android.builtin.statistics.domain.ProviderStat
 import com.lanxin.android.builtin.statistics.domain.StatisticsRepository
 import com.lanxin.android.data.repository.SettingRepository
 import com.lanxin.android.plugin.ToolCallEngine
+import com.lanxin.android.plugin.ToolDef
+import com.lanxin.android.skill.SkillEngine
 import com.lanxin.android.plugins.chat.data.AttachmentUploadCoordinator
 import com.lanxin.android.plugins.chat.data.ChatRepository
 import com.lanxin.android.plugins.chat.data.entity.ACTIVE_REVISION_LATEST
@@ -53,7 +57,8 @@ class ChatViewModel @Inject constructor(
     private val toolCallEngine: ToolCallEngine,
     private val personaRepository: PersonaRepository,
     private val statisticsRepository: StatisticsRepository,
-    private val autoKnowledgeService: AutoKnowledgeService
+    private val autoKnowledgeService: AutoKnowledgeService,
+    private val skillEngine: SkillEngine
 ) : ViewModel() {
     sealed class LoadingState {
         data object Idle : LoadingState()
@@ -574,8 +579,13 @@ class ChatViewModel @Inject constructor(
         revisionToAppendOnSuccess: com.lanxin.android.plugins.chat.data.entity.AssistantRevision? = null
     ) {
         val baseSystemPrompt = resolveSystemPrompt(platform.systemPrompt)
+        val filteredTools = resolvePersonaFilteredTools()
+        val allowedToolNames = filteredTools.allowedNames
         val platformWithTools = platform.copy(
-            systemPrompt = toolCallEngine.mergeSystemPrompt(baseSystemPrompt)
+            systemPrompt = toolCallEngine.mergeSystemPrompt(
+                existing = baseSystemPrompt,
+                tools = filteredTools.tools
+            )
         )
 
         var workingUserMessages = injectMemoryIntoLastUserMessage(userMessages)
@@ -613,7 +623,10 @@ class ChatViewModel @Inject constructor(
 
                 if (remainingRounds <= 0) break
 
-                val toolRound = toolCallEngine.processAssistantReply(assistantText) ?: break
+                val toolRound = toolCallEngine.processAssistantReply(
+                    assistantText = assistantText,
+                    allowedToolNames = allowedToolNames
+                ) ?: break
 
                 // 清理助手消息中的 tool_call 标签（用户可见的中间提示）
                 val cleaned = toolRound.cleanedAssistantText
@@ -744,20 +757,60 @@ class ChatViewModel @Inject constructor(
     /**
      * 解析最终 system prompt：
      * - 当前人格 prompt 优先作为底座
+     * - 若人格配置 mood_imitation_dialogs，拼接情绪风格示例
      * - 若平台自身也配置了 systemPrompt，则拼在人格之后
      */
     private suspend fun resolveSystemPrompt(platformPrompt: String?): String {
-        val personaPrompt = runCatching {
-            personaRepository.getCurrentSystemPrompt()
-        }.getOrDefault("").trim()
+        val persona = runCatching {
+            personaRepository.getCurrent()
+        }.getOrNull()
+        val personaPrompt = persona?.systemPrompt?.trim().orEmpty()
+        val withMood = PersonaMoodFormatter.appendToSystemPrompt(
+            base = personaPrompt,
+            dialogs = persona?.moodImitationDialogs
+        )
         val platform = platformPrompt?.trim().orEmpty()
         return when {
-            personaPrompt.isEmpty() -> platform
-            platform.isEmpty() -> personaPrompt
-            personaPrompt == platform -> personaPrompt
-            else -> "$personaPrompt\n\n$platform"
+            withMood.isEmpty() -> platform
+            platform.isEmpty() -> withMood
+            withMood == platform -> withMood
+            else -> "$withMood\n\n$platform"
         }
     }
+
+    /**
+     * 按当前人格 tools/skills 过滤 MCP 工具。
+     * persona 为 null 或 tools/skills 均为 null 时不限制。
+     */
+    private suspend fun resolvePersonaFilteredTools(): PersonaFilteredTools {
+        val globalTools = toolCallEngine.getRegisteredTools()
+        val persona = runCatching { personaRepository.getCurrent() }.getOrNull()
+        if (persona == null || (persona.tools == null && persona.skills == null)) {
+            return PersonaFilteredTools(
+                tools = globalTools,
+                allowedNames = null
+            )
+        }
+        val knownSkills = runCatching {
+            skillEngine.getSkills().map { it.name }.toSet()
+        }.getOrDefault(emptySet())
+        val filtered = PersonaCapabilityFilter.filterTools(
+            tools = globalTools,
+            allowedTools = persona.tools,
+            allowedSkills = persona.skills,
+            knownSkillNames = knownSkills
+        )
+        return PersonaFilteredTools(
+            tools = filtered,
+            allowedNames = filtered.map { it.name }.toSet()
+        )
+    }
+
+    private data class PersonaFilteredTools(
+        val tools: List<ToolDef>,
+        /** null 表示不限制执行 */
+        val allowedNames: Set<String>?
+    )
 
     /**
      * 仅在发给模型时注入记忆，界面仍显示用户原始消息。

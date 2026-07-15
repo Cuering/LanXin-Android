@@ -252,6 +252,20 @@ private fun PersonaCard(
                                 )
                             )
                         }
+                        if (!persona.moodImitationDialogs.isNullOrEmpty()) {
+                            AssistChip(
+                                onClick = { },
+                                label = {
+                                    Text(
+                                        "情绪风格:${persona.moodImitationDialogs.size}",
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                },
+                                colors = AssistChipDefaults.assistChipColors(
+                                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+                                )
+                            )
+                        }
                         if (!persona.customErrorMessage.isNullOrBlank()) {
                             AssistChip(
                                 onClick = { },

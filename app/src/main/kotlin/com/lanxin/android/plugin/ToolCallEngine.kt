@@ -46,6 +46,11 @@ class ToolCallEngine @Inject constructor(
     }
 
     /**
+     * 返回当前已注册的全部 MCP 工具（只读快照）。
+     */
+    fun getRegisteredTools(): List<ToolDef> = pluginManager.getTools()
+
+    /**
      * 根据当前已注册工具构建系统提示词片段。
      * 无工具时返回空字符串。
      *

@@ -50,6 +50,7 @@ class BuiltinPersonasTest {
             assertNull("tools should be null for builtin", p.tools)
             assertNull("skills should be null for builtin", p.skills)
             assertNull("customErrorMessage should be null for builtin", p.customErrorMessage)
+            assertNull("moodImitationDialogs should be null for builtin", p.moodImitationDialogs)
             assertNull("folderId should be null for builtin", p.folderId)
         }
     }
@@ -64,6 +65,7 @@ class BuiltinPersonasTest {
             tools = listOf("tool1"),
             skills = emptyList(),
             customErrorMessage = "出错了",
+            moodImitationDialogs = listOf("user mood", "assistant mood"),
             folderId = "folder1",
             sortOrder = 1,
             isBuiltin = false
@@ -73,6 +75,7 @@ class BuiltinPersonasTest {
         assertEquals(listOf("tool1"), p.tools)
         assertEquals(emptyList<String>(), p.skills)
         assertEquals("出错了", p.customErrorMessage)
+        assertEquals(listOf("user mood", "assistant mood"), p.moodImitationDialogs)
         assertEquals("folder1", p.folderId)
         assertEquals(1, p.sortOrder)
     }
@@ -84,6 +87,7 @@ class BuiltinPersonasTest {
         assertNull(p.tools)
         assertNull(p.skills)
         assertNull(p.customErrorMessage)
+        assertNull(p.moodImitationDialogs)
         assertNull(p.folderId)
         assertEquals(0, p.sortOrder)
         assertEquals(false, p.isBuiltin)

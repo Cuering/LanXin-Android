@@ -62,6 +62,7 @@ fun PersonaEditScreen(
     var toolsText by remember { mutableStateOf("") }
     var skillsText by remember { mutableStateOf("") }
     var customErrorMessage by remember { mutableStateOf("") }
+    var moodImitationDialogsText by remember { mutableStateOf("") }
     var loaded by remember { mutableStateOf(!isEdit) }
     val snackbarMessage by viewModel.snackbarMessage.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -76,6 +77,7 @@ fun PersonaEditScreen(
                 toolsText = persona.tools?.joinToString(", ") ?: ""
                 skillsText = persona.skills?.joinToString(", ") ?: ""
                 customErrorMessage = persona.customErrorMessage ?: ""
+                moodImitationDialogsText = persona.moodImitationDialogs?.joinToString("\n") ?: ""
             }
             loaded = true
         }
@@ -168,6 +170,18 @@ fun PersonaEditScreen(
                 supportingText = { Text("API 失败时用此消息回复用户，留空使用默认文案") },
                 singleLine = true
             )
+            Spacer(modifier = Modifier.height(12.dp))
+            OutlinedTextField(
+                value = moodImitationDialogsText,
+                onValueChange = { moodImitationDialogsText = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(140.dp),
+                label = { Text("情绪风格示例（mood_imitation_dialogs）") },
+                supportingText = {
+                    Text("每行一条，交替 user/assistant；会注入 system prompt 作为风格示例")
+                }
+            )
             Spacer(modifier = Modifier.height(24.dp))
             Button(
                 onClick = {
@@ -190,6 +204,11 @@ fun PersonaEditScreen(
                         .ifEmpty {
                             if (skillsText.isBlank()) null else emptyList()
                         }
+                    val parsedMoodDialogs = moodImitationDialogsText
+                        .lines()
+                        .map { it.trim() }
+                        .filter { it.isNotEmpty() }
+                        .ifEmpty { null }
                     viewModel.savePersona(
                         id = personaId,
                         name = name,
@@ -198,6 +217,7 @@ fun PersonaEditScreen(
                         tools = parsedTools,
                         skills = parsedSkills,
                         customErrorMessage = customErrorMessage.trim().ifBlank { null },
+                        moodImitationDialogs = parsedMoodDialogs,
                         onDone = { onSaved() }
                     )
                 },
