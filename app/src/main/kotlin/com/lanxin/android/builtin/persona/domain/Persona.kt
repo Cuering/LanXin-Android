@@ -26,6 +26,7 @@ package com.lanxin.android.builtin.persona.domain
  * @param tools 工具列表（null=全部，[]=禁用，[...]=仅列出的）
  * @param skills 技能列表（null=全部，[]=禁用，[...]=仅列出的）
  * @param customErrorMessage 自定义报错回复（API 失败时用）
+ * @param moodImitationDialogs 情绪风格示例对话（交替 user/assistant，注入 system prompt）
  * @param folderId 所属文件夹 ID
  * @param sortOrder 排序顺序
  * @param isBuiltin 是否为内置预设（不可删除）
@@ -40,6 +41,7 @@ data class Persona(
     val tools: List<String>? = null,
     val skills: List<String>? = null,
     val customErrorMessage: String? = null,
+    val moodImitationDialogs: List<String>? = null,
     val folderId: String? = null,
     val sortOrder: Int = 0,
     val isBuiltin: Boolean = false,

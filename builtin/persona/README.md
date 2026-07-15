@@ -7,7 +7,7 @@
 
 - 管理 AI 人格预设（system prompt）
 - 对话开始时将当前人格注入 system prompt
-- 支持 AstrBot 兼容的 beginDialogs、tools/skills 过滤、customErrorMessage
+- 支持 AstrBot 兼容的 beginDialogs、tools/skills 过滤、mood_imitation_dialogs、customErrorMessage
 - 提供设置页切换 / 编辑 / 新建 / 删除人格
 - 注册 MCP 工具：`persona_list` / `persona_get` / `persona_set` / `persona_create` / `persona_delete`
 - 兼容旧名：`persona_switch` / `persona_current`
@@ -46,6 +46,7 @@ builtin/persona/
 | `tools` | List<String>? | 可用工具列表 | null=全部 |
 | `skills` | List<String>? | 可用技能列表 | null=全部 |
 | `customErrorMessage` | String? | 自定义报错回复 | null |
+| `moodImitationDialogs` | List<String>? | 情绪风格示例对话（交替 user/assistant） | null |
 | `folderId` | String? | 所属文件夹 | null |
 | `sortOrder` | Int | 排序 | 0 |
 | `isBuiltin` | Boolean | 内置预设（不可删） | false |
@@ -54,7 +55,7 @@ builtin/persona/
 
 | 数据 | 方案 | 说明 |
 |------|------|------|
-| 人格列表 | Room `lanxin_persona.db` (v2) | MIGRATION_1_2 添加新字段 |
+| 人格列表 | Room `lanxin_persona.db` (v3) | MIGRATION_1_2 / MIGRATION_2_3 添加 mood_imitation_dialogs |
 | 当前选中 ID | DataStore | key: `current_persona_id` |
 
 ## 内置预设
@@ -72,9 +73,9 @@ builtin/persona/
 `ChatViewModel.resolveSystemPrompt()`：
 
 1. 读取 `PersonaRepository.getCurrentSystemPrompt()`
-2. 若人格有 `beginDialogs`，将其作为前置对话注入
+2. 若人格有 `moodImitationDialogs`，格式化为风格示例拼到 system prompt
 3. 与平台自身 `systemPrompt` 拼接（人格在前）
-4. 按 `tools` / `skills` 过滤 MCP 工具列表
+4. 按 `tools` / `skills` 过滤 MCP 工具列表（null=全部，[]=禁用，[...]=仅列出）
 5. `customErrorMessage` 覆盖 API 报错文案
 
 ## MCP 工具

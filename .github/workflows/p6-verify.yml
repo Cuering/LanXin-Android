@@ -1,0 +1,128 @@
+# Persona P6 验证：tools/skills 过滤 + mood_imitation_dialogs
+# 触发：push 到 feat/p6-persona-enhance，或 PR paths 命中
+
+name: P6 Persona Enhance Verify
+
+on:
+  push:
+    branches: [feat/p6-persona-enhance]
+  pull_request:
+    branches: [main]
+    paths:
+      - "app/src/main/kotlin/com/lanxin/android/builtin/persona/**"
+      - "app/src/test/kotlin/com/lanxin/android/builtin/persona/**"
+      - "app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/ChatViewModel.kt"
+      - "app/src/main/kotlin/com/lanxin/android/plugin/ToolCallEngine.kt"
+      - "app/src/main/kotlin/com/lanxin/android/skill/**"
+      - ".github/workflows/p6-verify.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: p6-verify-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Compile + Unit Test (P6)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: temurin
+          cache: gradle
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup local.properties and debug keystore
+        run: |
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+          rm -f debug-keystore.jks
+          keytool -genkeypair -v -keystore debug-keystore.jks -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Create assets model dir (models gitignored)
+        run: |
+          mkdir -p app/src/main/assets/models/gte-small
+          touch app/src/main/assets/models/gte-small/.gitkeep
+
+      - name: Compile Debug Kotlin
+        id: compile
+        continue-on-error: true
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:compileDebugKotlin --no-daemon --stacktrace 2>&1 | tee /tmp/compile.log
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Show compile errors if failed
+        if: steps.compile.outputs.exit_code != '0'
+        run: |
+          echo "=== Last 120 lines of compile log ==="
+          tail -120 /tmp/compile.log
+          echo "=== ERROR lines ==="
+          grep -n -iE "error:|e: |What went wrong|FAILED" /tmp/compile.log | tail -40 || true
+          exit 1
+
+      - name: Run persona unit tests
+        id: test
+        continue-on-error: true
+        run: |
+          mkdir -p /tmp/test-artifacts
+          ./gradlew :app:testDebugUnitTest \
+            --tests "com.lanxin.android.builtin.persona.*" \
+            --no-daemon --stacktrace 2>&1 | tee /tmp/test.log
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+          cp -r app/build/test-results/testDebugUnitTest/ /tmp/test-artifacts/ 2>/dev/null || true
+
+      - name: Show test output
+        if: always()
+        run: |
+          echo "### Test exit: ${{ steps.test.outputs.exit_code }} ###"
+          echo "=== FAILED ==="
+          grep -E "(FAILED|failed|✗|AssertionError)" /tmp/test.log | head -40 || echo "(none)"
+          echo "=== SUMMARY ==="
+          grep -E "(BUILD|tests? (completed|run)|PASSED|FAILURE|SUCCESS)" /tmp/test.log | tail -20 || true
+          echo "=== LAST 80 LINES ==="
+          tail -80 /tmp/test.log
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p6-test-results-${{ github.sha }}
+          path: /tmp/test-artifacts/
+          retention-days: 5
+
+      - name: Assemble Debug APK
+        id: assemble
+        continue-on-error: true
+        run: |
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace 2>&1 | tee /tmp/assemble.log
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Show assemble errors if failed
+        if: steps.assemble.outputs.exit_code != '0'
+        run: |
+          echo "=== Last 100 lines of assemble log ==="
+          tail -100 /tmp/assemble.log
+          grep -n -iE "error:|e: |What went wrong|FAILED" /tmp/assemble.log | tail -30 || true
+          exit 1
+
+      - name: Final gate
+        run: |
+          c="${{ steps.compile.outputs.exit_code }}"
+          t="${{ steps.test.outputs.exit_code }}"
+          a="${{ steps.assemble.outputs.exit_code }}"
+          echo "compile=$c test=$t assemble=$a"
+          if [ "$c" != "0" ] || [ "$t" != "0" ] || [ "$a" != "0" ]; then
+            echo "❌ P6 verify failed"
+            exit 1
+          fi
+          echo "✅ P6 verify passed"

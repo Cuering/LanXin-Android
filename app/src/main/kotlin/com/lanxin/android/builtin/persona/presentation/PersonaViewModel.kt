@@ -75,6 +75,7 @@ class PersonaViewModel @Inject constructor(
         tools: List<String>? = null,
         skills: List<String>? = null,
         customErrorMessage: String? = null,
+        moodImitationDialogs: List<String>? = null,
         onDone: (String) -> Unit
     ) {
         viewModelScope.launch {
@@ -96,7 +97,8 @@ class PersonaViewModel @Inject constructor(
                     beginDialogs = beginDialogs,
                     tools = tools,
                     skills = skills,
-                    customErrorMessage = customErrorMessage
+                    customErrorMessage = customErrorMessage,
+                    moodImitationDialogs = moodImitationDialogs
                 )
                 _snackbarMessage.update { "人格已创建" }
                 onDone(created.id)
@@ -108,7 +110,8 @@ class PersonaViewModel @Inject constructor(
                     beginDialogs = beginDialogs,
                     tools = tools,
                     skills = skills,
-                    customErrorMessage = customErrorMessage
+                    customErrorMessage = customErrorMessage,
+                    moodImitationDialogs = moodImitationDialogs
                 )
                 _snackbarMessage.update {
                     if (ok) "人格已更新" else "更新失败"

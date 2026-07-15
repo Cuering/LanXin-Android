@@ -113,6 +113,35 @@ class PersonaRepositoryTest {
     }
 
     @Test
+    fun `create and update persona with mood imitation dialogs`() = runBlocking {
+        repository.ensureSeeded()
+        val created = repository.createPersona(
+            name = "情绪人格",
+            systemPrompt = "moodful",
+            tools = listOf("memory_recall"),
+            skills = emptyList(),
+            moodImitationDialogs = listOf("今天好吗", "超级好呀！")
+        )
+        assertEquals(listOf("今天好吗", "超级好呀！"), created.moodImitationDialogs)
+        assertEquals(listOf("memory_recall"), created.tools)
+        assertEquals(emptyList<String>(), created.skills)
+
+        val ok = repository.updatePersona(
+            id = created.id,
+            name = "情绪人格2",
+            systemPrompt = "moodful2",
+            tools = emptyList(),
+            skills = listOf("material-learning-summary"),
+            moodImitationDialogs = listOf("嗨", "哈喽～")
+        )
+        assertTrue(ok)
+        val loaded = repository.getById(created.id)
+        assertEquals(listOf("嗨", "哈喽～"), loaded?.moodImitationDialogs)
+        assertEquals(emptyList<String>(), loaded?.tools)
+        assertEquals(listOf("material-learning-summary"), loaded?.skills)
+    }
+
+    @Test
     fun `delete custom persona resets selection when needed`() = runBlocking {
         repository.ensureSeeded()
         val created = repository.createPersona("临时", "prompt")

@@ -24,7 +24,7 @@ import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [PersonaEntity::class], version = 2, exportSchema = false)
+@Database(entities = [PersonaEntity::class], version = 3, exportSchema = false)
 @TypeConverters(PersonaTypeConverter::class)
 abstract class PersonaDatabase : RoomDatabase() {
     abstract fun personaDao(): PersonaDao
@@ -45,13 +45,20 @@ abstract class PersonaDatabase : RoomDatabase() {
             db.execSQL("ALTER TABLE personas ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0")
         }
 
+        /**
+         * Migration 2→3: 添加 mood_imitation_dialogs（情绪风格示例对话）。
+         */
+        val MIGRATION_2_3 = Migration(2, 3) { db ->
+            db.execSQL("ALTER TABLE personas ADD COLUMN mood_imitation_dialogs TEXT DEFAULT NULL")
+        }
+
         fun getInstance(context: Context): PersonaDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     PersonaDatabase::class.java,
                     "lanxin_persona.db"
-                ).addMigrations(MIGRATION_1_2)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build()
                 INSTANCE = instance
                 instance
