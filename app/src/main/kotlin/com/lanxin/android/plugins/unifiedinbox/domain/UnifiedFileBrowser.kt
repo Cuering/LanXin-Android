@@ -166,9 +166,16 @@ class UnifiedFileBrowser @Inject constructor(
         if (file.length() == 0L) return true
         return try {
             val sampleSize = minOf(file.length(), sampleBytes.toLong(), 512L).toInt()
-            val bytes = file.inputStream().use { it.readNBytes(sampleSize) }
-            val nullCount = bytes.count { it == 0.toByte() }
-            nullCount == 0
+            val buffer = ByteArray(sampleSize)
+            file.inputStream().use { stream ->
+                val read = stream.read(buffer)
+                if (read <= 0) return true
+                var nullCount = 0
+                for (i in 0 until read) {
+                    if (buffer[i] == 0.toByte()) nullCount++
+                }
+                nullCount == 0
+            }
         } catch (_: Exception) {
             false
         }
