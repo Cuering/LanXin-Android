@@ -25,7 +25,10 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Markdown 解析器：去除常见语法标记，保留正文与代码块内容。
+ * Markdown 解析器。
+ *
+ * 导入路径保留原始 Markdown（含 ATX 标题），供 [com.lanxin.android.builtin.knowledge.domain.MarkdownChunker]
+ * 做结构感知分段。纯文本化逻辑见 [stripMarkdown]。
  */
 @Singleton
 class MarkdownDocumentParser @Inject constructor(
@@ -40,16 +43,16 @@ class MarkdownDocumentParser @Inject constructor(
     }
 
     override fun parse(fileName: String, input: InputStream, mimeType: String?): ParsedDocument {
+        // 保留 Markdown 结构（标题 / fence），由 MarkdownChunker 负责切分
         val raw = try {
             txtParser.parse(fileName, input, mimeType ?: "text/markdown")
         } catch (e: DocumentParseException) {
             throw e
         }
-        val plain = stripMarkdown(raw.text)
         return ParsedDocument(
             fileName = fileName,
             mimeOrExt = mimeType ?: "text/markdown",
-            text = plain
+            text = raw.text
         )
     }
 

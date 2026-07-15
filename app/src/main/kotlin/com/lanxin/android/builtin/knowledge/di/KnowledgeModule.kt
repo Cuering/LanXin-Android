@@ -52,6 +52,6 @@ abstract class KnowledgeModule {
     @Singleton
     abstract fun bindDocumentParser(impl: CompositeDocumentParser): DocumentParser
 
-    // VectorPipeline / KnowledgePlugin / TextChunker / KnowledgeImportService
+    // VectorPipeline / KnowledgePlugin / TextChunker / MarkdownChunker / KnowledgeImportService
     // 使用 @Inject constructor 自动解析
 }
