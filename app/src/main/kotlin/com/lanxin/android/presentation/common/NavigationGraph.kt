@@ -22,6 +22,8 @@ import com.lanxin.android.builtin.scheduler.presentation.TaskListScreen
 import com.lanxin.android.builtin.statistics.presentation.StatisticsScreen
 import com.lanxin.android.plugins.logger.presentation.ui.LoggerScreen
 import com.lanxin.android.plugins.memory.presentation.ui.memory.MemoryScreen
+import com.lanxin.android.plugins.unifiedinbox.presentation.CrossSessionHistoryScreen
+import com.lanxin.android.plugins.unifiedinbox.presentation.UnifiedFileBrowserScreen
 import com.lanxin.android.presentation.ui.chat.ChatScreen
 import com.lanxin.android.presentation.ui.home.HomeScreen
 import com.lanxin.android.presentation.ui.migrate.MigrateScreen
@@ -59,6 +61,23 @@ fun SetupNavGraph(navController: NavHostController) {
         statisticsScreenNavigation(navController)
         knowledgeScreenNavigation(navController)
         schedulerScreenNavigation(navController)
+        unifiedInboxScreenNavigation(navController)
+    }
+}
+
+fun NavGraphBuilder.unifiedInboxScreenNavigation(navController: NavHostController) {
+    composable(Route.UNIFIED_INBOX) {
+        CrossSessionHistoryScreen(
+            onBackAction = { navController.navigateUp() },
+            onNavigateToFileBrowser = {
+                navController.navigate(Route.UNIFIED_FILE_BROWSER)
+            }
+        )
+    }
+    composable(Route.UNIFIED_FILE_BROWSER) {
+        UnifiedFileBrowserScreen(
+            onBackAction = { navController.navigateUp() }
+        )
     }
 }
 
@@ -298,7 +317,8 @@ fun NavGraphBuilder.settingNavigation(navController: NavHostController) {
                 onNavigateToPersona = { navController.navigate(Route.PERSONA_LIST) },
                 onNavigateToStatistics = { navController.navigate(Route.STATISTICS) },
                 onNavigateToKnowledge = { navController.navigate(Route.KNOWLEDGE) },
-                onNavigateToScheduler = { navController.navigate(Route.TASK_LIST) }
+                onNavigateToScheduler = { navController.navigate(Route.TASK_LIST) },
+                onNavigateToUnifiedInbox = { navController.navigate(Route.UNIFIED_INBOX) }
             )
         }
         composable(Route.ADD_PLATFORM) {

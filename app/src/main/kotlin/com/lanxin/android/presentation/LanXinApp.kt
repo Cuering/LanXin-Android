@@ -11,6 +11,7 @@ import com.lanxin.android.plugin.PluginManager
 import com.lanxin.android.plugins.chat.di.ChatPluginRegistration
 import com.lanxin.android.plugins.logger.di.LoggerPluginRegistration
 import com.lanxin.android.plugins.memory.di.MemoryPluginRegistration
+import com.lanxin.android.plugins.unifiedinbox.di.UnifiedInboxPluginRegistration
 import com.lanxin.android.skill.SkillEngineRegistration
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
@@ -52,6 +53,9 @@ class LanXinApp : Application(), Configuration.Provider {
 
     @Inject
     lateinit var schedulerPluginRegistration: SchedulerPluginRegistration
+
+    @Inject
+    lateinit var unifiedInboxPluginRegistration: UnifiedInboxPluginRegistration
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
