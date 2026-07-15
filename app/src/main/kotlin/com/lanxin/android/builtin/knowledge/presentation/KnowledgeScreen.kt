@@ -315,8 +315,7 @@ private fun AutoKnowledgeCard(
             Slider(
                 value = windowSize.toFloat(),
                 onValueChange = { onWindowChange(it.roundToInt()) },
-                valueRange = AutoKnowledgeSettings.MIN_WINDOW.toFloat()..
-                    AutoKnowledgeSettings.MAX_WINDOW.toFloat(),
+                valueRange = AutoKnowledgeSettings.MIN_WINDOW.toFloat()..AutoKnowledgeSettings.MAX_WINDOW.toFloat(),
                 steps = AutoKnowledgeSettings.MAX_WINDOW - AutoKnowledgeSettings.MIN_WINDOW - 1,
                 enabled = enabled
             )
