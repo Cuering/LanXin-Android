@@ -68,4 +68,11 @@ class MemoryExportModelsTest {
         assertEquals("hello", decoded.memories[0].content)
         assertEquals(0L, decoded.memories[0].id)
     }
+
+    @Test
+    fun `export format enum values`() {
+        assertEquals(2, MemoryExportFormat.entries.size)
+        assertEquals(MemoryExportFormat.JSON, MemoryExportFormat.valueOf("JSON"))
+        assertEquals(MemoryExportFormat.MARKDOWN, MemoryExportFormat.valueOf("MARKDOWN"))
+    }
 }
