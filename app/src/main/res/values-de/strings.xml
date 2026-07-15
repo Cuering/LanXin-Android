@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">LanXin</string>
-    <string name="lanxin_introduction_logo">GPT Mobile Einführung Logo</string>
+    <string name="lanxin_introduction_logo">LanXin Einführung Logo</string>
     <string name="welcome_title">Der beste KI-Assistent,\nden du auf deinem\nSmartphone haben kannst.</string>
     <string name="welcome_description">Verwende das Modell, das am besten zu dir passt.\nFrag einfach, was du möchtest!</string>
     <string name="get_started">Loslegen</string>
@@ -37,7 +37,7 @@
     <string name="gemini_1_5_flash_description">Schnelle und vielseitige Leistung bei einer Vielzahl unterschiedlicher Aufgaben.</string>
     <string name="gemini_1_0_pro_description">Aufgaben in natürlicher Sprache, mehrteilige Text- und Code-Chats sowie Codegenerierung.</string>
     <string name="setup_complete">Alles ist bereit!</string>
-    <string name="setup_complete_description">Lass uns mit GPT Mobile beginnen!</string>
+    <string name="setup_complete_description">Lass uns mit LanXin beginnen!</string>
     <string name="done">Fertig</string>
     <string name="setup_complete_logo">Einrichtung abgeschlossen Logo</string>
     <string name="chats">Chats</string>

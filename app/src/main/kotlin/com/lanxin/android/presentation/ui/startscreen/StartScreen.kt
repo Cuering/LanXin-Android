@@ -21,7 +21,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.lanxin.android.presentation.common.PrimaryLongButton
-import com.lanxin.android.presentation.icons.GptMobileStartScreen
+import com.lanxin.android.presentation.icons.LanXinStartScreen
 
 @Composable
 fun StartScreen(onStartClick: () -> Unit) {
@@ -48,7 +48,7 @@ fun StartScreen(onStartClick: () -> Unit) {
 @Composable
 fun StartScreenLogo(modifier: Modifier = Modifier) {
     Image(
-        imageVector = GptMobileStartScreen,
+        imageVector = LanXinStartScreen,
         contentDescription = "兰心启动页图标",
         contentScale = ContentScale.FillHeight,
         modifier = modifier

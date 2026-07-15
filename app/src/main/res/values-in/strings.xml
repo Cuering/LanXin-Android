@@ -4,7 +4,7 @@
     <string name="select_anthropic_model_description">Pilih model obrolan Anthropic. Kami saat ini hanya mendukung input teks untuk keluarga model Claude 3.</string>
     <string name="gpt_4o_description">Model andalan tercepat dan paling terjangkau.</string>
     <string name="gemini_1_5_pro_description">Dioptimalkan untuk tugas penalaran termasuk kode dan pembuatan teks.</string>
-    <string name="setup_complete_description">Mari sekarang memulai GPT Mobile!</string>
+    <string name="setup_complete_description">Mari sekarang memulai LanXin!</string>
     <string name="select_platform">Pilih Platform</string>
     <string name="select_platform_description">Pilih platform yang ingin Anda gunakan dalam obrolan ini. Setelah obrolan dibuat, Anda tidak dapat mengubah pengaturan ini. Jika Anda ingin mengubah ini, silakan buat obrolan baru.</string>
     <string name="confirm">Konfirmasi</string>
@@ -12,7 +12,7 @@
     <string name="theme_description">Tema Dinamis, Mode Gelap</string>
     <string name="google_setting">Pengaturan Google</string>
     <string name="google_description">Gemini sedang dalam perjalanan.</string>
-    <string name="lanxin_introduction_logo">GPT Mobile Logo Pendahuluan</string>
+    <string name="lanxin_introduction_logo">LanXin Logo Pendahuluan</string>
     <string name="welcome_description">Gunakan model yang paliling cocok untuk Anda.\nTanyakan apapun yang Anda inginkan!</string>
     <string name="sample_item_title">Item 1</string>
     <string name="sample_item_description">Deskripsi item</string>

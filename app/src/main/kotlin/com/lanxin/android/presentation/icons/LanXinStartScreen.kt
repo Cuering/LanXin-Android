@@ -17,12 +17,12 @@ import com.lanxin.android.data.model.DynamicTheme
 import com.lanxin.android.data.model.ThemeMode
 import com.lanxin.android.presentation.theme.LanXinTheme
 
-val GptMobileStartScreen: ImageVector
+val LanXinStartScreen: ImageVector
     @Composable
     get() {
         // It should be recomposed when theme is changed. So calculate every time (Expensive, but only used in get started screen)
         return Builder(
-            name = "GptMobileStartScreen",
+            name = "LanXinStartScreen",
             defaultWidth = 488.61.dp,
             defaultHeight = 317.24.dp,
             viewportWidth = 488.61f,
@@ -683,11 +683,11 @@ val GptMobileStartScreen: ImageVector
 
 @Preview
 @Composable
-fun GPTLogoStartScreen() {
+fun LanXinLogoStartScreen() {
     LanXinTheme(
         dynamicTheme = DynamicTheme.ON,
         themeMode = ThemeMode.DARK
     ) {
-        Image(imageVector = GptMobileStartScreen, contentDescription = "")
+        Image(imageVector = LanXinStartScreen, contentDescription = "")
     }
 }
