@@ -106,6 +106,7 @@ class PersonaRepository @Inject constructor(
         tools: List<String>? = null,
         skills: List<String>? = null,
         customErrorMessage: String? = null,
+        moodImitationDialogs: List<String>? = null,
         folderId: String? = null,
         sortOrder: Int = 0
     ): Persona {
@@ -119,6 +120,7 @@ class PersonaRepository @Inject constructor(
             tools = tools,
             skills = skills,
             customErrorMessage = customErrorMessage?.trim()?.ifBlank { null },
+            moodImitationDialogs = moodImitationDialogs,
             folderId = folderId,
             sortOrder = sortOrder,
             isBuiltin = false,
@@ -137,6 +139,7 @@ class PersonaRepository @Inject constructor(
         tools: List<String>? = null,
         skills: List<String>? = null,
         customErrorMessage: String? = null,
+        moodImitationDialogs: List<String>? = null,
         folderId: String? = null,
         sortOrder: Int = 0
     ): Boolean {
@@ -149,6 +152,7 @@ class PersonaRepository @Inject constructor(
             tools = tools,
             skills = skills,
             customErrorMessage = customErrorMessage?.trim()?.ifBlank { null },
+            moodImitationDialogs = moodImitationDialogs,
             folderId = folderId,
             sortOrder = sortOrder,
             updatedAt = System.currentTimeMillis()

@@ -48,6 +48,8 @@ class ToolCallEngine @Inject constructor(
     /**
      * 根据当前已注册工具构建系统提示词片段。
      * 无工具时返回空字符串。
+     *
+     * @param tools 若指定则仅使用该列表；默认取 [PluginManager.getTools]
      */
     fun buildToolsSystemPrompt(tools: List<ToolDef> = pluginManager.getTools()): String {
         if (tools.isEmpty()) return ""
@@ -75,15 +77,26 @@ class ToolCallEngine @Inject constructor(
 
     /**
      * 将工具提示拼接到既有 system prompt 上。
+     *
+     * @param tools 可选；传入时按该列表构建工具提示（用于人格 tools/skills 过滤）
      */
-    fun mergeSystemPrompt(existing: String?, toolsPrompt: String = buildToolsSystemPrompt()): String? {
+    fun mergeSystemPrompt(
+        existing: String?,
+        toolsPrompt: String? = null,
+        tools: List<ToolDef>? = null
+    ): String? {
+        val resolvedToolsPrompt = when {
+            toolsPrompt != null -> toolsPrompt
+            tools != null -> buildToolsSystemPrompt(tools)
+            else -> buildToolsSystemPrompt()
+        }
         val base = existing?.trim().orEmpty()
-        val tools = toolsPrompt.trim()
+        val toolsText = resolvedToolsPrompt.trim()
         return when {
-            tools.isEmpty() && base.isEmpty() -> null
-            tools.isEmpty() -> base
-            base.isEmpty() -> tools
-            else -> "$base\n\n$tools"
+            toolsText.isEmpty() && base.isEmpty() -> null
+            toolsText.isEmpty() -> base
+            base.isEmpty() -> toolsText
+            else -> "$base\n\n$toolsText"
         }
     }
 
@@ -123,12 +136,26 @@ class ToolCallEngine @Inject constructor(
 
     /**
      * 执行一组工具调用，路由到 PluginManager。
+     *
+     * @param allowedToolNames 若非 null，仅执行列表中的工具名；其余返回 error
      */
-    suspend fun executeToolCalls(calls: List<ToolCallRequest>): List<ToolCallResult> {
+    suspend fun executeToolCalls(
+        calls: List<ToolCallRequest>,
+        allowedToolNames: Set<String>? = null
+    ): List<ToolCallResult> {
         if (calls.isEmpty()) return emptyList()
         return calls.map { call ->
-            val result = pluginManager.callTool(call.name, call.arguments)
-            ToolCallResult(name = call.name, result = result)
+            if (allowedToolNames != null && call.name !in allowedToolNames) {
+                ToolCallResult(
+                    name = call.name,
+                    result = buildJsonObject {
+                        put("error", "工具 ${call.name} 当前人格不允许使用")
+                    }
+                )
+            } else {
+                val result = pluginManager.callTool(call.name, call.arguments)
+                ToolCallResult(name = call.name, result = result)
+            }
         }
     }
 
@@ -151,12 +178,17 @@ class ToolCallEngine @Inject constructor(
     /**
      * 完整一轮：解析 → 执行 → 生成回填消息。
      * 若无工具调用返回 null。
+     *
+     * @param allowedToolNames 人格 tools/skills 过滤后的允许工具名；null 表示不限制
      */
-    suspend fun processAssistantReply(assistantText: String): ToolRoundResult? {
+    suspend fun processAssistantReply(
+        assistantText: String,
+        allowedToolNames: Set<String>? = null
+    ): ToolRoundResult? {
         val calls = parseToolCalls(assistantText)
         if (calls.isEmpty()) return null
 
-        val results = executeToolCalls(calls)
+        val results = executeToolCalls(calls, allowedToolNames)
         return ToolRoundResult(
             calls = calls,
             results = results,

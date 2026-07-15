@@ -16,14 +16,12 @@
 
 package com.lanxin.android.builtin.persona
 
-import com.lanxin.android.builtin.persona.domain.FALLBACK_SYSTEM_PROMPT
 import com.lanxin.android.builtin.persona.domain.PersonaRepository
 import com.lanxin.android.plugin.LanXinPlugin
 import com.lanxin.android.plugin.PluginContext
 import com.lanxin.android.plugin.ToolDef
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
@@ -46,8 +44,9 @@ class PersonaPlugin @Inject constructor(
 
     override val id = "lanxin.persona"
     override val name = "人格设定"
-    override val version = "1.1.0"
-    override val description = "管理 AI 人格预设，支持 beginDialogs / tools / skills 过滤"
+    override val version = "1.2.0"
+    override val description =
+        "管理 AI 人格预设，支持 beginDialogs / tools / skills 过滤 / mood_imitation_dialogs"
 
     override suspend fun onLoad(context: PluginContext) {
         personaRepository.ensureSeeded()
@@ -56,7 +55,7 @@ class PersonaPlugin @Inject constructor(
         context.registerTool(
             ToolDef(
                 name = "persona_list",
-                description = "列出所有可用人格（预设 + 自定义），标注当前项及 beginDialogs/tools/skills 等信息",
+                description = "列出所有可用人格（预设 + 自定义），标注当前项及 beginDialogs/tools/skills/mood 等信息",
                 parameters = buildJsonObject {
                     put("type", "object")
                     put("properties", buildJsonObject { })
@@ -84,15 +83,21 @@ class PersonaPlugin @Inject constructor(
         context.registerTool(
             ToolDef(
                 name = "persona_get",
-                description = "按 id 获取人格详情，包含 systemPrompt / beginDialogs / tools / skills / customErrorMessage",
+                description = "按 id 获取人格详情，包含 systemPrompt / beginDialogs / tools / skills / mood_imitation_dialogs / customErrorMessage",
                 parameters = buildJsonObject {
                     put("type", "object")
-                    put("properties", buildJsonObject {
-                        put("persona_id", buildJsonObject {
-                            put("type", "string")
-                            put("description", "人格 ID（可用 persona_list 查询）")
-                        })
-                    })
+                    put(
+                        "properties",
+                        buildJsonObject {
+                            put(
+                                "persona_id",
+                                buildJsonObject {
+                                    put("type", "string")
+                                    put("description", "人格 ID（可用 persona_list 查询）")
+                                }
+                            )
+                        }
+                    )
                     put("required", buildJsonArray { add(JsonPrimitive("persona_id")) })
                 },
                 handler = { args ->
@@ -113,12 +118,18 @@ class PersonaPlugin @Inject constructor(
                 description = "设置当前人格。兼容旧名 persona_switch。后续对话将使用该人格的 system prompt",
                 parameters = buildJsonObject {
                     put("type", "object")
-                    put("properties", buildJsonObject {
-                        put("persona_id", buildJsonObject {
-                            put("type", "string")
-                            put("description", "目标人格 ID")
-                        })
-                    })
+                    put(
+                        "properties",
+                        buildJsonObject {
+                            put(
+                                "persona_id",
+                                buildJsonObject {
+                                    put("type", "string")
+                                    put("description", "目标人格 ID")
+                                }
+                            )
+                        }
+                    )
                     put("required", buildJsonArray { add(JsonPrimitive("persona_id")) })
                 },
                 handler = { args ->
@@ -147,12 +158,18 @@ class PersonaPlugin @Inject constructor(
                 description = "[兼容旧名] 切换当前人格，等同 persona_set",
                 parameters = buildJsonObject {
                     put("type", "object")
-                    put("properties", buildJsonObject {
-                        put("persona_id", buildJsonObject {
-                            put("type", "string")
-                            put("description", "目标人格 ID")
-                        })
-                    })
+                    put(
+                        "properties",
+                        buildJsonObject {
+                            put(
+                                "persona_id",
+                                buildJsonObject {
+                                    put("type", "string")
+                                    put("description", "目标人格 ID")
+                                }
+                            )
+                        }
+                    )
                     put("required", buildJsonArray { add(JsonPrimitive("persona_id")) })
                 },
                 handler = { args ->
@@ -178,7 +195,7 @@ class PersonaPlugin @Inject constructor(
         context.registerTool(
             ToolDef(
                 name = "persona_current",
-                description = "获取当前选中的人格完整信息",
+                description = "获取当前选中的人格完整信息（含 tools/skills/mood_imitation_dialogs）",
                 parameters = buildJsonObject {
                     put("type", "object")
                     put("properties", buildJsonObject { })
@@ -197,39 +214,71 @@ class PersonaPlugin @Inject constructor(
                 description = "创建新的人格。system_prompt 必填，其他可选。tools/skills 为 null 表示全部可用，[] 表示禁用",
                 parameters = buildJsonObject {
                     put("type", "object")
-                    put("properties", buildJsonObject {
-                        put("name", buildJsonObject {
-                            put("type", "string")
-                            put("description", "显示名称")
-                        })
-                        put("system_prompt", buildJsonObject {
-                            put("type", "string")
-                            put("description", "系统提示词")
-                        })
-                        put("begin_dialogs", buildJsonObject {
-                            put("type", "array")
-                            put("items", buildJsonObject { put("type", "string") })
-                            put("description", "预设对话（偶数字符串，交替 user/assistant）")
-                        })
-                        put("tools", buildJsonObject {
-                            put("type", "array")
-                            put("items", buildJsonObject { put("type", "string") })
-                            put("description", "工具列表（null=全部，[]=禁用）")
-                        })
-                        put("skills", buildJsonObject {
-                            put("type", "array")
-                            put("items", buildJsonObject { put("type", "string") })
-                            put("description", "技能列表（null=全部，[]=禁用）")
-                        })
-                        put("custom_error_message", buildJsonObject {
-                            put("type", "string")
-                            put("description", "自定义报错回复")
-                        })
-                    })
-                    put("required", buildJsonArray {
-                        add(JsonPrimitive("name"))
-                        add(JsonPrimitive("system_prompt"))
-                    })
+                    put(
+                        "properties",
+                        buildJsonObject {
+                            put(
+                                "name",
+                                buildJsonObject {
+                                    put("type", "string")
+                                    put("description", "显示名称")
+                                }
+                            )
+                            put(
+                                "system_prompt",
+                                buildJsonObject {
+                                    put("type", "string")
+                                    put("description", "系统提示词")
+                                }
+                            )
+                            put(
+                                "begin_dialogs",
+                                buildJsonObject {
+                                    put("type", "array")
+                                    put("items", buildJsonObject { put("type", "string") })
+                                    put("description", "预设对话（偶数字符串，交替 user/assistant）")
+                                }
+                            )
+                            put(
+                                "tools",
+                                buildJsonObject {
+                                    put("type", "array")
+                                    put("items", buildJsonObject { put("type", "string") })
+                                    put("description", "工具列表（null=全部，[]=禁用）")
+                                }
+                            )
+                            put(
+                                "skills",
+                                buildJsonObject {
+                                    put("type", "array")
+                                    put("items", buildJsonObject { put("type", "string") })
+                                    put("description", "技能列表（null=全部，[]=禁用）")
+                                }
+                            )
+                            put(
+                                "custom_error_message",
+                                buildJsonObject {
+                                    put("type", "string")
+                                    put("description", "自定义报错回复")
+                                }
+                            )
+                            put(
+                                "mood_imitation_dialogs",
+                                buildJsonObject {
+                                    put("type", "array")
+                                    put("items", buildJsonObject { put("type", "string") })
+                                    put("description", "情绪风格示例对话（交替 user/assistant）")
+                                }
+                            )
+                        }
+                    )
+                    put(
+                        "required",
+                        buildJsonArray {
+                            add(JsonPrimitive("name"))
+                            add(JsonPrimitive("system_prompt"))
+                        }
+                    )
                 },
                 handler = { args ->
                     val name = args["name"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
@@ -243,13 +292,15 @@ class PersonaPlugin @Inject constructor(
                     val tools = parseStringList(args["tools"])
                     val skills = parseStringList(args["skills"])
                     val customErrorMessage = args["custom_error_message"]?.jsonPrimitive?.contentOrNull
+                    val moodImitationDialogs = parseStringList(args["mood_imitation_dialogs"])
                     val persona = personaRepository.createPersona(
                         name = name,
                         systemPrompt = systemPrompt,
                         beginDialogs = beginDialogs,
                         tools = tools,
                         skills = skills,
-                        customErrorMessage = customErrorMessage
+                        customErrorMessage = customErrorMessage,
+                        moodImitationDialogs = moodImitationDialogs
                     )
                     buildJsonObject {
                         put("ok", true)
@@ -267,12 +318,18 @@ class PersonaPlugin @Inject constructor(
                 description = "删除指定人格（仅限自定义人格，内置人格不可删除）",
                 parameters = buildJsonObject {
                     put("type", "object")
-                    put("properties", buildJsonObject {
-                        put("persona_id", buildJsonObject {
-                            put("type", "string")
-                            put("description", "要删除的人格 ID")
-                        })
-                    })
+                    put(
+                        "properties",
+                        buildJsonObject {
+                            put(
+                                "persona_id",
+                                buildJsonObject {
+                                    put("type", "string")
+                                    put("description", "要删除的人格 ID")
+                                }
+                            )
+                        }
+                    )
                     put("required", buildJsonArray { add(JsonPrimitive("persona_id")) })
                 },
                 handler = { args ->
@@ -290,44 +347,45 @@ class PersonaPlugin @Inject constructor(
         )
     }
 
-    private fun buildPersonaJson(p: com.lanxin.android.builtin.persona.domain.Persona, currentId: String) =
-        buildJsonObject {
-            put("id", p.id)
-            put("name", p.name)
-            put("system_prompt", p.systemPrompt)
-            put("is_builtin", p.isBuiltin)
-            put("is_current", p.id == currentId)
-            put("sort_order", p.sortOrder)
-            if (p.beginDialogs != null) {
-                put("begin_dialogs", buildJsonArray {
-                    p.beginDialogs.forEach { add(JsonPrimitive(it)) }
-                })
-            } else {
-                put("begin_dialogs", JsonNull)
-            }
-            if (p.tools != null) {
-                put("tools", buildJsonArray {
-                    p.tools.forEach { add(JsonPrimitive(it)) }
-                })
-            } else {
-                put("tools", JsonNull)
-            }
-            if (p.skills != null) {
-                put("skills", buildJsonArray {
-                    p.skills.forEach { add(JsonPrimitive(it)) }
-                })
-            } else {
-                put("skills", JsonNull)
-            }
-            if (p.customErrorMessage != null) {
-                put("custom_error_message", JsonPrimitive(p.customErrorMessage))
-            } else {
-                put("custom_error_message", JsonNull)
-            }
-            if (p.folderId != null) {
-                put("folder_id", JsonPrimitive(p.folderId))
-            }
+    private fun buildPersonaJson(
+        p: com.lanxin.android.builtin.persona.domain.Persona,
+        currentId: String
+    ) = buildJsonObject {
+        put("id", p.id)
+        put("name", p.name)
+        put("system_prompt", p.systemPrompt)
+        put("is_builtin", p.isBuiltin)
+        put("is_current", p.id == currentId)
+        put("sort_order", p.sortOrder)
+        putStringListOrNull("begin_dialogs", p.beginDialogs)
+        putStringListOrNull("tools", p.tools)
+        putStringListOrNull("skills", p.skills)
+        putStringListOrNull("mood_imitation_dialogs", p.moodImitationDialogs)
+        if (p.customErrorMessage != null) {
+            put("custom_error_message", JsonPrimitive(p.customErrorMessage))
+        } else {
+            put("custom_error_message", JsonNull)
         }
+        if (p.folderId != null) {
+            put("folder_id", JsonPrimitive(p.folderId))
+        }
+    }
+
+    private fun kotlinx.serialization.json.JsonObjectBuilder.putStringListOrNull(
+        key: String,
+        value: List<String>?
+    ) {
+        if (value != null) {
+            put(
+                key,
+                buildJsonArray {
+                    value.forEach { add(JsonPrimitive(it)) }
+                }
+            )
+        } else {
+            put(key, JsonNull)
+        }
+    }
 
     /** 解析 JSON 参数中的字符串列表。null/不存在的字段返回 null，空数组返回空列表。 */
     private fun parseStringList(element: JsonElement?): List<String>? {
