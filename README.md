@@ -7,6 +7,7 @@
 - 多模型提供商：OpenAI / Anthropic / Google / Groq / Ollama 等
 - 本地聊天历史（`plugins/chat`）
 - 本地记忆系统（`plugins/memory`）
+- 知识库 - 向量检索 + BM25 稀疏检索（`builtin/knowledge`）
 - 人格设定：切换 / 自定义 AI system prompt（`builtin/persona`）
 - 数据统计：对话轮数、token 估算、按日活跃度（`builtin/statistics`）
 - 定时任务：周期/一次性 BASIC 回调与 ACTIVE_AGENT 提醒（`builtin/scheduler`）
@@ -20,7 +21,7 @@
 
 ```
 core/        原生内核（engine / provider / config / log / updater …）
-builtin/     内置功能（persona ✅ / statistics ✅ / scheduler ✅ / platform ✅）
+builtin/     内置功能（persona ✅ / knowledge ✅ / statistics ✅ / scheduler ✅ / platform ✅）
 plugins/     可拔插插件（memory / chat / logger）
 app/         壳应用（Compose UI 入口）
 ```
@@ -48,6 +49,7 @@ app/         壳应用（Compose UI 入口）
 | [plugins/chat/README.md](./plugins/chat/README.md) | 对话插件 |
 | [plugins/logger/README.md](./plugins/logger/README.md) | 日志查看 UI |
 | [builtin/persona/README.md](./builtin/persona/README.md) | 人格设定 |
+| [builtin/knowledge/README.md](./builtin/knowledge/README.md) | 知识库系统 |
 | [builtin/statistics/README.md](./builtin/statistics/README.md) | 数据统计 |
 | [builtin/scheduler/README.md](./builtin/scheduler/README.md) | 定时任务 |
 | [builtin/platform/README.md](./builtin/platform/README.md) | 手机平台工具 |
