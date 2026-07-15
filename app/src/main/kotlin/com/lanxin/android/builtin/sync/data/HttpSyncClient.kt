@@ -16,7 +16,7 @@
 
 package com.lanxin.android.builtin.sync.data
 
-import com.lanxin.android.builtin.sync.domain.SyncClient
+import com.lanxin.android.builtin.sync.domain.SyncApi
 import com.lanxin.android.builtin.sync.domain.SyncPullRequest
 import com.lanxin.android.builtin.sync.domain.SyncPullResponse
 import com.lanxin.android.builtin.sync.domain.SyncPushRequest
@@ -35,7 +35,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 
 /**
- * Ktor 实现的 SyncClient。
+ * Ktor 实现的 SyncApi。
  *
  * Endpoint：
  * - POST {baseUrl}/api/sync/pull
@@ -45,7 +45,7 @@ import kotlinx.serialization.json.Json
 class HttpSyncClient @Inject constructor(
     private val networkClient: NetworkClient,
     private val preferences: SyncPreferences
-) : SyncClient {
+) : SyncApi {
 
     private val client get() = networkClient()
 

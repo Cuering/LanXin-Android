@@ -17,7 +17,7 @@
 package com.lanxin.android.builtin.sync.data
 
 import com.lanxin.android.builtin.sync.domain.LwwResolver
-import com.lanxin.android.builtin.sync.domain.SyncClient
+import com.lanxin.android.builtin.sync.domain.SyncApi
 import com.lanxin.android.builtin.sync.domain.SyncCycleResult
 import com.lanxin.android.builtin.sync.domain.SyncItem
 import com.lanxin.android.builtin.sync.domain.SyncItemMapper
@@ -46,7 +46,7 @@ import kotlinx.coroutines.withContext
  */
 @Singleton
 class DefaultSyncRepository @Inject constructor(
-    private val syncClient: SyncClient,
+    private val syncApi: SyncApi,
     private val preferences: SyncPreferences,
     private val outbox: InMemorySyncOutbox,
     private val memoryRepository: MemoryRepository
@@ -95,7 +95,7 @@ class DefaultSyncRepository @Inject constructor(
         var serverTime = preferences.getLastServerTime()
 
         if (pending.isNotEmpty()) {
-            val pushResult = syncClient.push(
+            val pushResult = syncApi.push(
                 SyncPushRequest(
                     deviceId = deviceId,
                     userId = userId,
@@ -131,7 +131,7 @@ class DefaultSyncRepository @Inject constructor(
 
         // 2) pull
         val since = preferences.getLastServerTime()
-        val pullResult = syncClient.pull(
+        val pullResult = syncApi.pull(
             SyncPullRequest(
                 deviceId = deviceId,
                 userId = userId,

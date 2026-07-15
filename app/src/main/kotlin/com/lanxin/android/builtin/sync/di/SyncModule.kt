@@ -18,7 +18,7 @@ package com.lanxin.android.builtin.sync.di
 
 import com.lanxin.android.builtin.sync.data.DefaultSyncRepository
 import com.lanxin.android.builtin.sync.data.HttpSyncClient
-import com.lanxin.android.builtin.sync.domain.SyncClient
+import com.lanxin.android.builtin.sync.domain.SyncApi
 import com.lanxin.android.builtin.sync.domain.SyncRepository
 import dagger.Module
 import dagger.Provides
@@ -37,7 +37,7 @@ object SyncModule {
 
     @Provides
     @Singleton
-    fun provideSyncClient(impl: HttpSyncClient): SyncClient = impl
+    fun provideSyncApi(impl: HttpSyncClient): SyncApi = impl
 
     @Provides
     @Singleton
