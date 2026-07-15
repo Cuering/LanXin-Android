@@ -69,7 +69,8 @@ fun SettingScreen(
     onNavigateToPersona: () -> Unit = {},
     onNavigateToStatistics: () -> Unit = {},
     onNavigateToKnowledge: () -> Unit = {},
-    onNavigateToScheduler: () -> Unit = {}
+    onNavigateToScheduler: () -> Unit = {},
+    onNavigateToUnifiedInbox: () -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
     val scrollBehavior = pinnedExitUntilCollapsedScrollBehavior(
@@ -163,6 +164,14 @@ fun SettingScreen(
                 title = "定时任务",
                 description = "周期/一次性提醒与 BASIC 回调自动执行",
                 onItemClick = onNavigateToScheduler,
+                showTrailingIcon = true,
+                showLeadingIcon = false
+            )
+
+            SettingItem(
+                title = "跨会话历史",
+                description = "聚合本地会话对话，跨工作区文件浏览",
+                onItemClick = onNavigateToUnifiedInbox,
                 showTrailingIcon = true,
                 showLeadingIcon = false
             )
