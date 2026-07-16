@@ -73,7 +73,8 @@ fun SettingScreen(
     onNavigateToUnifiedInbox: () -> Unit = {},
     onNavigateToUnifiedSearch: () -> Unit = {},
     onNavigateToPluginManager: () -> Unit = {},
-    onNavigateToPluginMarket: () -> Unit = {}
+    onNavigateToPluginMarket: () -> Unit = {},
+    onNavigateToLocalInference: () -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
     val scrollBehavior = pinnedExitUntilCollapsedScrollBehavior(
@@ -199,6 +200,14 @@ fun SettingScreen(
                 title = "插件市场",
                 description = "从远程索引浏览/下载插件到 plugin-packages",
                 onItemClick = onNavigateToPluginMarket,
+                showTrailingIcon = true,
+                showLeadingIcon = false
+            )
+
+            SettingItem(
+                title = "本地推理",
+                description = "端侧 MNN 骨架：启用开关、模型路径、load stub",
+                onItemClick = onNavigateToLocalInference,
                 showTrailingIcon = true,
                 showLeadingIcon = false
             )
