@@ -243,19 +243,19 @@ class PluginManager @Inject constructor(
         val records = mutableListOf<PluginRecord>()
         for ((id, plugin) in plugins) {
             val handle = dynamicHandles[id]
+            val isDynamic = handle != null
             records += PluginRecord(
                 id = id,
                 name = plugin.name,
                 version = plugin.version,
                 description = plugin.description,
-                source = if (handle != null) PluginSource.DYNAMIC else PluginSource.COMPILED,
+                source = if (isDynamic) PluginSource.DYNAMIC else PluginSource.COMPILED,
                 enabled = isEnabled(id),
-                removable = handle != null || handle?.manifest?.removable == true,
+                removable = isDynamic && (handle?.manifest?.removable ?: true),
                 apkPath = handle?.apkFile?.absolutePath,
                 author = handle?.manifest?.author.orEmpty()
             )
         }
-        // 附加仅失败、未注册的扫描错误（可选展示）
         return records.sortedBy { it.id }
     }
 
