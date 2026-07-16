@@ -43,4 +43,7 @@ jobs:
 
       - name: Surface check - no model curl
         run: |
-          ! grep -rn "curl.*sherpa-onnx\|curl.*modelscope\|wget.*sherpa" .github/workflows/phase7-system-tools-verify.yml 2>/dev/null
+          if grep -rn "curl.*sherpa-onnx\|curl.*modelscope\|wget.*sherpa" .github/workflows/phase7-system-tools-verify.yml 2>/dev/null; then
+            echo "ERROR: Found model download commands in workflow file"
+            exit 1
+          fi
