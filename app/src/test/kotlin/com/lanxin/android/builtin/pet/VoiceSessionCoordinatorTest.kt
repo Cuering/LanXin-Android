@@ -30,6 +30,15 @@ class VoiceSessionCoordinatorTest {
         override suspend fun setAutoListen(autoListen: Boolean) {
             config = config.copy(autoListen = autoListen)
         }
+        override suspend fun setLive2dModelPath(path: String?) {
+            config = config.copy(live2dModelPath = path.orEmpty())
+        }
+    }
+
+    private class FixedResponder(
+        private val text: String
+    ) : PetChatResponder {
+        override suspend fun respond(userText: String): String = text
     }
 
     @Test
@@ -82,9 +91,8 @@ class VoiceSessionCoordinatorTest {
     fun `custom responder text appears in result`() = runBlocking {
         val tts = StubTtsEngine()
         tts.load(TtsConfig(enabled = true))
-        val responder = PetChatResponder { "自定义回复" }
         val c = VoiceSessionCoordinator(
-            responder = responder,
+            responder = FixedResponder("自定义回复"),
             ttsEngine = tts,
             petSettings = FakePetSettings()
         )
