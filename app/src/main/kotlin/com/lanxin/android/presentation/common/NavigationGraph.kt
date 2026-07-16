@@ -37,6 +37,7 @@ import com.lanxin.android.presentation.ui.setting.PlatformSettingScreen
 import com.lanxin.android.presentation.ui.setting.SettingScreen
 import com.lanxin.android.builtin.localinference.presentation.LocalInferenceScreen
 import com.lanxin.android.builtin.pet.presentation.DesktopPetScreen
+import com.lanxin.android.builtin.systemtools.presentation.SystemToolsScreen
 import com.lanxin.android.builtin.voice.presentation.VoiceAsrScreen
 import com.lanxin.android.presentation.ui.setting.SettingViewModelV2
 import com.lanxin.android.presentation.ui.setup.SetupCompleteScreen
@@ -74,6 +75,7 @@ fun SetupNavGraph(navController: NavHostController) {
         localInferenceScreenNavigation(navController)
         offlineAsrScreenNavigation(navController)
         desktopPetScreenNavigation(navController)
+        systemToolsScreenNavigation(navController)
     }
 }
 
@@ -117,6 +119,16 @@ fun NavGraphBuilder.desktopPetScreenNavigation(navController: NavHostController)
         )
     }
 }
+
+
+fun NavGraphBuilder.systemToolsScreenNavigation(navController: NavHostController) {
+    composable(Route.SYSTEM_TOOLS) {
+        SystemToolsScreen(
+            onBackAction = { navController.navigateUp() }
+        )
+    }
+}
+
 
 fun NavGraphBuilder.unifiedSearchScreenNavigation(navController: NavHostController) {
     composable(Route.UNIFIED_SEARCH) {
@@ -429,7 +441,8 @@ fun NavGraphBuilder.settingNavigation(navController: NavHostController) {
                 onNavigateToPluginMarket = { navController.navigate(Route.PLUGIN_MARKET) },
                 onNavigateToLocalInference = { navController.navigate(Route.LOCAL_INFERENCE) },
                 onNavigateToOfflineAsr = { navController.navigate(Route.OFFLINE_ASR) },
-                onNavigateToDesktopPet = { navController.navigate(Route.DESKTOP_PET) }
+                onNavigateToDesktopPet = { navController.navigate(Route.DESKTOP_PET) },
+                onNavigateToSystemTools = { navController.navigate(Route.SYSTEM_TOOLS) }
             )
         }
         composable(Route.ADD_PLATFORM) {
