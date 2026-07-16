@@ -38,6 +38,7 @@ object Route {
     const val MIGRATE_V2 = "migrate_v2"
 
     const val MEMORY_LIST = "memory_list"
+
     /** 从聊天引用打开记忆编辑；memoryId 为 Long 字符串。 */
     const val MEMORY_EDIT = "memory_edit/{memoryId}"
 
