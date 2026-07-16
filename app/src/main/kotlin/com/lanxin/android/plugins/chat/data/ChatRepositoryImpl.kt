@@ -61,6 +61,7 @@ import com.lanxin.android.builtin.localinference.domain.ChatLocalFallback
 import com.lanxin.android.builtin.localinference.domain.InferenceRouteCoordinator
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceProvider
 import com.lanxin.android.builtin.localinference.domain.NetworkStatusProvider
+import com.lanxin.android.builtin.localinference.domain.RouteReason
 import com.lanxin.android.util.AttachmentPayloadCache
 import com.lanxin.android.util.FileUtils
 import com.lanxin.android.util.stripAssistantErrorNote
@@ -148,13 +149,14 @@ class ChatRepositoryImpl @Inject constructor(
     override suspend fun completeChat(
         userMessages: List<MessageV2>,
         assistantMessages: List<List<MessageV2>>,
-        platform: PlatformV2
+        platform: PlatformV2,
+        needsTools: Boolean
     ): Flow<ApiState> {
-        // Phase 6.2：最小侵入离线/本地路由（完整 ChatRouter 见 6.3）
+        // Phase 6.3：统一走 ChatRouter（via InferenceRouteCoordinator）
         val coordinator = inferenceRouteCoordinator
         val localProvider = localInferenceProvider
         if (coordinator != null && localProvider != null) {
-            val decision = coordinator.decide()
+            val decision = coordinator.decide(needsTools = needsTools)
             lastRouteReason = decision.reason
             lastUsedLocal = ChatLocalFallback.shouldUseLocal(decision)
             if (ChatLocalFallback.shouldEmitUnavailable(decision)) {
@@ -175,7 +177,7 @@ class ChatRepositoryImpl @Inject constructor(
                 )
             }
         } else {
-            lastRouteReason = "cloud_default_no_router"
+            lastRouteReason = RouteReason.CLOUD_DEFAULT_NO_ROUTER
             lastUsedLocal = false
         }
         return completeChatCloud(userMessages, assistantMessages, platform)
