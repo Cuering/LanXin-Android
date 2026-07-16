@@ -105,16 +105,18 @@ fun LocalInferenceScreen(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant
                 )
             ) {
-                Column(Modifier = Modifier.padding(16.dp)) {
+                Column(modifier = Modifier.padding(16.dp)) {
                     Text(
                         text = "Phase 6.1 · MNN 骨架（stub）",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
-                    Spacer(Modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "当前为接口 + stub 实现，不打包模型文件。" +
-                            "配置模型路径后可 load；真实 MNN so 见 docs/local-inference.md。",
+                        text = "总开关默认关闭；关闭时不 load so / 不占模型内存。" +
+                            "模型自备：轻量 0.5B/1.5B 或标准 7B Q4（16G 推荐）。" +
+                            "本地无 tool_call，记忆/KB 由 App 注入；插件 UI 照常可用。" +
+                            "真实 MNN so 见 docs/local-inference.md。",
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
@@ -128,7 +130,7 @@ fun LocalInferenceScreen(
                 Column(modifier = Modifier.weight(1f)) {
                     Text("启用本地推理", style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        "关闭时引擎保持 DISABLED",
+                        "默认关；关闭时不 load so，引擎 DISABLED",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -164,7 +166,7 @@ fun LocalInferenceScreen(
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("模型路径") },
                 supportingText = {
-                    Text("绝对路径或 stub://demo；大文件勿提交 git")
+                    Text("绝对路径或 stub://demo；轻量 0.5B/1.5B / 标准 7B Q4；大文件勿提交 git")
                 },
                 singleLine = true
             )
