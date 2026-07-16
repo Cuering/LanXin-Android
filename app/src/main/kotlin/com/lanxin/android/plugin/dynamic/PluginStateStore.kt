@@ -2,7 +2,6 @@ package com.lanxin.android.plugin.dynamic
 
 import java.io.File
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -80,7 +79,7 @@ class PluginStateStore(
             )
         }
         runCatching {
-            stateFile.writeText(json.encodeToString(JsonObject.serializer(), body), Charsets.UTF_8)
+            stateFile.writeText(body.toString(), Charsets.UTF_8)
         }
     }
 }
