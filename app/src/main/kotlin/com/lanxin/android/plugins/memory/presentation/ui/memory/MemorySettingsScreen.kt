@@ -271,7 +271,7 @@ fun MemorySettingsScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Button(
-                            onClick = { viewModel.showExportFormatDialog() },
+                            onClick = { /* export on list page */ },
                             modifier = Modifier.weight(1f)
                         ) {
                             Text("导出")
