@@ -16,6 +16,8 @@
 
 package com.lanxin.android.builtin.systemtools.presentation
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -57,6 +59,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.lanxin.android.builtin.systemtools.domain.NotesExportFormat
+import com.lanxin.android.builtin.systemtools.domain.NotesImportStrategy
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,7 +76,24 @@ fun SystemToolsScreen(
     val perms = state.permissions
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    // 从系统设置返回时刷新权限状态
+    val exportJsonLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        uri?.let { viewModel.exportNotesToUri(it.toString(), NotesExportFormat.JSON) }
+    }
+    val exportMdLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/markdown")
+    ) { uri ->
+        uri?.let { viewModel.exportNotesToUri(it.toString(), NotesExportFormat.MARKDOWN) }
+    }
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let {
+            viewModel.importNotesFromUri(it.toString(), NotesImportStrategy.MERGE)
+        }
+    }
+
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
@@ -123,20 +146,21 @@ fun SystemToolsScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "Phase 7.2 · 日历 + 闹钟 Intent",
+                        text = "Phase 7.3 · 日历 + 闹钟 + 笔记",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "日历：读 Instances（READ_CALENDAR）；写优先 INSERT Intent。" +
-                            "闹钟：setAlarmClock 默认；mode=intent 真 startActivity。" +
-                            "默认全关；写操作默认需 confirmed。",
+                        text = "日历：Instances 读 + INSERT Intent 写。" +
+                            "闹钟：setAlarmClock / Intent。" +
+                            "笔记：Room 持久化 CRUD + SAF 导出/导入。" +
+                            "默认全关；写/删需 confirmed。",
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "隐私：日历仅在授权后可读；闹钟不抢系统时钟 App；" +
+                        text = "隐私：笔记仅存应用私有库；SAF 由用户显式选文件；" +
                             "不修改系统分区、不在服务器下模型。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -144,7 +168,6 @@ fun SystemToolsScreen(
                 }
             }
 
-            // 权限状态
             Card {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
@@ -209,7 +232,7 @@ fun SystemToolsScreen(
             )
             SwitchRow(
                 title = "笔记",
-                description = "内置轻量笔记 stub；厂商笔记深度集成不做",
+                description = "Room 私有库 CRUD + SAF 导出/导入；无厂商笔记深度集成",
                 checked = config.notesEnabled,
                 onCheckedChange = viewModel::setNotes,
                 enabled = config.masterEnabled
@@ -223,10 +246,81 @@ fun SystemToolsScreen(
             )
             SwitchRow(
                 title = "写操作需确认",
-                description = "默认开；关则写工具可不带 confirmed（仍建议确认）",
+                description = "默认开；关则写工具可不带 confirmed（删仍需 EXPLICIT）",
                 checked = config.requireConfirmOnWrite,
                 onCheckedChange = viewModel::setRequireConfirm
             )
+
+            // 笔记能力状态 + SAF
+            Card {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "笔记能力状态",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = state.notesStatusLabel,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        text = "工具：note_create / list / append / update / delete / export / import",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                val stamp = LocalDateTime.now()
+                                    .format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))
+                                exportJsonLauncher.launch("lanxin_notes_$stamp.json")
+                            },
+                            enabled = state.notesEnabled || state.notesCount > 0,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("导出 JSON")
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                val stamp = LocalDateTime.now()
+                                    .format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))
+                                exportMdLauncher.launch("lanxin_notes_$stamp.md")
+                            },
+                            enabled = state.notesEnabled || state.notesCount > 0,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("导出 MD")
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Button(
+                            onClick = {
+                                importLauncher.launch(arrayOf("application/json", "text/*", "*/*"))
+                            },
+                            enabled = config.masterEnabled && config.notesEnabled,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("导入 JSON")
+                        }
+                        OutlinedButton(
+                            onClick = { viewModel.shareNotes(NotesExportFormat.JSON) },
+                            enabled = state.notesCount > 0,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("分享")
+                        }
+                    }
+                }
+            }
 
             Card {
                 Column(modifier = Modifier.padding(16.dp)) {

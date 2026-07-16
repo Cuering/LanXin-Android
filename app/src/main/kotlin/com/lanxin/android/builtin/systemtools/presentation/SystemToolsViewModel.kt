@@ -20,6 +20,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lanxin.android.builtin.systemtools.data.DeviceToolRegistry
 import com.lanxin.android.builtin.systemtools.domain.DeviceToolIds
+import com.lanxin.android.builtin.systemtools.domain.NotesCodec
+import com.lanxin.android.builtin.systemtools.domain.NotesExportFormat
+import com.lanxin.android.builtin.systemtools.domain.NotesImportStrategy
+import com.lanxin.android.builtin.systemtools.domain.NotesIoResult
+import com.lanxin.android.builtin.systemtools.domain.NotesSafGateway
+import com.lanxin.android.builtin.systemtools.domain.NotesStore
 import com.lanxin.android.builtin.systemtools.domain.SystemToolsConfig
 import com.lanxin.android.builtin.systemtools.domain.SystemToolsPermissionChecker
 import com.lanxin.android.builtin.systemtools.domain.SystemToolsPermissionStatus
@@ -36,6 +42,9 @@ data class SystemToolsUiState(
     val config: SystemToolsConfig = SystemToolsConfig(),
     val stubToolNames: List<String> = emptyList(),
     val permissions: SystemToolsPermissionStatus = SystemToolsPermissionStatus(),
+    val notesCount: Int = 0,
+    val notesEnabled: Boolean = false,
+    val notesStatusLabel: String = "未启用",
     val snackbarMessage: String? = null,
     val isBusy: Boolean = false
 )
@@ -44,7 +53,9 @@ data class SystemToolsUiState(
 class SystemToolsViewModel @Inject constructor(
     private val settings: SystemToolsSettings,
     private val registry: DeviceToolRegistry,
-    private val permissionChecker: SystemToolsPermissionChecker
+    private val permissionChecker: SystemToolsPermissionChecker,
+    private val notesStore: NotesStore,
+    private val notesSaf: NotesSafGateway
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -60,11 +71,16 @@ class SystemToolsViewModel @Inject constructor(
         viewModelScope.launch {
             val perms = runCatching { permissionChecker.check() }
                 .getOrDefault(SystemToolsPermissionStatus())
+            val config = settings.getConfig()
+            val count = runCatching { notesStore.count() }.getOrDefault(0)
             _uiState.update {
                 it.copy(
-                    config = settings.getConfig(),
+                    config = config,
                     stubToolNames = registry.names().sorted(),
                     permissions = perms,
+                    notesCount = count,
+                    notesEnabled = config.masterEnabled && config.notesEnabled,
+                    notesStatusLabel = buildNotesStatus(config, count),
                     isBusy = false
                 )
             }
@@ -95,6 +111,109 @@ class SystemToolsViewModel @Inject constructor(
         _uiState.update { it.copy(snackbarMessage = "已打开精确闹钟设置") }
     }
 
+    /** 设置页 CreateDocument 选中 Uri 后调用：导出 JSON。 */
+    fun exportNotesToUri(uriString: String, format: NotesExportFormat = NotesExportFormat.JSON) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isBusy = true) }
+            try {
+                val notes = notesStore.list(500)
+                val payload = when (format) {
+                    NotesExportFormat.JSON -> NotesCodec.toJsonBundle(notes)
+                    NotesExportFormat.MARKDOWN -> NotesCodec.toMarkdown(notes)
+                }
+                val mime = when (format) {
+                    NotesExportFormat.JSON -> "application/json"
+                    NotesExportFormat.MARKDOWN -> "text/markdown"
+                }
+                when (val r = notesSaf.writeText(uriString, payload, mime)) {
+                    is NotesIoResult.Ok -> _uiState.update {
+                        it.copy(
+                            isBusy = false,
+                            snackbarMessage = "已导出 ${notes.size} 条笔记（${r.bytes} 字节）"
+                        )
+                    }
+                    is NotesIoResult.Error -> _uiState.update {
+                        it.copy(isBusy = false, snackbarMessage = "导出失败：${r.message}")
+                    }
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(isBusy = false, snackbarMessage = "导出失败：${e.message}")
+                }
+            }
+        }
+    }
+
+    /** 设置页 OpenDocument 选中 Uri 后调用：merge 导入。 */
+    fun importNotesFromUri(
+        uriString: String,
+        strategy: NotesImportStrategy = NotesImportStrategy.MERGE
+    ) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isBusy = true) }
+            try {
+                when (val r = notesSaf.readText(uriString)) {
+                    is NotesIoResult.Error -> {
+                        _uiState.update {
+                            it.copy(isBusy = false, snackbarMessage = "导入失败：${r.message}")
+                        }
+                        return@launch
+                    }
+                    is NotesIoResult.Ok -> {
+                        val parsed = NotesCodec.parseJsonBundle(r.message)
+                        if (strategy == NotesImportStrategy.REPLACE) {
+                            notesStore.clearAll()
+                        }
+                        val written = notesStore.upsertAll(parsed)
+                        val count = notesStore.count()
+                        val config = settings.getConfig()
+                        _uiState.update {
+                            it.copy(
+                                isBusy = false,
+                                notesCount = count,
+                                notesStatusLabel = buildNotesStatus(config, count),
+                                snackbarMessage = "已导入 $written 条，当前共 $count 条"
+                            )
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(isBusy = false, snackbarMessage = "导入失败：${e.message}")
+                }
+            }
+        }
+    }
+
+    fun shareNotes(format: NotesExportFormat = NotesExportFormat.JSON) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isBusy = true) }
+            try {
+                val notes = notesStore.list(500)
+                val payload = when (format) {
+                    NotesExportFormat.JSON -> NotesCodec.toJsonBundle(notes)
+                    NotesExportFormat.MARKDOWN -> NotesCodec.toMarkdown(notes)
+                }
+                val mime = when (format) {
+                    NotesExportFormat.JSON -> "application/json"
+                    NotesExportFormat.MARKDOWN -> "text/markdown"
+                }
+                when (val r = notesSaf.shareText(payload, mime)) {
+                    is NotesIoResult.Ok -> _uiState.update {
+                        it.copy(isBusy = false, snackbarMessage = r.message)
+                    }
+                    is NotesIoResult.Error -> _uiState.update {
+                        it.copy(isBusy = false, snackbarMessage = "分享失败：${r.message}")
+                    }
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(isBusy = false, snackbarMessage = "分享失败：${e.message}")
+                }
+            }
+        }
+    }
+
     fun clearSnackbar() {
         _uiState.update { it.copy(snackbarMessage = null) }
     }
@@ -105,10 +224,15 @@ class SystemToolsViewModel @Inject constructor(
             block()
             val perms = runCatching { permissionChecker.check() }
                 .getOrDefault(SystemToolsPermissionStatus())
+            val config = settings.getConfig()
+            val count = runCatching { notesStore.count() }.getOrDefault(0)
             _uiState.update {
                 it.copy(
-                    config = settings.getConfig(),
+                    config = config,
                     permissions = perms,
+                    notesCount = count,
+                    notesEnabled = config.masterEnabled && config.notesEnabled,
+                    notesStatusLabel = buildNotesStatus(config, count),
                     isBusy = false,
                     snackbarMessage = "已保存"
                 )
@@ -116,8 +240,17 @@ class SystemToolsViewModel @Inject constructor(
         }
     }
 
+    private fun buildNotesStatus(config: SystemToolsConfig, count: Int): String {
+        return when {
+            !config.masterEnabled -> "总开关关闭"
+            !config.notesEnabled -> "笔记能力关闭"
+            else -> "已启用 · Room 持久化 · $count 条"
+        }
+    }
+
     companion object {
         val DOC_TOOL_COUNT = DeviceToolIds.ALL.size
         val M1_COUNT = DeviceToolIds.M1_STUB_READY.size
+        val NOTES_COUNT = DeviceToolIds.NOTES_READY.size
     }
 }

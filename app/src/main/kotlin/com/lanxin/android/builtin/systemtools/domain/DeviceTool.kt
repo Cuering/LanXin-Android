@@ -54,6 +54,10 @@ object DeviceToolIds {
     const val NOTE_CREATE = "note_create"
     const val NOTE_LIST = "note_list"
     const val NOTE_APPEND = "note_append"
+    const val NOTE_UPDATE = "note_update"
+    const val NOTE_DELETE = "note_delete"
+    const val NOTE_EXPORT = "note_export"
+    const val NOTE_IMPORT = "note_import"
     const val FILE_PICK = "file_pick"
     const val FILE_LIST = "file_list"
     const val FILE_READ_TEXT = "file_read_text"
@@ -68,6 +72,10 @@ object DeviceToolIds {
         NOTE_CREATE,
         NOTE_LIST,
         NOTE_APPEND,
+        NOTE_UPDATE,
+        NOTE_DELETE,
+        NOTE_EXPORT,
+        NOTE_IMPORT,
         FILE_PICK,
         FILE_LIST,
         FILE_READ_TEXT,
@@ -75,7 +83,7 @@ object DeviceToolIds {
         FILE_SHARE
     )
 
-    /** 本 PR skeleton 已接线 stub 的工具。 */
+    /** Phase 7.1+ 已接线工具（含 7.2 日历/闹钟、7.3 笔记）。 */
     val M1_STUB_READY: Set<String> = setOf(
         ALARM_SET,
         ALARM_SHOW,
@@ -83,6 +91,21 @@ object DeviceToolIds {
         CALENDAR_CREATE_EVENT,
         NOTE_CREATE,
         NOTE_LIST,
-        NOTE_APPEND
+        NOTE_APPEND,
+        NOTE_UPDATE,
+        NOTE_DELETE,
+        NOTE_EXPORT,
+        NOTE_IMPORT
+    )
+
+    /** 7.3 笔记工具集合。 */
+    val NOTES_READY: Set<String> = setOf(
+        NOTE_CREATE,
+        NOTE_LIST,
+        NOTE_APPEND,
+        NOTE_UPDATE,
+        NOTE_DELETE,
+        NOTE_EXPORT,
+        NOTE_IMPORT
     )
 }

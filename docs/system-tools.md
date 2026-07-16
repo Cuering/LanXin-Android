@@ -1,6 +1,6 @@
 # Phase 7 — System Tools / Device Skills
 
-> 状态：**7.1 骨架 ✅** · **7.2 闹钟 Intent + 日历读/写 🚧**（`feat/phase7.2-calendar-alarm`）  
+> 状态：**7.1 骨架 ✅** · **7.2 闹钟 Intent + 日历读/写 ✅** · **7.3 笔记 Room + SAF 🚧**（`feat/phase7.3-notes`）  
 > 模块：`builtin/systemtools` + `app/.../builtin/systemtools/*`  
 > 产品线：**桌宠 + 操控手机 = 陪伴操控一体**（与 Phase 6 VoiceSession 同一会话，非旁路 App）  
 > 与 ChatRouter `needsTools`、桌宠 VoiceSession、MCP 共用统一 `DeviceTool` 契约。
@@ -13,7 +13,7 @@
 |----|------|----------|
 | **Calendar** | 读即将到来的事件 / 写简单事件 | 读：`CalendarContract.Instances`（`READ_CALENDAR`）；写：**优先 INSERT Intent**（`Events.CONTENT_URI`），`mode=stub` 内存 |
 | **Alarm** | 设置精确闹钟 / Intent 设系统闹钟 / 打开闹钟列表 | **默认** `AlarmManager.setAlarmClock`；`mode=intent` → **`startActivity(SET_ALARM)`**；`alarm_show` → **`startActivity(SHOW_ALARMS)`** |
-| **Notes** | 创建 / 列表 / 追加 | Android **无统一系统笔记 API** → 内置轻量笔记 + 可选 `CREATE_DOCUMENT` / 分享 Intent |
+| **Notes** | CRUD / 导出 / 导入 | Android **无统一系统笔记 API** → **Room 私有库** + SAF `CREATE_DOCUMENT` / `OpenDocument` / 分享 Intent |
 | **User File** | 列表 / 读文本 / 写 / 分享 / 删 | **仅用户可访问文件**：SAF + MediaStore + `getExternalFilesDir`；禁止 root / 改 `/system` |
 
 ### 一体工作流（听 → 想 → 办 → 说）
@@ -48,6 +48,8 @@ DeviceToolGate
 CalendarGateway ──► AndroidCalendarReader (Instances + INSERT Intent) | StubCalendarGateway
 AlarmClockGateway ──► AndroidAlarmSetter (setAlarmClock) | Fake
 SystemToolsIntentLauncher ──► AndroidSystemToolsIntentLauncher (startActivity)
+NotesStore ──► RoomNotesStore | StubNotesStore
+NotesSafGateway ──► AndroidNotesSafGateway (SAF write/read + share)
 
 SystemToolsPlugin (LanXinPlugin)
     └── registerTool → MCP / Chat tool_call
@@ -62,10 +64,11 @@ app/src/main/kotlin/com/lanxin/android/builtin/systemtools/
 │   ├── DeviceModels.kt
 │   ├── DeviceTool.kt
 │   ├── DeviceToolGate.kt
-│   ├── AlarmIntentBuilder.kt      # AlarmClock Intent 规格
-│   ├── CalendarIntentBuilder.kt   # INSERT 日历事件 Intent 规格
+│   ├── AlarmIntentBuilder.kt
+│   ├── CalendarIntentBuilder.kt
 │   ├── AlarmClockGateway.kt
-│   ├── CalendarGateway.kt         # list + create 结果密封类
+│   ├── CalendarGateway.kt
+│   ├── NotesStore.kt              # NotesStore + NotesCodec + NotesSafGateway
 │   ├── SystemToolsIntentLauncher.kt
 │   ├── SystemToolsPermissionStatus.kt
 │   └── SystemToolsSettings.kt
@@ -75,21 +78,27 @@ app/src/main/kotlin/com/lanxin/android/builtin/systemtools/
 │   ├── AndroidSystemToolsIntentLauncher.kt
 │   ├── AndroidSystemToolsPermissionChecker.kt
 │   ├── StubCalendarGateway.kt
-│   ├── StubNotesStore.kt
+│   ├── StubNotesStore.kt          # 内存 NotesStore（单测）
 │   ├── StubDeviceTools.kt
-│   └── SystemToolsPreferences.kt
+│   ├── SystemToolsPreferences.kt
+│   └── notes/
+│       ├── NoteEntity.kt
+│       ├── NoteDao.kt
+│       ├── NotesDatabase.kt
+│       ├── RoomNotesStore.kt
+│       └── AndroidNotesSafGateway.kt
 ├── receiver/
 │   └── SystemToolsAlarmReceiver.kt
 ├── di/
 │   └── SystemToolsModule.kt
 └── presentation/
-    ├── SystemToolsScreen.kt       # 设置 + 权限状态/引导
+    ├── SystemToolsScreen.kt       # 设置 + 权限 + 笔记状态/SAF 导入导出
     └── SystemToolsViewModel.kt
 ```
 
 ## 3. 工具清单
 
-### 已实现（7.1 + 7.2）
+### 已实现（7.1 + 7.2 + 7.3）
 
 | 工具 | 副作用 | 确认 | 说明 |
 |------|--------|------|------|
@@ -97,41 +106,45 @@ app/src/main/kotlin/com/lanxin/android/builtin/systemtools/
 | `alarm_show` | LAUNCH_INTENT | 否 | **真 startActivity SHOW_ALARMS** |
 | `calendar_list_upcoming` | READ | 否 | `CalendarContract.Instances`；无权限 → Denied |
 | `calendar_create_event` | WRITE | 是* | **默认 INSERT Intent**；`mode=stub` 内存写入 |
-| `note_create` | WRITE | 是* | 内存笔记 |
-| `note_list` | READ | 否 | 列表 |
-| `note_append` | WRITE | 是* | 追加 |
+| `note_create` | WRITE | 是* | Room 创建 |
+| `note_list` | READ | 否 | 列表（倒序） |
+| `note_append` | WRITE | 是* | 追加正文 |
+| `note_update` | WRITE | 是* | 覆盖标题/正文 |
+| `note_delete` | DELETE | **始终** | `EXPLICIT_APPROVE` |
+| `note_export` | WRITE | 是* | `mode=share|saf|preview`；`format=json|markdown` |
+| `note_import` | WRITE | 是* | `uri` 或 `json_text`；`strategy=merge|replace` |
 
-\* 当设置「写操作需确认」开启（默认）时，须 `confirmed=true`（经 `DeviceToolGate`）。
+\* 当设置「写操作需确认」开启（默认）时，须 `confirmed=true`（经 `DeviceToolGate`）。  
+删除始终需 `confirmed=true`。
 
 ### 规划（后续）
 
 | 工具 | 阶段 | 说明 |
 |------|------|------|
-| `file_*` | 7.4 | SAF |
-| （删除） | 7.4 | 必须 `EXPLICIT_APPROVE` |
+| `file_*` | 7.4 | SAF 用户目录 |
 
 ## 4. 里程碑
 
 | 阶段 | 内容 | 状态 |
 |------|------|------|
 | **7.1 骨架** | DeviceTool + 门闸 + Stub + 设置 | ✅ |
-| **7.2 闹钟 + 日历** | Intent 真启动 + setAlarmClock；日历 Instances + INSERT Intent + 确认流 + 权限引导 | 🚧 本 PR |
-| **7.3 笔记** | 应用内笔记 CRUD | 🔜 |
+| **7.2 闹钟 + 日历** | Intent 真启动 + setAlarmClock；日历 Instances + INSERT Intent + 确认流 + 权限引导 | ✅ |
+| **7.3 笔记** | Room CRUD + SAF 导出/导入 + 设置状态 | 🚧 本 PR |
 | **7.4 文件** | SAF | 🔜 |
 | **7.5 一体接入** | ChatRouter + VoiceSession tool 钩子 | 🔜 |
 | **7.6 打磨** | UX / 审计 | 🔜 |
 
-### 7.2 交付清单
+### 7.3 交付清单
 
-- [x] `CalendarGateway` + `AndroidCalendarReader`（Instances，无权限不崩溃）
-- [x] `CalendarIntentBuilder` + create → **INSERT Intent startActivity**
-- [x] `AlarmClockGateway` + `AndroidAlarmSetter`（setAlarmClock + Receiver）
-- [x] `SystemToolsIntentLauncher`：alarm_set(mode=intent) / alarm_show **真启动**
-- [x] 写操作经 `DeviceToolGate.confirmed`
-- [x] 设置页日历 / 精确闹钟权限状态 + 跳转
-- [x] Manifest：`READ_CALENDAR` + Receiver
-- [x] 单测：AlarmSetter / Calendar create intent / Gate 确认流
-- [x] 文档 + CI surface check
+- [x] `NotesStore` 接口 + `RoomNotesStore`（`lanxin_system_notes.db`）
+- [x] `StubNotesStore` 实现同一接口（单测）
+- [x] `note_create` / `list` / `append` / `update` / `delete`
+- [x] `note_export`（share / SAF uri / preview）+ `note_import`（uri / json_text）
+- [x] `NotesCodec` JSON/Markdown 编解码（无 Android 依赖）
+- [x] `AndroidNotesSafGateway` + 设置页 CreateDocument / OpenDocument
+- [x] 设置页笔记能力状态（开关 + 条数 + 导入导出按钮）
+- [x] 单测：CRUD / Codec / Gate 确认 / 导入导出 Fake SAF
+- [x] 文档 + CI surface check（7.3 路径）
 
 ## 5. 权限表
 
@@ -141,15 +154,17 @@ app/src/main/kotlin/com/lanxin/android/builtin/systemtools/
 | 闹钟 Intent | 无 | 7.2 | startActivity |
 | 读日历 | `READ_CALENDAR` | 7.2 | Denied 不崩溃 |
 | 写日历 | **Intent INSERT**（默认） | 7.2 | 不申请 WRITE_CALENDAR |
-| 笔记 | 私有 stub | stub | |
-| 用户文件 | SAF | 未实现 | |
+| 笔记 | 应用私有 Room | 7.3 | 无额外权限 |
+| 笔记 SAF | CreateDocument / OpenDocument | 7.3 | 用户显式选文件 |
+| 用户文件 | SAF | 未实现 | 7.4 |
 
 ## 6. 隐私与安全
 
 1. **默认全关**：总开关 + 分项。
-2. **写/删需确认**：`DeviceToolGate` + `confirmed`。
+2. **写/删需确认**：`DeviceToolGate` + `confirmed`；删除 `EXPLICIT_APPROVE`。
 3. **禁止**：root、改系统分区、无障碍乱点、静默扫敏感路径。
 4. **不下模型**。
+5. **笔记不落公有存储**，仅 Room + 用户主动 SAF。
 
 ## 7. 配置键（DataStore）
 
@@ -172,11 +187,12 @@ app/src/main/kotlin/com/lanxin/android/builtin/systemtools/
 - `CalendarListUpcomingStubTest`（list / create intent / stub / Denied）
 - `DeviceToolGateTest`（开关 + 确认流）
 - `DeviceToolIdsTest` / `SystemToolsConfigTest`
+- `NotesStoreTest`（CRUD / Codec / Gate / export-import）
 
 ## 9. 明确不做（本 PR）
 
-- 笔记 CRUD 持久化（7.3）
-- 用户文件 SAF（7.4）
+- 用户文件 SAF 通用管理（7.4）
 - VoiceSession 一体接入（7.5）
 - WRITE_CALENDAR ContentProvider 直写
+- 厂商笔记 App 私有协议
 - 服务器下载 / auto-merge
