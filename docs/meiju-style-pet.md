@@ -1,10 +1,13 @@
-# 妹居风格桌宠 + 语音会话（Phase 6 主线 M1）
+# 妹居风格桌宠 + 语音会话（Phase 6 主线）
 
-> 分支：`feat/phase6-pet-voice-session`  
-> 状态：**M1 骨架（悬浮层 + WebView 占位 + Bridge + VoiceSession 状态机 + stub TTS/回复）**  
+> 分支：`feat/phase6-pet-m2-engines`（M2a）  
+> 状态：**M1 ✅ 已合 main**（#48）· **M2a 🚧 路径闭环 + 设置就绪体验**  
 > 参考包（**仅本机分析，禁止入库**）：`/AstrBot/data/workspaces/妹居2.2.2版本.apk`
 
 ## 1. 产品主线
+
+> **与 Phase 7 交叉：** 桌宠 VoiceSession 与系统工具（日历/闹钟/笔记/文件）合并为 **「陪伴操控一体」**——感官在桌宠，行动在 ToolRegistry。见 `ARCHITECTURE.md` Phase 7.4、`docs/system-tools.md`。
+
 
 **不要**优先做「文本 Chat 按住说话填输入框」。
 
@@ -20,83 +23,84 @@ Live2D/占位桌宠  +  语音听/说  +  对话  +  （后续）场景感知
 IDLE → LISTENING → THINKING → SPEAKING → IDLE
 ```
 
-- 输入：ASR 文本（M1 可 stub）
-- 思考：`PetChatResponder`（stub；后续 ChatRouter / 云端）
+- 输入：ASR 文本（M1/M2a 可 stub；真引擎 M2c）
+- 思考：`PetChatResponder`（stub；后续 ChatRouter / 云端 / 本地 1.5B）
 - 输出：TTS + **桌宠气泡**（**不**塞 Chat 输入框）
 
-## 2. 妹居 2.2.2 → 兰心 映射
+## 2. 阶段状态
 
-| 妹居（APK 观察） | 兰心 M1 | 备注 |
-|------------------|---------|------|
+| 阶段 | 内容 | 状态 |
+|------|------|------|
+| **M1** | 悬浮层 + WebView 占位 + Bridge + VoiceSession + stub TTS | ✅ main `#48` |
+| **M2a** | 真资源路径闭环 + 设置「已就绪/缺失」+ fetch 脚本文案 + 本地脑 1.5B 键说明 | 🚧 本分支 |
+| **M2b** | Live2D 真显示（WebView 加载 model3，失败降级） | 后续 |
+| **M2c** | sherpa ASR/TTS 可 load 文件则 READY（无 so 仍 stub） | 后续 |
+| **M3** | 真 TTS + 口型 | 后续 |
+| **M4** | 自有/授权 Live2D | 后续 |
+| **M5** | 场景感知（显式授权） | 后续 |
+
+## 3. M2a 交付
+
+### 3.1 路径就绪
+
+- `PetPathReadiness`：Live2D 文件 / ASR·TTS 非空目录 / `stub://` → **已就绪**
+- 空或无效 → **未就绪 / 路径无效**，明细指向 `scripts/fetch-debug-assets.sh`
+- Debug 自动解析优先级：用户配置 → `filesDir/debug-assets/**`（开源）→ `meiju-ref/**`（仅本机）
+
+### 3.2 设置页
+
+- 展示 Live2D / ASR / TTS 来源标签 + 就绪短标签
+- 缺失时按钮文案说明跑 **GitHub 仓库脚本**（**不在 App / AstrBot 服务器下载**）
+- 预留 `local_inference_model_path` 与 **Qwen2.5-1.5B** 说明（链 `docs/local-inference.md`）
+
+### 3.3 脚本
+
+| 脚本 | 说明 |
+|------|------|
+| `scripts/fetch-debug-assets.sh` | M2 推荐入口（封装 `download-debug-assets.sh`） |
+| `scripts/download-debug-assets.sh` | 一键 Live2D + ASR + TTS |
+| 分项 `download-debug-live2d/asr/tts.sh` | 同上 |
+
+**硬性**：下载只在开发者机器或按需 CI；禁止 AstrBot 服务器 `/data/download` 当交付。
+
+## 4. 妹居 2.2.2 → 兰心 映射
+
+| 妹居（APK 观察） | 兰心 | 备注 |
+|------------------|------|------|
 | `assets/desktop-pet.html` + Pixi Live2D | `assets/pet/desktop-pet.html` 自有占位 | **重写**，不复制商业资源 |
-| `FloatingWindowManager` / `AndroidDesktopPet` | `FloatingPetService` + WindowManager | 需 `SYSTEM_ALERT_WINDOW` |
-| `DesktopPetBridge` | `DesktopPetBridge` `@JavascriptInterface` | 命名对齐概念 |
-| `AndroidVoiceBridge` / `RealtimeVoiceBridge` | `AndroidVoiceBridge` | start/stop/getPhase |
-| Sherpa ASR so（assets/tts 路径下） | 复用 6.4 `AsrEngine` / stub | M2 真接入 |
-| Bert-VITS2 + `libbertvits2.so` | `TtsEngine` + `StubTtsEngine` | M3 真接入 |
-| MNN 本地脑 | 已有 6.1–6.3 LocalLlm + ChatRouter | 思考阶段可后续接 |
-| `sister_android.json` 人设结构 | stub 短句回复；自有人设 | **禁止**抄商业角色全文 |
-| `assets/assets/L2D/**` moc3 | 不提交；M4 自有/授权模型 | 红线 |
-| UsageStats / 截屏 | 接口预留 | M5 / 6.7 |
+| `FloatingWindowManager` | `FloatingPetService` | `SYSTEM_ALERT_WINDOW` |
+| `DesktopPetBridge` / `AndroidVoiceBridge` | 同名 Bridge | M1 |
+| Sherpa ASR | 6.4 `AsrEngine` + 路径就绪 M2a | M2c 真 load |
+| Bert-VITS2 | `TtsEngine` + stub | M3 |
+| MNN 本地脑 | 6.1–6.3；默认选型 **1.5B** | 权重自备 |
+| 商业 L2D / 人设 | **禁止入库** | 红线 |
 
-## 3. 模块边界
+## 5. 模块边界
 
 ```
 builtin/pet/          overlay + web assets + bridge + VoiceSession*
 app/.../builtin/pet/
-  domain/             VoiceSessionStateMachine / Coordinator / BridgeProtocol
+  domain/             StateMachine / Coordinator / PathReadiness / DebugOpenSourcePaths
   data/               FloatingPetService / Bridges / PetPreferences
-  di/                 PetModule
   presentation/       DesktopPetScreen / ViewModel
 
-builtin/voice/        6.4 ASR + M1 TtsEngine / StubTtsEngine
+builtin/voice/        ASR + TtsEngine / StubTtsEngine
 ```
 
-## 4. 产品规则
+## 6. 产品规则
 
 1. `desktop_pet_enabled` **默认 `false`**
 2. 关闭：不启 Service、不跑会话、不打开麦克风
-3. 悬浮权限：设置页显式引导，不偷偷弹
+3. 悬浮权限：设置页显式引导
 4. **不**后台偷录、**不**偷偷截屏
-5. 会话结果只走桌宠气泡 / Bridge，**不**作为主路径写入 Chat 输入框
+5. 会话结果只走桌宠气泡，**不**作主路径写入 Chat 输入框
+6. 模型目录：App `filesDir` / `externalFiles`，不进系统目录
 
-## 5. 资源红线
+## 7. 资源红线
 
-- **禁止**把妹居 APK 内 so / 模型 / moc3 / wav / 商业人设 **提交进 git**
-- 可：文档记录结构、接口名；自有 HTML；stub 引擎；本机 `unzip -l` 学习
-- `.gitignore` 已覆盖 `*.mnn` / ASR 模型等
-
-### 5.1 Debug 默认走开源（非妹居）
-
-真机/集成测试资源请用官方/开源栈，**不要**默认依赖妹居解包：
-
-| 能力 | 推荐 | 脚本 |
-|------|------|------|
-| Live2D | Niziiro Mao / Haru（Live2D Sample） | `scripts/download-debug-live2d.sh` |
-| ASR | sherpa-onnx zipformer zh-14M | `scripts/download-debug-asr.sh` |
-| TTS | matcha-baker / melo（sherpa-onnx） | `scripts/download-debug-tts.sh` |
-
-一键：`bash scripts/download-debug-assets.sh`  
-完整许可、体积、路径约定：[`docs/debug-assets.md`](./debug-assets.md)
-
-妹居 APK **仅**本机架构对照；设置页与脚本默认路径全部指向 `debug-assets/`。
-
-## 6. 设置入口
-
-设置 → **桌宠 / 语音陪伴**
-
-- 总开关 / 悬浮权限 / 启动·停止桌宠
-- 会话状态预览
-- 试运行：stub 一轮「听→想→说」
-
-## 7. 下一刀
-
-| 阶段 | 内容 |
-|------|------|
-| **M2** | 真 ASR 接到 VoiceSession（Sherpa，复用 6.4） |
-| **M3** | 真 TTS（Bert-VITS2 风格）+ 口型驱动 WebView |
-| **M4** | 自有/授权 Live2D 替换占位 |
-| **M5** | 场景感知（UsageStats / 截屏，显式授权） |
+- **禁止**妹居 so / moc3 / mnn / wav / 商业人设 **提交 git**
+- **禁止**在 AstrBot 服务器 curl 模型当交付
+- Debug 走开源：Live2D Mao + sherpa ASR/TTS → `docs/debug-assets.md`
 
 ## 8. 单测
 
@@ -106,9 +110,9 @@ builtin/voice/        6.4 ASR + M1 TtsEngine / StubTtsEngine
   --tests "com.lanxin.android.builtin.voice.StubTtsEngineTest"
 ```
 
-## 9. 非目标（M1）
+## 9. 非目标（M2a）
 
-- 提交妹居 so / 模型 / L2D
-- 真截屏 UsageStats
-- 完整 Bert-VITS2 / 真 Sherpa 接入
-- 复制妹居 Yuki 等商业人设全文
+- 真 Live2D 渲染（M2b）
+- 真 sherpa so 接入（M2c）
+- 提交大权重 / 妹居资源
+- auto-merge / force-push main

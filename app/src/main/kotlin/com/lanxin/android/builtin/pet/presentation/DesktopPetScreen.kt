@@ -85,12 +85,8 @@ fun DesktopPetScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
     }
 
-    LaunchedEffect(state.live2dModelPathConfigured, state.ttsModelDirResolved, state.ttsReferenceResolved) {
-        // 仅在外部刷新时同步 draft（用户正在编辑时不强制覆盖已有输入）
+    LaunchedEffect(state.live2dModelPathConfigured) {
         if (live2dDraft.isEmpty()) live2dDraft = state.live2dModelPathConfigured
-        if (ttsDirDraft.isEmpty() && state.ttsModelDirResolved.isNotBlank()) {
-            // 展示 resolved 仅作 hint；保存时写配置
-        }
     }
 
     LaunchedEffect(state.snackbarMessage) {
@@ -125,7 +121,7 @@ fun DesktopPetScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                "妹居级体验骨架：路径配置一等公民 + 语音会话状态机。默认关，不偷偷录音/截屏。",
+                "M2a：路径就绪闭环 + 设置体验。默认关，不偷偷录音/截屏；资源仅开发者机/脚本拉取。",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -161,32 +157,68 @@ fun DesktopPetScreen(
                 }
             }
 
-            // 资源路径 + 来源标注（勿宣传为可分发）
+            // 资源路径就绪
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("资源路径", fontWeight = FontWeight.SemiBold)
+                    Text("资源路径与就绪状态", fontWeight = FontWeight.SemiBold)
                     Text(
                         state.live2dSourceLabel,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
                     Text(
-                        "TTS：${state.ttsSourceLabel} · ASR：${state.asrSourceLabel}",
+                        "Live2D：${state.live2dReadyLabel}" +
+                            if (state.live2dReady) " ✓" else "",
                         style = MaterialTheme.typography.bodySmall
                     )
+                    Text(
+                        "ASR：${state.asrSourceLabel} · ${state.asrReadyLabel}" +
+                            if (state.asrReady) " ✓" else "",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                        "TTS：${state.ttsSourceLabel} · ${state.ttsReadyLabel}" +
+                            if (state.ttsReady) " ✓" else "",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    if (state.resourceSummary.isNotBlank()) {
+                        Text(
+                            state.resourceSummary,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    val anyMissing = !state.live2dReady || !state.asrReady || !state.ttsReady
+                    if (anyMissing) {
+                        OutlinedButton(onClick = viewModel::showFetchAssetsHint) {
+                            Text("如何拉取资源（fetch-debug-assets.sh）")
+                        }
+                        Text(
+                            "仅文档/文案指向 GitHub 脚本；App 与 AstrBot 服务器不下载模型。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                    } else {
+                        Text(
+                            "路径均已就绪（引擎 so 可后续接；本阶段不强制真推理）。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
                     if (state.isDebugBuild) {
                         Text(
-                            "Debug：若 filesDir/meiju-ref 存在约定资源则自动选用；" +
-                                "妹居 so/moc3/mnn/wav 仅本地，禁止入库与分发。",
+                            "Debug：filesDir/debug-assets 存在则自动选用开源包；" +
+                                "妹居 so/moc3 仅本机旁路，禁止入库。",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     } else {
                         Text(
-                            "Release：不依赖妹居资源；路径空则占位。",
+                            "Release：不依赖默认大模型；路径空则占位。",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -245,6 +277,30 @@ fun DesktopPetScreen(
                     }
                     Text(
                         "换 Live2D / TTS / ASR 只改设置项，不改 VoiceSession 状态机。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            // 本地脑预留
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("本地脑（预留）", fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "键：local_inference_model_path · 状态：${state.localLlmReadyLabel}",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                        "当前配置：" +
+                            state.localLlmPathConfigured.ifBlank { "（空）" },
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                        state.localLlmHint,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
