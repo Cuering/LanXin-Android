@@ -129,7 +129,7 @@ class PluginManagerViewModelTest {
         assertEquals(1, state.records.size)
         assertEquals("compiled.a", state.records.single().id)
         assertTrue(state.snackbarMessage!!.contains("已卸载"))
-        assertTrue(catalog.unloadedIds.contains("dyn.b"))
+        assertTrue(catalog.unloadedIds.containsKey("dyn.b"))
     }
 
     @Test
