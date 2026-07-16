@@ -206,7 +206,7 @@ fun SettingScreen(
 
             SettingItem(
                 title = "本地推理",
-                description = "端侧 MNN 骨架：启用开关、模型路径、load stub",
+                description = "默认关；0.5B/1.5B 或 7B Q4；无 tool_call，记忆/KB 注入",
                 onItemClick = onNavigateToLocalInference,
                 showTrailingIcon = true,
                 showLeadingIcon = false
