@@ -19,7 +19,7 @@ package com.lanxin.android.builtin.localinference.domain
 /**
  * Chat 完成路径上的本地 fallback 决策辅助（纯逻辑，JVM 可测）。
  *
- * 与 [InferenceRouteSelector] 配合：Repository 在 completeChat 入口调用。
+ * 与 [ChatRouter] / [InferenceRouteCoordinator] 配合：Repository 在 completeChat 入口调用。
  */
 object ChatLocalFallback {
 
@@ -47,7 +47,10 @@ object ChatLocalFallback {
     fun unavailableMessage(decision: InferenceRouteDecision, networkAvailable: Boolean): String {
         return when {
             !networkAvailable -> InferenceRouteCoordinator.OFFLINE_LOCAL_UNAVAILABLE_MESSAGE
-            decision.reason == "no_provider" -> InferenceRouteCoordinator.NO_PROVIDER_MESSAGE
+            decision.reason == RouteReason.OFFLINE_LOCAL_UNAVAILABLE ->
+                InferenceRouteCoordinator.OFFLINE_LOCAL_UNAVAILABLE_MESSAGE
+            decision.reason == RouteReason.NO_PROVIDER ->
+                InferenceRouteCoordinator.NO_PROVIDER_MESSAGE
             else -> InferenceRouteCoordinator.NO_PROVIDER_MESSAGE
         }
     }

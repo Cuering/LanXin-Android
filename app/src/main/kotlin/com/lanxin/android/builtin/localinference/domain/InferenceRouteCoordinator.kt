@@ -20,12 +20,15 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Phase 6.2 路由协调：把设置 / 引擎就绪 / 网络状态接到 [InferenceRouteSelector]。
+ * Phase 6.3 ChatRouter 运行时门面：收集设置 / 引擎就绪 / 网络，委托 [ChatRouter]。
  *
  * 产品边界：
  * - `local_inference_enabled` 关 → 引擎不会 ready → 永不走本地
- * - 仅 **引擎 ready（已 load）** 才算 localAvailable
+ * - 仅 **引擎 ready（已 load）** 才算 localReady
+ * - **needsTools** → 优先云端（本地无 tool_call）
  * - 无网时 cloudAvailable=false；有网默认云端（preferLocal 且 ready 时本地）
+ *
+ * 保留类名以兼容 6.2 DI / 调用方；语义上即 ChatRouter Coordinator。
  */
 @Singleton
 class InferenceRouteCoordinator @Inject constructor(
@@ -37,29 +40,34 @@ class InferenceRouteCoordinator @Inject constructor(
     /**
      * 计算当前推理路由。
      *
+     * @param needsTools 本轮是否需要 tool_call / MCP 工具链
      * @param forceCloudAvailable 覆盖「云端是否可选」；默认随网络。
      *        传入 false 可模拟仅本地候选（测试 / 预览）。
      */
     suspend fun decide(
+        needsTools: Boolean = false,
         forceCloudAvailable: Boolean? = null
     ): InferenceRouteDecision {
         val networkOk = networkStatusProvider.isNetworkAvailable()
         val preferLocal = settings.isPreferLocal()
         val localReady = engine.isReady
         val cloudAvailable = forceCloudAvailable ?: networkOk
-        return InferenceRouteSelector.select(
-            preferLocal = preferLocal,
-            localAvailable = localReady,
-            cloudAvailable = cloudAvailable,
-            networkAvailable = networkOk
+        return ChatRouter.decide(
+            ChatRouteContext(
+                preferLocal = preferLocal,
+                localReady = localReady,
+                networkAvailable = networkOk,
+                needsTools = needsTools,
+                cloudAvailable = cloudAvailable
+            )
         )
     }
 
     /**
-     * 设置页 / 调试用的路由预览文案。
+     * 设置页 / 调试用的路由预览文案（默认按无 tool 需求预览）。
      */
-    suspend fun previewLabel(): String {
-        val decision = decide()
+    suspend fun previewLabel(needsTools: Boolean = false): String {
+        val decision = decide(needsTools = needsTools)
         val networkOk = networkStatusProvider.isNetworkAvailable()
         val config = settings.getConfig()
         val engineState = engine.state.value
@@ -69,12 +77,13 @@ class InferenceRouteCoordinator @Inject constructor(
             engineState == LocalEngineState.READY -> "本地就绪"
             else -> "本地未就绪(${engineState.name})"
         }
+        val toolsLabel = if (needsTools) "需工具" else "纯对话"
         val targetLabel = when (decision.target) {
             InferenceRouteTarget.CLOUD -> "云端"
             InferenceRouteTarget.LOCAL -> "本地"
             InferenceRouteTarget.UNAVAILABLE -> "不可用"
         }
-        return "$netLabel · $localLabel · 路由=$targetLabel (${decision.reason})"
+        return "$netLabel · $localLabel · $toolsLabel · 路由=$targetLabel (${decision.reason})"
     }
 
     companion object {

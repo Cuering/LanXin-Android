@@ -17,61 +17,33 @@
 package com.lanxin.android.builtin.localinference.domain
 
 /**
- * 云端 ↔ 本地路由选择纯逻辑（无 Android 依赖，便于 JVM 单测）。
+ * 云端 ↔ 本地路由选择（兼容入口）。
  *
- * Phase 6.1：骨架决策，供 Chat 层手动选用或后续 ChatRouter 调用。
- * 完整离线兜底与自动切换在 6.2 / 6.3 扩展。
+ * Phase 6.3：完整决策收敛到 [ChatRouter]；本对象仅作薄委托，避免平行逻辑。
+ * 新代码请优先使用 [ChatRouter.decide]。
  */
 object InferenceRouteSelector {
 
     /**
-     * 选择推理目标。
-     *
-     * 规则（6.1 MVP）：
-     * 1. preferLocal && localAvailable → LOCAL
-     * 2. !networkAvailable && localAvailable → LOCAL（离线兜底预览）
-     * 3. cloudAvailable → CLOUD
-     * 4. localAvailable → LOCAL
-     * 5. 否则 UNAVAILABLE
+     * 选择推理目标（委托 [ChatRouter]）。
      *
      * @param preferLocal 用户显式偏好本地
-     * @param localAvailable 本地引擎可用（启用+路径/就绪）
+     * @param localAvailable 本地引擎可用（启用+就绪）
      * @param cloudAvailable 云端平台可用
      * @param networkAvailable 网络是否可用；null 表示未知（不按离线处理）
+     * @param needsTools 是否需要 tool_call / MCP（优先云端）
      */
     fun select(
         preferLocal: Boolean,
         localAvailable: Boolean,
         cloudAvailable: Boolean,
-        networkAvailable: Boolean? = null
-    ): InferenceRouteDecision {
-        if (preferLocal && localAvailable) {
-            return InferenceRouteDecision(
-                target = InferenceRouteTarget.LOCAL,
-                reason = "user_prefer_local"
-            )
-        }
-        if (networkAvailable == false && localAvailable) {
-            return InferenceRouteDecision(
-                target = InferenceRouteTarget.LOCAL,
-                reason = "offline_fallback"
-            )
-        }
-        if (cloudAvailable) {
-            return InferenceRouteDecision(
-                target = InferenceRouteTarget.CLOUD,
-                reason = "cloud_preferred"
-            )
-        }
-        if (localAvailable) {
-            return InferenceRouteDecision(
-                target = InferenceRouteTarget.LOCAL,
-                reason = "local_only_available"
-            )
-        }
-        return InferenceRouteDecision(
-            target = InferenceRouteTarget.UNAVAILABLE,
-            reason = "no_provider"
-        )
-    }
+        networkAvailable: Boolean? = null,
+        needsTools: Boolean = false
+    ): InferenceRouteDecision = ChatRouter.decide(
+        preferLocal = preferLocal,
+        localReady = localAvailable,
+        cloudAvailable = cloudAvailable,
+        networkAvailable = networkAvailable,
+        needsTools = needsTools
+    )
 }
