@@ -72,7 +72,8 @@ fun SettingScreen(
     onNavigateToScheduler: () -> Unit = {},
     onNavigateToUnifiedInbox: () -> Unit = {},
     onNavigateToUnifiedSearch: () -> Unit = {},
-    onNavigateToPluginManager: () -> Unit = {}
+    onNavigateToPluginManager: () -> Unit = {},
+    onNavigateToPluginMarket: () -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
     val scrollBehavior = pinnedExitUntilCollapsedScrollBehavior(
@@ -190,6 +191,14 @@ fun SettingScreen(
                 title = "插件管理",
                 description = "启用/停用插件，扫描与卸载动态 .apk 包",
                 onItemClick = onNavigateToPluginManager,
+                showTrailingIcon = true,
+                showLeadingIcon = false
+            )
+
+            SettingItem(
+                title = "插件市场",
+                description = "从远程索引浏览/下载插件到 plugin-packages",
+                onItemClick = onNavigateToPluginMarket,
                 showTrailingIcon = true,
                 showLeadingIcon = false
             )

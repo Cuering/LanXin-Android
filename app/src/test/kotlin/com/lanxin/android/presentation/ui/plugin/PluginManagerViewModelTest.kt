@@ -217,6 +217,15 @@ class PluginManagerViewModelTest {
             return nextDiscover
         }
 
+        override suspend fun loadDynamicPlugin(apkFile: File): PluginLoadResult {
+            // Phase 5.5：市场安装后单包加载；本 Fake 返回 Failure stub，避免抽象成员缺失
+            return PluginLoadResult.Failure(
+                apkPath = apkFile.absolutePath,
+                pluginId = null,
+                reason = "fake catalog: loadDynamicPlugin not simulated"
+            )
+        }
+
         override fun packagesDirectory(): File = packages
     }
 }

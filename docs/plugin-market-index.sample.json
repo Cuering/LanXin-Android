@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-07-16T00:00:00Z",
+  "plugins": [
+    {
+      "id": "example.hello",
+      "name": "Hello Plugin",
+      "version": "1.0.0",
+      "description": "示例外部插件（sample 索引，无真实下载包）",
+      "author": "LanXin",
+      "download_url": "https://example.invalid/plugins/hello-1.0.0.apk",
+      "min_app_version": "0.7.0",
+      "checksum": "",
+      "size": 0
+    },
+    {
+      "id": "example.tools",
+      "name": "Tools Pack",
+      "version": "0.2.1",
+      "description": "示例工具包插件（sample）",
+      "author": "LanXin",
+      "download_url": "https://example.invalid/plugins/tools-0.2.1.apk",
+      "min_app_version": "0.7.0",
+      "checksum": "",
+      "size": 1024
+    },
+    {
+      "id": "example.notes",
+      "name": "Notes Helper",
+      "version": "2.0.0",
+      "description": "笔记辅助示例插件",
+      "author": "community",
+      "download_url": "https://example.invalid/plugins/notes-2.0.0.apk",
+      "min_app_version": "0.7.5",
+      "checksum": "",
+      "size": 0
+    }
+  ]
+}

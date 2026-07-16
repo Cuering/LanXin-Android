@@ -67,6 +67,7 @@ import com.lanxin.android.plugin.dynamic.PluginSource
 @Composable
 fun PluginManagerScreen(
     onBackAction: () -> Unit,
+    onNavigateToMarket: () -> Unit = {},
     viewModel: PluginManagerViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -122,7 +123,8 @@ fun PluginManagerScreen(
                         packagesPath = state.packagesPath,
                         recordCount = state.records.size,
                         onScan = { viewModel.refresh(scanDynamic = true) },
-                        scanEnabled = !state.isLoading
+                        scanEnabled = !state.isLoading,
+                        onOpenMarket = onNavigateToMarket
                     )
                 }
 
@@ -228,7 +230,8 @@ private fun HeaderCard(
     packagesPath: String,
     recordCount: Int,
     onScan: () -> Unit,
-    scanEnabled: Boolean
+    scanEnabled: Boolean,
+    onOpenMarket: () -> Unit = {}
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -255,8 +258,16 @@ private fun HeaderCard(
                 overflow = TextOverflow.Ellipsis
             )
             Spacer(modifier = Modifier.height(8.dp))
-            TextButton(onClick = onScan, enabled = scanEnabled) {
-                Text("重新扫描动态插件")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                TextButton(onClick = onScan, enabled = scanEnabled) {
+                    Text("重新扫描动态插件")
+                }
+                TextButton(onClick = onOpenMarket, enabled = scanEnabled) {
+                    Text("插件市场")
+                }
             }
         }
     }

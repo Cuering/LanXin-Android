@@ -29,6 +29,7 @@ import com.lanxin.android.presentation.ui.chat.ChatScreen
 import com.lanxin.android.presentation.ui.home.HomeScreen
 import com.lanxin.android.presentation.ui.migrate.MigrateScreen
 import com.lanxin.android.presentation.ui.plugin.PluginManagerScreen
+import com.lanxin.android.presentation.ui.plugin.PluginMarketScreen
 import com.lanxin.android.presentation.ui.setting.AboutScreen
 import com.lanxin.android.presentation.ui.setting.AddPlatformScreen
 import com.lanxin.android.presentation.ui.setting.LicenseScreen
@@ -66,12 +67,22 @@ fun SetupNavGraph(navController: NavHostController) {
         unifiedInboxScreenNavigation(navController)
         unifiedSearchScreenNavigation(navController)
         pluginManagerScreenNavigation(navController)
+        pluginMarketScreenNavigation(navController)
     }
 }
 
 fun NavGraphBuilder.pluginManagerScreenNavigation(navController: NavHostController) {
     composable(Route.PLUGIN_MANAGER) {
         PluginManagerScreen(
+            onBackAction = { navController.navigateUp() },
+            onNavigateToMarket = { navController.navigate(Route.PLUGIN_MARKET) }
+        )
+    }
+}
+
+fun NavGraphBuilder.pluginMarketScreenNavigation(navController: NavHostController) {
+    composable(Route.PLUGIN_MARKET) {
+        PluginMarketScreen(
             onBackAction = { navController.navigateUp() }
         )
     }
@@ -340,7 +351,8 @@ fun NavGraphBuilder.settingNavigation(navController: NavHostController) {
                 onNavigateToScheduler = { navController.navigate(Route.TASK_LIST) },
                 onNavigateToUnifiedInbox = { navController.navigate(Route.UNIFIED_INBOX) },
                 onNavigateToUnifiedSearch = { navController.navigate(Route.UNIFIED_SEARCH) },
-                onNavigateToPluginManager = { navController.navigate(Route.PLUGIN_MANAGER) }
+                onNavigateToPluginManager = { navController.navigate(Route.PLUGIN_MANAGER) },
+                onNavigateToPluginMarket = { navController.navigate(Route.PLUGIN_MARKET) }
             )
         }
         composable(Route.ADD_PLATFORM) {

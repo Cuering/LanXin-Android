@@ -1,0 +1,107 @@
+# Phase 5.5 插件市场验证：domain / installer / UI / 路由 / 文档
+name: Phase5 Plugin Market Verify
+
+on:
+  push:
+    branches: [main, 'feat/phase5*']
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/plugin/**'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/plugin/**'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/common/Route.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/common/NavigationGraph.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/setting/SettingScreen.kt'
+      - 'app/src/test/kotlin/com/lanxin/android/plugin/**'
+      - 'app/src/test/kotlin/com/lanxin/android/presentation/ui/plugin/**'
+      - 'docs/dynamic-plugins.md'
+      - 'docs/plugin-market.md'
+      - 'docs/plugin-market-index.sample.json'
+      - 'ARCHITECTURE.md'
+      - '.github/workflows/phase5-plugin-market-verify.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/plugin/**'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/plugin/**'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/common/Route.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/common/NavigationGraph.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/setting/SettingScreen.kt'
+      - 'app/src/test/kotlin/com/lanxin/android/plugin/**'
+      - 'app/src/test/kotlin/com/lanxin/android/presentation/ui/plugin/**'
+      - 'docs/dynamic-plugins.md'
+      - 'docs/plugin-market.md'
+      - 'docs/plugin-market-index.sample.json'
+      - 'ARCHITECTURE.md'
+      - '.github/workflows/phase5-plugin-market-verify.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: phase5-market-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: Plugin market unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: gradle
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup local.properties and debug keystore
+        run: |
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+          rm -f debug-keystore.jks
+          keytool -genkeypair -v -keystore debug-keystore.jks -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Create assets model dir (models gitignored)
+        run: |
+          mkdir -p app/src/main/assets/models/gte-small
+          touch app/src/main/assets/models/gte-small/.gitkeep
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run plugin market + manager unit tests
+        run: |
+          ./gradlew :app:testDebugUnitTest \
+            --tests "com.lanxin.android.plugin.market.*" \
+            --tests "com.lanxin.android.presentation.ui.plugin.*" \
+            --tests "com.lanxin.android.plugin.dynamic.*" \
+            --no-daemon --stacktrace
+
+      - name: Surfaces present
+        run: |
+          test -f app/src/main/kotlin/com/lanxin/android/plugin/PluginCatalog.kt
+          test -f app/src/main/kotlin/com/lanxin/android/plugin/market/MarketModels.kt
+          test -f app/src/main/kotlin/com/lanxin/android/plugin/market/PluginInstaller.kt
+          test -f app/src/main/kotlin/com/lanxin/android/presentation/ui/plugin/PluginMarketScreen.kt
+          test -f app/src/main/kotlin/com/lanxin/android/presentation/ui/plugin/PluginMarketViewModel.kt
+          test -f docs/plugin-market.md
+          test -f docs/plugin-market-index.sample.json
+          grep -E -n "PLUGIN_MARKET|plugin_market" \
+            app/src/main/kotlin/com/lanxin/android/presentation/common/Route.kt
+          grep -E -n "PluginMarketScreen|PLUGIN_MARKET|onNavigateToPluginMarket" \
+            app/src/main/kotlin/com/lanxin/android/presentation/common/NavigationGraph.kt
+          grep -E -n "插件市场|onNavigateToPluginMarket" \
+            app/src/main/kotlin/com/lanxin/android/presentation/ui/setting/SettingScreen.kt
+          grep -E -n "loadDynamicPlugin" \
+            app/src/main/kotlin/com/lanxin/android/plugin/PluginCatalog.kt
+          grep -E -n "loadDynamicPlugin" \
+            app/src/test/kotlin/com/lanxin/android/presentation/ui/plugin/PluginManagerViewModelTest.kt
+          grep -E -n "DEFAULT_CATALOG_URL|plugin-market-index.sample" \
+            app/src/main/kotlin/com/lanxin/android/plugin/market/MarketModels.kt
+          grep -E -n "5\\\\.5|插件市场" ARCHITECTURE.md
+          grep -E -n "插件市场|5\\\\.5|DEFAULT_CATALOG" docs/plugin-market.md
+          grep -E -n "插件市场|5\\\\.5" docs/dynamic-plugins.md
