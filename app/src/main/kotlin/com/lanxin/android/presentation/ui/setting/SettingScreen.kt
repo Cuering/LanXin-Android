@@ -76,7 +76,8 @@ fun SettingScreen(
     onNavigateToPluginMarket: () -> Unit = {},
     onNavigateToLocalInference: () -> Unit = {},
     onNavigateToOfflineAsr: () -> Unit = {},
-    onNavigateToDesktopPet: () -> Unit = {}
+    onNavigateToDesktopPet: () -> Unit = {},
+    onNavigateToSystemTools: () -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
     val scrollBehavior = pinnedExitUntilCollapsedScrollBehavior(
@@ -226,6 +227,15 @@ fun SettingScreen(
                 title = "桌宠 / 语音陪伴",
                 description = "默认关；悬浮窗 + 听想说会话；stub 演示不塞 Chat 输入框",
                 onItemClick = onNavigateToDesktopPet,
+                showTrailingIcon = true,
+                showLeadingIcon = false
+            )
+
+
+            SettingItem(
+                title = "系统能力",
+                description = "默认关；日历 / 闹钟 Intent / 笔记 / 用户文件；写操作需确认",
+                onItemClick = onNavigateToSystemTools,
                 showTrailingIcon = true,
                 showLeadingIcon = false
             )
