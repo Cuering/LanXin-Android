@@ -36,3 +36,8 @@ app/src/main/assets/models/**
 .idea/copilot.data.migration.agent.xml
 .idea/copilot.data.migration.edit.xml
 .idea/copilot.data.migration.ask2agent.xml
+
+# Local LLM weights (Phase 6, do not commit)
+*.mnn
+*.gguf
+*.safetensors

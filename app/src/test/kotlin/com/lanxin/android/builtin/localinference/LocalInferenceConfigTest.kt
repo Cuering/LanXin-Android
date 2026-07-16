@@ -1,0 +1,24 @@
+package com.lanxin.android.builtin.localinference
+
+import com.lanxin.android.builtin.localinference.domain.LocalInferenceConfig
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Test
+
+class LocalInferenceConfigTest {
+
+    @Test
+    fun `defaults are safe`() {
+        val c = LocalInferenceConfig()
+        assertFalse(c.enabled)
+        assertEquals("", c.modelPath)
+        assertEquals(LocalInferenceConfig.DEFAULT_MAX_TOKENS, c.maxTokens)
+        assertEquals(LocalInferenceConfig.DEFAULT_TEMPERATURE, c.temperature, 0.001f)
+    }
+
+    @Test
+    fun `token bounds constants ordered`() {
+        assert(LocalInferenceConfig.MIN_MAX_TOKENS < LocalInferenceConfig.DEFAULT_MAX_TOKENS)
+        assert(LocalInferenceConfig.DEFAULT_MAX_TOKENS < LocalInferenceConfig.MAX_MAX_TOKENS)
+    }
+}

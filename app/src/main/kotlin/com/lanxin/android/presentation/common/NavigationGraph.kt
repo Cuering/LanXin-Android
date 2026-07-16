@@ -35,6 +35,7 @@ import com.lanxin.android.presentation.ui.setting.AddPlatformScreen
 import com.lanxin.android.presentation.ui.setting.LicenseScreen
 import com.lanxin.android.presentation.ui.setting.PlatformSettingScreen
 import com.lanxin.android.presentation.ui.setting.SettingScreen
+import com.lanxin.android.builtin.localinference.presentation.LocalInferenceScreen
 import com.lanxin.android.presentation.ui.setting.SettingViewModelV2
 import com.lanxin.android.presentation.ui.setup.SetupCompleteScreen
 import com.lanxin.android.presentation.ui.setup.SetupPlatformListScreen
@@ -68,6 +69,7 @@ fun SetupNavGraph(navController: NavHostController) {
         unifiedSearchScreenNavigation(navController)
         pluginManagerScreenNavigation(navController)
         pluginMarketScreenNavigation(navController)
+        localInferenceScreenNavigation(navController)
     }
 }
 
@@ -83,6 +85,15 @@ fun NavGraphBuilder.pluginManagerScreenNavigation(navController: NavHostControll
 fun NavGraphBuilder.pluginMarketScreenNavigation(navController: NavHostController) {
     composable(Route.PLUGIN_MARKET) {
         PluginMarketScreen(
+            onBackAction = { navController.navigateUp() }
+        )
+    }
+}
+
+
+fun NavGraphBuilder.localInferenceScreenNavigation(navController: NavHostController) {
+    composable(Route.LOCAL_INFERENCE) {
+        LocalInferenceScreen(
             onBackAction = { navController.navigateUp() }
         )
     }
@@ -352,7 +363,8 @@ fun NavGraphBuilder.settingNavigation(navController: NavHostController) {
                 onNavigateToUnifiedInbox = { navController.navigate(Route.UNIFIED_INBOX) },
                 onNavigateToUnifiedSearch = { navController.navigate(Route.UNIFIED_SEARCH) },
                 onNavigateToPluginManager = { navController.navigate(Route.PLUGIN_MANAGER) },
-                onNavigateToPluginMarket = { navController.navigate(Route.PLUGIN_MARKET) }
+                onNavigateToPluginMarket = { navController.navigate(Route.PLUGIN_MARKET) },
+                onNavigateToLocalInference = { navController.navigate(Route.LOCAL_INFERENCE) }
             )
         }
         composable(Route.ADD_PLATFORM) {

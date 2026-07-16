@@ -61,4 +61,6 @@ object Route {
     const val PLUGIN_MANAGER = "plugin_manager"
 
     const val PLUGIN_MARKET = "plugin_market"
+
+    const val LOCAL_INFERENCE = "local_inference"
 }

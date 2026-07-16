@@ -1,0 +1,95 @@
+# Phase 6.1 本地推理骨架：接口 / stub / 路由选择 / 配置
+name: Phase6.1 Local Inference Verify
+
+on:
+  push:
+    branches: [main, 'feat/phase6*']
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/localinference/**'
+      - 'app/src/test/kotlin/com/lanxin/android/builtin/localinference/**'
+      - 'docs/local-inference.md'
+      - 'builtin/local_inference/**'
+      - 'ARCHITECTURE.md'
+      - '.github/workflows/phase6-1-local-inference-verify.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/localinference/**'
+      - 'app/src/test/kotlin/com/lanxin/android/builtin/localinference/**'
+      - 'docs/local-inference.md'
+      - 'builtin/local_inference/**'
+      - 'ARCHITECTURE.md'
+      - '.github/workflows/phase6-1-local-inference-verify.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: phase6-1-local-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: Local inference unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: gradle
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup local.properties and debug keystore
+        run: |
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+          rm -f debug-keystore.jks
+          keytool -genkeypair -v -keystore debug-keystore.jks -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Create assets model dir (models gitignored)
+        run: |
+          mkdir -p app/src/main/assets/models/gte-small
+          touch app/src/main/assets/models/gte-small/.gitkeep
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run local inference unit tests
+        run: |
+          ./gradlew :app:testDebugUnitTest \
+            --tests "com.lanxin.android.builtin.localinference.*" \
+            --no-daemon --stacktrace
+
+      - name: Surfaces and docs present
+        run: |
+          test -f docs/local-inference.md
+          test -f builtin/local_inference/README.md
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/localinference/domain/LocalLlmEngine.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/localinference/domain/LocalInferenceProvider.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/localinference/domain/InferenceRouteSelector.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/localinference/data/StubLocalLlmEngine.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/localinference/data/MnnNativeBridge.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/localinference/data/LocalInferencePreferences.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/localinference/di/LocalInferenceModule.kt
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/localinference/InferenceRouteSelectorTest.kt
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/localinference/StubLocalLlmEngineTest.kt
+          grep -E -n "interface LocalLlmEngine|fun load|fun generate|fun stream|isReady|isAvailable" \
+            app/src/main/kotlin/com/lanxin/android/builtin/localinference/domain/LocalLlmEngine.kt
+          grep -E -n "fun select|preferLocal|offline_fallback|InferenceRouteTarget" \
+            app/src/main/kotlin/com/lanxin/android/builtin/localinference/domain/InferenceRouteSelector.kt
+          grep -E -n "local_inference_enabled|local_inference_model_path" \
+            app/src/main/kotlin/com/lanxin/android/builtin/localinference/data/LocalInferencePreferences.kt
+          grep -E -n "MnnNativeBridge|System.loadLibrary|validateModelPath" \
+            app/src/main/kotlin/com/lanxin/android/builtin/localinference/data/MnnNativeBridge.kt
+          grep -E -n "LOCAL_INFERENCE|LocalInferenceScreen" \
+            app/src/main/kotlin/com/lanxin/android/presentation/common/Route.kt \
+            app/src/main/kotlin/com/lanxin/android/presentation/common/NavigationGraph.kt
+          grep -E -n "6\.1|本地推理|local.inference|MNN" ARCHITECTURE.md
+          grep -E -n "StubLocalLlmEngine|MnnNativeBridge|能力边界" docs/local-inference.md

@@ -73,7 +73,8 @@ fun SettingScreen(
     onNavigateToUnifiedInbox: () -> Unit = {},
     onNavigateToUnifiedSearch: () -> Unit = {},
     onNavigateToPluginManager: () -> Unit = {},
-    onNavigateToPluginMarket: () -> Unit = {}
+    onNavigateToPluginMarket: () -> Unit = {},
+    onNavigateToLocalInference: () -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
     val scrollBehavior = pinnedExitUntilCollapsedScrollBehavior(
@@ -199,6 +200,14 @@ fun SettingScreen(
                 title = "插件市场",
                 description = "从远程索引浏览/下载插件到 plugin-packages",
                 onItemClick = onNavigateToPluginMarket,
+                showTrailingIcon = true,
+                showLeadingIcon = false
+            )
+
+            SettingItem(
+                title = "本地推理",
+                description = "默认关；0.5B/1.5B 或 7B Q4；无 tool_call，记忆/KB 注入",
+                onItemClick = onNavigateToLocalInference,
                 showTrailingIcon = true,
                 showLeadingIcon = false
             )
