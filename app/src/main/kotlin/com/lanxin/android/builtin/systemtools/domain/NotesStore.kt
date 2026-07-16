@@ -53,6 +53,7 @@ enum class NotesExportFormat {
 enum class NotesImportStrategy {
     /** 按 id 覆盖已有；新 id 追加 */
     MERGE,
+
     /** 清空后全量写入 */
     REPLACE
 }
