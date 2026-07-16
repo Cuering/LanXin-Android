@@ -1,8 +1,17 @@
 package com.lanxin.android.plugin.dynamic
 
 import java.io.File
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 
 /**
  * 签名策略配置（内存快照）。
@@ -17,16 +26,25 @@ data class PluginSignatureConfig(
 /**
  * 持久化 `filesDir/plugin-signature.json`。
  *
- * 与 [PluginStateStore] 一样使用同步文件 IO，便于 JVM 单测与启动路径。
+ * 格式：
+ * ```json
+ * { "policy": "allow_all", "allowlist": ["abcd..."] }
+ * ```
  *
  * 默认策略：
- * - debug / 缺省可调试： [SignaturePolicy.ALLOW_ALL]
+ * - debug： [SignaturePolicy.ALLOW_ALL]
  * - release： [SignaturePolicy.ALLOWLIST]（空名单 = 拒绝加载）
  */
 class PluginSignatureConfigStore(
     private val file: File,
     private val defaultPolicy: SignaturePolicy
 ) {
+
+    private val json = Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+        prettyPrint = true
+    }
 
     @Volatile
     private var cached: PluginSignatureConfig? = null
@@ -46,10 +64,16 @@ class PluginSignatureConfigStore(
                 .toSet()
         )
         file.parentFile?.mkdirs()
-        val json = JSONObject()
-            .put("policy", normalized.policy.wireName)
-            .put("allowlist", JSONArray(normalized.allowlist.sorted()))
-        file.writeText(json.toString())
+        val body = buildJsonObject {
+            put("policy", normalized.policy.wireName)
+            put(
+                "allowlist",
+                buildJsonArray {
+                    normalized.allowlist.sorted().forEach { add(JsonPrimitive(it)) }
+                }
+            )
+        }
+        file.writeText(json.encodeToString(JsonObject.serializer(), body), Charsets.UTF_8)
         cached = normalized
     }
 
@@ -75,21 +99,23 @@ class PluginSignatureConfigStore(
 
     private fun readFromDisk(): PluginSignatureConfig? {
         if (!file.isFile) return null
+        val text = runCatching { file.readText(Charsets.UTF_8) }.getOrNull() ?: return null
+        if (text.isBlank()) return null
         return runCatching {
-            val root = JSONObject(file.readText())
+            val root = json.parseToJsonElement(text).jsonObject
             val policy = SignaturePolicy.fromWire(
-                root.optString("policy", defaultPolicy.wireName),
+                root["policy"]?.jsonPrimitive?.contentOrNull,
                 fallback = defaultPolicy
             )
             val allow = linkedSetOf<String>()
-            val arr = root.optJSONArray("allowlist")
-            if (arr != null) {
-                for (i in 0 until arr.length()) {
-                    val n = CertDigestUtils.normalize(arr.optString(i, ""))
+            val arr = root["allowlist"]
+            if (arr is JsonArray) {
+                for (el in arr) {
+                    val n = CertDigestUtils.normalize(el.jsonPrimitive.contentOrNull.orEmpty())
                     if (n.isNotEmpty()) allow += n
                 }
             } else {
-                val csv = root.optString("allowlist_csv", "")
+                val csv = root["allowlist_csv"]?.jsonPrimitive?.contentOrNull.orEmpty()
                 allow += CertDigestUtils.parseAllowlist(csv)
             }
             PluginSignatureConfig(policy = policy, allowlist = allow)

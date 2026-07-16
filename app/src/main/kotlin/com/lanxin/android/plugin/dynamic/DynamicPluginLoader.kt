@@ -48,9 +48,9 @@ class DynamicPluginLoader(
                 return LoadPackageResult.Error(
                     apkPath = apkFile.absolutePath,
                     pluginId = manifest.id,
-                    reason = "签名校验失败: ${sig.reason}"
+                    reason = formatSignatureReject(sig)
                 )
-            PluginSignatureResult.Trusted -> Unit
+            is PluginSignatureResult.Trusted -> Unit
         }
 
         if (manifest.minAppVersion.isNotBlank() && appVersionName.isNotBlank()) {
@@ -78,7 +78,8 @@ class DynamicPluginLoader(
                     manifest = manifest,
                     apkFile = apkFile,
                     classLoader = null,
-                    plugin = fromFactory
+                    plugin = fromFactory,
+                    signature = signatureVerifier.verify(apkFile).toInfo()
                 )
             )
         }
@@ -112,7 +113,8 @@ class DynamicPluginLoader(
                 manifest = manifest,
                 apkFile = apkFile,
                 classLoader = cl,
-                plugin = plugin
+                plugin = plugin,
+                signature = signatureVerifier.verify(apkFile).toInfo()
             )
         )
     }
@@ -121,7 +123,8 @@ class DynamicPluginLoader(
         val manifest: PluginManifest,
         val apkFile: File,
         val classLoader: ClassLoader?,
-        val plugin: LanXinPlugin
+        val plugin: LanXinPlugin,
+        val signature: PluginSignatureInfo = PluginSignatureInfo.unknown()
     )
 
     sealed class LoadPackageResult {
@@ -132,4 +135,26 @@ class DynamicPluginLoader(
             val reason: String
         ) : LoadPackageResult()
     }
+
+    companion object {
+        fun formatSignatureReject(sig: PluginSignatureResult.Rejected): String {
+            val policyPart = if (sig.policy.isNotBlank()) " [${sig.policy}]" else ""
+            return "签名校验失败$policyPart: ${sig.reason}"
+        }
+    }
+}
+
+private fun PluginSignatureResult.toInfo(): PluginSignatureInfo = when (this) {
+    is PluginSignatureResult.Trusted -> PluginSignatureInfo(
+        status = PluginSignatureStatus.TRUSTED,
+        policy = policy,
+        certificateSha256 = certificateSha256,
+        detail = null
+    )
+    is PluginSignatureResult.Rejected -> PluginSignatureInfo(
+        status = PluginSignatureStatus.REJECTED,
+        policy = policy,
+        certificateSha256 = certificateSha256,
+        detail = reason
+    )
 }
