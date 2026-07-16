@@ -1,8 +1,8 @@
 # 动态插件加载设计（Phase 5.3）
 
-> 状态：MVP 骨架已落地（`feat/phase5-3-dynamic-plugins`）  
-> 范围：从 `filesDir` 发现 / 解析 / 加载 `.apk` 插件包，接入现有 `PluginManager`  
-> 非目标：5.4 管理 UI、5.5 插件市场、5.6 完整签名校验
+> 状态：5.3 加载 ✅；5.4 管理 UI 🚧（`feat/phase5-4-plugin-manager-ui`）  
+> 范围：从 `filesDir` 发现 / 解析 / 加载 `.apk` 插件包 + 管理界面  
+> 非目标：5.5 插件市场、5.6 完整签名校验
 
 ---
 
@@ -161,15 +161,43 @@ interface PluginSignatureVerifier {
 
 | 阶段 | 内容 |
 |------|------|
-| 5.4 | 管理 UI：列表 / 启用 / 停用 / 卸载文件 |
+| 5.4 | 管理 UI：列表 / 启用 / 停用 / 卸载文件 ✅ 本轮 |
 | 5.5 | 市场：GitHub 索引下载到 `plugin-packages/` |
 | 5.6 | 签名证书白名单 + 用户确认 |
 
+
+
 ---
 
-## 8. 版本
+## 9. 管理 UI（Phase 5.4）
+
+| 项 | 说明 |
+|----|------|
+| 路由 | `Route.PLUGIN_MANAGER` = `plugin_manager` |
+| 入口 | 设置页 →「插件管理」 |
+| Screen | `presentation/ui/plugin/PluginManagerScreen` |
+| ViewModel | `PluginManagerViewModel`（状态：records / failures / loading / snackbar） |
+| 门面 | `PluginCatalog`（`PluginManager` 实现，Hilt 绑定） |
+
+### 9.1 能力
+
+- 列表：编译期 + 动态插件（id / name / version / source / enabled / author）
+- 启用/停用：`PluginCatalog.setEnabled`
+- 重新扫描：`discoverAndLoadDynamicPlugins`，并展示 `getLastDynamicFailures`
+- 动态插件卸载：`unloadPlugin`（APK 保留）
+- 删除 APK：unload + 删除 `apkPath` 文件（二次确认）
+- 提示：签名 MVP 为 AllowAll（5.6 换实现）
+
+### 9.2 单测
+
+- `PluginManagerViewModelTest`：Fake `PluginCatalog`，覆盖 refresh / setEnabled / unload / deleteApk
+
+
+---
+
+## 10. 版本
 
 | 字段 | 值 |
 |------|-----|
-| design_version | 1 |
-| phase | 5.3 |
+| design_version | 2 |
+| phase | 5.4 |

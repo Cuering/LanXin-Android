@@ -1,0 +1,94 @@
+# Phase 5.4 插件管理 UI 验证：ViewModel / 路由 / PluginCatalog 门面
+name: Phase5 Plugin Manager UI Verify
+
+on:
+  push:
+    branches: [main, 'feat/phase5*']
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/plugin/**'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/plugin/**'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/common/Route.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/common/NavigationGraph.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/setting/SettingScreen.kt'
+      - 'app/src/test/kotlin/com/lanxin/android/presentation/ui/plugin/**'
+      - 'docs/dynamic-plugins.md'
+      - 'ARCHITECTURE.md'
+      - '.github/workflows/phase5-plugin-manager-ui-verify.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/plugin/**'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/plugin/**'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/common/Route.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/common/NavigationGraph.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/setting/SettingScreen.kt'
+      - 'app/src/test/kotlin/com/lanxin/android/presentation/ui/plugin/**'
+      - 'docs/dynamic-plugins.md'
+      - 'ARCHITECTURE.md'
+      - '.github/workflows/phase5-plugin-manager-ui-verify.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: phase5-pm-ui-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: Plugin manager UI unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: gradle
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup local.properties and debug keystore
+        run: |
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+          rm -f debug-keystore.jks
+          keytool -genkeypair -v -keystore debug-keystore.jks -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Create assets model dir (models gitignored)
+        run: |
+          mkdir -p app/src/main/assets/models/gte-small
+          touch app/src/main/assets/models/gte-small/.gitkeep
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run plugin manager UI unit tests
+        run: |
+          ./gradlew :app:testDebugUnitTest \
+            --tests "com.lanxin.android.presentation.ui.plugin.*" \
+            --tests "com.lanxin.android.plugin.dynamic.*" \
+            --no-daemon --stacktrace
+
+      - name: Surfaces present
+        run: |
+          test -f app/src/main/kotlin/com/lanxin/android/plugin/PluginCatalog.kt
+          test -f app/src/main/kotlin/com/lanxin/android/plugin/di/PluginModule.kt
+          test -f app/src/main/kotlin/com/lanxin/android/presentation/ui/plugin/PluginManagerScreen.kt
+          test -f app/src/main/kotlin/com/lanxin/android/presentation/ui/plugin/PluginManagerViewModel.kt
+          test -f app/src/test/kotlin/com/lanxin/android/presentation/ui/plugin/PluginManagerViewModelTest.kt
+          # use grep (runner may not have rg); avoid star-slash in shell comments
+          grep -E -n "PLUGIN_MANAGER|plugin_manager" \
+            app/src/main/kotlin/com/lanxin/android/presentation/common/Route.kt
+          grep -E -n "PluginManagerScreen|PLUGIN_MANAGER|onNavigateToPluginManager" \
+            app/src/main/kotlin/com/lanxin/android/presentation/common/NavigationGraph.kt
+          grep -E -n "插件管理|onNavigateToPluginManager" \
+            app/src/main/kotlin/com/lanxin/android/presentation/ui/setting/SettingScreen.kt
+          grep -E -n "interface PluginCatalog|getPluginRecords|setEnabled|unloadPlugin" \
+            app/src/main/kotlin/com/lanxin/android/plugin/PluginCatalog.kt
+          grep -E -n "5\\\\.4|插件管理 UI" ARCHITECTURE.md
+          grep -E -n "管理 UI|5\\\\.4" docs/dynamic-plugins.md

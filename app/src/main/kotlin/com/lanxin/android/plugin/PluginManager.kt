@@ -38,7 +38,7 @@ import kotlinx.serialization.json.put
 @Singleton
 class PluginManager @Inject constructor(
     @ApplicationContext private val appContext: Context
-) {
+) : PluginCatalog {
 
     private val plugins = mutableMapOf<String, LanXinPlugin>()
     private val tools = mutableMapOf<String, ToolDef>()
@@ -147,7 +147,7 @@ class PluginManager @Inject constructor(
      * - disable：若已 load 则 onUnload 并移除其工具
      * - enable：若已注册且未 load 则 onLoad
      */
-    suspend fun setEnabled(pluginId: String, enabled: Boolean): Boolean {
+    override suspend fun setEnabled(pluginId: String, enabled: Boolean): Boolean {
         if (pluginId !in plugins && pluginId !in dynamicHandles) {
             // 仍持久化，便于尚未扫描到的包
             stateStore.setEnabled(pluginId, enabled)
@@ -189,11 +189,12 @@ class PluginManager @Inject constructor(
      * 扫描 `filesDir/plugin-packages/` 并加载动态插件。
      * 失败项记入结果，不抛异常、不中断宿主。
      */
-    suspend fun discoverAndLoadDynamicPlugins(
-        packagesDir: File = PluginPackagePaths.ensurePackagesDir(appContext.filesDir)
+    override suspend fun discoverAndLoadDynamicPlugins(
+        packagesDir: File?
     ): DynamicDiscoverResult {
+        val dir = packagesDir ?: PluginPackagePaths.ensurePackagesDir(appContext.filesDir)
         lastFailures.clear()
-        val scan = PluginPackageScanner.scanWithManifests(packagesDir)
+        val scan = PluginPackageScanner.scanWithManifests(dir)
         val successes = mutableListOf<PluginLoadResult.Success>()
         val failures = scan.failures.toMutableList()
 
@@ -232,7 +233,7 @@ class PluginManager @Inject constructor(
      * 卸载动态插件（从注册表移除并 onUnload）。
      * 编译期插件返回 false。
      */
-    suspend fun unloadPlugin(pluginId: String): Boolean {
+    override suspend fun unloadPlugin(pluginId: String): Boolean {
         if (pluginId in compiledIds && pluginId !in dynamicHandles) {
             return false
         }
@@ -250,7 +251,7 @@ class PluginManager @Inject constructor(
     /**
      * 插件记录列表（编译期 + 动态），供 5.4 管理 UI。
      */
-    fun getPluginRecords(): List<PluginRecord> {
+    override fun getPluginRecords(): List<PluginRecord> {
         val records = mutableListOf<PluginRecord>()
         for ((id, plugin) in plugins) {
             val handle = dynamicHandles[id]
@@ -270,7 +271,10 @@ class PluginManager @Inject constructor(
         return records.sortedBy { it.id }
     }
 
-    fun getLastDynamicFailures(): List<PluginLoadResult.Failure> = lastFailures.toList()
+    override fun getLastDynamicFailures(): List<PluginLoadResult.Failure> = lastFailures.toList()
+
+    override fun packagesDirectory(): File =
+        PluginPackagePaths.ensurePackagesDir(appContext.filesDir)
 
     /**
      * 卸载所有插件，释放资源。

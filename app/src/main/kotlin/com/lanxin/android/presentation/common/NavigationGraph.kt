@@ -28,6 +28,7 @@ import com.lanxin.android.plugins.unifiedinbox.presentation.UnifiedFileBrowserSc
 import com.lanxin.android.presentation.ui.chat.ChatScreen
 import com.lanxin.android.presentation.ui.home.HomeScreen
 import com.lanxin.android.presentation.ui.migrate.MigrateScreen
+import com.lanxin.android.presentation.ui.plugin.PluginManagerScreen
 import com.lanxin.android.presentation.ui.setting.AboutScreen
 import com.lanxin.android.presentation.ui.setting.AddPlatformScreen
 import com.lanxin.android.presentation.ui.setting.LicenseScreen
@@ -64,6 +65,15 @@ fun SetupNavGraph(navController: NavHostController) {
         schedulerScreenNavigation(navController)
         unifiedInboxScreenNavigation(navController)
         unifiedSearchScreenNavigation(navController)
+        pluginManagerScreenNavigation(navController)
+    }
+}
+
+fun NavGraphBuilder.pluginManagerScreenNavigation(navController: NavHostController) {
+    composable(Route.PLUGIN_MANAGER) {
+        PluginManagerScreen(
+            onBackAction = { navController.navigateUp() }
+        )
     }
 }
 
@@ -329,7 +339,8 @@ fun NavGraphBuilder.settingNavigation(navController: NavHostController) {
                 onNavigateToKnowledge = { navController.navigate(Route.KNOWLEDGE) },
                 onNavigateToScheduler = { navController.navigate(Route.TASK_LIST) },
                 onNavigateToUnifiedInbox = { navController.navigate(Route.UNIFIED_INBOX) },
-                onNavigateToUnifiedSearch = { navController.navigate(Route.UNIFIED_SEARCH) }
+                onNavigateToUnifiedSearch = { navController.navigate(Route.UNIFIED_SEARCH) },
+                onNavigateToPluginManager = { navController.navigate(Route.PLUGIN_MANAGER) }
             )
         }
         composable(Route.ADD_PLATFORM) {
