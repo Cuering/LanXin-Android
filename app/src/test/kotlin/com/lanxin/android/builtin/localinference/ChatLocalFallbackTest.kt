@@ -1,17 +1,18 @@
 package com.lanxin.android.builtin.localinference
 
 import com.lanxin.android.builtin.localinference.domain.ChatLocalFallback
+import com.lanxin.android.builtin.localinference.domain.ChatRouter
 import com.lanxin.android.builtin.localinference.domain.InferenceRouteCoordinator
 import com.lanxin.android.builtin.localinference.domain.InferenceRouteDecision
-import com.lanxin.android.builtin.localinference.domain.InferenceRouteSelector
 import com.lanxin.android.builtin.localinference.domain.InferenceRouteTarget
+import com.lanxin.android.builtin.localinference.domain.RouteReason
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Phase 6.2 路由矩阵 + Chat fallback 辅助逻辑。
+ * Phase 6.3 路由矩阵 + Chat fallback 辅助逻辑。
  */
 class ChatLocalFallbackTest {
 
@@ -19,17 +20,17 @@ class ChatLocalFallbackTest {
     fun `shouldUseLocal only for LOCAL target`() {
         assertTrue(
             ChatLocalFallback.shouldUseLocal(
-                InferenceRouteDecision(InferenceRouteTarget.LOCAL, "offline_fallback")
+                InferenceRouteDecision(InferenceRouteTarget.LOCAL, RouteReason.OFFLINE_LOCAL)
             )
         )
         assertFalse(
             ChatLocalFallback.shouldUseLocal(
-                InferenceRouteDecision(InferenceRouteTarget.CLOUD, "cloud_preferred")
+                InferenceRouteDecision(InferenceRouteTarget.CLOUD, RouteReason.DEFAULT_CLOUD)
             )
         )
         assertFalse(
             ChatLocalFallback.shouldUseLocal(
-                InferenceRouteDecision(InferenceRouteTarget.UNAVAILABLE, "no_provider")
+                InferenceRouteDecision(InferenceRouteTarget.UNAVAILABLE, RouteReason.NO_PROVIDER)
             )
         )
     }
@@ -38,12 +39,12 @@ class ChatLocalFallbackTest {
     fun `shouldEmitUnavailable only for UNAVAILABLE`() {
         assertTrue(
             ChatLocalFallback.shouldEmitUnavailable(
-                InferenceRouteDecision(InferenceRouteTarget.UNAVAILABLE, "no_provider")
+                InferenceRouteDecision(InferenceRouteTarget.UNAVAILABLE, RouteReason.NO_PROVIDER)
             )
         )
         assertFalse(
             ChatLocalFallback.shouldEmitUnavailable(
-                InferenceRouteDecision(InferenceRouteTarget.LOCAL, "offline_fallback")
+                InferenceRouteDecision(InferenceRouteTarget.LOCAL, RouteReason.OFFLINE_LOCAL)
             )
         )
     }
@@ -60,7 +61,10 @@ class ChatLocalFallbackTest {
     @Test
     fun `unavailableMessage guides offline when no network`() {
         val msg = ChatLocalFallback.unavailableMessage(
-            InferenceRouteDecision(InferenceRouteTarget.UNAVAILABLE, "no_provider"),
+            InferenceRouteDecision(
+                InferenceRouteTarget.UNAVAILABLE,
+                RouteReason.OFFLINE_LOCAL_UNAVAILABLE
+            ),
             networkAvailable = false
         )
         assertEquals(InferenceRouteCoordinator.OFFLINE_LOCAL_UNAVAILABLE_MESSAGE, msg)
@@ -69,66 +73,68 @@ class ChatLocalFallbackTest {
 
     @Test
     fun `route matrix offline ready uses local`() {
-        val d = InferenceRouteSelector.select(
+        val d = ChatRouter.decide(
             preferLocal = false,
-            localAvailable = true,
+            localReady = true,
             cloudAvailable = false,
             networkAvailable = false
         )
         assertEquals(InferenceRouteTarget.LOCAL, d.target)
         assertTrue(ChatLocalFallback.shouldUseLocal(d))
+        assertEquals(RouteReason.OFFLINE_LOCAL, d.reason)
     }
 
     @Test
     fun `route matrix offline not ready unavailable`() {
-        val d = InferenceRouteSelector.select(
+        val d = ChatRouter.decide(
             preferLocal = false,
-            localAvailable = false,
+            localReady = false,
             cloudAvailable = false,
             networkAvailable = false
         )
         assertEquals(InferenceRouteTarget.UNAVAILABLE, d.target)
         assertTrue(ChatLocalFallback.shouldEmitUnavailable(d))
+        assertEquals(RouteReason.OFFLINE_LOCAL_UNAVAILABLE, d.reason)
     }
 
     @Test
     fun `route matrix online defaults cloud`() {
-        val d = InferenceRouteSelector.select(
+        val d = ChatRouter.decide(
             preferLocal = false,
-            localAvailable = true,
+            localReady = true,
             cloudAvailable = true,
             networkAvailable = true
         )
         assertEquals(InferenceRouteTarget.CLOUD, d.target)
         assertFalse(ChatLocalFallback.shouldUseLocal(d))
+        assertEquals(RouteReason.DEFAULT_CLOUD, d.reason)
     }
 
     @Test
     fun `route matrix preferLocal online uses local when ready`() {
-        val d = InferenceRouteSelector.select(
+        val d = ChatRouter.decide(
             preferLocal = true,
-            localAvailable = true,
+            localReady = true,
             cloudAvailable = true,
             networkAvailable = true
         )
         assertEquals(InferenceRouteTarget.LOCAL, d.target)
-        assertEquals("user_prefer_local", d.reason)
+        assertEquals(RouteReason.PREFER_LOCAL, d.reason)
     }
 
     @Test
     fun `route matrix enabled off means not ready never local`() {
-        // localAvailable=false 模拟开关关 / 未 load
-        val offline = InferenceRouteSelector.select(
+        val offline = ChatRouter.decide(
             preferLocal = true,
-            localAvailable = false,
+            localReady = false,
             cloudAvailable = false,
             networkAvailable = false
         )
         assertEquals(InferenceRouteTarget.UNAVAILABLE, offline.target)
 
-        val online = InferenceRouteSelector.select(
+        val online = ChatRouter.decide(
             preferLocal = true,
-            localAvailable = false,
+            localReady = false,
             cloudAvailable = true,
             networkAvailable = true
         )
@@ -139,8 +145,21 @@ class ChatLocalFallbackTest {
     fun `isLocalGeneration matches LOCAL target`() {
         assertTrue(
             ChatLocalFallback.isLocalGeneration(
-                InferenceRouteDecision(InferenceRouteTarget.LOCAL, "offline_fallback")
+                InferenceRouteDecision(InferenceRouteTarget.LOCAL, RouteReason.OFFLINE_LOCAL)
             )
         )
+    }
+
+    @Test
+    fun `needs tools cloud reason`() {
+        val d = ChatRouter.decide(
+            preferLocal = true,
+            localReady = true,
+            cloudAvailable = true,
+            networkAvailable = true,
+            needsTools = true
+        )
+        assertEquals(RouteReason.NEED_TOOLS_CLOUD, d.reason)
+        assertFalse(ChatLocalFallback.shouldUseLocal(d))
     }
 }

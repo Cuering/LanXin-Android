@@ -610,8 +610,12 @@ class ChatViewModel @Inject constructor(
             turnIndex = turnIndex,
             updateUx = platformIndex == 0
         )
-        // Phase 6.2：预判路由，本地时显示「本地离线生成中…」；完整路由仍在 Repository
-        val routeDecision = runCatching { inferenceRouteCoordinator.decide() }.getOrNull()
+        // Phase 6.3：首轮 needsTools=false（保留 preferLocal/离线本地）；
+        // 仅当模型产出 tool_call 进入工具循环后，才强制 need_tools_cloud。
+        // 有注册工具 ≠ 本轮「需要」工具；否则 preferLocal 在有网时永远失效。
+        val routeDecision = runCatching {
+            inferenceRouteCoordinator.decide(needsTools = false)
+        }.getOrNull()
         val useLocalGeneration =
             routeDecision != null && ChatLocalFallback.isLocalGeneration(routeDecision)
         if (platformIndex == 0) {
@@ -632,13 +636,16 @@ class ChatViewModel @Inject constructor(
         var lastAssistantText = ""
         var recordedError = false
         var markedStreamStart = false
+        // 工具 follow-up 轮：强制 needsTools → 云端
+        var needsToolsForRoute = false
 
         try {
             while (true) {
                 chatRepository.completeChat(
                     workingUserMessages,
                     workingAssistantMessages,
-                    platformWithTools
+                    platformWithTools,
+                    needsTools = needsToolsForRoute
                 ).handleStates(
                     messageFlow = _groupedMessages,
                     turnIndex = turnIndex,
@@ -677,6 +684,8 @@ class ChatViewModel @Inject constructor(
                 if (platformIndex == 0) {
                     setTurnPhase(turnIndex, ChatGenerationPhase.CALLING_TOOLS)
                 }
+                // 已进入 tool 循环：后续 completeChat 必须走云端
+                needsToolsForRoute = true
 
                 // 清理助手消息中的 tool_call 标签（用户可见的中间提示）
                 val cleaned = toolRound.cleanedAssistantText

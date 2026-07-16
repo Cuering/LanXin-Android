@@ -365,7 +365,7 @@ class ChatRepositoryImplTest {
         assertEquals(0, openAIAPI.streamChatCompletionCalls)
         assertEquals(1, local.calls)
         assertEquals(true, repository.lastUsedLocal)
-        assertEquals("offline_fallback", repository.lastRouteReason)
+        assertEquals("offline_local", repository.lastRouteReason)
     }
 
     @Test
@@ -417,7 +417,7 @@ class ChatRepositoryImplTest {
         assertEquals(1, openAIAPI.streamChatCompletionCalls)
         assertEquals(0, local.calls)
         assertEquals(false, repository.lastUsedLocal)
-        assertEquals("cloud_preferred", repository.lastRouteReason)
+        assertEquals("default_cloud", repository.lastRouteReason)
     }
 
     @Test
@@ -441,7 +441,34 @@ class ChatRepositoryImplTest {
         assertEquals(ApiState.Success("prefer"), states[1])
         assertEquals(0, openAIAPI.streamChatCompletionCalls)
         assertEquals(1, local.calls)
-        assertEquals("user_prefer_local", repository.lastRouteReason)
+        assertEquals("prefer_local", repository.lastRouteReason)
+    }
+
+
+
+    @Test
+    fun `needsTools forces cloud even when preferLocal ready`() = runBlocking {
+        val openAIAPI = RecordingOpenAIAPI()
+        val local = RecordingLocalProvider(listOf(ApiState.Success("should-not")))
+        val repository = createRepository(
+            openAIAPI = openAIAPI,
+            localProvider = local,
+            networkAvailable = true,
+            localReady = true,
+            preferLocal = true
+        )
+
+        repository.completeChat(
+            userMessages = listOf(MessageV2(content = "Hi", platformType = null)),
+            assistantMessages = emptyList(),
+            platform = customPlatform(),
+            needsTools = true
+        ).toList()
+
+        assertEquals(1, openAIAPI.streamChatCompletionCalls)
+        assertEquals(0, local.calls)
+        assertEquals(false, repository.lastUsedLocal)
+        assertEquals("need_tools_cloud", repository.lastRouteReason)
     }
 
 

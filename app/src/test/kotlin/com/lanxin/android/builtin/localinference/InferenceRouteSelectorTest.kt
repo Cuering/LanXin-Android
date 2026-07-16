@@ -2,6 +2,7 @@ package com.lanxin.android.builtin.localinference
 
 import com.lanxin.android.builtin.localinference.domain.InferenceRouteSelector
 import com.lanxin.android.builtin.localinference.domain.InferenceRouteTarget
+import com.lanxin.android.builtin.localinference.domain.RouteReason
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -16,7 +17,7 @@ class InferenceRouteSelectorTest {
             networkAvailable = true
         )
         assertEquals(InferenceRouteTarget.LOCAL, d.target)
-        assertEquals("user_prefer_local", d.reason)
+        assertEquals(RouteReason.PREFER_LOCAL, d.reason)
     }
 
     @Test
@@ -28,7 +29,7 @@ class InferenceRouteSelectorTest {
             networkAvailable = false
         )
         assertEquals(InferenceRouteTarget.LOCAL, d.target)
-        assertEquals("offline_fallback", d.reason)
+        assertEquals(RouteReason.OFFLINE_LOCAL, d.reason)
     }
 
     @Test
@@ -40,7 +41,7 @@ class InferenceRouteSelectorTest {
             networkAvailable = true
         )
         assertEquals(InferenceRouteTarget.CLOUD, d.target)
-        assertEquals("cloud_preferred", d.reason)
+        assertEquals(RouteReason.DEFAULT_CLOUD, d.reason)
     }
 
     @Test
@@ -63,7 +64,7 @@ class InferenceRouteSelectorTest {
             networkAvailable = true
         )
         assertEquals(InferenceRouteTarget.LOCAL, d.target)
-        assertEquals("local_only_available", d.reason)
+        assertEquals(RouteReason.LOCAL_ONLY, d.reason)
     }
 
     @Test
@@ -75,7 +76,7 @@ class InferenceRouteSelectorTest {
             networkAvailable = false
         )
         assertEquals(InferenceRouteTarget.UNAVAILABLE, d.target)
-        assertEquals("no_provider", d.reason)
+        assertEquals(RouteReason.OFFLINE_LOCAL_UNAVAILABLE, d.reason)
     }
 
     @Test
@@ -87,6 +88,19 @@ class InferenceRouteSelectorTest {
             networkAvailable = null
         )
         assertEquals(InferenceRouteTarget.CLOUD, d.target)
-        assertEquals("cloud_preferred", d.reason)
+        assertEquals(RouteReason.DEFAULT_CLOUD, d.reason)
+    }
+
+    @Test
+    fun `needsTools delegates to cloud`() {
+        val d = InferenceRouteSelector.select(
+            preferLocal = true,
+            localAvailable = true,
+            cloudAvailable = true,
+            networkAvailable = true,
+            needsTools = true
+        )
+        assertEquals(InferenceRouteTarget.CLOUD, d.target)
+        assertEquals(RouteReason.NEED_TOOLS_CLOUD, d.reason)
     }
 }
