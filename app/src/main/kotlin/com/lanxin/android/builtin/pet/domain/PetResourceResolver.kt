@@ -21,9 +21,9 @@ import com.lanxin.android.builtin.voice.domain.TtsConfig
 import java.io.File
 
 /**
- * 将 DataStore 配置 +（可选）debug 妹居旁路解析为运行时路径。
+ * 将 DataStore 配置 +（可选）debug 开源 `debug-assets` / 妹居旁路解析为运行时路径。
  *
- * VoiceSession / PetOverlay **只读**解析结果，不写死妹居文件名。
+ * VoiceSession / PetOverlay **只读**解析结果，不写死商业文件名。
  */
 object PetResourceResolver {
 
@@ -43,7 +43,7 @@ object PetResourceResolver {
 
     /**
      * @param filesDir Context.filesDir
-     * @param isDebug BuildConfig.DEBUG；false 时绝不自动选用 meiju-ref
+     * @param isDebug debuggable；false 时绝不自动选用 debug-assets / meiju-ref
      */
     fun resolve(
         filesDir: File,

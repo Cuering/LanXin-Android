@@ -19,22 +19,24 @@ package com.lanxin.android.builtin.pet.domain
 import java.io.File
 
 /**
- * Debug 专用：妹居参考资源在设备上的**约定相对路径**（相对 [filesDir]）。
+ * Debug 专用：设备上资源路径解析（相对 [filesDir]）。
  *
- * - **绝不**把 so / moc3 / mnn / wav 打进 git；仅本地 / adb push / 从 APK 抽取。
- * - Release 不得依赖这些默认；路径配置始终是一等公民，换模型不改状态机。
- * - 妹居文件名只作 debug 常量，业务层只读配置路径。
+ * 用户配置为空时优先级：
+ * 1. **开源 debug 包** [DebugOpenSourcePaths]（`debug-assets/`，脚本拉取）
+ * 2. **妹居参考旁路** `meiju-ref/`（仅本机 adb push，**禁止入库**）
+ *
+ * Release 不得自动选用上述默认；路径配置始终是一等公民。
  */
 object MeijuDebugPaths {
 
-    /** 设备侧根目录名（位于 Context.filesDir 下）。 */
+    /** 妹居参考根目录名（位于 Context.filesDir 下）。 */
     const val ROOT_DIR = "meiju-ref"
 
     /** Live2D 模型目录（相对 filesDir）。 */
     const val L2D_DIR = "$ROOT_DIR/L2D/high"
 
     /**
-     * Live2D model3 相对路径（debug 默认常量；正式版改设置项即可）。
+     * 妹居 Live2D model3 相对路径（**仅本机**；正式测试用 Mao）。
      * 对应妹居 APK：`assets/assets/L2D/high/棕发1.model3.json`
      */
     const val L2D_MODEL3_REL = "$L2D_DIR/棕发1.model3.json"
@@ -55,13 +57,16 @@ object MeijuDebugPaths {
     const val NATIVE_LIBS_DIR = "$ROOT_DIR/libs"
 
     /**
-     * 资源来源标签（设置页文案，勿宣传为可分发）。
+     * 资源来源标签（设置页文案）。
      */
     enum class ResourceSource {
         /** 用户显式配置的自定义路径。 */
         CUSTOM,
 
-        /** Debug 构建且命中 meiju-ref 约定目录。 */
+        /** Debug 开源包（Mao / sherpa 小模型，scripts/fetch-debug-assets.sh）。 */
+        DEBUG_OPEN_SOURCE,
+
+        /** Debug 构建且命中 meiju-ref 约定目录（仅本地）。 */
         DEBUG_MEIJU_REF,
 
         /** 无可用资源 / 占位。 */
@@ -78,9 +83,13 @@ object MeijuDebugPaths {
 
     fun asrModelDirFile(filesDir: File): File = File(filesDir, ASR_MODEL_DIR)
 
-    fun live2dExists(filesDir: File): Boolean = live2dModelFile(filesDir).isFile
+    fun live2dExists(filesDir: File): Boolean =
+        DebugOpenSourcePaths.live2dModelFile(filesDir).isFile || live2dModelFile(filesDir).isFile
 
     fun ttsModelsExist(filesDir: File): Boolean {
+        if (DebugOpenSourcePaths.isModelDirReady(DebugOpenSourcePaths.ttsModelDir(filesDir))) {
+            return true
+        }
         val dir = ttsModelDirFile(filesDir)
         return dir.isDirectory && (dir.listFiles()?.isNotEmpty() == true)
     }
@@ -88,16 +97,20 @@ object MeijuDebugPaths {
     fun ttsReferenceExists(filesDir: File): Boolean = ttsReferenceAudioFile(filesDir).isFile
 
     /**
-     * Debug 时：若用户未配置路径且设备上存在约定文件，则返回绝对路径；否则返回空。
+     * Debug：用户配置优先 → 开源 debug-assets → 妹居旁路 → 空。
      */
     fun resolveLive2dIfPresent(filesDir: File, configured: String): String {
         if (configured.isNotBlank()) return configured.trim()
+        val open = DebugOpenSourcePaths.live2dModelFile(filesDir)
+        if (open.isFile) return open.absolutePath
         val f = live2dModelFile(filesDir)
         return if (f.isFile) f.absolutePath else ""
     }
 
     fun resolveTtsModelDirIfPresent(filesDir: File, configured: String): String {
         if (configured.isNotBlank()) return configured.trim()
+        val open = DebugOpenSourcePaths.ttsModelDir(filesDir)
+        if (DebugOpenSourcePaths.isModelDirReady(open)) return open.absolutePath
         val d = ttsModelDirFile(filesDir)
         return if (d.isDirectory) d.absolutePath else ""
     }
@@ -110,38 +123,33 @@ object MeijuDebugPaths {
 
     fun resolveAsrIfPresent(filesDir: File, configured: String): String {
         if (configured.isNotBlank()) return configured.trim()
+        val open = DebugOpenSourcePaths.asrModelDir(filesDir)
+        if (DebugOpenSourcePaths.isModelDirReady(open)) return open.absolutePath
         val d = asrModelDirFile(filesDir)
         return if (d.isDirectory) d.absolutePath else ""
     }
 
     /**
      * 判定当前有效路径的展示来源。
-     *
-     * @param isDebug BuildConfig.DEBUG
-     * @param configured 用户 DataStore 中的原始值（未 resolve）
-     * @param resolved 解析后路径
-     * @param meijuMarker 若 resolved 落在 meiju-ref 下则为 debug 参考
      */
     fun classifySource(
         isDebug: Boolean,
         configured: String,
-        resolved: String,
-        meijuMarker: String = ROOT_DIR
+        resolved: String
     ): ResourceSource {
         if (resolved.isBlank()) return ResourceSource.PLACEHOLDER
-        if (configured.isNotBlank()) {
-            // 用户手填：即使路径碰巧在 meiju-ref 下也标自定义
-            return ResourceSource.CUSTOM
-        }
-        return if (isDebug && resolved.contains(meijuMarker)) {
-            ResourceSource.DEBUG_MEIJU_REF
-        } else {
-            ResourceSource.PLACEHOLDER
+        if (configured.isNotBlank()) return ResourceSource.CUSTOM
+        if (!isDebug) return ResourceSource.PLACEHOLDER
+        return when {
+            DebugOpenSourcePaths.pathLooksOpenSource(resolved) -> ResourceSource.DEBUG_OPEN_SOURCE
+            resolved.contains(ROOT_DIR) -> ResourceSource.DEBUG_MEIJU_REF
+            else -> ResourceSource.PLACEHOLDER
         }
     }
 
     fun sourceLabel(source: ResourceSource): String = when (source) {
         ResourceSource.CUSTOM -> "当前：自定义"
+        ResourceSource.DEBUG_OPEN_SOURCE -> "当前：Debug 开源包（可测）"
         ResourceSource.DEBUG_MEIJU_REF -> "当前：Debug 妹居参考（仅本地）"
         ResourceSource.PLACEHOLDER -> "当前：占位 / 未配置"
     }

@@ -20,8 +20,11 @@ import android.app.Application
 import android.content.pm.ApplicationInfo
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.lanxin.android.builtin.localinference.domain.LocalInferenceSettings
 import com.lanxin.android.builtin.pet.data.FloatingPetService
 import com.lanxin.android.builtin.pet.data.OverlayPermissionHelper
+import com.lanxin.android.builtin.pet.domain.DebugOpenSourcePaths
+import com.lanxin.android.builtin.pet.domain.PetPathReadiness
 import com.lanxin.android.builtin.pet.domain.PetResourceResolver
 import com.lanxin.android.builtin.pet.domain.PetSettings
 import com.lanxin.android.builtin.pet.domain.VoiceSessionCoordinator
@@ -57,10 +60,24 @@ data class DesktopPetUiState(
     val ttsModelDirResolved: String = "",
     val ttsReferenceResolved: String = "",
     val asrModelPathResolved: String = "",
-    /** 设置页标注：当前：自定义 / Debug 妹居参考（仅本地）/ 占位。 */
+    /** 设置页标注：当前：自定义 / Debug 开源包 / 妹居参考 / 占位。 */
     val live2dSourceLabel: String = "当前：占位 / 未配置",
     val ttsSourceLabel: String = "当前：占位 / 未配置",
     val asrSourceLabel: String = "当前：占位 / 未配置",
+    /** 路径就绪短标签。 */
+    val live2dReadyLabel: String = "未就绪",
+    val asrReadyLabel: String = "未就绪",
+    val ttsReadyLabel: String = "未就绪",
+    val live2dReady: Boolean = false,
+    val asrReady: Boolean = false,
+    val ttsReady: Boolean = false,
+    /** 汇总：就绪 / 缺失引导 fetch 脚本。 */
+    val resourceSummary: String = "",
+    /** 本地脑路径键 + 1.5B 说明（M2a 预留展示）。 */
+    val localLlmPathConfigured: String = "",
+    val localLlmReadyLabel: String = "未配置",
+    val localLlmHint: String = DebugOpenSourcePaths.LOCAL_LLM_DEFAULT_HINT,
+    val fetchScriptHint: String = DebugOpenSourcePaths.FETCH_SCRIPT_HINT,
     val isDebugBuild: Boolean = false
 )
 
@@ -71,7 +88,8 @@ class DesktopPetViewModel @Inject constructor(
     private val sessionCoordinator: VoiceSessionCoordinator,
     private val ttsSettings: TtsSettings,
     private val ttsEngine: TtsEngine,
-    private val asrSettings: AsrSettings
+    private val asrSettings: AsrSettings,
+    private val localInferenceSettings: LocalInferenceSettings
 ) : AndroidViewModel(application) {
 
     private val isDebugBuild: Boolean =
@@ -109,12 +127,29 @@ class DesktopPetViewModel @Inject constructor(
             val config = petSettings.getConfig()
             val tts = ttsSettings.getConfig()
             val asr = asrSettings.getConfig()
+            val local = localInferenceSettings.getConfig()
             val resolved = PetResourceResolver.resolve(
                 filesDir = app.filesDir,
                 pet = config,
                 tts = tts,
                 asr = asr,
                 isDebug = isDebugBuild
+            )
+            val live2dCheck = PetPathReadiness.check(
+                PetPathReadiness.Kind.LIVE2D,
+                resolved.live2dModelPath
+            )
+            val asrCheck = PetPathReadiness.check(
+                PetPathReadiness.Kind.ASR,
+                resolved.asrModelPath
+            )
+            val ttsCheck = PetPathReadiness.check(
+                PetPathReadiness.Kind.TTS,
+                resolved.ttsModelDir
+            )
+            val llmCheck = PetPathReadiness.check(
+                PetPathReadiness.Kind.LOCAL_LLM,
+                local.modelPath
             )
             val can = OverlayPermissionHelper.canDrawOverlays(app)
             val snap = sessionCoordinator.current()
@@ -132,6 +167,26 @@ class DesktopPetViewModel @Inject constructor(
                     live2dSourceLabel = resolved.live2dLabel,
                     ttsSourceLabel = resolved.ttsLabel,
                     asrSourceLabel = resolved.asrLabel,
+                    live2dReadyLabel = live2dCheck.label,
+                    asrReadyLabel = asrCheck.label,
+                    ttsReadyLabel = ttsCheck.label,
+                    live2dReady = live2dCheck.ready,
+                    asrReady = asrCheck.ready,
+                    ttsReady = ttsCheck.ready,
+                    resourceSummary = PetPathReadiness.summaryMessage(
+                        live2dCheck,
+                        asrCheck,
+                        ttsCheck,
+                        llmCheck
+                    ),
+                    localLlmPathConfigured = local.modelPath,
+                    localLlmReadyLabel = if (local.modelPath.isBlank()) {
+                        "未配置"
+                    } else {
+                        llmCheck.label
+                    },
+                    localLlmHint = DebugOpenSourcePaths.LOCAL_LLM_DEFAULT_HINT,
+                    fetchScriptHint = DebugOpenSourcePaths.FETCH_SCRIPT_HINT,
                     isDebugBuild = isDebugBuild,
                     phase = snap.phase,
                     asrText = snap.asrText,
@@ -243,6 +298,13 @@ class DesktopPetViewModel @Inject constructor(
                 )
             }
             refresh()
+        }
+    }
+
+    /** 将脚本说明推到 snackbar（不在 App 内下载）。 */
+    fun showFetchAssetsHint() {
+        _uiState.update {
+            it.copy(snackbarMessage = DebugOpenSourcePaths.FETCH_SCRIPT_HINT)
         }
     }
 
