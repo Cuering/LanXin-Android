@@ -50,9 +50,9 @@ class SystemToolsPlugin @Inject constructor(
 
     override val id = "lanxin.systemtools"
     override val name = "系统能力"
-    override val version = "0.1.0"
+    override val version = "0.2.0"
     override val description =
-        "日历 / 系统闹钟 Intent / 内置笔记（Phase 7 skeleton，默认关，写操作需确认）"
+        "日历读取 / setAlarmClock 闹钟 / 内置笔记（Phase 7.2，默认关，写操作需确认）"
 
     private val gate = DeviceToolGate { settings.getConfig() }
 
@@ -60,17 +60,18 @@ class SystemToolsPlugin @Inject constructor(
         register(
             context,
             name = DeviceToolIds.ALARM_SET,
-            description = "设置系统闹钟（AlarmClock Intent；M1 仅返回 Intent 规格 stub）",
+            description = "设置闹钟：默认 setAlarmClock；mode=intent 用系统 AlarmClock Intent",
             properties = buildJsonObject {
-                put("hour", intProp("小时 0-23"))
+                put("hour", intProp("小时 0-23（与 trigger_at_epoch_ms 二选一）"))
                 put("minutes", intProp("分钟 0-59"))
+                put("trigger_at_epoch_ms", intProp("绝对触发时刻 epoch ms"))
                 put("message", stringProp("闹钟标签"))
-                put("skip_ui", boolProp("尽量跳过系统 UI，默认 false"))
-                put("vibrate", boolProp("振动，默认 true"))
-                put("days", stringProp("重复日 1-7 逗号分隔，可选"))
+                put("mode", stringProp("set_alarm_clock（默认）| intent"))
+                put("skip_ui", boolProp("intent 模式：尽量跳过系统 UI"))
+                put("vibrate", boolProp("intent 模式：振动，默认 true"))
+                put("days", stringProp("intent 模式：重复日 1-7 逗号分隔"))
                 put("confirmed", boolProp("写操作用户已确认，默认 false"))
-            },
-            required = listOf("hour", "minutes")
+            }
         )
         register(
             context,
@@ -81,9 +82,10 @@ class SystemToolsPlugin @Inject constructor(
         register(
             context,
             name = DeviceToolIds.CALENDAR_LIST_UPCOMING,
-            description = "列出即将到来的日历事件（stub）",
+            description = "列出接下来 N 天内的日历事件（CalendarContract；无权限返回提示）",
             properties = buildJsonObject {
                 put("limit", intProp("最多条数，默认 10"))
+                put("days", intProp("未来天数 1-30，默认 7"))
                 put("after_epoch_ms", intProp("起始时间 epoch ms，默认现在"))
             }
         )

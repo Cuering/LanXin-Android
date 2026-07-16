@@ -9,7 +9,9 @@ on:
       - 'builtin/systemtools/**'
       - 'ARCHITECTURE.md'
   push:
-    branches: [ feat/phase7-system-tools-skeleton ]
+    branches:
+      - feat/phase7-system-tools-skeleton
+      - feat/phase7.2-calendar-alarm
 
 concurrency:
   group: phase7-${{ github.head_ref || github.ref_name }}
@@ -40,6 +42,11 @@ jobs:
         run: |
           test -f docs/system-tools.md || { echo 'Missing docs/system-tools.md'; exit 1; }
           grep -q 'DeviceTool' app/src/main/kotlin/com/lanxin/android/builtin/systemtools/domain/DeviceTool.kt 2>/dev/null || { echo 'Missing DeviceTool interface'; exit 1; }
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/systemtools/data/AndroidCalendarReader.kt || { echo 'Missing AndroidCalendarReader'; exit 1; }
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/systemtools/data/AndroidAlarmSetter.kt || { echo 'Missing AndroidAlarmSetter'; exit 1; }
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/systemtools/receiver/SystemToolsAlarmReceiver.kt || { echo 'Missing SystemToolsAlarmReceiver'; exit 1; }
+          grep -q 'READ_CALENDAR' app/src/main/AndroidManifest.xml || { echo 'Missing READ_CALENDAR permission'; exit 1; }
+          grep -q '7.2' docs/system-tools.md || { echo 'docs must mention 7.2'; exit 1; }
 
       - name: Surface check - no model curl
         run: |

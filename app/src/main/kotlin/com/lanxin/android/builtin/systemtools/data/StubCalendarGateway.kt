@@ -17,6 +17,9 @@
 package com.lanxin.android.builtin.systemtools.data
 
 import com.lanxin.android.builtin.systemtools.domain.CalendarEvent
+import com.lanxin.android.builtin.systemtools.domain.CalendarGateway
+import com.lanxin.android.builtin.systemtools.domain.CalendarListResult
+import com.lanxin.android.builtin.systemtools.domain.CalendarQueryParams
 import com.lanxin.android.builtin.systemtools.domain.CreateCalendarEventRequest
 import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
@@ -25,36 +28,32 @@ import javax.inject.Singleton
 
 /**
  * 日历 Gateway stub：内存事件列表，不访问 CalendarContract。
- * M2 可替换为 `CalendarContractGateway`（READ/WRITE_CALENDAR 或 Intent）。
+ * 用于单测与写路径 fallback；读路径真机由 [AndroidCalendarReader] 实现。
  */
 @Singleton
-class StubCalendarGateway @Inject constructor() {
+class StubCalendarGateway @Inject constructor() : CalendarGateway {
 
     private val events = CopyOnWriteArrayList<CalendarEvent>()
 
     init {
-        // 演示用样例，便于 list 非空
-        val now = System.currentTimeMillis()
-        events.add(
-            CalendarEvent(
-                id = "stub-sample-1",
-                title = "（stub）示例会议",
-                startEpochMs = now + 3_600_000L,
-                endEpochMs = now + 7_200_000L,
-                location = "stub-room"
-            )
-        )
+        seedSample()
     }
 
-    fun listUpcoming(limit: Int = 10, afterEpochMs: Long = System.currentTimeMillis()): List<CalendarEvent> {
-        val n = limit.coerceIn(1, 100)
-        return events
-            .filter { it.endEpochMs >= afterEpochMs }
+    override fun listUpcoming(
+        limit: Int,
+        afterEpochMs: Long,
+        days: Int
+    ): CalendarListResult {
+        val n = CalendarQueryParams.normalizeLimit(limit)
+        val endMs = CalendarQueryParams.windowEndEpochMs(afterEpochMs, days)
+        val list = events
+            .filter { it.endEpochMs >= afterEpochMs && it.startEpochMs <= endMs }
             .sortedBy { it.startEpochMs }
             .take(n)
+        return CalendarListResult.Ok(list)
     }
 
-    fun create(request: CreateCalendarEventRequest): CalendarEvent {
+    override fun create(request: CreateCalendarEventRequest): CalendarEvent {
         require(request.title.isNotBlank()) { "title 不能为空" }
         require(request.endEpochMs >= request.startEpochMs) { "end 必须 ≥ start" }
         val event = CalendarEvent(
@@ -71,6 +70,10 @@ class StubCalendarGateway @Inject constructor() {
     /** 单测用：清空并重置样例。 */
     fun resetForTest() {
         events.clear()
+        seedSample()
+    }
+
+    private fun seedSample() {
         val now = System.currentTimeMillis()
         events.add(
             CalendarEvent(

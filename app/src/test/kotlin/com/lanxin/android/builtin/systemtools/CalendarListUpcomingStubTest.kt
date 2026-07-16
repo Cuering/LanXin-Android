@@ -19,6 +19,11 @@ package com.lanxin.android.builtin.systemtools
 import com.lanxin.android.builtin.systemtools.data.CalendarCreateEventDeviceTool
 import com.lanxin.android.builtin.systemtools.data.CalendarListUpcomingDeviceTool
 import com.lanxin.android.builtin.systemtools.data.StubCalendarGateway
+import com.lanxin.android.builtin.systemtools.domain.CalendarEvent
+import com.lanxin.android.builtin.systemtools.domain.CalendarGateway
+import com.lanxin.android.builtin.systemtools.domain.CalendarListResult
+import com.lanxin.android.builtin.systemtools.domain.CalendarQueryParams
+import com.lanxin.android.builtin.systemtools.domain.CreateCalendarEventRequest
 import com.lanxin.android.builtin.systemtools.domain.DeviceToolIds
 import com.lanxin.android.builtin.systemtools.domain.DeviceToolOutcome
 import kotlinx.coroutines.runBlocking
@@ -52,7 +57,6 @@ class CalendarListUpcomingStubTest {
         assertTrue(outcome is DeviceToolOutcome.Ok)
         val ok = outcome as DeviceToolOutcome.Ok
         assertEquals(true, ok.data["ok"])
-        assertEquals(true, ok.data["stub"])
         assertTrue((ok.data["count"] as Int) >= 1)
         @Suppress("UNCHECKED_CAST")
         val events = ok.data["events"] as List<Map<String, Any?>>
@@ -92,5 +96,35 @@ class CalendarListUpcomingStubTest {
         }
         val list = listTool.invoke(mapOf("limit" to 2)) as DeviceToolOutcome.Ok
         assertEquals(2, list.data["count"])
+    }
+
+    @Test
+    fun `permission denied maps to Denied outcome`() = runBlocking {
+        val deniedGateway = object : CalendarGateway {
+            override fun listUpcoming(limit: Int, afterEpochMs: Long, days: Int) =
+                CalendarListResult.PermissionDenied("未授予 READ_CALENDAR")
+
+            override fun create(request: CreateCalendarEventRequest): CalendarEvent {
+                error("not used")
+            }
+        }
+        val tool = CalendarListUpcomingDeviceTool(deniedGateway)
+        val outcome = tool.invoke(emptyMap())
+        assertTrue(outcome is DeviceToolOutcome.Denied)
+        val denied = outcome as DeviceToolOutcome.Denied
+        assertEquals("permission_denied_read_calendar", denied.code)
+        assertTrue(denied.reason.contains("READ_CALENDAR"))
+    }
+
+    @Test
+    fun `query params normalize days and limit`() {
+        assertEquals(7, CalendarQueryParams.normalizeDays(null))
+        assertEquals(1, CalendarQueryParams.normalizeDays(0))
+        assertEquals(30, CalendarQueryParams.normalizeDays(99))
+        assertEquals(10, CalendarQueryParams.normalizeLimit(null))
+        assertEquals(1, CalendarQueryParams.normalizeLimit(0))
+        assertEquals(100, CalendarQueryParams.normalizeLimit(500))
+        val now = 1_000_000L
+        assertEquals(now + 7 * CalendarQueryParams.DAY_MS, CalendarQueryParams.windowEndEpochMs(now, 7))
     }
 }

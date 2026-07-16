@@ -8,6 +8,8 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- Phase 7.2 日历读取 -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -71,6 +73,15 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="com.lanxin.android.scheduler.ACTION_FIRE" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Phase 7.2 setAlarmClock 触发 -->
+        <receiver
+            android:name=".builtin.systemtools.receiver.SystemToolsAlarmReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.lanxin.android.systemtools.ACTION_ALARM_FIRE" />
             </intent-filter>
         </receiver>
 

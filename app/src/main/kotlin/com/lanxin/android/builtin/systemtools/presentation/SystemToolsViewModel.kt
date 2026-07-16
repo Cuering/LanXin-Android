@@ -21,6 +21,8 @@ import androidx.lifecycle.viewModelScope
 import com.lanxin.android.builtin.systemtools.data.DeviceToolRegistry
 import com.lanxin.android.builtin.systemtools.domain.DeviceToolIds
 import com.lanxin.android.builtin.systemtools.domain.SystemToolsConfig
+import com.lanxin.android.builtin.systemtools.domain.SystemToolsPermissionChecker
+import com.lanxin.android.builtin.systemtools.domain.SystemToolsPermissionStatus
 import com.lanxin.android.builtin.systemtools.domain.SystemToolsSettings
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -33,6 +35,7 @@ import kotlinx.coroutines.launch
 data class SystemToolsUiState(
     val config: SystemToolsConfig = SystemToolsConfig(),
     val stubToolNames: List<String> = emptyList(),
+    val permissions: SystemToolsPermissionStatus = SystemToolsPermissionStatus(),
     val snackbarMessage: String? = null,
     val isBusy: Boolean = false
 )
@@ -40,7 +43,8 @@ data class SystemToolsUiState(
 @HiltViewModel
 class SystemToolsViewModel @Inject constructor(
     private val settings: SystemToolsSettings,
-    private val registry: DeviceToolRegistry
+    private val registry: DeviceToolRegistry,
+    private val permissionChecker: SystemToolsPermissionChecker
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -54,10 +58,13 @@ class SystemToolsViewModel @Inject constructor(
 
     fun refresh() {
         viewModelScope.launch {
+            val perms = runCatching { permissionChecker.check() }
+                .getOrDefault(SystemToolsPermissionStatus())
             _uiState.update {
                 it.copy(
                     config = settings.getConfig(),
                     stubToolNames = registry.names().sorted(),
+                    permissions = perms,
                     isBusy = false
                 )
             }
@@ -78,6 +85,16 @@ class SystemToolsViewModel @Inject constructor(
         settings.setRequireConfirmOnWrite(require)
     }
 
+    fun openCalendarPermissionSettings() {
+        runCatching { permissionChecker.openAppDetailsSettings() }
+        _uiState.update { it.copy(snackbarMessage = "已打开应用权限设置") }
+    }
+
+    fun openExactAlarmSettings() {
+        runCatching { permissionChecker.openExactAlarmSettings() }
+        _uiState.update { it.copy(snackbarMessage = "已打开精确闹钟设置") }
+    }
+
     fun clearSnackbar() {
         _uiState.update { it.copy(snackbarMessage = null) }
     }
@@ -86,9 +103,12 @@ class SystemToolsViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isBusy = true) }
             block()
+            val perms = runCatching { permissionChecker.check() }
+                .getOrDefault(SystemToolsPermissionStatus())
             _uiState.update {
                 it.copy(
                     config = settings.getConfig(),
+                    permissions = perms,
                     isBusy = false,
                     snackbarMessage = "已保存"
                 )

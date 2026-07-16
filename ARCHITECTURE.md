@@ -1,7 +1,7 @@
 # LanXin Android 架构设计（定稿 v1.0）
 
 > 基于 GPT Mobile 源码改造，引入插件化架构，借鉴 AstrBot 设计思路。
-> 当前状态：**Phase 1 ✅ → Phase 2 ✅ → Phase 3 ✅ → Phase 4 ✅ → Phase 5.1–5.7 ✅ → Phase 6.1 ✅ → Phase 6.2 ✅ → Phase 6.3 ✅ → Phase 6.4 ✅ 骨架 → 桌宠 M1 ✅ → M2a 路径闭环 🚧** → **Phase 7.1 系统工具骨架 🚧** · **桌宠 + 操控手机 = 陪伴操控一体**
+> 当前状态：**Phase 1 ✅ → Phase 2 ✅ → Phase 3 ✅ → Phase 4 ✅ → Phase 5.1–5.7 ✅ → Phase 6.1 ✅ → Phase 6.2 ✅ → Phase 6.3 ✅ → Phase 6.4 ✅ 骨架 → 桌宠 M1 ✅ → M2a 路径闭环 🚧** → **Phase 7.1 系统工具骨架 ✅ → 7.2 日历+闹钟 🚧** · **桌宠 + 操控手机 = 陪伴操控一体**
 > - Step①~⑧ 全部完成
 > - 知识库 P0~P6、Unified Inbox 均已落地
 > - Phase 4：品牌换皮 + Memory 编辑 UI + UnifiedSearch 四路 RRF
@@ -18,7 +18,8 @@
 > - Phase 6.4：Sherpa-ONNX 离线语音识别（ASR）骨架 ✅（`feat/phase6-4-offline-asr`）
 > - Phase 6 主线 M1：妹居风格桌宠 + VoiceSession 听→想→说 ✅（#48 已合 main）
 > - Phase 6 主线 M2a：资源路径就绪 + 设置体验 + fetch 脚本指引 🚧（#49 / `feat/phase6-pet-m2-engines`）
-> - Phase 7.1：系统工具骨架 🚧（`feat/phase7-system-tools-skeleton`）——DeviceTool + Gate + stub + 设置总开关；**陪伴操控一体**（`docs/system-tools.md` + VoiceSession hook 预留）
+> - Phase 7.1：系统工具骨架 ✅（#52）——DeviceTool + Gate + stub + 设置总开关；**陪伴操控一体**
+> - Phase 7.2：日历读取 + setAlarmClock 🚧（`feat/phase7.2-calendar-alarm`）——Instances + 精确闹钟 + 权限引导
 
 ---
 
@@ -65,7 +66,7 @@ LanXin-Android/
 │   ├── local_inference/    本地推理（MNN 骨架 + 离线 + ChatRouter）✅ 6.1 · ✅ 6.2 · ✅ 6.3
 │   ├── voice/              离线 ASR ✅ 6.4 · TTS stub ✅ M1
 │   ├── pet/                桌宠悬浮 + VoiceSession ✅ M1 · 路径就绪 🚧 M2a
-│   └── systemtools/        系统能力（日历/闹钟/笔记/用户文件）🚧 Phase 7.1
+│   └── systemtools/        系统能力（日历/闹钟/笔记/用户文件）🚧 Phase 7.2
 │
 ├── plugins/                [外部插件] — 可选增强，可拔插
 │   ├── memory/             记忆系统 ✅（5.7 判断包/Decide/衰减维护/坚果云同步配置）
@@ -183,7 +184,7 @@ Phase 4（已落地 ✅）       Phase 5（5.1–5.7 ✅）
 | `builtin/local_inference/` | ✅ 6.1 · ✅ 6.2 · ✅ 6.3 | 高 | MNN 骨架 + 离线兜底 + ChatRouter（见第十四节） |
 | `builtin/voice/` | ✅ 6.4 ASR 骨架 · ✅ M1 TTS stub · 🔜 真 TTS | 高 | Sherpa-ONNX ASR + Bert-VITS2 TTS（见第十四节 / meiju-style-pet） |
 | `builtin/pet/` | ✅ M1 · 🚧 M2a 路径闭环 | 高 | 悬浮 WebView + VoiceSession + 资源就绪（见第十四节） |
-| `builtin/systemtools/` | 🚧 Phase 7.1 骨架 | 中 | DeviceTool + Gate + stub 日历/闹钟/笔记（见第十四节 / system-tools） |
+| `builtin/systemtools/` | 🚧 Phase 7.2 | 中 | DeviceTool + CalendarContract + setAlarmClock + stub 笔记（见第十四节 / system-tools） |
 
 ---
 
@@ -711,8 +712,8 @@ app/.../plugins/unifiedinbox/
 
 | 阶段 | 内容 | 优先级 | 状态 |
 |------|------|--------|------|
-| **7.1 骨架** | `DeviceTool` 接口 + 权限门闸 + Fake/Stub + 单测 + 设置总开关 + 本文档 | 🔴 高 | 🚧 本 PR |
-| **7.2 闹钟 + 日历** | Intent 设闹钟；日历读列表 + 创建（确认流） | 🔴 高 | 🔜 |
+| **7.1 骨架** | `DeviceTool` 接口 + 权限门闸 + Fake/Stub + 单测 + 设置总开关 + 本文档 | 🔴 高 | ✅ |
+| **7.2 闹钟 + 日历** | `setAlarmClock` + 权限引导；日历 Instances 读列表 + 创建确认流 | 🔴 高 | 🚧 |
 | **7.3 笔记** | 应用内笔记 CRUD + 导出/分享 | 🟡 中 | 🔜 |
 | **7.4 文件** | SAF 授权目录列表、读文本摘要、写/分享/删（确认） | 🔴 高 | 🔜 |
 | **7.5 对话/桌宠一体接入** | ChatRouter `needsTools` + **桌宠 VoiceSession 同一链路**调工具（听→想→办→说） | 🔴 高 | 🔜 |
