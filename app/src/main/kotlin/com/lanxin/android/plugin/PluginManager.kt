@@ -42,6 +42,7 @@ class PluginManager @Inject constructor(
 
     private val plugins = mutableMapOf<String, LanXinPlugin>()
     private val tools = mutableMapOf<String, ToolDef>()
+
     /** toolName → 所属 pluginId（用于 disable 时清理工具） */
     private val toolOwners = mutableMapOf<String, String>()
     private val loadedIds = mutableSetOf<String>()
@@ -170,9 +171,19 @@ class PluginManager @Inject constructor(
 
     /**
      * 按类型查找已注册插件（Phase 2 API）。
+     *
+     * 非 inline：避免 public-API inline 访问 private [plugins]。
      */
-    inline fun <reified T : LanXinPlugin> getPluginsByType(): List<T> =
-        plugins.values.filterIsInstance<T>()
+    fun <T : LanXinPlugin> getPluginsByType(clazz: Class<T>): List<T> =
+        plugins.values.filterIsInstance(clazz)
+
+    /**
+     * 便捷重载：按 reified 类型查找（内部拷贝列表，不直接暴露 private map）。
+     */
+    inline fun <reified T : LanXinPlugin> getPluginsByType(): List<T> {
+        val snapshot = getPlugins()
+        return snapshot.filterIsInstance<T>()
+    }
 
     /**
      * 扫描 `filesDir/plugin-packages/` 并加载动态插件。
