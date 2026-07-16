@@ -9,7 +9,7 @@ data class MemoryEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     @ColumnInfo(name = "content") val content: String,
     // 类型: preference(偏好), factual(事实), daily(日常),
-    //       chat(对话), insight(洞察), instruction(指令)
+    //       chat(对话), insight(洞察), instruction(指令), judgment(判断包)
     @ColumnInfo(name = "type") val type: String = "chat",
     @ColumnInfo(name = "importance") val importance: Float = 5.0f,
     // 状态: active(活跃), archived(归档), expired(过期)
@@ -18,7 +18,7 @@ data class MemoryEntity(
     @ColumnInfo(name = "lifecycle") val lifecycle: String = "permanent",
     @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis(),
     @ColumnInfo(name = "last_accessed_at") val lastAccessedAt: Long? = null,
-    // metadata: JSON 字符串，存额外信息
+    // metadata: JSON 字符串，存额外信息（applies_when / does_not_apply_when 等）
     @ColumnInfo(name = "metadata") val metadata: String? = null
 )
 
@@ -29,8 +29,9 @@ object MemoryType {
     const val CHAT = "chat"
     const val INSIGHT = "insight"
     const val INSTRUCTION = "instruction"
+    const val JUDGMENT = "judgment"
 
-    val ALL = listOf(PREFERENCE, FACTUAL, DAILY, CHAT, INSIGHT, INSTRUCTION)
+    val ALL = listOf(PREFERENCE, FACTUAL, DAILY, CHAT, INSIGHT, INSTRUCTION, JUDGMENT)
 
     fun displayName(type: String): String = when (type) {
         PREFERENCE -> "偏好"
@@ -39,6 +40,7 @@ object MemoryType {
         CHAT -> "对话"
         INSIGHT -> "洞察"
         INSTRUCTION -> "指令"
+        JUDGMENT -> "判断准则"
         else -> type
     }
 }

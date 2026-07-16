@@ -1,5 +1,6 @@
 package com.lanxin.android.plugins.memory.domain.memory
 
+import android.content.Context
 import android.util.Log
 import com.lanxin.android.builtin.knowledge.domain.VectorPipeline
 import com.lanxin.android.builtin.knowledge.domain.VectorSource
@@ -8,33 +9,36 @@ import com.lanxin.android.builtin.knowledge.domain.sparse.SparseIndexItem
 import com.lanxin.android.plugins.memory.data.memory.MemoryEntity
 import com.lanxin.android.plugins.memory.data.memory.MemoryRepository
 import com.lanxin.android.plugins.memory.data.memory.MemoryType
+import dagger.hilt.android.qualifiers.ApplicationContext
+import org.json.JSONObject
+import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
  * 在发送聊天消息前检索本地记忆并注入上下文。
  *
- * 双路召回 + RRF 融合：
- * 1. 稀疏 BM25（内存索引；失败时 fallback Room LIKE）
- * 2. 语义向量（VectorPipeline，source=memory）
- *
- * 语义路失败时自动降级为纯稀疏/关键词。
+ * Phase 5.7:
+ * Decide gate, judgment packs, silent inject, trace, inject budget.
+ * Sparse BM25 + semantic RRF for factual memories.
  */
 @Singleton
 class MemoryInjector @Inject constructor(
     private val memoryRepository: MemoryRepository,
-    private val vectorPipeline: VectorPipeline
+    private val vectorPipeline: VectorPipeline,
+    @ApplicationContext private val context: Context
 ) {
     @Volatile
     var enabled: Boolean = true
 
-    /** 语义向量检索开关，默认开启；关闭后仅走稀疏/关键词路。 */
     @Volatile
     var semanticEnabled: Boolean = true
 
-    /** 稀疏 BM25 开关；关闭后直接 LIKE。 */
     @Volatile
     var sparseEnabled: Boolean = true
+
+    @Volatile
+    var syncEnabled: Boolean = true
 
     private val bm25 = Bm25Index()
 
@@ -48,12 +52,15 @@ class MemoryInjector @Inject constructor(
     suspend fun inject(question: String, limit: Int = 5): String {
         if (!enabled || question.isBlank()) return question
 
+        if (shouldSkipInject(question)) {
+            Log.d(TAG, "[Trace] skipped decide msg=${question.take(30)}")
+            return question
+        }
+
         val keyword = extractKeyword(question)
+        val judgmentBlock = loadJudgmentBlock(keyword)
 
-        // 路1：稀疏 BM25（失败 → LIKE）
         val sparseResults = searchSparseOrLike(keyword, limit * 2)
-
-        // 路2：语义向量搜索（降级为空）
         val semanticResults = if (semanticEnabled) {
             try {
                 vectorPipeline.search(
@@ -73,27 +80,182 @@ class MemoryInjector @Inject constructor(
             semanticTexts = semanticResults.map { it.textPreview },
             k = RRF_K,
             topK = limit
-        )
+        ).filterNot { it.type == MemoryType.JUDGMENT }
 
-        if (merged.isEmpty()) return question
+        if (merged.isEmpty() && judgmentBlock.isEmpty()) {
+            Log.d(TAG, "[Trace] no_match")
+            return question
+        }
 
-        val lines = merged.joinToString("\n") { item ->
+        val memLines = merged.joinToString("\n") { item ->
             val typeLabel = MemoryType.displayName(item.type)
             "- [$typeLabel] ${item.content}"
         }
 
-        return buildString {
-            appendLine("[我的记忆]")
-            appendLine(lines)
-            appendLine("[记忆结束]")
-            appendLine()
-            append(question)
+        val assembled = mutableListOf<String>()
+        var usedChars = 0
+
+        if (judgmentBlock.isNotEmpty()) {
+            val addLen = judgmentBlock.length + 2
+            if (usedChars + addLen <= MAX_INJECT_CHARS) {
+                assembled.add(judgmentBlock)
+                usedChars += addLen
+                Log.d(TAG, "[Trace] injected judgment chars=${judgmentBlock.length}")
+            } else {
+                Log.d(TAG, "[Trace] judgment truncated by budget")
+            }
+        }
+
+        if (memLines.isNotEmpty()) {
+            val fullBlock = buildString {
+                appendLine("[我的记忆]")
+                appendLine(memLines)
+                appendLine("[记忆结束]")
+            }.trimEnd()
+            val addLen = fullBlock.length + 2
+            if (usedChars + addLen <= MAX_INJECT_CHARS) {
+                assembled.add(fullBlock)
+                usedChars += addLen
+                Log.d(TAG, "[Trace] injected memories count=${merged.size}")
+            } else {
+                val remain = MAX_INJECT_CHARS - usedChars - 2
+                if (remain > 40) {
+                    assembled.add(fullBlock.take(remain - 1) + "…")
+                }
+                Log.d(TAG, "[Trace] memory truncated by budget used=$usedChars")
+            }
+        }
+
+        return if (assembled.isEmpty()) {
+            question
+        } else {
+            assembled.joinToString("\n\n") + "\n\n" + question
         }
     }
 
-    /**
-     * BM25 稀疏检索；索引不可用或异常时 fallback LIKE。
-     */
+    private fun shouldSkipInject(question: String): Boolean {
+        val trimmed = question.trim()
+        if (trimmed.isEmpty()) return true
+        if (trimmed.length == 1 && !trimmed[0].isLetterOrDigit()) return true
+        if (trimmed.all { ch ->
+                val c = ch.code
+                c in 0x1F300..0x1FAFF || c in 0x2600..0x27BF || c in 0x1F600..0x1F64F ||
+                    c in 0x1F900..0x1F9FF || c in 0x1F1E0..0x1F1FF || ch.isWhitespace()
+            }
+        ) {
+            return true
+        }
+        val skipWords = setOf("好", "好的", "嗯", "行", "ok", "OK", "1", "是", "不是", "继续", "知道了", "收到")
+        if (trimmed in skipWords) return true
+        if ("不用搜" in trimmed || "不要搜" in trimmed || "别搜" in trimmed) return true
+        return false
+    }
+
+    private suspend fun loadJudgmentBlock(queryKeyword: String): String {
+        ensureJudgmentPacksCopied()
+        val candidates = mutableListOf<JudgmentCandidate>()
+        val packsDir = File(context.filesDir, JUDGMENT_PACKS_DIR)
+        if (packsDir.isDirectory) {
+            packsDir.listFiles { file -> file.extension == "json" }?.forEach { jsonFile ->
+                try {
+                    val pkg = JudgmentPackage.fromJson(jsonFile.readText())
+                    val score = matchPackage(pkg, queryKeyword)
+                    if (score > 0) {
+                        candidates.add(
+                            JudgmentCandidate(
+                                name = pkg.name.ifBlank { pkg.id },
+                                rulesText = pkg.rulesText(),
+                                score = score,
+                                priority = pkg.priority
+                            )
+                        )
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to load judgment pack: ${jsonFile.name}", e)
+                }
+            }
+        }
+
+        runCatching { memoryRepository.getJudgmentMemories() }.getOrDefault(emptyList()).forEach { mem ->
+            val meta = mem.metadata
+            if (meta.isNullOrBlank()) return@forEach
+            try {
+                val pkg = JudgmentPackage.fromJson(meta)
+                val score = matchPackage(pkg, queryKeyword)
+                if (score > 0) {
+                    candidates.add(
+                        JudgmentCandidate(
+                            name = pkg.name.ifBlank { mem.content.take(20) },
+                            rulesText = pkg.rulesText().ifBlank { mem.content },
+                            score = score,
+                            priority = pkg.priority
+                        )
+                    )
+                }
+            } catch (_: Exception) {
+                // skip invalid metadata
+            }
+        }
+
+        val selected = candidates
+            .sortedWith(compareByDescending<JudgmentCandidate> { it.score }.thenBy { it.priority })
+            .firstOrNull()
+
+        return if (selected == null) {
+            Log.d(TAG, "[Trace] judgment no_match query=$queryKeyword")
+            ""
+        } else {
+            Log.d(TAG, "[Trace] judgment selected=${selected.name} score=${selected.score}")
+            buildString {
+                appendLine("[判断准则:${selected.name}]")
+                selected.rulesText.lines().map { it.trim() }.filter { it.isNotEmpty() }.take(6).forEach {
+                    appendLine("- $it")
+                }
+                appendLine("[准则结束·静默应用·勿向用户朗读]")
+            }.trimEnd()
+        }
+    }
+
+    private fun ensureJudgmentPacksCopied() {
+        val packsDir = File(context.filesDir, JUDGMENT_PACKS_DIR)
+        if (!packsDir.exists()) {
+            packsDir.mkdirs()
+        }
+        val existing = packsDir.listFiles { f -> f.extension == "json" }?.isNotEmpty() == true
+        if (existing) return
+        try {
+            val assetNames = context.assets.list(JUDGMENT_PACKS_DIR) ?: return
+            for (name in assetNames) {
+                if (!name.endsWith(".json")) continue
+                context.assets.open("$JUDGMENT_PACKS_DIR/$name").use { input ->
+                    File(packsDir, name).outputStream().use { output -> input.copyTo(output) }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "copy judgment packs failed", e)
+        }
+    }
+
+    private fun matchPackage(pkg: JudgmentPackage, queryKeyword: String): Int {
+        val q = queryKeyword.lowercase()
+        pkg.doesNotApplyWhen.forEach { excl ->
+            val e = excl.lowercase()
+            if (e.isNotBlank() && (e in q || q in e)) return 0
+        }
+        if (pkg.appliesWhen.isEmpty()) return 1
+        var score = 0
+        pkg.appliesWhen.forEach { cond ->
+            val c = cond.lowercase()
+            if (c.isNotBlank() && c in q) score += 10
+        }
+        return score
+    }
+
+    private fun extractKeyword(text: String): String {
+        val trimmed = text.trim()
+        return if (trimmed.length <= 20) trimmed else trimmed.take(20)
+    }
+
     private suspend fun searchSparseOrLike(keyword: String, limit: Int): List<MemoryEntity> {
         if (!sparseEnabled) {
             return memoryRepository.searchForInject(keyword, limit)
@@ -118,7 +280,6 @@ class MemoryInjector @Inject constructor(
 
             val hits = bm25.search(keyword, limit)
             if (hits.isEmpty()) {
-                // BM25 无命中时再试 LIKE，避免过度严格
                 return memoryRepository.searchForInject(keyword, limit)
             }
 
@@ -130,25 +291,66 @@ class MemoryInjector @Inject constructor(
         }
     }
 
-    /**
-     * 提取检索关键词：取前 20 个字或整句。
-     */
-    private fun extractKeyword(text: String): String {
-        val trimmed = text.trim()
-        return if (trimmed.length <= 20) trimmed else trimmed.take(20)
+    private data class JudgmentCandidate(
+        val name: String,
+        val rulesText: String,
+        val score: Int,
+        val priority: Int
+    )
+
+    private data class JudgmentPackage(
+        val id: String = "",
+        val name: String = "",
+        val priority: Int = 50,
+        val appliesWhen: List<String> = emptyList(),
+        val doesNotApplyWhen: List<String> = emptyList(),
+        val rules: List<String> = emptyList(),
+        val boundaries: List<String> = emptyList()
+    ) {
+        fun rulesText(): String {
+            val lines = rules + boundaries.map { "边界: $it" }
+            return lines.joinToString("\n")
+        }
+
+        companion object {
+            fun fromJson(text: String): JudgmentPackage {
+                val obj = JSONObject(text)
+                fun arr(key: String): List<String> {
+                    val a = obj.optJSONArray(key) ?: return emptyList()
+                    return (0 until a.length()).mapNotNull { i ->
+                        a.optString(i)?.takeIf { it.isNotBlank() }
+                    }
+                }
+                val rulesArr = arr("rules")
+                val rulesStr = obj.optString("rules", "")
+                val rules = if (rulesArr.isNotEmpty()) {
+                    rulesArr
+                } else if (rulesStr.isNotBlank() && !rulesStr.startsWith("[")) {
+                    listOf(rulesStr)
+                } else {
+                    emptyList()
+                }
+                return JudgmentPackage(
+                    id = obj.optString("id", ""),
+                    name = obj.optString("name", ""),
+                    priority = obj.optInt("priority", 50),
+                    appliesWhen = arr("applies_when"),
+                    doesNotApplyWhen = arr("does_not_apply_when"),
+                    rules = rules,
+                    boundaries = arr("boundaries")
+                )
+            }
+        }
     }
 
     companion object {
         private const val TAG = "MemoryInjector"
-
-        /** RRF 平滑常数，经典取值 60。 */
-        const val RRF_K = 60
+        private const val RRF_K = 60
+        private const val MAX_INJECT_CHARS = 1800
+        private const val JUDGMENT_PACKS_DIR = "judgment_packs"
 
         /**
          * Reciprocal Rank Fusion：两路按排名累加 1/(k+rank)，再取 topK。
-         *
-         * 语义路只有文本预览，若能与关键词结果 content 对齐则复用 MemoryEntity
-         * （保留 type 标签）；纯语义命中则降级为 type=chat 的伪实体。
          */
         fun reciprocalRankFusion(
             keywordResults: List<MemoryEntity>,
