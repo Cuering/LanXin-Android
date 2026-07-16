@@ -1,0 +1,92 @@
+# Phase 7 System Tools 骨架：接口 / stub / 门闸 / 设置 / 文档
+name: Phase7 System Tools Verify
+
+on:
+  push:
+    branches: [main, 'feat/phase7*']
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/systemtools/**'
+      - 'app/src/test/kotlin/com/lanxin/android/builtin/systemtools/**'
+      - 'docs/system-tools.md'
+      - 'builtin/systemtools/**'
+      - 'ARCHITECTURE.md'
+      - '.github/workflows/phase7-system-tools-verify.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/systemtools/**'
+      - 'app/src/test/kotlin/com/lanxin/android/builtin/systemtools/**'
+      - 'docs/system-tools.md'
+      - 'builtin/systemtools/**'
+      - 'ARCHITECTURE.md'
+      - '.github/workflows/phase7-system-tools-verify.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: phase7-system-tools-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: System tools unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: gradle
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup local.properties and debug keystore
+        run: |
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+          rm -f debug-keystore.jks
+          keytool -genkeypair -v -keystore debug-keystore.jks -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Create assets model dir (models gitignored)
+        run: |
+          mkdir -p app/src/main/assets/models/gte-small
+          touch app/src/main/assets/models/gte-small/.gitkeep
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run systemtools unit tests
+        run: |
+          ./gradlew :app:testDebugUnitTest \
+            --tests "com.lanxin.android.builtin.systemtools.*" \
+            --no-daemon --stacktrace
+
+      - name: Surfaces and docs present
+        run: |
+          test -f docs/system-tools.md
+          test -f builtin/systemtools/README.md
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/systemtools/domain/DeviceTool.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/systemtools/domain/DeviceToolGate.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/systemtools/domain/AlarmIntentBuilder.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/systemtools/data/StubDeviceTools.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/systemtools/SystemToolsPlugin.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/systemtools/presentation/SystemToolsScreen.kt
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/systemtools/AlarmIntentBuilderTest.kt
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/systemtools/CalendarListUpcomingStubTest.kt
+          grep -E -n "interface DeviceTool|alarm_set|calendar_list_upcoming" \
+            app/src/main/kotlin/com/lanxin/android/builtin/systemtools/domain/DeviceTool.kt
+          grep -E -n "ACTION_SET_ALARM|fromSetAlarmArgs" \
+            app/src/main/kotlin/com/lanxin/android/builtin/systemtools/domain/AlarmIntentBuilder.kt
+          grep -E -n "DeviceToolGate|master_disabled|NeedsConfirmation" \
+            app/src/main/kotlin/com/lanxin/android/builtin/systemtools/domain/DeviceToolGate.kt
+          grep -E -n "SYSTEM_TOOLS|SystemToolsScreen" \
+            app/src/main/kotlin/com/lanxin/android/presentation/common/Route.kt \
+            app/src/main/kotlin/com/lanxin/android/presentation/common/NavigationGraph.kt
+          grep -E -n "Phase 7|systemtools|系统能力|System Tools" ARCHITECTURE.md
+          grep -E -n "M1|alarm_set|calendar_list_upcoming|DeviceToolGate" docs/system-tools.md
