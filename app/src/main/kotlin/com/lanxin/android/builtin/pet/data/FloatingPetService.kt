@@ -217,7 +217,10 @@ class FloatingPetService : Service() {
                 val configured = pet.live2dModelPath
                 if (configured.isNotBlank()) {
                     configured
-                } else if (com.lanxin.android.BuildConfig.DEBUG) {
+                } else if (
+                    (applicationContext.applicationInfo.flags and
+                        android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+                ) {
                     com.lanxin.android.builtin.pet.domain.MeijuDebugPaths
                         .resolveLive2dIfPresent(filesDir, "")
                 } else {

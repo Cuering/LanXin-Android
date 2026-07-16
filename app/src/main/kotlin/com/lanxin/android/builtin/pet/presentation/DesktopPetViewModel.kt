@@ -17,9 +17,9 @@
 package com.lanxin.android.builtin.pet.presentation
 
 import android.app.Application
+import android.content.pm.ApplicationInfo
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.lanxin.android.BuildConfig
 import com.lanxin.android.builtin.pet.data.FloatingPetService
 import com.lanxin.android.builtin.pet.data.OverlayPermissionHelper
 import com.lanxin.android.builtin.pet.domain.PetResourceResolver
@@ -74,7 +74,10 @@ class DesktopPetViewModel @Inject constructor(
     private val asrSettings: AsrSettings
 ) : AndroidViewModel(application) {
 
-    private val _uiState = MutableStateFlow(DesktopPetUiState(isDebugBuild = BuildConfig.DEBUG))
+    private val isDebugBuild: Boolean =
+        (application.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+
+    private val _uiState = MutableStateFlow(DesktopPetUiState(isDebugBuild = isDebugBuild))
     val uiState: StateFlow<DesktopPetUiState> = _uiState.asStateFlow()
 
     init {
@@ -111,7 +114,7 @@ class DesktopPetViewModel @Inject constructor(
                 pet = config,
                 tts = tts,
                 asr = asr,
-                isDebug = BuildConfig.DEBUG
+                isDebug = isDebugBuild
             )
             val can = OverlayPermissionHelper.canDrawOverlays(app)
             val snap = sessionCoordinator.current()
@@ -129,7 +132,7 @@ class DesktopPetViewModel @Inject constructor(
                     live2dSourceLabel = resolved.live2dLabel,
                     ttsSourceLabel = resolved.ttsLabel,
                     asrSourceLabel = resolved.asrLabel,
-                    isDebugBuild = BuildConfig.DEBUG,
+                    isDebugBuild = isDebugBuild,
                     phase = snap.phase,
                     asrText = snap.asrText,
                     replyText = snap.replyText,

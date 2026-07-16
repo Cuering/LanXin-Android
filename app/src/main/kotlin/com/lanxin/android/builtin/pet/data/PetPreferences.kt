@@ -83,6 +83,7 @@ class PetPreferences @Inject constructor(
         const val KEY_ENABLED = "desktop_pet_enabled"
         const val KEY_OVERLAY_RUNNING = "desktop_pet_overlay_running"
         const val KEY_AUTO_LISTEN = "desktop_pet_auto_listen"
+
         /** 与产品决策对齐的公开键名。 */
         const val KEY_LIVE2D_MODEL_PATH = "live2d_model_path"
     }
