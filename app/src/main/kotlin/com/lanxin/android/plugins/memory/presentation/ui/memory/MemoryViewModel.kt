@@ -108,6 +108,23 @@ class MemoryViewModel @Inject constructor(
         _showAddDialog.update { true }
     }
 
+    /**
+     * 从聊天引用跳转：按 id 加载并打开现有编辑 Dialog（可改可删）。
+     */
+    fun openEditById(memoryId: Long) {
+        if (memoryId <= 0L) return
+        viewModelScope.launch {
+            val entity = withContext(Dispatchers.IO) {
+                runCatching { memoryRepository.getMemoryById(memoryId) }.getOrNull()
+            }
+            if (entity != null) {
+                openEditDialog(entity)
+            } else {
+                _snackbarMessage.update { "未找到该记忆" }
+            }
+        }
+    }
+
     fun closeAddDialog() {
         _showAddDialog.update { false }
         _editingMemory.update { null }

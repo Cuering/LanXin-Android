@@ -46,15 +46,32 @@ class MemoryInjector @Inject constructor(
     private var lastMemoryFingerprint: Long = Long.MIN_VALUE
 
     /**
+     * 注入结果：增强文本 + 本轮命中的记忆实体（供 Chat 引用芯片）。
+     */
+    data class InjectResult(
+        val enrichedQuestion: String,
+        val matchedMemories: List<MemoryEntity> = emptyList()
+    )
+
+    /**
      * 将匹配记忆注入到用户消息前面。
      * 若无匹配或注入关闭，原样返回。
      */
     suspend fun inject(question: String, limit: Int = 5): String {
-        if (!enabled || question.isBlank()) return question
+        return injectWithMatches(question, limit).enrichedQuestion
+    }
+
+    /**
+     * 注入并返回命中的记忆实体列表。
+     */
+    suspend fun injectWithMatches(question: String, limit: Int = 5): InjectResult {
+        if (!enabled || question.isBlank()) {
+            return InjectResult(enrichedQuestion = question)
+        }
 
         if (shouldSkipInject(question)) {
             Log.d(TAG, "[Trace] skipped decide msg=${question.take(30)}")
-            return question
+            return InjectResult(enrichedQuestion = question)
         }
 
         val keyword = extractKeyword(question)
@@ -84,7 +101,7 @@ class MemoryInjector @Inject constructor(
 
         if (merged.isEmpty() && judgmentBlock.isEmpty()) {
             Log.d(TAG, "[Trace] no_match")
-            return question
+            return InjectResult(enrichedQuestion = question)
         }
 
         val memLines = merged.joinToString("\n") { item ->
@@ -126,11 +143,14 @@ class MemoryInjector @Inject constructor(
             }
         }
 
-        return if (assembled.isEmpty()) {
+        val enriched = if (assembled.isEmpty()) {
             question
         } else {
             assembled.joinToString("\n\n") + "\n\n" + question
         }
+        // 仅返回有真实 id 的记忆，语义路径无 id 占位不进入引用
+        val refs = merged.filter { it.id > 0L }
+        return InjectResult(enrichedQuestion = enriched, matchedMemories = refs)
     }
 
     private fun shouldSkipInject(question: String): Boolean {

@@ -68,6 +68,7 @@ import java.util.Locale
 @Composable
 fun MemoryScreen(
     onBackAction: () -> Unit,
+    openMemoryId: Long? = null,
     viewModel: MemoryViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -121,6 +122,13 @@ fun MemoryScreen(
         snackbarMessage?.let {
             snackbarHostState.showSnackbar(it)
             viewModel.clearSnackbar()
+        }
+    }
+
+    // 聊天引用跳转：打开现有编辑 Dialog（可改可删）
+    LaunchedEffect(openMemoryId) {
+        openMemoryId?.let { id ->
+            if (id > 0L) viewModel.openEditById(id)
         }
     }
 

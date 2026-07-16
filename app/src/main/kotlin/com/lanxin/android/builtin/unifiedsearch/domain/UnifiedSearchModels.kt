@@ -65,3 +65,14 @@ data class UnifiedSearchResult(
     val routeHitCounts: Map<SearchRoute, Int>
         get() = SearchRoute.entries.associateWith { hitCount(it) }
 }
+
+/**
+ * 注入结果：增强后的用户消息 + 本轮可点引用（记忆/知识）。
+ */
+data class InjectOutcome(
+    val enrichedQuestion: String,
+    val memoryHits: List<UnifiedHit> = emptyList(),
+    val knowledgeHits: List<UnifiedHit> = emptyList()
+) {
+    val hasHits: Boolean get() = memoryHits.isNotEmpty() || knowledgeHits.isNotEmpty()
+}

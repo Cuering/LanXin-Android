@@ -1,0 +1,81 @@
+# Chat UX: dynamic status text + memory/knowledge refs
+name: Chat Status Refs Verify
+
+on:
+  push:
+    branches: [main, 'feat/chat-status-refs*']
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/**'
+      - 'app/src/test/kotlin/com/lanxin/android/presentation/ui/chat/**'
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/unifiedsearch/**'
+      - 'app/src/main/kotlin/com/lanxin/android/plugins/memory/domain/memory/MemoryInjector.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/knowledge/presentation/KnowledgeDetailScreen.kt'
+      - 'docs/chat-status-refs.md'
+      - '.github/workflows/chat-status-refs-verify.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/**'
+      - 'app/src/test/kotlin/com/lanxin/android/presentation/ui/chat/**'
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/unifiedsearch/**'
+      - 'app/src/main/kotlin/com/lanxin/android/plugins/memory/domain/memory/MemoryInjector.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/knowledge/presentation/KnowledgeDetailScreen.kt'
+      - 'docs/chat-status-refs.md'
+      - '.github/workflows/chat-status-refs-verify.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: chat-status-refs-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: Chat status/refs unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: gradle
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup local.properties and debug keystore
+        run: |
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+          rm -f debug-keystore.jks
+          keytool -genkeypair -v -keystore debug-keystore.jks -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Create assets model dir (models gitignored)
+        run: |
+          mkdir -p app/src/main/assets/models/gte-small
+          touch app/src/main/assets/models/gte-small/.gitkeep
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run chat status/refs unit tests
+        run: |
+          ./gradlew :app:testDebugUnitTest \
+            --tests "com.lanxin.android.presentation.ui.chat.ChatGenerationStatusLogicTest" \
+            --no-daemon --stacktrace
+
+      - name: Surfaces and docs present
+        run: |
+          test -f docs/chat-status-refs.md
+          test -f app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/ChatStatusModels.kt
+          test -f app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/ChatStatusBlock.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/knowledge/presentation/KnowledgeDetailScreen.kt
+          grep -E -n "injectWithHits|injectWithMatches|turnUxStates|ChatGenerationPhase" \
+            app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/ChatViewModel.kt \
+            app/src/main/kotlin/com/lanxin/android/builtin/unifiedsearch/domain/UnifiedSearchService.kt \
+            app/src/main/kotlin/com/lanxin/android/plugins/memory/domain/memory/MemoryInjector.kt

@@ -39,6 +39,12 @@ object Route {
 
     const val MEMORY_LIST = "memory_list"
 
+    /** 从聊天引用打开记忆编辑；memoryId 为 Long 字符串。 */
+    const val MEMORY_EDIT = "memory_edit/{memoryId}"
+
+    /** 知识条目只读详情（预留路由，可从聊天引用打开）。 */
+    const val KNOWLEDGE_DETAIL = "knowledge_detail/{externalId}?snippet={snippet}"
+
     const val LOGGER = "logger"
 
     const val PERSONA_LIST = "persona_list"
