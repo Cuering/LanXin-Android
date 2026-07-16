@@ -59,7 +59,7 @@ class PluginManagerViewModelTest {
             )
         )
         viewModel = PluginManagerViewModel(catalog)
-        // init { refresh } 
+        // init { refresh }
         dispatcher.scheduler.advanceUntilIdle()
     }
 
