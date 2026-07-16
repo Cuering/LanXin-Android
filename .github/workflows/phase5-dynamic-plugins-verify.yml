@@ -1,0 +1,85 @@
+# Phase 5.3 动态插件加载验证：路径 / 清单 / 状态机 / PluginManager
+name: Phase5 Dynamic Plugins Verify
+
+on:
+  push:
+    branches: [main, 'feat/phase5*']
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/plugin/**'
+      - 'app/src/test/kotlin/com/lanxin/android/plugin/**'
+      - 'docs/dynamic-plugins.md'
+      - 'ARCHITECTURE.md'
+      - '.github/workflows/phase5-dynamic-plugins-verify.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/plugin/**'
+      - 'app/src/test/kotlin/com/lanxin/android/plugin/**'
+      - 'docs/dynamic-plugins.md'
+      - 'ARCHITECTURE.md'
+      - '.github/workflows/phase5-dynamic-plugins-verify.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: phase5-dyn-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: Dynamic plugin unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: gradle
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup local.properties and debug keystore
+        run: |
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+          rm -f debug-keystore.jks
+          keytool -genkeypair -v -keystore debug-keystore.jks -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Create assets model dir (models gitignored)
+        run: |
+          mkdir -p app/src/main/assets/models/gte-small
+          touch app/src/main/assets/models/gte-small/.gitkeep
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run dynamic plugin unit tests
+        run: |
+          ./gradlew :app:testDebugUnitTest \
+            --tests "com.lanxin.android.plugin.dynamic.*" \
+            --tests "com.lanxin.android.plugin.ToolCallEngineTest" \
+            --no-daemon --stacktrace
+
+      - name: Design and surface present
+        run: |
+          test -f docs/dynamic-plugins.md
+          test -f app/src/main/kotlin/com/lanxin/android/plugin/dynamic/PluginPackagePaths.kt
+          test -f app/src/main/kotlin/com/lanxin/android/plugin/dynamic/PluginManifestParser.kt
+          test -f app/src/main/kotlin/com/lanxin/android/plugin/dynamic/PluginStateStore.kt
+          test -f app/src/main/kotlin/com/lanxin/android/plugin/dynamic/DynamicPluginLoader.kt
+          test -f app/src/main/kotlin/com/lanxin/android/plugin/dynamic/PluginSignatureVerifier.kt
+          test -f app/src/test/kotlin/com/lanxin/android/plugin/dynamic/PluginManagerDynamicTest.kt
+          # use grep (runner may not have rg); avoid star-slash in shell comments
+          grep -E -n "plugin-packages|lanxin-plugin.json|PathClassLoader|PluginSignatureVerifier" \
+            docs/dynamic-plugins.md
+          grep -E -n "discoverAndLoadDynamicPlugins|setEnabled|unloadPlugin|getPluginRecords" \
+            app/src/main/kotlin/com/lanxin/android/plugin/PluginManager.kt
+          grep -E -n "AllowAllPluginSignatureVerifier|PluginSignatureResult" \
+            app/src/main/kotlin/com/lanxin/android/plugin/dynamic/PluginSignatureVerifier.kt
+          grep -E -n "5\\.3|动态插件" ARCHITECTURE.md

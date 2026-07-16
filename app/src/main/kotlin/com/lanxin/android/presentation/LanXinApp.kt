@@ -62,12 +62,22 @@ class LanXinApp : Application(), Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
         logManager.initialize(this)
-        logManager.getLogger("LanXinApp").info("LanXin starting…")
+        val log = logManager.getLogger("LanXinApp")
+        log.info("LanXin starting…")
 
         // 插件已通过 DI @Provides 注册到 PluginManager
-        // 异步加载所有插件（调用 onLoad）
+        // 异步：加载编译期插件 + 扫描 filesDir/plugin-packages 动态插件
         appScope.launch {
             pluginManager.loadAll()
+            val dynamic = pluginManager.discoverAndLoadDynamicPlugins()
+            if (dynamic.total > 0) {
+                log.info(
+                    "动态插件: ok=${dynamic.successes.size} fail=${dynamic.failures.size}"
+                )
+            }
+            dynamic.failures.forEach { f ->
+                log.warning("动态插件加载失败 id=${f.pluginId}: ${f.reason}")
+            }
         }
     }
 
