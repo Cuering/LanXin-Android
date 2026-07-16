@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>兰心桌宠</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
+    html, body {
+      width: 100%; height: 100%;
+      background: transparent;
+      overflow: hidden;
+      font-family: "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
+    }
+    #root {
+      width: 100%; height: 100%;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: flex-end;
+      padding-bottom: 8px;
+      position: relative;
+    }
+    #bubble {
+      max-width: 92%;
+      min-width: 80px;
+      background: rgba(255, 72, 96, 0.95);
+      color: #fff;
+      padding: 10px 14px;
+      border-radius: 16px;
+      border: 2px solid #fff;
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.35;
+      text-align: center;
+      word-break: break-word;
+      box-shadow: 0 6px 18px rgba(0,0,0,.35);
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity .25s ease, transform .25s ease;
+      margin-bottom: 8px;
+      pointer-events: none;
+    }
+    #bubble.show { opacity: 1; transform: translateY(0); }
+    #avatar {
+      width: 120px; height: 140px;
+      border-radius: 24px 24px 32px 32px;
+      background: linear-gradient(160deg, #ffb7c5 0%, #ff7aa2 55%, #e85d8e 100%);
+      box-shadow: 0 10px 24px rgba(232, 93, 142, .4);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      position: relative;
+      border: 3px solid rgba(255,255,255,.85);
+    }
+    #face {
+      font-size: 42px;
+      line-height: 1;
+      filter: drop-shadow(0 2px 2px rgba(0,0,0,.15));
+    }
+    #status {
+      margin-top: 6px;
+      font-size: 11px;
+      color: rgba(255,255,255,.95);
+      background: rgba(0,0,0,.25);
+      padding: 2px 8px;
+      border-radius: 999px;
+    }
+    #controls {
+      display: flex; gap: 8px; margin-top: 8px;
+    }
+    button {
+      border: none;
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      background: rgba(0,0,0,.72);
+      color: #fff;
+      cursor: pointer;
+    }
+    button:active { transform: scale(.96); }
+    button.danger { background: rgba(180, 30, 50, .85); }
+  </style>
+</head>
+<body>
+  <div id="root">
+    <div id="bubble"></div>
+    <div id="avatar" title="LanXin Pet Placeholder">
+      <div id="face">😊</div>
+      <div id="status">闲置</div>
+    </div>
+    <div id="controls">
+      <button id="btn-voice" type="button">语音</button>
+      <button id="btn-close" class="danger" type="button">关闭</button>
+    </div>
+  </div>
+  <script>
+    (function () {
+      var bubble = document.getElementById('bubble');
+      var face = document.getElementById('face');
+      var statusEl = document.getElementById('status');
+      var hideTimer = null;
+
+      var PHASE_UI = {
+        IDLE:      { face: '😊', label: '闲置' },
+        LISTENING: { face: '👂', label: '在听…' },
+        THINKING:  { face: '💭', label: '想想…' },
+        SPEAKING:  { face: '💬', label: '在说…' },
+        ERROR:     { face: '😅', label: '出错了' }
+      };
+
+      function setPhase(phase) {
+        var ui = PHASE_UI[phase] || PHASE_UI.IDLE;
+        face.textContent = ui.face;
+        statusEl.textContent = ui.label;
+      }
+
+      function showBubble(text) {
+        if (!text) return;
+        bubble.textContent = text;
+        bubble.classList.add('show');
+        if (hideTimer) clearTimeout(hideTimer);
+        hideTimer = setTimeout(function () {
+          bubble.classList.remove('show');
+        }, 4500);
+      }
+
+      function hideBubble() {
+        bubble.classList.remove('show');
+      }
+
+      function parseNativeMessage(raw) {
+        if (!raw) return;
+        var map = {};
+        String(raw).split('\\n').join('\n').split('\n').forEach(function (line) {
+          var i = line.indexOf('=');
+          if (i > 0) map[line.slice(0, i)] = line.slice(i + 1);
+        });
+        var cmd = (map.command || '').toUpperCase();
+        if (map.phase) setPhase(map.phase);
+        if (cmd === 'SHOW_BUBBLE' || map.bubble || map.subtitle) {
+          showBubble(map.bubble || map.subtitle || map.replyText || '');
+        }
+        if (cmd === 'HIDE_BUBBLE') hideBubble();
+        if (cmd === 'SESSION_STATE' && map.subtitle) showBubble(map.subtitle);
+      }
+
+      // Native → Web
+      window.onNativePetMessage = function (raw) {
+        try { parseNativeMessage(raw); } catch (e) {}
+      };
+
+      function safeCall(fn) {
+        try { fn(); } catch (e) {}
+      }
+
+      document.getElementById('btn-voice').addEventListener('click', function () {
+        safeCall(function () {
+          if (window.AndroidVoiceBridge && AndroidVoiceBridge.startVoiceChat) {
+            AndroidVoiceBridge.startVoiceChat();
+          } else if (window.DesktopPetBridge && DesktopPetBridge.requestStartVoice) {
+            DesktopPetBridge.requestStartVoice();
+          }
+        });
+        setPhase('LISTENING');
+        showBubble('…');
+      });
+
+      document.getElementById('btn-close').addEventListener('click', function () {
+        safeCall(function () {
+          if (window.DesktopPetBridge && DesktopPetBridge.closePet) {
+            DesktopPetBridge.closePet();
+          }
+        });
+      });
+
+      // 轮询状态（桥接就绪后）
+      setInterval(function () {
+        safeCall(function () {
+          if (window.AndroidVoiceBridge && AndroidVoiceBridge.getPhase) {
+            setPhase(AndroidVoiceBridge.getPhase());
+            var sub = AndroidVoiceBridge.getSubtitle && AndroidVoiceBridge.getSubtitle();
+            if (sub) showBubble(sub);
+          }
+        });
+      }, 1200);
+
+      setPhase('IDLE');
+    })();
+  </script>
+</body>
+</html>

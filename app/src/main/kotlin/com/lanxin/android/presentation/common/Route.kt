@@ -71,4 +71,7 @@ object Route {
     const val LOCAL_INFERENCE = "local_inference"
 
     const val OFFLINE_ASR = "offline_asr"
+
+    /** 桌宠 / 语音陪伴（Phase 6 主线 M1） */
+    const val DESKTOP_PET = "desktop_pet"
 }

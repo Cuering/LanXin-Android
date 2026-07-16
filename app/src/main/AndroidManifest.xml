@@ -12,6 +12,9 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- Phase 6 桌宠悬浮层：需用户显式授权 SYSTEM_ALERT_WINDOW -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- 枚举已安装应用（app_install_check 列表模式，Android 11+） -->
     <uses-permission
         android:name="android.permission.QUERY_ALL_PACKAGES"
@@ -86,6 +89,16 @@
             android:foregroundServiceType="dataSync"
             android:exported="false"
             tools:node="merge" />
+
+        <!-- Phase 6 桌宠悬浮层（默认不启动） -->
+        <service
+            android:name=".builtin.pet.data.FloatingPetService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="desktop_pet_overlay" />
+        </service>
 
         <!-- 使用 Application 实现的 Configuration.Provider，禁用默认 WorkManager 初始化 -->
         <provider

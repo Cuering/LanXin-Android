@@ -36,6 +36,7 @@ import com.lanxin.android.presentation.ui.setting.LicenseScreen
 import com.lanxin.android.presentation.ui.setting.PlatformSettingScreen
 import com.lanxin.android.presentation.ui.setting.SettingScreen
 import com.lanxin.android.builtin.localinference.presentation.LocalInferenceScreen
+import com.lanxin.android.builtin.pet.presentation.DesktopPetScreen
 import com.lanxin.android.builtin.voice.presentation.VoiceAsrScreen
 import com.lanxin.android.presentation.ui.setting.SettingViewModelV2
 import com.lanxin.android.presentation.ui.setup.SetupCompleteScreen
@@ -72,6 +73,7 @@ fun SetupNavGraph(navController: NavHostController) {
         pluginMarketScreenNavigation(navController)
         localInferenceScreenNavigation(navController)
         offlineAsrScreenNavigation(navController)
+        desktopPetScreenNavigation(navController)
     }
 }
 
@@ -103,6 +105,14 @@ fun NavGraphBuilder.localInferenceScreenNavigation(navController: NavHostControl
 fun NavGraphBuilder.offlineAsrScreenNavigation(navController: NavHostController) {
     composable(Route.OFFLINE_ASR) {
         VoiceAsrScreen(
+            onBackAction = { navController.navigateUp() }
+        )
+    }
+}
+
+fun NavGraphBuilder.desktopPetScreenNavigation(navController: NavHostController) {
+    composable(Route.DESKTOP_PET) {
+        DesktopPetScreen(
             onBackAction = { navController.navigateUp() }
         )
     }
@@ -418,7 +428,8 @@ fun NavGraphBuilder.settingNavigation(navController: NavHostController) {
                 onNavigateToPluginManager = { navController.navigate(Route.PLUGIN_MANAGER) },
                 onNavigateToPluginMarket = { navController.navigate(Route.PLUGIN_MARKET) },
                 onNavigateToLocalInference = { navController.navigate(Route.LOCAL_INFERENCE) },
-                onNavigateToOfflineAsr = { navController.navigate(Route.OFFLINE_ASR) }
+                onNavigateToOfflineAsr = { navController.navigate(Route.OFFLINE_ASR) },
+                onNavigateToDesktopPet = { navController.navigate(Route.DESKTOP_PET) }
             )
         }
         composable(Route.ADD_PLATFORM) {
