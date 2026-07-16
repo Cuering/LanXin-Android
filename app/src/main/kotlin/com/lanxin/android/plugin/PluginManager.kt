@@ -34,6 +34,7 @@ import kotlinx.serialization.json.put
  *
  * Phase 5.3：支持从 `filesDir/plugin-packages/` 动态加载 .apk 插件包，
  * 并提供 enable / disable / unload 状态机（见 docs/dynamic-plugins.md）。
+ * Phase 5.5：市场安装后可通过 [loadDynamicPlugin] 单包加载。
  */
 @Singleton
 class PluginManager @Inject constructor(
@@ -219,14 +220,18 @@ class PluginManager @Inject constructor(
     /**
      * 加载单个动态插件包。
      */
-    suspend fun loadDynamicPlugin(apkFile: File): PluginLoadResult {
+    override suspend fun loadDynamicPlugin(apkFile: File): PluginLoadResult {
         val loader = DynamicPluginLoader(
             classLoaderFactory = classLoaderFactory,
             signatureVerifier = signatureVerifier,
             appVersionName = appVersionName,
             pluginFactory = testPluginFactory
         )
-        return loadDynamicPluginInternal(apkFile, loader)
+        val result = loadDynamicPluginInternal(apkFile, loader)
+        if (result is PluginLoadResult.Failure) {
+            lastFailures.add(result)
+        }
+        return result
     }
 
     /**
