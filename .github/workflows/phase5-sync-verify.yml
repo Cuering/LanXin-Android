@@ -1,4 +1,4 @@
-# Phase 5.1 同步引擎验证：协议骨架 + 单测
+# Phase 5 同步引擎验证：协议 + LWW 单测（5.1 / 5.2）
 name: Phase5 Sync Verify
 
 on:
@@ -59,14 +59,25 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Run sync unit tests
+      - name: Run sync unit tests (incl. LWW)
         run: |
           ./gradlew :app:testDebugUnitTest \
             --tests "com.lanxin.android.builtin.sync.*" \
             --no-daemon --stacktrace
 
-      - name: Protocol draft present
+      - name: Protocol and LWW surface present
         run: |
           test -f docs/sync-protocol.md
           test -f builtin/sync/README.md
-          grep -E -n "POST /api/sync/pull|LWW|SyncItem" docs/sync-protocol.md
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/sync/domain/LwwResolver.kt
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/sync/LwwResolverTest.kt
+          # use grep (runner may not have rg); avoid */ in shell comments
+          grep -E -n "POST /api/sync/pull|LWW|SyncItem|preferRemote|防复活" docs/sync-protocol.md
+          grep -E -n "fun compare|fun decide|fun shouldApply|fun mergeById|LwwDecision" \
+            app/src/main/kotlin/com/lanxin/android/builtin/sync/domain/LwwResolver.kt
+          grep -E -n "tombstone|preferRemote|mergeById knowledge|isConflictResolution" \
+            app/src/test/kotlin/com/lanxin/android/builtin/sync/LwwResolverTest.kt
+          grep -E -n "skipped|conflictResolved" \
+            app/src/main/kotlin/com/lanxin/android/builtin/sync/domain/SyncModels.kt
+          grep -E -n "applyRemoteItem|LwwResolver.decide" \
+            app/src/main/kotlin/com/lanxin/android/builtin/sync/data/DefaultSyncRepository.kt

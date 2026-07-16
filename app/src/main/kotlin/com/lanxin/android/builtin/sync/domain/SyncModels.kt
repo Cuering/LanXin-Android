@@ -112,12 +112,20 @@ data class SyncOutboxEntry(
     val lastError: String? = null
 )
 
-/** 一次完整同步的结果摘要。 */
+/**
+ * 一次完整同步的结果摘要。
+ *
+ * Phase 5.2 增加 [skipped] / [conflictResolved] 轻量观测字段。
+ */
 data class SyncCycleResult(
     val pushed: Int = 0,
     val pulled: Int = 0,
     val merged: Int = 0,
     val rejected: Int = 0,
+    /** LWW 判定本地胜出、未写库的条目数（含 push.applied 与 pull）。 */
+    val skipped: Int = 0,
+    /** 双方均存在且远端按 LWW 覆盖本地的次数。 */
+    val conflictResolved: Int = 0,
     val serverTime: Long = 0L,
     val error: String? = null
 ) {

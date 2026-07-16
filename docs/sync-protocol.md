@@ -1,8 +1,8 @@
-# LanXin ↔ AstrBot 同步协议草案（Phase 5.1）
+# LanXin ↔ AstrBot 同步协议草案（Phase 5.2）
 
-> 状态：草案 / 进行中（`feat/phase5-sync`）  
+> 状态：草案 / LWW 已落地（`feat/phase5-2-lww`）  
 > 范围：knowledge / memory 双向增量同步底座  
-> 非目标：聊天消息同步、会话污染、全量备份替代
+> 非目标：聊天消息同步、会话污染、全量备份替代、完整冲突 UI
 
 ---
 
@@ -117,23 +117,54 @@ Content-Type: application/json
 5. 清理已 ack 的 outbox
 ```
 
+**App 实现要点（5.2）**：`push.applied` 与 `pull.items` **共用同一 LWW 入口**
+（`DefaultSyncRepository.applyRemoteItem` → `LwwResolver.decide`），避免两端路径不一致。
+
 ---
 
-## 4. 冲突策略（5.2 占位，接口预留）
+## 4. 冲突策略（LWW — Phase 5.2 已落地）
 
 **默认：LWW（Last-Write-Wins）**
 
-比较顺序：
+严格比较顺序（与 `LwwResolver` 一致）：
 
 1. `updated_at` 较大者胜
-2. 相等时：`deleted=true` 优先于未删除（防复活）
-3. 仍相等：`source` 字典序较大者胜（稳定 tie-break）
-4. 仍相等：保留 `id` 对应的本地或远端由实现指定（`preferRemote` 开关）
+2. 相等时：`deleted=true` 优先于未删除（**防复活**：同时间戳 tombstone 压过 live）
+3. 仍相等：`source` 字典序较大者胜（稳定 tie-break；如 `astrbot` > `android`）
+4. 仍相等：由实现 `preferRemote` 开关决定（App 默认 `true`，偏向远端最终态）
 
-App 侧：`LwwResolver.pick(local, remote)`  
-服务端应对 push 做同等规则，并在 `applied` 回传最终态。
+### 4.1 App API
 
-> 5.2 将补齐：字段级合并、importance 保护、用户手动 resolve UI。
+| 方法 | 说明 |
+|------|------|
+| `LwwResolver.compare(a, b)` | 协议字段比较；0 = LWW 全等 |
+| `LwwResolver.pick(local, remote, preferRemote)` | 返回胜者引用 |
+| `LwwResolver.shouldApply(existing, candidate, preferRemote)` | candidate 是否应写库 |
+| `LwwResolver.decide(...)` | `APPLY_NEW` / `APPLY` / `SKIP` |
+| `LwwResolver.mergeById(local, remote, preferRemote)` | 列表层合并（memory + knowledge 均可测） |
+| `LwwResolver.isConflictResolution(...)` | 双方存在且 candidate 覆盖本地 |
+
+### 4.2 边界约定
+
+| 场景 | 结果 |
+|------|------|
+| 相等 `updated_at`，一端 deleted | tombstone 胜（防复活） |
+| 较新 live vs 较旧 tombstone | 较新 live 胜（防复活仅 equal-ts） |
+| 全协议字段相等、content 不同 | `preferRemote` 决胜 |
+| knowledge 尚无本地存储 | `mergeById` 列表层 LWW 可测；落库 skipped |
+| 服务端 push | 应对 push 做同等 LWW，并在 `applied` 回传最终态 |
+
+### 4.3 可观测性
+
+`SyncCycleResult` 字段：
+
+| 字段 | 含义 |
+|------|------|
+| `merged` | LWW 通过并写库（含删除） |
+| `skipped` | LWW 本地胜 / knowledge 无适配 / 无 id tombstone |
+| `conflictResolved` | 双方存在且远端覆盖本地 |
+
+> 非目标（后续）：字段级合并、importance 保护、用户手动 resolve UI。
 
 ---
 
@@ -153,7 +184,7 @@ App 侧：`LwwResolver.pick(local, remote)`
 | `metadata` | `metadata` |
 | `created_at` | `createdAt` |
 
-**不走聊天通道**：同步仅 HTTP `/api/sync/*`，不注入 ChatViewModel / 会话消息。
+**不走聊天通道**：同步仅 HTTP `/api/sync/pull` 与 `/api/sync/push`，不注入 ChatViewModel / 会话消息。
 
 ### 5.2 Android Knowledge
 
@@ -164,7 +195,7 @@ App 侧：`LwwResolver.pick(local, remote)`
 | `content` | chunk 文本 |
 | `metadata` | 源文件、页码、embedding 版本等 JSON |
 
-5.1 仅预留接口；knowledge 适配器可后置。
+5.2：列表层 `mergeById` 已覆盖 LWW；端侧 knowledge 存储适配仍可后置。
 
 ### 5.3 AstrBot 对接注意点（文档，不改系统源码）
 
@@ -218,4 +249,4 @@ push 成功（accepted）后删除对应 outbox 行；rejected 保留并递增 a
 
 | protocol_version | 说明 |
 |------------------|------|
-| 1 | 本文草案：pull/push + LWW 占位 + memory 优先 |
+| 1 | pull/push + LWW（5.2 完整）+ memory 优先；knowledge 列表层 |
