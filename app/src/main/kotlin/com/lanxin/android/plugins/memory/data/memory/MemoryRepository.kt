@@ -29,33 +29,24 @@ class MemoryRepository @Inject constructor(
 
     fun getMemoriesByType(type: String): Flow<List<MemoryEntity>> = dao.getMemoriesByType(type)
 
-    /**
-     * 同步拉取全部记忆（BM25 索引构建用）。
-     */
+    /** 同步拉取全部记忆（BM25 索引构建用）。 */
     suspend fun getAllMemoriesOnce(): List<MemoryEntity> = withContext(Dispatchers.IO) {
         dao.getAllMemoriesOnce()
     }
 
-    /**
-     * 按 type 同步拉取（P3 自动知识列表）。
-     */
+    /** 按 type 同步拉取（P3 自动知识列表）。 */
     suspend fun getByType(type: String): List<MemoryEntity> = withContext(Dispatchers.IO) {
         dao.getMemoriesByType(type).first()
     }
 
-    /**
-     * 删除指定 type 的全部记忆，返回删除条数。
-     */
+    /** 删除指定 type 的全部记忆，返回删除条数。 */
     suspend fun clearByType(type: String): Int = withContext(Dispatchers.IO) {
         val items = dao.getMemoriesByType(type).first()
         items.forEach { dao.deleteMemoryById(it.id) }
         items.size
     }
 
-    /**
-     * P3：自动知识条目。metadata 含 source=auto_knowledge，type 为分类。
-     * 因 type 本身是 preference/fact/...，按 metadata 过滤。
-     */
+    /** P3：自动知识条目。metadata 含 source=auto_knowledge，type 为分类。 */
     suspend fun getAutoKnowledge(): List<MemoryEntity> = withContext(Dispatchers.IO) {
         dao.getAllMemoriesOnce().filter { entity ->
             entity.metadata?.contains("auto_knowledge") == true
@@ -115,9 +106,7 @@ class MemoryRepository @Inject constructor(
         }
     }
 
-    /**
-     * 聊天注入专用检索（关键词 LIKE，Phase 2.1 再换向量检索）。
-     */
+    /** 聊天注入专用检索（关键词 LIKE）。 */
     suspend fun searchForInject(keyword: String, limit: Int = 5): List<MemoryEntity> {
         if (keyword.isBlank()) return emptyList()
         val results = dao.searchMemoriesForInject(keyword.trim(), limit)
@@ -126,26 +115,128 @@ class MemoryRepository @Inject constructor(
         return results
     }
 
-    /**
-     * 将全部记忆导出为 cache 目录下的 JSON 文件，供分享/保存。
-     * 任务签名为 `fun exportToJson`，内部通过 runBlocking 读取 Room。
-     * 推荐优先使用 [exportToJsonSuspend]。
-     */
+    // === Phase 5.7 新增方法 ===
+
+    /** 获取所有 judgment 类型记忆 */
+    suspend fun getJudgmentMemories(): List<MemoryEntity> = withContext(Dispatchers.IO) {
+        dao.getJudgmentMemories()
+    }
+
+    /** 添加 judgment 类型记忆 */
+    suspend fun addJudgmentMemory(
+        content: String,
+        name: String,
+        appliesWhen: List<String>? = null,
+        doesNotApplyWhen: List<String>? = null,
+        rules: String? = null
+    ): Long {
+        val metadata = JSONObject().apply {
+            put("name", name)
+            putsIfAbsent("applies_when", JSONArray(appliesWhen ?: emptyList()))
+            putsIfAbsent("does_not_apply_when", JSONArray(doesNotApplyWhen ?: emptyList()))
+            if (!rules.isNullOrEmpty()) put("rules", rules)
+        }.toString()
+        return addMemory(content, MemoryType.JUDGMENT, 8.0f, "permanent", metadata)
+    }
+
+    /** 获取即将过期的记忆（按 lastAccessedAt 判断） */
+    suspend fun getExpiredMemories(cutoffMillis: Long): List<MemoryEntity> = withContext(Dispatchers.IO) {
+        dao.getExpiredMemories(cutoffMillis)
+    }
+
+    /** 清理过期记忆 */
+    suspend fun cleanupExpiredMemories(): Int = withContext(Dispatchers.IO) {
+        val expired = dao.getExpiredMemories(System.currentTimeMillis() - 90 * 86400_000L)
+        expired.forEach { dao.markExpired(it.id) }
+        dao.deleteExpiredMemories()
+        expired.size
+    }
+
+    /** 自适应衰减：根据访问频率 + 重要性 + 不活跃天数计算半衰期 */
+    suspend fun applyAdaptiveDecay(halfLifeDays: Int = 30): Int {
+        val all = getAllMemoriesOnce()
+        var decayed = 0
+        for (mem in all) {
+            if (mem.lifecycle == "permanent") continue
+            val daysInactive = if (mem.lastAccessedAt != null) {
+                (System.currentTimeMillis() - mem.lastAccessedAt) / 86400_000L
+            } else {
+                (System.currentTimeMillis() - mem.createdAt) / 86400_000L
+            }
+            val halfLife = calculateAdaptiveHalfLife(mem.importance, daysInactive)
+            if (daysInactive > halfLife * 2) {
+                dao.markExpired(mem.id)
+                decayed++
+            }
+        }
+        if (decayed > 0) dao.deleteExpiredMemories()
+        return decayed
+    }
+
+    /** 计算自适应半衰期（基于重要性和不活跃天数） */
+    private fun calculateAdaptiveHalfLife(importance: Float, daysInactive: Long): Double {
+        val base = 30.0
+        val importanceFactor = importance / 10.0 // 0.1 ~ 1.0
+        val inactiveFactor = 1.0 / (1.0 + daysInactive / 30.0)
+        return base * importanceFactor * inactiveFactor
+    }
+
+    /** 用户画像管理 */
+    suspend fun getUserProfileSummary(): String? = withContext(Dispatchers.IO) {
+        val profile = dao.getUserProfile()
+        profile?.summary?.takeIf { it.isNotBlank() }
+    }
+
+    suspend fun upsertUserProfile(summary: String) {
+        dao.upsertUserProfile(UserEntity(summary = summary, updatedAt = System.currentTimeMillis()))
+    }
+
+    /** 进化索引管理 */
+    suspend fun getEvolutionEntries(limit: Int = 5): List<EvolutionEntry> = withContext(Dispatchers.IO) {
+        dao.getEvolutionEntries(limit)
+    }
+
+    suspend fun addEvolutionEntry(date: String, content: String) {
+        dao.insertEvolutionEntry(EvolutionEntry(date = date, content = content))
+    }
+
+    /** 任务续接管理 */
+    suspend fun getPendingTaskResume(): TaskResumeEntity? = withContext(Dispatchers.IO) {
+        dao.getPendingTaskResume()
+    }
+
+    suspend fun markTaskResumeResolved(id: Long) {
+        dao.markTaskResumeResolved(id)
+    }
+
+    suspend fun saveTaskResume(description: String, sessionId: String) {
+        dao.insertTaskResume(TaskResumeEntity(
+            description = description,
+            sessionId = sessionId,
+            status = "pending"
+        ))
+    }
+
+    /** 对话归档管理 */
+    suspend fun getUnarchivedDialogs(limit: Int = 100): List<DialogEntity> = withContext(Dispatchers.IO) {
+        dao.getUnarchivedDialogs(limit)
+    }
+
+    suspend fun archiveDialogs() {
+        val unarchived = dao.getUnarchivedDialogs(1000)
+        unarchived.forEach { dao.markDialogArchived(it.id) }
+    }
+
+    /** 将全部记忆导出为 cache 目录下的 JSON 文件。 */
     fun exportToJson(context: Context): File {
         return kotlinx.coroutines.runBlocking {
             exportToJsonSuspend(context)
         }
     }
 
-    /**
-     * 导出全部记忆为 JSON（既有签名，保持不变）。
-     */
     suspend fun exportToJsonSuspend(context: Context): File =
         exportToJsonSuspend(context, typeFilter = null)
 
-    /**
-     * P4：导出 JSON，可按 type / 导出分组过滤。
-     */
     suspend fun exportToJsonSuspend(
         context: Context,
         typeFilter: String?
@@ -160,21 +251,15 @@ class MemoryRepository @Inject constructor(
         writeCacheFile(context, "json", jsonText)
     }
 
-    /**
-     * P4：导出全部记忆为 Markdown。
-     */
     suspend fun exportToMarkdownSuspend(context: Context): File =
         exportToMarkdownSuspend(context, typeFilter = null)
 
-    /**
-     * P4：导出 Markdown，可按 type / 导出分组过滤。
-     */
     suspend fun exportToMarkdownSuspend(
         context: Context,
         typeFilter: String?
     ): File = withContext(Dispatchers.IO) {
         val exportedAt = System.currentTimeMillis()
-        val items = loadExportItems(typeFilter = null) // 全量取出，由 exporter 再过滤
+        val items = loadExportItems(typeFilter = null)
         val markdown = MemoryMarkdownExporter.build(
             memories = items,
             exportedAt = exportedAt,
@@ -183,9 +268,6 @@ class MemoryRepository @Inject constructor(
         writeCacheFile(context, "md", markdown)
     }
 
-    /**
-     * P4：统一导出入口。
-     */
     suspend fun exportSuspend(
         context: Context,
         format: MemoryExportFormat,
@@ -195,9 +277,6 @@ class MemoryRepository @Inject constructor(
         MemoryExportFormat.MARKDOWN -> exportToMarkdownSuspend(context, typeFilter)
     }
 
-    /**
-     * 从 SAF 选择的 Uri 导入记忆。
-     */
     suspend fun importFromJson(
         context: Context,
         uri: Uri,
@@ -209,9 +288,6 @@ class MemoryRepository @Inject constructor(
         importFromJsonText(text, strategy)
     }
 
-    /**
-     * 从本地文件导入记忆。
-     */
     suspend fun importFromJsonFile(
         context: Context,
         file: File,
@@ -321,4 +397,9 @@ class MemoryRepository @Inject constructor(
         lastAccessedAt = updatedAt.takeIf { it > 0 },
         metadata = metadata
     )
+
+    /** 辅助：JSONObject put 若 key 已存在则跳过 */
+    private fun JSONObject.putsIfAbsent(key: String, value: Any) {
+        if (!has(key)) put(key, value)
+    }
 }
