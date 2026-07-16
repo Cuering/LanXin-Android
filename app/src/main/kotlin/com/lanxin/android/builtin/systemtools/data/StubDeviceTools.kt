@@ -43,18 +43,25 @@ import com.lanxin.android.builtin.systemtools.domain.NotesSafGateway
 import com.lanxin.android.builtin.systemtools.domain.NotesStore
 import com.lanxin.android.builtin.systemtools.domain.SetAlarmClockRequest
 import com.lanxin.android.builtin.systemtools.domain.SystemToolsIntentLauncher
+import com.lanxin.android.builtin.systemtools.data.files.FileDeleteDeviceTool
+import com.lanxin.android.builtin.systemtools.data.files.FileListDeviceTool
+import com.lanxin.android.builtin.systemtools.data.files.FilePickDeviceTool
+import com.lanxin.android.builtin.systemtools.data.files.FileReadTextDeviceTool
+import com.lanxin.android.builtin.systemtools.data.files.FileShareDeviceTool
+import com.lanxin.android.builtin.systemtools.data.files.FileWriteDeviceTool
 import com.lanxin.android.builtin.systemtools.domain.intArg
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Phase 7.2–7.3 设备工具实现。
+ * Phase 7.2–7.4 设备工具实现。
  *
  * - [AlarmSetDeviceTool]：默认 setAlarmClock；`mode=intent` 时 startActivity SET_ALARM
  * - [AlarmShowDeviceTool]：startActivity SHOW_ALARMS
  * - [CalendarListUpcomingDeviceTool]：CalendarContract / stub Gateway
  * - [CalendarCreateEventDeviceTool]：优先 INSERT Intent；`mode=stub` 内存写入
  * - Notes：Room 持久化 CRUD + SAF 导出/导入/分享
+ * - Files：SAF pick/list/read/write/share/delete（7.4）
  */
 @Singleton
 class AlarmSetDeviceTool @Inject constructor(
@@ -646,7 +653,13 @@ class DeviceToolRegistry @Inject constructor(
     noteUpdate: NoteUpdateDeviceTool,
     noteDelete: NoteDeleteDeviceTool,
     noteExport: NoteExportDeviceTool,
-    noteImport: NoteImportDeviceTool
+    noteImport: NoteImportDeviceTool,
+    filePick: FilePickDeviceTool,
+    fileList: FileListDeviceTool,
+    fileReadText: FileReadTextDeviceTool,
+    fileWrite: FileWriteDeviceTool,
+    fileShare: FileShareDeviceTool,
+    fileDelete: FileDeleteDeviceTool
 ) {
     private val tools: Map<String, DeviceTool> = listOf(
         alarmSet,
@@ -659,7 +672,13 @@ class DeviceToolRegistry @Inject constructor(
         noteUpdate,
         noteDelete,
         noteExport,
-        noteImport
+        noteImport,
+        filePick,
+        fileList,
+        fileReadText,
+        fileWrite,
+        fileShare,
+        fileDelete
     ).associateBy { it.name }
 
     fun get(name: String): DeviceTool? = tools[name]

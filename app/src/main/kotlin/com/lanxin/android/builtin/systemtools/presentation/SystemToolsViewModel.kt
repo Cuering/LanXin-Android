@@ -30,6 +30,12 @@ import com.lanxin.android.builtin.systemtools.domain.SystemToolsConfig
 import com.lanxin.android.builtin.systemtools.domain.SystemToolsPermissionChecker
 import com.lanxin.android.builtin.systemtools.domain.SystemToolsPermissionStatus
 import com.lanxin.android.builtin.systemtools.domain.SystemToolsSettings
+import com.lanxin.android.builtin.systemtools.domain.UserFileCatalog
+import com.lanxin.android.builtin.systemtools.domain.UserFileEntry
+import com.lanxin.android.builtin.systemtools.domain.UserFileIoGateway
+import com.lanxin.android.builtin.systemtools.domain.UserFileIoResult
+import com.lanxin.android.builtin.systemtools.domain.UserFileSort
+import com.lanxin.android.builtin.systemtools.domain.guessMimeFromName
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,6 +51,10 @@ data class SystemToolsUiState(
     val notesCount: Int = 0,
     val notesEnabled: Boolean = false,
     val notesStatusLabel: String = "未启用",
+    val userFileCount: Int = 0,
+    val userFileEnabled: Boolean = false,
+    val userFileStatusLabel: String = "未启用",
+    val userFilePreview: List<UserFileEntry> = emptyList(),
     val snackbarMessage: String? = null,
     val isBusy: Boolean = false
 )
@@ -55,7 +65,9 @@ class SystemToolsViewModel @Inject constructor(
     private val registry: DeviceToolRegistry,
     private val permissionChecker: SystemToolsPermissionChecker,
     private val notesStore: NotesStore,
-    private val notesSaf: NotesSafGateway
+    private val notesSaf: NotesSafGateway,
+    private val userFileCatalog: UserFileCatalog,
+    private val userFileIo: UserFileIoGateway
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -73,6 +85,11 @@ class SystemToolsViewModel @Inject constructor(
                 .getOrDefault(SystemToolsPermissionStatus())
             val config = settings.getConfig()
             val count = runCatching { notesStore.count() }.getOrDefault(0)
+            syncPrivateFilesToCatalog()
+            val fileCount = runCatching { userFileCatalog.count() }.getOrDefault(0)
+            val preview = runCatching {
+                userFileCatalog.list(sort = UserFileSort.DATE_DESC, limit = 8)
+            }.getOrDefault(emptyList())
             _uiState.update {
                 it.copy(
                     config = config,
@@ -81,6 +98,10 @@ class SystemToolsViewModel @Inject constructor(
                     notesCount = count,
                     notesEnabled = config.masterEnabled && config.notesEnabled,
                     notesStatusLabel = buildNotesStatus(config, count),
+                    userFileCount = fileCount,
+                    userFileEnabled = config.masterEnabled && config.userFileEnabled,
+                    userFileStatusLabel = buildUserFileStatus(config, fileCount),
+                    userFilePreview = preview,
                     isBusy = false
                 )
             }
@@ -214,8 +235,127 @@ class SystemToolsViewModel @Inject constructor(
         }
     }
 
+    /** SAF OpenDocument：导入到应用 imports 并登记。 */
+    fun importUserFileFromUri(uriString: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isBusy = true) }
+            try {
+                userFileIo.takePersistableIfPossible(uriString)
+                when (val r = userFileIo.copyToAppPrivate(uriString)) {
+                    is UserFileIoResult.Error -> {
+                        _uiState.update {
+                            it.copy(isBusy = false, snackbarMessage = "导入失败：${r.message}")
+                        }
+                    }
+                    is UserFileIoResult.Ok -> {
+                        val path = r.uri.orEmpty()
+                        val name = r.name ?: path.substringAfterLast('/')
+                        userFileCatalog.upsert(
+                            UserFileEntry(
+                                id = "app:$path",
+                                uriOrPath = path,
+                                name = name,
+                                sizeBytes = r.bytes.toLong(),
+                                mimeType = guessMimeFromName(name),
+                                modifiedAtEpochMs = System.currentTimeMillis(),
+                                source = "app_private"
+                            )
+                        )
+                        userFileCatalog.upsert(
+                            UserFileEntry(
+                                id = "saf:$uriString",
+                                uriOrPath = uriString,
+                                name = name,
+                                sizeBytes = r.bytes.toLong(),
+                                mimeType = guessMimeFromName(name),
+                                modifiedAtEpochMs = System.currentTimeMillis(),
+                                source = "saf"
+                            )
+                        )
+                        afterUserFileMutation("已导入 $name")
+                    }
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(isBusy = false, snackbarMessage = "导入失败：${e.message}")
+                }
+            }
+        }
+    }
+
+    /** CreateDocument：写入文本后登记。 */
+    fun exportUserTextToUri(uriString: String, text: String, mime: String = "text/plain") {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isBusy = true) }
+            try {
+                userFileIo.takePersistableIfPossible(uriString)
+                when (val r = userFileIo.writeText(uriString, text, mime)) {
+                    is UserFileIoResult.Error -> _uiState.update {
+                        it.copy(isBusy = false, snackbarMessage = "写入失败：${r.message}")
+                    }
+                    is UserFileIoResult.Ok -> {
+                        val name = userFileIo.probe(uriString)?.name
+                            ?: uriString.substringAfterLast('/')
+                        userFileCatalog.upsert(
+                            UserFileEntry(
+                                id = "saf:$uriString",
+                                uriOrPath = uriString,
+                                name = name,
+                                sizeBytes = r.bytes.toLong(),
+                                mimeType = mime,
+                                modifiedAtEpochMs = System.currentTimeMillis(),
+                                source = "saf"
+                            )
+                        )
+                        afterUserFileMutation("已写入 $name（${r.bytes} 字节）")
+                    }
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(isBusy = false, snackbarMessage = "写入失败：${e.message}")
+                }
+            }
+        }
+    }
+
+    fun shareUserFile(entry: UserFileEntry) {
+        viewModelScope.launch {
+            when (val r = userFileIo.shareUri(entry.uriOrPath, entry.mimeType)) {
+                is UserFileIoResult.Ok -> _uiState.update {
+                    it.copy(snackbarMessage = r.message)
+                }
+                is UserFileIoResult.Error -> _uiState.update {
+                    it.copy(snackbarMessage = "分享失败：${r.message}")
+                }
+            }
+        }
+    }
+
     fun clearSnackbar() {
         _uiState.update { it.copy(snackbarMessage = null) }
+    }
+
+    private suspend fun syncPrivateFilesToCatalog() {
+        val files = runCatching { userFileIo.listAppPrivateFiles() }.getOrDefault(emptyList())
+        for (f in files) {
+            userFileCatalog.upsert(f)
+        }
+    }
+
+    private suspend fun afterUserFileMutation(message: String) {
+        val config = settings.getConfig()
+        val fileCount = userFileCatalog.count()
+        val preview = userFileCatalog.list(sort = UserFileSort.DATE_DESC, limit = 8)
+        _uiState.update {
+            it.copy(
+                isBusy = false,
+                userFileCount = fileCount,
+                userFileEnabled = config.masterEnabled && config.userFileEnabled,
+                userFileStatusLabel = buildUserFileStatus(config, fileCount),
+                userFilePreview = preview,
+                snackbarMessage = message
+            )
+        }
     }
 
     private fun update(block: suspend () -> Unit) {
@@ -226,6 +366,11 @@ class SystemToolsViewModel @Inject constructor(
                 .getOrDefault(SystemToolsPermissionStatus())
             val config = settings.getConfig()
             val count = runCatching { notesStore.count() }.getOrDefault(0)
+            syncPrivateFilesToCatalog()
+            val fileCount = runCatching { userFileCatalog.count() }.getOrDefault(0)
+            val preview = runCatching {
+                userFileCatalog.list(sort = UserFileSort.DATE_DESC, limit = 8)
+            }.getOrDefault(emptyList())
             _uiState.update {
                 it.copy(
                     config = config,
@@ -233,6 +378,10 @@ class SystemToolsViewModel @Inject constructor(
                     notesCount = count,
                     notesEnabled = config.masterEnabled && config.notesEnabled,
                     notesStatusLabel = buildNotesStatus(config, count),
+                    userFileCount = fileCount,
+                    userFileEnabled = config.masterEnabled && config.userFileEnabled,
+                    userFileStatusLabel = buildUserFileStatus(config, fileCount),
+                    userFilePreview = preview,
                     isBusy = false,
                     snackbarMessage = "已保存"
                 )
@@ -248,9 +397,18 @@ class SystemToolsViewModel @Inject constructor(
         }
     }
 
+    private fun buildUserFileStatus(config: SystemToolsConfig, count: Int): String {
+        return when {
+            !config.masterEnabled -> "总开关关闭"
+            !config.userFileEnabled -> "用户文件能力关闭"
+            else -> "已启用 · SAF + imports · $count 项"
+        }
+    }
+
     companion object {
         val DOC_TOOL_COUNT = DeviceToolIds.ALL.size
         val M1_COUNT = DeviceToolIds.M1_STUB_READY.size
         val NOTES_COUNT = DeviceToolIds.NOTES_READY.size
+        val FILES_COUNT = DeviceToolIds.FILES_READY.size
     }
 }
