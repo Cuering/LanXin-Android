@@ -125,6 +125,8 @@ class MemoryViewModel @Inject constructor(
         viewModelScope.launch {
             _isLoading.update { true }
             try {
+                // Sync outbox hook deferred: Hilt/KSP cannot resolve sync graph types yet.
+                // See builtin/sync; re-enable via Provider/manual once DI compiles.
                 memoryRepository.addMemory(content, type, importance)
                 _snackbarMessage.update { "记忆已添加" }
                 closeAddDialog()
@@ -138,9 +140,13 @@ class MemoryViewModel @Inject constructor(
         viewModelScope.launch {
             _isLoading.update { true }
             try {
-                memoryRepository.updateMemory(
-                    memory.copy(content = content, type = type, importance = importance)
+                val updated = memory.copy(
+                    content = content,
+                    type = type,
+                    importance = importance,
+                    lastAccessedAt = System.currentTimeMillis()
                 )
+                memoryRepository.updateMemory(updated)
                 _snackbarMessage.update { "记忆已更新" }
                 closeAddDialog()
             } finally {
