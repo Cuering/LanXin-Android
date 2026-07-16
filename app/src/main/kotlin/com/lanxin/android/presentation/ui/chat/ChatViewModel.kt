@@ -610,10 +610,11 @@ class ChatViewModel @Inject constructor(
             turnIndex = turnIndex,
             updateUx = platformIndex == 0
         )
-        // Phase 6.3：首轮 needsTools = 有可注册工具；本地时 GENERATING_LOCAL 并跳过 tool 循环
-        val hasRegisteredTools = filteredTools.tools.isNotEmpty()
+        // Phase 6.3：首轮 needsTools=false（保留 preferLocal/离线本地）；
+        // 仅当模型产出 tool_call 进入工具循环后，才强制 need_tools_cloud。
+        // 有注册工具 ≠ 本轮「需要」工具；否则 preferLocal 在有网时永远失效。
         val routeDecision = runCatching {
-            inferenceRouteCoordinator.decide(needsTools = hasRegisteredTools)
+            inferenceRouteCoordinator.decide(needsTools = false)
         }.getOrNull()
         val useLocalGeneration =
             routeDecision != null && ChatLocalFallback.isLocalGeneration(routeDecision)
@@ -635,8 +636,8 @@ class ChatViewModel @Inject constructor(
         var lastAssistantText = ""
         var recordedError = false
         var markedStreamStart = false
-        // 后续轮若进入 tool 循环，强制 needsTools=true 走云端
-        var needsToolsForRoute = hasRegisteredTools && !useLocalGeneration
+        // 工具 follow-up 轮：强制 needsTools → 云端
+        var needsToolsForRoute = false
 
         try {
             while (true) {
