@@ -1,7 +1,7 @@
 # LanXin Android 架构设计（定稿 v1.0）
 
 > 基于 GPT Mobile 源码改造，引入插件化架构，借鉴 AstrBot 设计思路。
-> 当前状态：**Phase 1 ✅ → Phase 2 ✅ → Phase 3 ✅ → Phase 4 ✅ → Phase 5.1–5.7 ✅ → Phase 6.1 ✅ → Phase 6.2 ✅ → Phase 6.3 ✅ → Phase 6.4 ✅ 骨架 → 桌宠语音会话 M1 🚧**
+> 当前状态：**Phase 1 ✅ → Phase 2 ✅ → Phase 3 ✅ → Phase 4 ✅ → Phase 5.1–5.7 ✅ → Phase 6.1 ✅ → Phase 6.2 ✅ → Phase 6.3 ✅ → Phase 6.4 ✅ 骨架 → 桌宠语音会话 M1 🚧** → **Phase 7 系统工具 🔜**
 > - Step①~⑧ 全部完成
 > - 知识库 P0~P6、Unified Inbox 均已落地
 > - Phase 4：品牌换皮 + Memory 编辑 UI + UnifiedSearch 四路 RRF
@@ -16,7 +16,9 @@
 > - Phase 6.2：离线兜底（无网自动切本地）✅（`feat/phase6-2-offline-local-fallback`）
 > - Phase 6.3：ChatRouter 路由层重构（云端 ↔ 本地）✅（`feat/phase6-3-chat-router`）
 > - Phase 6.4：Sherpa-ONNX 离线语音识别（ASR）骨架 ✅（`feat/phase6-4-offline-asr`）
-> - Phase 6 主线 M1：妹居风格桌宠 + VoiceSession 听→想→说 🚧（`feat/phase6-pet-voice-session`）
+> - Phase 6 主线 M1：妹居风格桌宠 + VoiceSession 听→想→说 ✅（#48 已合 main）
+> - Phase 6 主线 M2a：路径就绪闭环 + 设置「已就绪/缺失」🚧（#49）
+> - Phase 7：系统工具（日历 / 闹钟 / 笔记 / 非系统文件）🔜（`docs/system-tools.md` + `builtin/systemtools`）
 
 ---
 
@@ -429,7 +431,7 @@ app/.../plugins/unifiedinbox/
 
 ---
 
-## 十四、Phase 4~6 完整路线图
+## 十四、Phase 4~7 完整路线图
 
 ### Phase 4 — 基础夯实（Foundation Overhaul）✅
 
@@ -576,7 +578,8 @@ app/.../plugins/unifiedinbox/
 | **6.3** | ChatRouter 路由层重构：云端 ↔ 本地自动切换 | 🔴 高 | 3d | ✅ |
 | **6.4** | Sherpa-ONNX 离线语音识别（ASR） | 🔴 高 | 4d | ✅ 骨架 |
 | **6.5 / M3** | Bert-VITS2 语音合成（TTS） | 🔴 高 | 4d | 🔜 真机；M1 已有 StubTtsEngine |
-| **6.6 / M1** | 桌宠悬浮窗 + VoiceSession 主线（听→想→说） | 🔴 高 | 4d | 🚧 M1（`feat/phase6-pet-voice-session`） |
+| **6.6 / M1** | 桌宠悬浮窗 + VoiceSession 主线（听→想→说） | 🔴 高 | 4d | ✅ M1（#48） |
+| **6.6 / M2** | 路径就绪 + Live2D 真显 + 引擎可接 | 🔴 高 | 3d | 🚧 M2a（#49） |
 | **6.7 / M5** | 场景感知：UsageStats + 截屏 → 桌宠主动关怀 | 🔴 高 | 3d | 🔜 |
 
 **交付主线：** **桌宠语音会话**（妹居级：Live2D/占位 + 语音听/说 + 对话）；6.5 TTS / 6.6 Pet 合并进该主线叙述。见 `docs/meiju-style-pet.md`。
@@ -670,18 +673,94 @@ app/.../plugins/unifiedinbox/
 
 ## 十四、整体 Timeline
 
+
+### Phase 7 — 系统工具 / 设备技能（System Tools & Device Skills）
+
+> 目标：让兰心通过 **统一 Tool/Skill 接口** 调用手机能力——**系统日历、闹钟、笔记、用户文件**等；聊天、桌宠 VoiceSession、MCP 共用同一套工具。  
+> 详细设计：`docs/system-tools.md`（落地时与本文同步）。模块建议：`builtin/systemtools/`（或 `builtin/device/`）。
+
+#### 7.0 原则
+
+| 原则 | 说明 |
+|------|------|
+| **用户文件，非系统分区** | 只管理用户可访问内容（SAF / MediaStore / `getExternalFilesDir` 等）；**禁止** root、改 `/system` `/vendor` |
+| **能 Intent 就不深挖厂商** | 闹钟优先 `AlarmClock` Intent；日历优先 `CalendarContract` 或交给系统日历 App |
+| **写/删要确认** | 创建日程、删文件、覆盖笔记等默认需用户确认或显式 tool 批准；设置页可分项开关 |
+| **权限最小** | 能用 SAF / 系统 Intent 的不申请宽权限；日历读写按需申请 |
+| **与现有模块协作** | 应用内定时继续用 `builtin/scheduler`；知识库/记忆已有 SAF 导入导出可复用 |
+
+#### 7.1 能力范围
+
+| 能力 | 策略 | 示例工具 ID | 权限 / 机制 |
+|------|------|-------------|-------------|
+| **日历 Calendar** | 读即将到来的事件；创建简单事件（或 Intent 交给系统日历） | `calendar_list_upcoming` / `calendar_create_event` | `READ_CALENDAR` / `WRITE_CALENDAR` 或 Intent |
+| **闹钟 Alarm** | **不**替代系统时钟 App；调起系统设置闹钟 / 打开闹钟列表 | `alarm_set` / `alarm_show` | `AlarmClock.ACTION_SET_ALARM` 等 |
+| **笔记 Notes** | 安卓无统一系统笔记 API：① 应用内轻量笔记 ② `CREATE_DOCUMENT` 导出 md/txt ③ 分享到已装笔记 App | `note_create` / `note_list` / `note_append` | 应用私有 DB + SAF；无强制厂商 API |
+| **文件 Files（非系统）** | 列表/读文本/写入/分享/删除（确认）；仅用户授权树或应用目录 | `file_pick` / `file_list` / `file_read_text` / `file_write` / `file_share` | SAF + persistable URI；**不做**全盘静默扫描 |
+
+#### 7.2 里程碑
+
+| 阶段 | 内容 | 优先级 | 状态 |
+|------|------|--------|------|
+| **7.1 骨架** | `DeviceTool` 接口 + 权限门闸 + Fake/Stub + 单测 + 设置总开关 + 本文档 | 🔴 高 | 🔜 |
+| **7.2 闹钟 + 日历** | Intent 设闹钟；日历读列表 + 创建（确认流） | 🔴 高 | 🔜 |
+| **7.3 笔记** | 应用内笔记 CRUD + 导出/分享 | 🟡 中 | 🔜 |
+| **7.4 文件** | SAF 授权目录列表、读文本摘要、写/分享/删（确认） | 🔴 高 | 🔜 |
+| **7.5 对话接入** | ChatRouter `needsTools` + 桌宠 VoiceSession 可调用上述工具 | 🔴 高 | 🔜 |
+| **7.6 打磨** | 权限引导 UX、隐私文案、失败降级、审计日志（可选） | 🟡 中 | 🔜 |
+
+#### 7.3 架构要点
+
 ```
-Phase 4（基础夯实）   Phase 5（平台扩展）     Phase 6（端侧智能）
-────────────────      ────────────────      ────────────────
-4.1 目录迁移         5.1 跨设备同步         6.1 MNN 本地推理
-4.2 品牌换皮         5.2 冲突策略           6.2 离线兜底
-4.3 Memory 编辑 UI    5.3 动态插件加载       6.3 ChatRouter 重构
-4.4 统一搜索          5.4 插件管理 UI         6.4 ASR 语音识别 ✅
-4.5 搜索设置页        5.5 插件市场           6.5/M3 TTS（M1 stub ✅）
-                      5.6 插件签名           6.6/M1 桌宠 VoiceSession 🚧
+Chat / VoiceSession / MCP
+        │
+        ▼
+  ToolRegistry（统一注册）
+        │
+        ▼
+  SystemToolsCoordinator（权限 + 用户确认 + 开关）
+        │
+  ┌─────┼─────────┬──────────┐
+  ▼     ▼         ▼          ▼
+Calendar Alarm   Notes    UserFiles
+Contract Intent  Store    SAF/MediaStore
+```
+
+- **默认**：危险操作（写日历、删文件、覆盖笔记）→ UI 确认后再执行。  
+- **设置**：`系统能力` 分项开关（日历/闹钟/笔记/文件），总开关可一键全关。  
+- **非目标（本阶段）**：无障碍模拟点击第三方 App、厂商笔记私有协议逆向、系统分区文件管理。
+
+#### 7.4 与 Phase 6 关系
+
+| Phase 6 | Phase 7 |
+|---------|---------|
+| 听得见、说得出、本地脑、桌宠形象 | **办得了事**（日程/闹钟/笔记/文件） |
+| VoiceSession 听→想→说 | 「想」之后 **tool_call** 调系统工具再总结回复 |
+| debug 模型路径在用户/应用可访问目录 | 文件工具同样 **只碰用户授权路径** |
+
+#### 7.5 遗留对照（本阶段纳入）
+
+| 需求 | 归入 |
+|------|------|
+| 接入系统日历 | **7.2** |
+| 接入系统闹钟 | **7.2**（Intent） |
+| 笔记（系统/应用内/导出） | **7.3** |
+| 管理非系统文件 | **7.4** |
+| 桌宠/聊天语音触发上述能力 | **7.5** |
+
+
+```
+Phase 4（基础夯实）   Phase 5（平台扩展）     Phase 6（端侧智能）        Phase 7（系统工具）
+────────────────      ────────────────      ────────────────        ────────────────
+4.1 目录迁移         5.1 跨设备同步         6.1 MNN 本地推理         7.1 工具骨架 / 权限门闸
+4.2 品牌换皮         5.2 冲突策略           6.2 离线兜底             7.2 日历 + 闹钟 Intent
+4.3 Memory 编辑 UI    5.3 动态插件加载       6.3 ChatRouter 重构       7.3 笔记（应用内+导出）
+4.4 统一搜索          5.4 插件管理 UI         6.4 ASR 语音识别 ✅       7.4 用户文件 SAF
+4.5 搜索设置页        5.5 插件市场           6.5/M3 TTS（M1 stub ✅）  7.5 对话/桌宠接入工具
+                      5.6 插件签名           6.6/M1 桌宠 ✅ → M2 🚧    7.6 UX / 隐私打磨
                                              6.7/M5 场景感知
 
-预计总工时：约 45~50 人天
+预计总工时：约 45~50 人天（Phase 6）+ 约 10~15 人天（Phase 7 视权限与厂商差异）
 （各阶段可并行推进，具体排期由兰心按当前进度灵活调整）
 ```
 
@@ -698,6 +777,10 @@ Phase 4（基础夯实）   Phase 5（平台扩展）     Phase 6（端侧智能
 | VoiceRepo / ASR + TTS | **Phase 6.4~6.5 / M1–M3** | Sherpa-ONNX + Bert-VITS2（会话优先桌宠） |
 | 桌宠 PetOverlay | **Phase 6 主线 M1~M5** | 参考妹居 2.2.2 架构（不复制资源） |
 | engine/ 路由层重构 | **Phase 6.3** | 做离线兜底时一并重构 |
+| 系统日历 / 闹钟 Intent | **Phase 7.2** | CalendarContract + AlarmClock |
+| 笔记（应用内 + 导出/分享） | **Phase 7.3** | 无统一系统笔记 API |
+| 非系统文件管理（SAF） | **Phase 7.4** | 用户授权目录，禁止系统分区 |
+| 对话/桌宠调用系统工具 | **Phase 7.5** | ToolRegistry + 确认门闸 |
 
 ---
 
