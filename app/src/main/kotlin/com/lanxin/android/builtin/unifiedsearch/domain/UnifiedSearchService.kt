@@ -127,14 +127,32 @@ class UnifiedSearchService @Inject constructor(
      * 无命中或关闭时原样返回。
      */
     suspend fun inject(question: String, topK: Int = DEFAULT_TOP_K): String {
-        if (!enabled || question.isBlank()) return question
+        return injectWithHits(question, topK).enrichedQuestion
+    }
+
+    /**
+     * 注入并返回本轮 memory/knowledge 命中，供 Chat UX 引用芯片使用。
+     */
+    suspend fun injectWithHits(question: String, topK: Int = DEFAULT_TOP_K): InjectOutcome {
+        if (!enabled || question.isBlank()) {
+            return InjectOutcome(enrichedQuestion = question)
+        }
         val result = search(question, topK = topK)
-        if (result.fused.isEmpty() || result.injectedPrompt.isBlank()) return question
-        return buildString {
+        if (result.fused.isEmpty() || result.injectedPrompt.isBlank()) {
+            return InjectOutcome(enrichedQuestion = question)
+        }
+        val memoryHits = result.fused.filter { it.route == SearchRoute.MEMORY }
+        val knowledgeHits = result.fused.filter { it.route == SearchRoute.KNOWLEDGE }
+        val enriched = buildString {
             append(result.injectedPrompt)
             appendLine()
             append(question)
         }
+        return InjectOutcome(
+            enrichedQuestion = enriched,
+            memoryHits = memoryHits,
+            knowledgeHits = knowledgeHits
+        )
     }
 
     private suspend fun searchMemoryRoute(query: String, limit: Int): RouteResult {

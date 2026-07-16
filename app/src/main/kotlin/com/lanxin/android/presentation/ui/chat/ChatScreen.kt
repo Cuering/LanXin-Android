@@ -108,7 +108,9 @@ import kotlinx.coroutines.withContext
 @Composable
 fun ChatScreen(
     chatViewModel: ChatViewModel = hiltViewModel(),
-    onBackAction: () -> Unit
+    onBackAction: () -> Unit,
+    onOpenMemoryRef: (String) -> Unit = {},
+    onOpenKnowledgeRef: (String, String) -> Unit = { _, _ -> }
 ) {
     val containerSize = LocalWindowInfo.current.containerSize
     val screenWidthDp = with(LocalDensity.current) { containerSize.width.toDp() }
@@ -124,6 +126,7 @@ fun ChatScreen(
     val groupedMessages by chatViewModel.groupedMessages.collectAsStateWithLifecycle()
     val indexStates by chatViewModel.indexStates.collectAsStateWithLifecycle()
     val loadingStates by chatViewModel.loadingStates.collectAsStateWithLifecycle()
+    val turnUxStates by chatViewModel.turnUxStates.collectAsStateWithLifecycle()
     val isChatTitleDialogOpen by chatViewModel.isChatTitleDialogOpen.collectAsStateWithLifecycle()
     val isChatModelDialogOpen by chatViewModel.isChatModelDialogOpen.collectAsStateWithLifecycle()
     val messageEditSession by chatViewModel.messageEditSession.collectAsStateWithLifecycle()
@@ -228,6 +231,7 @@ fun ChatScreen(
                             assistantMessages = groupedMessages.assistantMessages.getOrNull(index) ?: emptyList(),
                             platformIndexState = indexStates.getOrElse(index) { 0 },
                             loadingStates = loadingStates,
+                            turnUx = turnUxStates[index],
                             enabledPlatformsInChat = chatViewModel.enabledPlatformsInChat,
                             enabledPlatformLookup = enabledPlatformLookup,
                             canUseChat = canUseChat,
@@ -247,7 +251,13 @@ fun ChatScreen(
                             onSelectText = chatViewModel::openSelectTextSheet,
                             onRetry = chatViewModel::retryChat,
                             onShowPreviousRevision = chatViewModel::showPreviousAssistantRevision,
-                            onShowNextRevision = chatViewModel::showNextAssistantRevision
+                            onShowNextRevision = chatViewModel::showNextAssistantRevision,
+                            onRefClick = { ref ->
+                                when (ref.type) {
+                                    ChatRefType.MEMORY -> onOpenMemoryRef(ref.id)
+                                    ChatRefType.KNOWLEDGE -> onOpenKnowledgeRef(ref.id, ref.snippet)
+                                }
+                            }
                         )
                     }
 
@@ -259,6 +269,7 @@ fun ChatScreen(
                                 assistantMessages = groupedMessages.assistantMessages.getOrNull(lastMessageIndex) ?: emptyList(),
                                 platformIndexState = indexStates.getOrElse(lastMessageIndex) { 0 },
                                 loadingStates = loadingStates,
+                                turnUx = turnUxStates[lastMessageIndex],
                                 enabledPlatformsInChat = chatViewModel.enabledPlatformsInChat,
                                 enabledPlatformLookup = enabledPlatformLookup,
                                 canUseChat = canUseChat,
@@ -278,7 +289,13 @@ fun ChatScreen(
                                 onSelectText = chatViewModel::openSelectTextSheet,
                                 onRetry = chatViewModel::retryChat,
                                 onShowPreviousRevision = chatViewModel::showPreviousAssistantRevision,
-                                onShowNextRevision = chatViewModel::showNextAssistantRevision
+                                onShowNextRevision = chatViewModel::showNextAssistantRevision,
+                                onRefClick = { ref ->
+                                    when (ref.type) {
+                                        ChatRefType.MEMORY -> onOpenMemoryRef(ref.id)
+                                        ChatRefType.KNOWLEDGE -> onOpenKnowledgeRef(ref.id, ref.snippet)
+                                    }
+                                }
                             )
                         }
 
@@ -413,6 +430,7 @@ private fun ChatMessagePair(
     assistantMessages: List<MessageV2>,
     platformIndexState: Int,
     loadingStates: List<ChatViewModel.LoadingState>,
+    turnUx: ChatTurnUxState?,
     enabledPlatformsInChat: List<String>,
     enabledPlatformLookup: Map<String, PlatformV2>,
     canUseChat: Boolean,
@@ -428,7 +446,8 @@ private fun ChatMessagePair(
     onSelectText: (String) -> Unit,
     onRetry: (Int, Int) -> Unit,
     onShowPreviousRevision: (Int, Int) -> Unit,
-    onShowNextRevision: (Int, Int) -> Unit
+    onShowNextRevision: (Int, Int) -> Unit,
+    onRefClick: (ChatRef) -> Unit = {}
 ) {
     val selectedAssistantMessage = assistantMessages.getOrNull(platformIndexState)
     val assistantContent = selectedAssistantMessage?.effectiveContent() ?: ""
@@ -514,6 +533,12 @@ private fun ChatMessagePair(
                 thoughts = assistantThoughts,
                 attachments = selectedAssistantMessage?.attachments.orEmpty().map { it.filePathForDisplay },
                 contentIdentity = "$messageIndex:$selectedPlatformUid",
+                generationPhase = if (isActiveMessage) {
+                    turnUx?.phase ?: ChatGenerationPhase.IDLE
+                } else {
+                    ChatGenerationPhase.IDLE
+                },
+                chatRefs = turnUx?.refs.orEmpty(),
                 revisionIndexLabel = selectedAssistantMessage?.let { assistantMessage ->
                     val totalRevisions = assistantMessage.revisions.size + 1
                     if (assistantMessage.activeRevisionIndex == ACTIVE_REVISION_LATEST) {
@@ -537,7 +562,8 @@ private fun ChatMessagePair(
                 onRetryClick = { onRetry(messageIndex, platformIndexState) },
                 onEditClick = { onEditAssistant(messageIndex, platformIndexState) },
                 onShowPreviousRevision = { onShowPreviousRevision(messageIndex, platformIndexState) },
-                onShowNextRevision = { onShowNextRevision(messageIndex, platformIndexState) }
+                onShowNextRevision = { onShowNextRevision(messageIndex, platformIndexState) },
+                onRefClick = onRefClick
             )
         }
     }

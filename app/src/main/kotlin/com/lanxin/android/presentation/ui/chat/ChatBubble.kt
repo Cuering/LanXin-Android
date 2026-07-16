@@ -94,6 +94,8 @@ fun OpponentChatBubble(
     attachments: List<String> = emptyList(),
     contentIdentity: Any = text,
     canEdit: Boolean = false,
+    generationPhase: ChatGenerationPhase = ChatGenerationPhase.IDLE,
+    chatRefs: List<ChatRef> = emptyList(),
     revisionIndexLabel: String? = null,
     canShowPreviousRevision: Boolean = false,
     canShowNextRevision: Boolean = false,
@@ -102,7 +104,8 @@ fun OpponentChatBubble(
     onRetryClick: () -> Unit = {},
     onEditClick: () -> Unit = {},
     onShowPreviousRevision: () -> Unit = {},
-    onShowNextRevision: () -> Unit = {}
+    onShowNextRevision: () -> Unit = {},
+    onRefClick: (ChatRef) -> Unit = {}
 ) {
     val cardColor = CardColors(
         containerColor = MaterialTheme.colorScheme.background,
@@ -113,8 +116,19 @@ fun OpponentChatBubble(
 
     // Show thinking block while loading if we have thoughts but no text yet
     val isThinking = isLoading && thoughts.isNotBlank() && text.isBlank()
+    // 动态状态：活动阶段显示；正文已出且 Done 时收起
+    val showStatus = generationPhase.isActive ||
+        (generationPhase == ChatGenerationPhase.DONE && isLoading && text.isBlank())
 
     Column(modifier = modifier) {
+        if (showStatus) {
+            ChatStatusBlock(
+                phase = generationPhase,
+                modifier = Modifier.padding(top = 16.dp, start = 8.dp, end = 8.dp),
+                showWhenDone = generationPhase == ChatGenerationPhase.DONE && text.isBlank()
+            )
+        }
+
         // Thinking block (collapsed by default)
         if (thoughts.isNotBlank()) {
             ThinkingBlock(
@@ -147,6 +161,12 @@ fun OpponentChatBubble(
                     )
                 }
             }
+
+            ChatRefsRow(
+                refs = chatRefs,
+                onRefClick = onRefClick,
+                modifier = Modifier.padding(start = 8.dp, end = 8.dp)
+            )
 
             if (!isLoading) {
                 Row(
@@ -315,15 +335,15 @@ fun UserChatBubblePreview() {
 fun OpponentChatBubblePreview() {
     val sampleText = """
         # Demo
-    
+
         Emphasis, aka italics, with *asterisks* or _underscores_. Strong emphasis, aka bold, with **asterisks** or __underscores__. Combined emphasis with **asterisks and _underscores_**. [Links with two blocks, text in square-brackets, destination is in parentheses.](https://www.example.com). Inline `code` has `back-ticks around` it.
-    
+
         1. First ordered list item
         2. Another item
             * Unordered sub-list.
         3. And another item.
             You can have properly indented paragraphs within list items. Notice the blank line above, and the leading spaces (at least one, but we'll use three here to also align the raw Markdown).
-    
+
         * Unordered list can use asterisks
         - Or minuses
         + Or pluses

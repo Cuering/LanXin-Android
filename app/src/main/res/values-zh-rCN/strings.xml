@@ -198,6 +198,15 @@
     <string name="view_thinking">查看推理过程</string>
     <string name="hide_thinking">隐藏推理过程</string>
     <string name="thinking_in_progress">推理中……</string>
+    <string name="chat_status_preparing">准备中…</string>
+    <string name="chat_status_searching_memory">检索记忆…</string>
+    <string name="chat_status_searching_knowledge">检索知识库…</string>
+    <string name="chat_status_generating">生成中…</string>
+    <string name="chat_status_calling_tools">调用工具…</string>
+    <string name="chat_status_done">已完成</string>
+    <string name="chat_refs_title">本轮引用</string>
+    <string name="chat_ref_memory">记忆</string>
+    <string name="chat_ref_knowledge">知识</string>
     <string name="expand">展开</string>
     <string name="collapse">收起</string>
     <string name="extended_thinking">深度推理</string>

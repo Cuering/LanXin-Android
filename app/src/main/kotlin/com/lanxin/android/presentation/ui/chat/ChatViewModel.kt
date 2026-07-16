@@ -31,6 +31,7 @@ import com.lanxin.android.plugins.chat.data.entity.resetActiveRevision
 import com.lanxin.android.plugins.chat.data.entity.selectRevision
 import com.lanxin.android.plugins.chat.data.entity.snapshotLatestAssistantRevision
 import com.lanxin.android.plugins.memory.data.memory.MemoryRepository
+import com.lanxin.android.plugins.memory.data.memory.MemoryType
 import com.lanxin.android.plugins.memory.domain.memory.MemoryInjector
 import com.lanxin.android.util.AttachmentPayloadCache
 import com.lanxin.android.util.FileUtils
@@ -132,6 +133,12 @@ class ChatViewModel @Inject constructor(
 
     private val _loadingStates = MutableStateFlow(List<LoadingState>(enabledPlatformsInChat.size) { LoadingState.Idle })
     val loadingStates = _loadingStates.asStateFlow()
+
+    /**
+     * 按 turn 索引挂载生成阶段 + 本轮引用（会话内存，P0 不写 Room）。
+     */
+    private val _turnUxStates = MutableStateFlow<Map<Int, ChatTurnUxState>>(emptyMap())
+    val turnUxStates = _turnUxStates.asStateFlow()
 
     private val _selectedText = MutableStateFlow("")
     val selectedText = _selectedText.asStateFlow()
@@ -590,13 +597,26 @@ class ChatViewModel @Inject constructor(
             )
         )
 
-        var workingUserMessages = injectMemoryIntoLastUserMessage(userMessages)
+        // 仅主平台（index 0）驱动状态文案与引用，避免多平台互相覆盖
+        if (platformIndex == 0) {
+            setTurnPhase(turnIndex, ChatGenerationPhase.PREPARING)
+        }
+
+        var workingUserMessages = injectMemoryIntoLastUserMessage(
+            userMessages = userMessages,
+            turnIndex = turnIndex,
+            updateUx = platformIndex == 0
+        )
+        if (platformIndex == 0) {
+            setTurnPhase(turnIndex, ChatGenerationPhase.GENERATING)
+        }
         var workingAssistantMessages = assistantMessages
         var remainingRounds = MAX_TOOL_ROUNDS
         var pendingRevision = revisionToAppendOnSuccess
         val turnStartMs = System.currentTimeMillis()
         var lastAssistantText = ""
         var recordedError = false
+        var markedStreamStart = false
 
         try {
             while (true) {
@@ -622,6 +642,15 @@ class ChatViewModel @Inject constructor(
                 if (assistantText.contains("[Response stopped:")) {
                     recordedError = true
                 }
+                if (platformIndex == 0 && !markedStreamStart && assistantText.isNotBlank()) {
+                    markedStreamStart = true
+                    setTurnPhase(
+                        turnIndex,
+                        ChatGenerationStatusLogic.onStreamContentStarted(
+                            _turnUxStates.value[turnIndex]?.phase ?: ChatGenerationPhase.GENERATING
+                        )
+                    )
+                }
 
                 if (remainingRounds <= 0) break
 
@@ -629,6 +658,10 @@ class ChatViewModel @Inject constructor(
                     assistantText = assistantText,
                     allowedToolNames = allowedToolNames
                 ) ?: break
+
+                if (platformIndex == 0) {
+                    setTurnPhase(turnIndex, ChatGenerationPhase.CALLING_TOOLS)
+                }
 
                 // 清理助手消息中的 tool_call 标签（用户可见的中间提示）
                 val cleaned = toolRound.cleanedAssistantText
@@ -673,6 +706,11 @@ class ChatViewModel @Inject constructor(
                 // 下一轮覆盖同一 UI 槽位，不再追加 revision
                 pendingRevision = null
                 remainingRounds -= 1
+                markedStreamStart = false
+
+                if (platformIndex == 0) {
+                    setTurnPhase(turnIndex, ChatGenerationPhase.GENERATING)
+                }
 
                 // 清空 UI 槽位，准备接收最终/下一轮回复
                 _groupedMessages.update { grouped ->
@@ -701,9 +739,31 @@ class ChatViewModel @Inject constructor(
             if (!recordedError && platformIndex == 0 && lastAssistantText.isNotBlank()) {
                 maybeExtractAutoKnowledge(platformIndex)
             }
+            if (platformIndex == 0) {
+                setTurnPhase(
+                    turnIndex,
+                    ChatGenerationStatusLogic.onGenerationFinished(
+                        _turnUxStates.value[turnIndex]?.phase ?: ChatGenerationPhase.DONE
+                    )
+                )
+            }
             _loadingStates.update {
                 it.toMutableList().apply { this[platformIndex] = LoadingState.Idle }
             }
+        }
+    }
+
+    private fun setTurnPhase(turnIndex: Int, phase: ChatGenerationPhase) {
+        _turnUxStates.update { current ->
+            val prev = current[turnIndex] ?: ChatTurnUxState()
+            current + (turnIndex to prev.copy(phase = phase))
+        }
+    }
+
+    private fun setTurnRefs(turnIndex: Int, refs: List<ChatRef>) {
+        _turnUxStates.update { current ->
+            val prev = current[turnIndex] ?: ChatTurnUxState()
+            current + (turnIndex to prev.copy(refs = refs))
         }
     }
 
@@ -823,15 +883,48 @@ class ChatViewModel @Inject constructor(
      * 仅在发给模型时注入上下文，界面仍显示用户原始消息。
      *
      * Phase 4.4：优先走 UnifiedSearch 四路 RRF；关闭时回退 MemoryInjector。
+     * 同时写入本轮 ChatRef 供气泡下方引用芯片使用。
      */
-    private suspend fun injectMemoryIntoLastUserMessage(userMessages: List<MessageV2>): List<MessageV2> {
+    private suspend fun injectMemoryIntoLastUserMessage(
+        userMessages: List<MessageV2>,
+        turnIndex: Int,
+        updateUx: Boolean
+    ): List<MessageV2> {
         if (userMessages.isEmpty()) return userMessages
         val last = userMessages.last()
-        val enriched = if (unifiedSearchService.enabled) {
-            unifiedSearchService.inject(last.content)
+
+        val refs = mutableListOf<ChatRef>()
+        val enriched: String = if (unifiedSearchService.enabled) {
+            if (updateUx) setTurnPhase(turnIndex, ChatGenerationPhase.SEARCHING_MEMORY)
+            val outcome = unifiedSearchService.injectWithHits(last.content)
+            if (updateUx && outcome.knowledgeHits.isNotEmpty()) {
+                setTurnPhase(turnIndex, ChatGenerationPhase.SEARCHING_KNOWLEDGE)
+            }
+            if (updateUx) {
+                refs += ChatGenerationStatusLogic.refsFromUnifiedKeys(
+                    keys = (outcome.memoryHits + outcome.knowledgeHits).map { it.key },
+                    texts = (outcome.memoryHits + outcome.knowledgeHits).map { it.text },
+                    subtitles = (outcome.memoryHits + outcome.knowledgeHits).map { it.subtitle }
+                )
+            }
+            outcome.enrichedQuestion
         } else {
-            memoryInjector.inject(last.content)
+            if (updateUx) setTurnPhase(turnIndex, ChatGenerationPhase.SEARCHING_MEMORY)
+            val result = memoryInjector.injectWithMatches(last.content)
+            if (updateUx) {
+                refs += result.matchedMemories.map { entity ->
+                    ChatRef(
+                        type = ChatRefType.MEMORY,
+                        id = entity.id.toString(),
+                        title = MemoryType.displayName(entity.type),
+                        snippet = entity.content.take(120)
+                    )
+                }
+            }
+            result.enrichedQuestion
         }
+        if (updateUx) setTurnRefs(turnIndex, refs)
+
         if (enriched == last.content) return userMessages
         return userMessages.dropLast(1) + last.copy(content = enriched)
     }

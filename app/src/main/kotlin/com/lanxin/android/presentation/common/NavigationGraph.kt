@@ -132,6 +132,24 @@ fun NavGraphBuilder.statisticsScreenNavigation(navController: NavHostController)
 }
 
 fun NavGraphBuilder.knowledgeScreenNavigation(navController: NavHostController) {
+    composable(
+        route = Route.KNOWLEDGE_DETAIL,
+        arguments = listOf(
+            navArgument("externalId") { type = NavType.StringType },
+            navArgument("snippet") {
+                type = NavType.StringType
+                defaultValue = ""
+            }
+        )
+    ) { entry ->
+        val externalId = entry.arguments?.getString("externalId").orEmpty()
+        val snippet = entry.arguments?.getString("snippet").orEmpty()
+        com.lanxin.android.builtin.knowledge.presentation.KnowledgeDetailScreen(
+            externalId = externalId,
+            snippet = snippet,
+            onBackAction = { navController.navigateUp() }
+        )
+    }
     composable(Route.KNOWLEDGE) {
         KnowledgeScreen(
             onBackAction = { navController.navigateUp() }
@@ -217,6 +235,16 @@ fun NavGraphBuilder.memoryScreenNavigation(navController: NavHostController) {
     composable(Route.MEMORY_LIST) {
         MemoryScreen(
             onBackAction = { navController.navigateUp() }
+        )
+    }
+    composable(
+        route = Route.MEMORY_EDIT,
+        arguments = listOf(navArgument("memoryId") { type = NavType.StringType })
+    ) { entry ->
+        val memoryId = entry.arguments?.getString("memoryId")?.toLongOrNull()
+        MemoryScreen(
+            onBackAction = { navController.navigateUp() },
+            openMemoryId = memoryId
         )
     }
 }
@@ -333,7 +361,23 @@ fun NavGraphBuilder.chatScreenNavigation(navController: NavHostController) {
         )
     ) {
         ChatScreen(
-            onBackAction = { navController.navigateUp() }
+            onBackAction = { navController.navigateUp() },
+            onOpenMemoryRef = { memoryId ->
+                navController.navigate(
+                    Route.MEMORY_EDIT.replace(
+                        "{memoryId}",
+                        android.net.Uri.encode(memoryId)
+                    )
+                )
+            },
+            onOpenKnowledgeRef = { externalId, snippet ->
+                val encodedSnippet = android.net.Uri.encode(snippet.take(200))
+                navController.navigate(
+                    Route.KNOWLEDGE_DETAIL
+                        .replace("{externalId}", android.net.Uri.encode(externalId))
+                        .replace("{snippet}", encodedSnippet)
+                )
+            }
         )
     }
 }
