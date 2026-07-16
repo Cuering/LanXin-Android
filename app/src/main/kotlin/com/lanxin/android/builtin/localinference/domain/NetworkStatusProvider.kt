@@ -22,7 +22,7 @@ package com.lanxin.android.builtin.localinference.domain
  * Phase 6.2 离线兜底依赖此接口；实现默认走 [android.net.ConnectivityManager]。
  * 单测可注入假实现。
  */
-interface NetworkStatusProvider {
+fun interface NetworkStatusProvider {
 
     /**
      * @return true 表示当前具备可用网络（通常含 INTERNET + VALIDATED）；
