@@ -231,7 +231,7 @@ class DefaultSyncRepository(
         enqueue(item, SyncOutboxOp.UPSERT)
     }
 
-    override suspend fun enqueueMemoryDelete(localId: Long, contentSnapshot: String = "") {
+    override suspend fun enqueueMemoryDelete(localId: Long, contentSnapshot: String) {
         val deviceId = preferences.getOrCreateDeviceId()
         val now = System.currentTimeMillis()
         val item = SyncItem(
