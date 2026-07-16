@@ -43,7 +43,8 @@ class DynamicPluginLoader(
                 reason = "无法解析插件清单"
             )
 
-        when (val sig = signatureVerifier.verify(apkFile)) {
+        val sig = signatureVerifier.verify(apkFile)
+        when (sig) {
             is PluginSignatureResult.Rejected ->
                 return LoadPackageResult.Error(
                     apkPath = apkFile.absolutePath,
@@ -52,6 +53,7 @@ class DynamicPluginLoader(
                 )
             is PluginSignatureResult.Trusted -> Unit
         }
+        val signatureInfo = sig.toInfo()
 
         if (manifest.minAppVersion.isNotBlank() && appVersionName.isNotBlank()) {
             // 宿主版本 < minAppVersion 则拒绝
@@ -79,7 +81,7 @@ class DynamicPluginLoader(
                     apkFile = apkFile,
                     classLoader = null,
                     plugin = fromFactory,
-                    signature = signatureVerifier.verify(apkFile).toInfo()
+                    signature = signatureInfo
                 )
             )
         }
@@ -114,7 +116,7 @@ class DynamicPluginLoader(
                 apkFile = apkFile,
                 classLoader = cl,
                 plugin = plugin,
-                signature = signatureVerifier.verify(apkFile).toInfo()
+                signature = signatureInfo
             )
         )
     }
