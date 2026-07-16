@@ -11,6 +11,7 @@ enum class ChatGenerationPhase {
     SEARCHING_MEMORY,
     SEARCHING_KNOWLEDGE,
     GENERATING,
+
     /** 本地离线/偏好本地生成中（Phase 6.2）。 */
     GENERATING_LOCAL,
     CALLING_TOOLS,
