@@ -22,11 +22,10 @@ import com.lanxin.android.plugin.PluginCatalog
 import com.lanxin.android.plugin.market.DefaultPluginInstaller
 import com.lanxin.android.plugin.market.InstallPhase
 import com.lanxin.android.plugin.market.InstallProgress
-import com.lanxin.android.plugin.market.MarketConfig
 import com.lanxin.android.plugin.market.MarketDefaults
 import com.lanxin.android.plugin.market.MarketInstallStatus
 import com.lanxin.android.plugin.market.MarketPluginEntry
-import com.lanxin.android.plugin.market.MarketPreferences
+import com.lanxin.android.plugin.market.MarketSettings
 import com.lanxin.android.plugin.market.PluginInstallResult
 import com.lanxin.android.plugin.market.PluginInstaller
 import com.lanxin.android.plugin.market.PluginMarketRepository
@@ -64,7 +63,7 @@ class PluginMarketViewModel @Inject constructor(
     private val marketRepository: PluginMarketRepository,
     private val installer: PluginInstaller,
     private val catalog: PluginCatalog,
-    private val marketPreferences: MarketPreferences
+    private val marketSettings: MarketSettings
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(PluginMarketUiState())
@@ -81,9 +80,9 @@ class PluginMarketViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             try {
-                val url = marketPreferences.getCatalogUrl()
-                val result = marketRepository.search(_uiState.value.query)
-                val entries = result.getOrElse { e ->
+                val url = marketSettings.getCatalogUrl()
+                val fullResult = marketRepository.fetchCatalog()
+                val full = fullResult.getOrElse { e ->
                     _uiState.update {
                         it.copy(
                             isLoading = false,
@@ -93,10 +92,8 @@ class PluginMarketViewModel @Inject constructor(
                     }
                     return@launch
                 }
-                // search 已过滤；保留全量以便本地 query 切换
-                val full = marketRepository.fetchCatalog().getOrNull()?.plugins ?: entries
-                allEntries = full
-                val filtered = filterEntries(full, _uiState.value.query)
+                allEntries = full.plugins
+                val filtered = filterEntries(full.plugins, _uiState.value.query)
                 _uiState.update {
                     it.copy(
                         items = toListItems(filtered),
@@ -188,7 +185,7 @@ class PluginMarketViewModel @Inject constructor(
     fun saveCatalogUrl() {
         viewModelScope.launch {
             val url = _uiState.value.draftCatalogUrl.trim()
-            marketPreferences.setCatalogUrl(url.ifBlank { null })
+            marketSettings.setCatalogUrl(url.ifBlank { null })
             _uiState.update {
                 it.copy(
                     showUrlDialog = false,

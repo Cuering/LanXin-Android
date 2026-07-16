@@ -17,11 +17,11 @@ import kotlinx.coroutines.flow.map
 @Singleton
 class MarketPreferences @Inject constructor(
     private val dataStore: DataStore<Preferences>
-) {
+) : MarketSettings {
 
     private val catalogUrlKey = stringPreferencesKey(MarketDefaults.PREF_CATALOG_URL)
 
-    suspend fun getCatalogUrl(): String {
+    override suspend fun getCatalogUrl(): String {
         val stored = dataStore.data.map { it[catalogUrlKey] }.first()
         return if (stored.isNullOrBlank()) {
             MarketDefaults.DEFAULT_CATALOG_URL
@@ -30,7 +30,7 @@ class MarketPreferences @Inject constructor(
         }
     }
 
-    suspend fun setCatalogUrl(url: String?) {
+    override suspend fun setCatalogUrl(url: String?) {
         dataStore.edit { prefs ->
             if (url.isNullOrBlank()) {
                 prefs.remove(catalogUrlKey)
@@ -40,7 +40,7 @@ class MarketPreferences @Inject constructor(
         }
     }
 
-    suspend fun getConfig(): MarketConfig = MarketConfig(
+    override suspend fun getConfig(): MarketConfig = MarketConfig(
         catalogUrl = getCatalogUrl(),
         fallbackToSample = true
     )

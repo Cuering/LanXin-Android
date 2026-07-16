@@ -5,6 +5,7 @@ import com.lanxin.android.plugin.market.DefaultPluginInstaller
 import com.lanxin.android.plugin.market.KtorMarketHttpFetcher
 import com.lanxin.android.plugin.market.MarketHttpFetcher
 import com.lanxin.android.plugin.market.MarketPreferences
+import com.lanxin.android.plugin.market.MarketSettings
 import com.lanxin.android.plugin.market.PluginInstaller
 import com.lanxin.android.plugin.market.PluginMarketRepository
 import com.lanxin.android.plugin.market.RemotePluginMarketRepository
@@ -27,6 +28,10 @@ abstract class PluginMarketBindModule {
     @Binds
     @Singleton
     abstract fun bindPluginInstaller(impl: DefaultPluginInstaller): PluginInstaller
+
+    @Binds
+    @Singleton
+    abstract fun bindMarketSettings(impl: MarketPreferences): MarketSettings
 }
 
 @Module
@@ -37,10 +42,10 @@ object PluginMarketProvideModule {
     @Singleton
     fun providePluginMarketRepository(
         fetcher: MarketHttpFetcher,
-        preferences: MarketPreferences
+        settings: MarketSettings
     ): PluginMarketRepository {
         val remote = RemotePluginMarketRepository(
-            catalogUrlProvider = { preferences.getCatalogUrl() },
+            catalogUrlProvider = { settings.getCatalogUrl() },
             fetcher = fetcher
         )
         return CompositePluginMarketRepository(
