@@ -10,7 +10,18 @@ import kotlinx.coroutines.flow.Flow
 
 interface ChatRepository {
 
-    suspend fun completeChat(userMessages: List<MessageV2>, assistantMessages: List<List<MessageV2>>, platform: PlatformV2): Flow<ApiState>
+    /**
+     * 完成一轮对话（云端或本地）。
+     *
+     * @param needsTools 本轮是否需要 tool_call / MCP（Phase 6.3：优先云端）
+     */
+    suspend fun completeChat(
+        userMessages: List<MessageV2>,
+        assistantMessages: List<List<MessageV2>>,
+        platform: PlatformV2,
+        needsTools: Boolean = false
+    ): Flow<ApiState>
+
     suspend fun fetchChatList(): List<ChatRoom>
     suspend fun fetchChatListV2(): List<ChatRoomV2>
     suspend fun searchChatsV2(query: String): List<ChatRoomV2>
