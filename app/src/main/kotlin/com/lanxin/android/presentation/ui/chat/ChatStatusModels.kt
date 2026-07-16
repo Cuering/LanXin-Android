@@ -11,6 +11,8 @@ enum class ChatGenerationPhase {
     SEARCHING_MEMORY,
     SEARCHING_KNOWLEDGE,
     GENERATING,
+    /** 本地离线/偏好本地生成中（Phase 6.2）。 */
+    GENERATING_LOCAL,
     CALLING_TOOLS,
     DONE;
 
@@ -53,6 +55,7 @@ object ChatGenerationStatusLogic {
         ChatGenerationPhase.SEARCHING_MEMORY -> "检索记忆…"
         ChatGenerationPhase.SEARCHING_KNOWLEDGE -> "检索知识库…"
         ChatGenerationPhase.GENERATING -> "生成中…"
+        ChatGenerationPhase.GENERATING_LOCAL -> "本地离线生成中…"
         ChatGenerationPhase.CALLING_TOOLS -> "调用工具…"
         ChatGenerationPhase.DONE -> "已完成"
     }

@@ -15,6 +15,9 @@ import com.lanxin.android.data.network.OpenAIAPI
 import com.lanxin.android.plugins.chat.data.ChatRepository
 import com.lanxin.android.plugins.chat.data.ChatRepositoryImpl
 import com.lanxin.android.data.repository.SettingRepository
+import com.lanxin.android.builtin.localinference.domain.InferenceRouteCoordinator
+import com.lanxin.android.builtin.localinference.domain.LocalInferenceProvider
+import com.lanxin.android.builtin.localinference.domain.NetworkStatusProvider
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -42,7 +45,10 @@ object ChatRepositoryModule {
         googleAPI: GoogleAPI,
         lanXinAPI: LanXinAPI,
         attachmentUploadCoordinator: com.lanxin.android.plugins.chat.data.AttachmentUploadCoordinator,
-        contextBuilder: ContextBuilder
+        contextBuilder: ContextBuilder,
+        localInferenceProvider: LocalInferenceProvider,
+        inferenceRouteCoordinator: InferenceRouteCoordinator,
+        networkStatusProvider: NetworkStatusProvider
     ): ChatRepository = ChatRepositoryImpl(
         context,
         chatRoomDao,
@@ -57,6 +63,9 @@ object ChatRepositoryModule {
         googleAPI,
         lanXinAPI,
         attachmentUploadCoordinator,
-        contextBuilder
+        contextBuilder,
+        localInferenceProvider,
+        inferenceRouteCoordinator,
+        networkStatusProvider
     )
 }

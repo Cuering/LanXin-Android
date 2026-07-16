@@ -8,6 +8,8 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lanxin.android.builtin.knowledge.domain.AutoKnowledgeService
+import com.lanxin.android.builtin.localinference.domain.ChatLocalFallback
+import com.lanxin.android.builtin.localinference.domain.InferenceRouteCoordinator
 import com.lanxin.android.builtin.persona.domain.PersonaCapabilityFilter
 import com.lanxin.android.builtin.persona.domain.PersonaMoodFormatter
 import com.lanxin.android.builtin.persona.domain.PersonaRepository
@@ -61,7 +63,8 @@ class ChatViewModel @Inject constructor(
     private val personaRepository: PersonaRepository,
     private val statisticsRepository: StatisticsRepository,
     private val autoKnowledgeService: AutoKnowledgeService,
-    private val skillEngine: SkillEngine
+    private val skillEngine: SkillEngine,
+    private val inferenceRouteCoordinator: InferenceRouteCoordinator
 ) : ViewModel() {
     sealed class LoadingState {
         data object Idle : LoadingState()
@@ -607,11 +610,23 @@ class ChatViewModel @Inject constructor(
             turnIndex = turnIndex,
             updateUx = platformIndex == 0
         )
+        // Phase 6.2：预判路由，本地时显示「本地离线生成中…」；完整路由仍在 Repository
+        val routeDecision = runCatching { inferenceRouteCoordinator.decide() }.getOrNull()
+        val useLocalGeneration =
+            routeDecision != null && ChatLocalFallback.isLocalGeneration(routeDecision)
         if (platformIndex == 0) {
-            setTurnPhase(turnIndex, ChatGenerationPhase.GENERATING)
+            setTurnPhase(
+                turnIndex,
+                if (useLocalGeneration) {
+                    ChatGenerationPhase.GENERATING_LOCAL
+                } else {
+                    ChatGenerationPhase.GENERATING
+                }
+            )
         }
         var workingAssistantMessages = assistantMessages
-        var remainingRounds = MAX_TOOL_ROUNDS
+        // 本地不做 tool_call：路由到本地时跳过工具循环
+        var remainingRounds = if (useLocalGeneration) 0 else MAX_TOOL_ROUNDS
         var pendingRevision = revisionToAppendOnSuccess
         val turnStartMs = System.currentTimeMillis()
         var lastAssistantText = ""

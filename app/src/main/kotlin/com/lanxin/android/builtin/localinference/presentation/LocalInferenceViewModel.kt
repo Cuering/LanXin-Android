@@ -18,10 +18,12 @@ package com.lanxin.android.builtin.localinference.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.lanxin.android.builtin.localinference.domain.InferenceRouteCoordinator
 import com.lanxin.android.builtin.localinference.domain.LocalEngineState
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceConfig
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceSettings
 import com.lanxin.android.builtin.localinference.domain.LocalLlmEngine
+import com.lanxin.android.builtin.localinference.domain.NetworkStatusProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,13 +43,18 @@ data class LocalInferenceUiState(
     val engineState: LocalEngineState = LocalEngineState.DISABLED,
     val lastError: String? = null,
     val isBusy: Boolean = false,
-    val snackbarMessage: String? = null
+    val snackbarMessage: String? = null,
+    /** Phase 6.2 路由预览（云端/本地/不可用）。 */
+    val routePreview: String = "",
+    val networkAvailable: Boolean = true
 )
 
 @HiltViewModel
 class LocalInferenceViewModel @Inject constructor(
     private val settings: LocalInferenceSettings,
-    private val engine: LocalLlmEngine
+    private val engine: LocalLlmEngine,
+    private val routeCoordinator: InferenceRouteCoordinator,
+    private val networkStatusProvider: NetworkStatusProvider
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LocalInferenceUiState())
@@ -70,6 +77,8 @@ class LocalInferenceViewModel @Inject constructor(
         viewModelScope.launch {
             val config = settings.getConfig()
             val prefer = settings.isPreferLocal()
+            val preview = runCatching { routeCoordinator.previewLabel() }.getOrDefault("路由预览不可用")
+            val networkOk = runCatching { networkStatusProvider.isNetworkAvailable() }.getOrDefault(true)
             _uiState.update {
                 it.copy(
                     enabled = config.enabled,
@@ -78,7 +87,9 @@ class LocalInferenceViewModel @Inject constructor(
                     temperature = config.temperature,
                     preferLocal = prefer,
                     engineState = engine.state.value,
-                    lastError = engine.lastError
+                    lastError = engine.lastError,
+                    routePreview = preview,
+                    networkAvailable = networkOk
                 )
             }
         }
@@ -91,6 +102,7 @@ class LocalInferenceViewModel @Inject constructor(
             if (!enabled) {
                 engine.unload()
             }
+            refresh()
         }
     }
 
@@ -113,6 +125,7 @@ class LocalInferenceViewModel @Inject constructor(
         viewModelScope.launch {
             settings.setPreferLocal(prefer)
             _uiState.update { it.copy(preferLocal = prefer) }
+            refresh()
         }
     }
 
@@ -133,6 +146,7 @@ class LocalInferenceViewModel @Inject constructor(
                     }
                 )
             }
+            refresh()
         }
     }
 
@@ -145,6 +159,7 @@ class LocalInferenceViewModel @Inject constructor(
                     snackbarMessage = "已卸载"
                 )
             }
+            refresh()
         }
     }
 

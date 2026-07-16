@@ -81,6 +81,7 @@ private fun statusLabel(phase: ChatGenerationPhase): String = when (phase) {
     ChatGenerationPhase.SEARCHING_MEMORY -> stringResource(R.string.chat_status_searching_memory)
     ChatGenerationPhase.SEARCHING_KNOWLEDGE -> stringResource(R.string.chat_status_searching_knowledge)
     ChatGenerationPhase.GENERATING -> stringResource(R.string.chat_status_generating)
+    ChatGenerationPhase.GENERATING_LOCAL -> stringResource(R.string.chat_status_generating_local)
     ChatGenerationPhase.CALLING_TOOLS -> stringResource(R.string.chat_status_calling_tools)
     ChatGenerationPhase.DONE -> stringResource(R.string.chat_status_done)
     ChatGenerationPhase.IDLE -> ""

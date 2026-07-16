@@ -13,6 +13,7 @@ class ChatGenerationStatusLogicTest {
         assertEquals("检索记忆…", ChatGenerationStatusLogic.label(ChatGenerationPhase.SEARCHING_MEMORY))
         assertEquals("检索知识库…", ChatGenerationStatusLogic.label(ChatGenerationPhase.SEARCHING_KNOWLEDGE))
         assertEquals("生成中…", ChatGenerationStatusLogic.label(ChatGenerationPhase.GENERATING))
+        assertEquals("本地离线生成中…", ChatGenerationStatusLogic.label(ChatGenerationPhase.GENERATING_LOCAL))
         assertEquals("调用工具…", ChatGenerationStatusLogic.label(ChatGenerationPhase.CALLING_TOOLS))
         assertEquals("已完成", ChatGenerationStatusLogic.label(ChatGenerationPhase.DONE))
         assertEquals("", ChatGenerationStatusLogic.label(ChatGenerationPhase.IDLE))
@@ -23,6 +24,7 @@ class ChatGenerationStatusLogicTest {
         assertTrue(ChatGenerationPhase.PREPARING.isActive)
         assertTrue(ChatGenerationPhase.SEARCHING_MEMORY.isActive)
         assertTrue(ChatGenerationPhase.GENERATING.isActive)
+        assertTrue(ChatGenerationPhase.GENERATING_LOCAL.isActive)
         assertFalse(ChatGenerationPhase.IDLE.isActive)
         assertFalse(ChatGenerationPhase.DONE.isActive)
     }

@@ -1,0 +1,102 @@
+# Phase 6.2 离线兜底：网络检测 / 路由协调 / Chat fallback
+name: Phase6.2 Offline Local Fallback Verify
+
+on:
+  push:
+    branches: [main, 'feat/phase6*']
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/localinference/**'
+      - 'app/src/test/kotlin/com/lanxin/android/builtin/localinference/**'
+      - 'app/src/main/kotlin/com/lanxin/android/plugins/chat/data/ChatRepositoryImpl.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/plugins/chat/di/ChatRepositoryModule.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/ChatViewModel.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/ChatStatusModels.kt'
+      - 'app/src/test/kotlin/com/lanxin/android/data/repository/ChatRepositoryImplTest.kt'
+      - 'docs/local-inference.md'
+      - 'builtin/local_inference/**'
+      - 'ARCHITECTURE.md'
+      - '.github/workflows/phase6-2-offline-fallback-verify.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/localinference/**'
+      - 'app/src/test/kotlin/com/lanxin/android/builtin/localinference/**'
+      - 'app/src/main/kotlin/com/lanxin/android/plugins/chat/data/ChatRepositoryImpl.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/plugins/chat/di/ChatRepositoryModule.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/ChatViewModel.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/ChatStatusModels.kt'
+      - 'app/src/test/kotlin/com/lanxin/android/data/repository/ChatRepositoryImplTest.kt'
+      - 'docs/local-inference.md'
+      - 'builtin/local_inference/**'
+      - 'ARCHITECTURE.md'
+      - '.github/workflows/phase6-2-offline-fallback-verify.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: phase6-2-offline-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: Offline fallback unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: gradle
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup local.properties and debug keystore
+        run: |
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+          rm -f debug-keystore.jks
+          keytool -genkeypair -v -keystore debug-keystore.jks -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Create assets model dir (models gitignored)
+        run: |
+          mkdir -p app/src/main/assets/models/gte-small
+          touch app/src/main/assets/models/gte-small/.gitkeep
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run local inference + chat repository unit tests
+        run: |
+          ./gradlew :app:testDebugUnitTest \
+            --tests "com.lanxin.android.builtin.localinference.*" \
+            --tests "com.lanxin.android.data.repository.ChatRepositoryImplTest" \
+            --tests "com.lanxin.android.presentation.ui.chat.ChatGenerationStatusLogicTest" \
+            --no-daemon --stacktrace
+
+      - name: Surfaces and docs present
+        run: |
+          test -f docs/local-inference.md
+          test -f builtin/local_inference/README.md
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/localinference/domain/NetworkStatusProvider.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/localinference/domain/InferenceRouteCoordinator.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/localinference/domain/ChatLocalFallback.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/localinference/data/ConnectivityNetworkStatusProvider.kt
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/localinference/ChatLocalFallbackTest.kt
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/localinference/InferenceRouteCoordinatorTest.kt
+          grep -E -n "completeChat|InferenceRouteCoordinator|LocalInferenceProvider|lastUsedLocal" \
+            app/src/main/kotlin/com/lanxin/android/plugins/chat/data/ChatRepositoryImpl.kt
+          grep -E -n "GENERATING_LOCAL|inferenceRouteCoordinator|ChatLocalFallback" \
+            app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/ChatViewModel.kt \
+            app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/ChatStatusModels.kt
+          grep -E -n "NetworkStatusProvider|bindNetworkStatusProvider" \
+            app/src/main/kotlin/com/lanxin/android/builtin/localinference/di/LocalInferenceModule.kt
+          grep -E -n "6\.2|离线兜底|offline" docs/local-inference.md ARCHITECTURE.md
+          grep -E -n "chat_status_generating_local" \
+            app/src/main/res/values/strings.xml \
+            app/src/main/res/values-zh-rCN/strings.xml
