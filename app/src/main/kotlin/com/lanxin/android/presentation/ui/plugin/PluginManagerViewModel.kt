@@ -32,12 +32,13 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * 插件管理 UI 状态（Phase 5.4）。
+ * 插件管理 UI 状态（Phase 5.4 + 5.6 签名策略展示）。
  */
 data class PluginManagerUiState(
     val records: List<PluginRecord> = emptyList(),
     val failures: List<PluginLoadResult.Failure> = emptyList(),
     val packagesPath: String = "",
+    val signaturePolicy: String = "",
     val isLoading: Boolean = false,
     val snackbarMessage: String? = null,
     /** 待确认卸载的动态插件 id。 */
@@ -69,6 +70,7 @@ class PluginManagerViewModel @Inject constructor(
             try {
                 val packagesPath = runCatching { catalog.packagesDirectory().absolutePath }
                     .getOrDefault("")
+                val policy = runCatching { catalog.currentSignaturePolicy() }.getOrDefault("")
                 if (scanDynamic) {
                     val result = catalog.discoverAndLoadDynamicPlugins()
                     val msg = buildString {
@@ -82,6 +84,7 @@ class PluginManagerViewModel @Inject constructor(
                             records = catalog.getPluginRecords(),
                             failures = catalog.getLastDynamicFailures(),
                             packagesPath = packagesPath,
+                            signaturePolicy = policy,
                             isLoading = false,
                             snackbarMessage = msg
                         )
@@ -92,6 +95,7 @@ class PluginManagerViewModel @Inject constructor(
                             records = catalog.getPluginRecords(),
                             failures = catalog.getLastDynamicFailures(),
                             packagesPath = packagesPath,
+                            signaturePolicy = policy,
                             isLoading = false
                         )
                     }
