@@ -1,0 +1,96 @@
+# Phase 6.4 离线 ASR 骨架：接口 / stub / 权限门控 / 配置
+name: Phase6.4 Offline ASR Verify
+
+on:
+  push:
+    branches: [main, 'feat/phase6*']
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/voice/**'
+      - 'app/src/test/kotlin/com/lanxin/android/builtin/voice/**'
+      - 'docs/voice-asr.md'
+      - 'builtin/voice/**'
+      - 'ARCHITECTURE.md'
+      - '.github/workflows/phase6-4-offline-asr-verify.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/voice/**'
+      - 'app/src/test/kotlin/com/lanxin/android/builtin/voice/**'
+      - 'docs/voice-asr.md'
+      - 'builtin/voice/**'
+      - 'ARCHITECTURE.md'
+      - '.github/workflows/phase6-4-offline-asr-verify.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: phase6-4-asr-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: Offline ASR unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: gradle
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup local.properties and debug keystore
+        run: |
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+          rm -f debug-keystore.jks
+          keytool -genkeypair -v -keystore debug-keystore.jks -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Create assets model dir (models gitignored)
+        run: |
+          mkdir -p app/src/main/assets/models/gte-small
+          touch app/src/main/assets/models/gte-small/.gitkeep
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run offline ASR unit tests
+        run: |
+          ./gradlew :app:testDebugUnitTest \
+            --tests "com.lanxin.android.builtin.voice.*" \
+            --no-daemon --stacktrace
+
+      - name: Surfaces and docs present
+        run: |
+          test -f docs/voice-asr.md
+          test -f builtin/voice/README.md
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/voice/domain/AsrEngine.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/voice/domain/AsrSettings.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/voice/domain/MicPermissionGate.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/voice/domain/VoiceInputCoordinator.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/voice/data/StubAsrEngine.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/voice/data/SherpaOnnxBridge.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/voice/data/AsrPreferences.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/voice/data/PcmAudioRecorder.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/voice/di/VoiceModule.kt
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/voice/StubAsrEngineTest.kt
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/voice/MicPermissionGateTest.kt
+          grep -E -n "interface AsrEngine|fun load|fun unload|fun transcribe|streamPartial|isReady|isAvailable" \
+            app/src/main/kotlin/com/lanxin/android/builtin/voice/domain/AsrEngine.kt
+          grep -E -n "offline_asr_enabled|offline_asr_model_path|offline_asr_language" \
+            app/src/main/kotlin/com/lanxin/android/builtin/voice/data/AsrPreferences.kt
+          grep -E -n "SherpaOnnxBridge|System.loadLibrary|validateModelPath" \
+            app/src/main/kotlin/com/lanxin/android/builtin/voice/data/SherpaOnnxBridge.kt
+          grep -E -n "RECORD_AUDIO" app/src/main/AndroidManifest.xml
+          grep -E -n "OFFLINE_ASR|VoiceAsrScreen" \
+            app/src/main/kotlin/com/lanxin/android/presentation/common/Route.kt \
+            app/src/main/kotlin/com/lanxin/android/presentation/common/NavigationGraph.kt
+          grep -E -n "6\\.4|离线语音|ASR|Sherpa|voice" ARCHITECTURE.md
+          grep -E -n "StubAsrEngine|SherpaOnnxBridge|能力边界|不在后台" docs/voice-asr.md

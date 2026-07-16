@@ -74,7 +74,8 @@ fun SettingScreen(
     onNavigateToUnifiedSearch: () -> Unit = {},
     onNavigateToPluginManager: () -> Unit = {},
     onNavigateToPluginMarket: () -> Unit = {},
-    onNavigateToLocalInference: () -> Unit = {}
+    onNavigateToLocalInference: () -> Unit = {},
+    onNavigateToOfflineAsr: () -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
     val scrollBehavior = pinnedExitUntilCollapsedScrollBehavior(
@@ -208,6 +209,14 @@ fun SettingScreen(
                 title = "本地推理",
                 description = "默认关；0.5B/1.5B 或 7B Q4；无 tool_call，记忆/KB 注入",
                 onItemClick = onNavigateToLocalInference,
+                showTrailingIcon = true,
+                showLeadingIcon = false
+            )
+
+            SettingItem(
+                title = "离线语音识别",
+                description = "默认关；Sherpa-ONNX 骨架；试转写走 stub，不偷偷录音",
+                onItemClick = onNavigateToOfflineAsr,
                 showTrailingIcon = true,
                 showLeadingIcon = false
             )

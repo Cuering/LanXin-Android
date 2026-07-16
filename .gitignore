@@ -41,3 +41,8 @@ app/src/main/assets/models/**
 *.mnn
 *.gguf
 *.safetensors
+
+# Offline ASR models / sherpa-onnx (Phase 6.4, do not commit)
+**/models/offline-asr/**
+**/sherpa-onnx-models/**
+libs/sherpa-onnx/**

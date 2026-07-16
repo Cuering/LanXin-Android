@@ -69,4 +69,6 @@ object Route {
     const val PLUGIN_MARKET = "plugin_market"
 
     const val LOCAL_INFERENCE = "local_inference"
+
+    const val OFFLINE_ASR = "offline_asr"
 }

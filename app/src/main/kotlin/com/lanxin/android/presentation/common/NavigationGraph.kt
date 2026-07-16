@@ -36,6 +36,7 @@ import com.lanxin.android.presentation.ui.setting.LicenseScreen
 import com.lanxin.android.presentation.ui.setting.PlatformSettingScreen
 import com.lanxin.android.presentation.ui.setting.SettingScreen
 import com.lanxin.android.builtin.localinference.presentation.LocalInferenceScreen
+import com.lanxin.android.builtin.voice.presentation.VoiceAsrScreen
 import com.lanxin.android.presentation.ui.setting.SettingViewModelV2
 import com.lanxin.android.presentation.ui.setup.SetupCompleteScreen
 import com.lanxin.android.presentation.ui.setup.SetupPlatformListScreen
@@ -70,6 +71,7 @@ fun SetupNavGraph(navController: NavHostController) {
         pluginManagerScreenNavigation(navController)
         pluginMarketScreenNavigation(navController)
         localInferenceScreenNavigation(navController)
+        offlineAsrScreenNavigation(navController)
     }
 }
 
@@ -90,10 +92,17 @@ fun NavGraphBuilder.pluginMarketScreenNavigation(navController: NavHostControlle
     }
 }
 
-
 fun NavGraphBuilder.localInferenceScreenNavigation(navController: NavHostController) {
     composable(Route.LOCAL_INFERENCE) {
         LocalInferenceScreen(
+            onBackAction = { navController.navigateUp() }
+        )
+    }
+}
+
+fun NavGraphBuilder.offlineAsrScreenNavigation(navController: NavHostController) {
+    composable(Route.OFFLINE_ASR) {
+        VoiceAsrScreen(
             onBackAction = { navController.navigateUp() }
         )
     }
@@ -408,7 +417,8 @@ fun NavGraphBuilder.settingNavigation(navController: NavHostController) {
                 onNavigateToUnifiedSearch = { navController.navigate(Route.UNIFIED_SEARCH) },
                 onNavigateToPluginManager = { navController.navigate(Route.PLUGIN_MANAGER) },
                 onNavigateToPluginMarket = { navController.navigate(Route.PLUGIN_MARKET) },
-                onNavigateToLocalInference = { navController.navigate(Route.LOCAL_INFERENCE) }
+                onNavigateToLocalInference = { navController.navigate(Route.LOCAL_INFERENCE) },
+                onNavigateToOfflineAsr = { navController.navigate(Route.OFFLINE_ASR) }
             )
         }
         composable(Route.ADD_PLATFORM) {
