@@ -21,8 +21,8 @@ class DefaultPluginInstallerTest {
             val packages = File(root, "plugin-packages").also { it.mkdirs() }
             val payload = byteArrayOf(9, 8, 7, 6)
             val fetcher = object : MarketHttpFetcher {
-                override suspend fun getText(url: String) =
-                    Result.failure(UnsupportedOperationException())
+                override suspend fun getText(url: String): Result<String> =
+                    Result.failure(UnsupportedOperationException("not used"))
                 override suspend fun downloadToFile(
                     url: String,
                     destFile: File,
@@ -100,12 +100,13 @@ class DefaultPluginInstallerTest {
                 override fun packagesDirectory(): File = packages
             }
             val fetcher = object : MarketHttpFetcher {
-                override suspend fun getText(url: String) = Result.failure(Exception())
+                override suspend fun getText(url: String): Result<String> =
+                    Result.failure(Exception("not used"))
                 override suspend fun downloadToFile(
                     url: String,
                     destFile: File,
                     onProgress: (Float) -> Unit
-                ) = Result.failure(Exception())
+                ): Result<Long> = Result.failure(Exception("not used"))
             }
             val installer = DefaultPluginInstaller(fetcher, catalog)
             val result = installer.install(
