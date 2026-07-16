@@ -34,12 +34,24 @@ import kotlinx.coroutines.sync.withLock
  * - 输出：[TtsEngine] + 字幕气泡（**不**塞 Chat 输入框）
  *
  * 默认不录音、不截屏；仅用户 / 设置页显式触发。
+ *
+ * ## Phase 7 一体钩子（预留，本 PR 不接线）
+ *
+ * 目标态：听 → 想 → **办**（`DeviceToolRegistry` + `DeviceToolGate`）→ 说。
+ * Chat / MCP / VoiceSession 共用同一套系统工具与确认门闸，见 `docs/system-tools.md`。
+ *
+ * ```
+ * // TODO(phase7.5): after think / when tool_call needed —
+ * // val outcome = deviceToolGate.invoke(registry.get(name)!!, args, confirmed)
+ * // feed outcome back into responder / TTS (听→想→办→说)
+ * ```
  */
 @Singleton
 class VoiceSessionCoordinator @Inject constructor(
     private val responder: PetChatResponder,
     private val ttsEngine: TtsEngine,
     private val petSettings: PetSettings
+    // TODO(phase7.5): inject DeviceToolRegistry + DeviceToolGate when wiring tools
 ) {
 
     private val mutex = Mutex()
