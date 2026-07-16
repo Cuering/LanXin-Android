@@ -39,7 +39,7 @@ jobs:
       - name: Surface check - docs present
         run: |
           test -f docs/system-tools.md || { echo 'Missing docs/system-tools.md'; exit 1; }
-          grep -q 'DeviceTool' app/src/main/kotlin/com/lanxin/android/builtin/systemtools/DeviceTool.kt 2>/dev/null || { echo 'Missing DeviceTool interface'; exit 1; }
+          grep -q 'DeviceTool' app/src/main/kotlin/com/lanxin/android/builtin/systemtools/domain/DeviceTool.kt 2>/dev/null || { echo 'Missing DeviceTool interface'; exit 1; }
 
       - name: Surface check - no model curl
         run: |
