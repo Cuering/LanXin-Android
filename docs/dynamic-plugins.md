@@ -1,8 +1,8 @@
-# 动态插件加载设计（Phase 5.3）
+# 动态插件加载设计（Phase 5.3–5.5）
 
-> 状态：5.3 加载 ✅；5.4 管理 UI 🚧（`feat/phase5-4-plugin-manager-ui`）  
-> 范围：从 `filesDir` 发现 / 解析 / 加载 `.apk` 插件包 + 管理界面  
-> 非目标：5.5 插件市场、5.6 完整签名校验
+> 状态：5.3 加载 ✅；5.4 管理 UI ✅；5.5 插件市场 ✅（`feat/phase5-5-plugin-market`）  
+> 范围：从 `filesDir` 发现 / 解析 / 加载 `.apk` 插件包 + 管理界面 + 远程市场索引安装  
+> 非目标：5.6 完整签名校验（钩子已预留）
 
 ---
 
@@ -10,7 +10,7 @@
 
 | 路径 | 用途 |
 |------|------|
-| `context.filesDir/plugin-packages/` | **外部插件包目录**（放置 `*.apk`） |
+| `context.filesDir/plugin-packages/` | **外部插件包目录**（放置 `*.apk`；市场下载目标） |
 | `context.filesDir/plugins/<pluginId>/` | 插件运行时私有数据（既有 `PluginContext.filesDir`） |
 | `context.filesDir/plugin-state.json` | enable / disable 持久化（简单 JSON） |
 
@@ -64,12 +64,12 @@ plugin.apk
 ## 3. 加载流程
 
 ```
-App 启动 / 手动 refresh
+App 启动 / 手动 refresh / 市场安装后
   │
   ├─ 1. PluginPackageScanner.scan(plugin-packages/)
   │       → 列出 *.apk（忽略隐藏与非文件）
   │
-  ├─ 2. 对每个 apk:
+  ├─ 2. 对每个 apk（或市场单包 loadDynamicPlugin）:
   │     ├─ PluginManifestParser.parseFromApk(apk)
   │     ├─ PluginSignatureVerifier.verify(apk)   // 5.6 钩子；默认 AllowAll
   │     ├─ minAppVersion 检查（VersionComparator）
@@ -89,7 +89,7 @@ App 启动 / 手动 refresh
 | 来源 | 注册方式 | 可卸载 | ClassLoader |
 |------|----------|:------:|-------------|
 | builtin / plugins（源码内） | Hilt `@Provides` + `register()` | 否（removable=false 语义） | App ClassLoader |
-| 动态 .apk | `discoverAndLoadDynamicPlugins()` | 是 | 独立 PathClassLoader |
+| 动态 .apk | `discoverAndLoadDynamicPlugins()` / `loadDynamicPlugin` | 是 | 独立 PathClassLoader |
 
 - **同一 `PluginManager`**，不另起冲突体系。
 - 动态插件 id **不得**覆盖已注册 id。
@@ -106,16 +106,17 @@ App 启动 / 手动 refresh
 | DISABLED | 已登记但未 load / 已 unload 工具；包仍在磁盘 |
 | FAILED | 解析 / 校验 / 实例化失败 |
 
-### 4.1 API（`PluginManager`）
+### 4.1 API（`PluginManager` / `PluginCatalog`）
 
 | 方法 | 说明 |
 |------|------|
 | `setEnabled(id, enabled)` | 内存 + 持久化；disable 时 unload 工具并 `onUnload` |
 | `isEnabled(id)` | 默认 true（未写入状态时） |
 | `discoverAndLoadDynamicPlugins()` | 扫描并加载 |
-| `loadDynamicPlugin(file)` | 单包加载 |
+| `loadDynamicPlugin(file)` | 单包加载（5.5 市场安装后） |
 | `unloadPlugin(id)` | 仅动态插件；编译期插件返回 false |
-| `getPluginRecords()` | 含 source / enabled / apkPath 的列表（给 5.4 UI） |
+| `getPluginRecords()` | 含 source / enabled / apkPath 的列表 |
+| `packagesDirectory()` | 动态包目录 |
 
 ### 4.2 隔离边界（MVP）
 
@@ -139,6 +140,8 @@ interface PluginSignatureVerifier {
 
 加载管线在 ClassLoader 创建 **之前** 调用 verifier；`REJECTED` 则不加载并记 Failure。
 
+市场侧另有 **文件完整性** 钩子：`PluginPackageVerifier`（size + 可选 sha256），与签名校验分离。
+
 ---
 
 ## 6. 单元测试策略
@@ -154,6 +157,8 @@ interface PluginSignatureVerifier {
 | 签名钩子 | AllowAll / RejectAll |
 | PluginManager | mock loader 注入、冲突 id、disable 后 callTool 不可用 |
 | 失败不崩溃 | 坏 JSON / 缺 entry / verifier reject |
+| 管理 UI | `PluginManagerViewModelTest` + Fake `PluginCatalog`（含 `loadDynamicPlugin` stub） |
+| 市场 | parser / verifier / installer / repository / ViewModel |
 
 ---
 
@@ -161,11 +166,9 @@ interface PluginSignatureVerifier {
 
 | 阶段 | 内容 |
 |------|------|
-| 5.4 | 管理 UI：列表 / 启用 / 停用 / 卸载文件 ✅ 本轮 |
-| 5.5 | 市场：GitHub 索引下载到 `plugin-packages/` |
+| 5.4 | 管理 UI：列表 / 启用 / 停用 / 卸载文件 ✅ |
+| 5.5 | 市场：GitHub 索引下载到 `plugin-packages/` ✅ |
 | 5.6 | 签名证书白名单 + 用户确认 |
-
-
 
 ---
 
@@ -174,9 +177,9 @@ interface PluginSignatureVerifier {
 | 项 | 说明 |
 |----|------|
 | 路由 | `Route.PLUGIN_MANAGER` = `plugin_manager` |
-| 入口 | 设置页 →「插件管理」 |
+| 入口 | 设置页 →「插件管理」；页内可进「插件市场」 |
 | Screen | `presentation/ui/plugin/PluginManagerScreen` |
-| ViewModel | `PluginManagerViewModel`（状态：records / failures / loading / snackbar） |
+| ViewModel | `PluginManagerViewModel` |
 | 门面 | `PluginCatalog`（`PluginManager` 实现，Hilt 绑定） |
 
 ### 9.1 能力
@@ -190,14 +193,28 @@ interface PluginSignatureVerifier {
 
 ### 9.2 单测
 
-- `PluginManagerViewModelTest`：Fake `PluginCatalog`，覆盖 refresh / setEnabled / unload / deleteApk
-
+- `PluginManagerViewModelTest`：Fake `PluginCatalog`，覆盖 refresh / setEnabled / unload / deleteApk；Fake 实现 `loadDynamicPlugin`
 
 ---
 
-## 10. 版本
+## 10. 插件市场（Phase 5.5）
+
+详见 **`docs/plugin-market.md`**。
+
+| 项 | 说明 |
+|----|------|
+| 路由 | `Route.PLUGIN_MARKET` = `plugin_market` |
+| 入口 | 设置 →「插件市场」；插件管理页 →「插件市场」 |
+| 默认索引 URL | `https://raw.githubusercontent.com/Cuering/LanXin-Android/main/docs/plugin-market-index.sample.json` |
+| 配置覆盖 | DataStore 键 `plugin_market_catalog_url`（`MarketPreferences` / `MarketSettings`） |
+| 安装管线 | 下载 → size/sha256 校验 → 落入 `plugin-packages/` → `PluginCatalog.loadDynamicPlugin` |
+| 回退 | 远程失败时 `CompositePluginMarketRepository` 回退内置 sample |
+
+---
+
+## 11. 版本
 
 | 字段 | 值 |
 |------|-----|
-| design_version | 2 |
-| phase | 5.4 |
+| design_version | 3 |
+| phase | 5.5 |

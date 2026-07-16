@@ -59,4 +59,6 @@ object Route {
     const val UNIFIED_SEARCH = "unified_search"
 
     const val PLUGIN_MANAGER = "plugin_manager"
+
+    const val PLUGIN_MARKET = "plugin_market"
 }

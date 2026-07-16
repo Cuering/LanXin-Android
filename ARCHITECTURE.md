@@ -433,8 +433,8 @@ app/.../plugins/unifiedinbox/
 | **5.1** | 跨设备同步：knowledge / memory 与 AstrBot 双向同步 | 🔴 高 | 5d | ✅ 已合入 |
 | **5.2** | 同步冲突策略（LWW：最后写入者胜） | 🟡 中 | 2d | ✅ 已合入 |
 | **5.3** | 动态插件加载：从 filesDir 加载 .apk 插件包 | 🔴 高 | 4d | ✅ 已合入 |
-| **5.4** | 插件管理 UI：启用/停用/卸载 | 🟡 中 | 2d | 🚧 进行中 |
-| **5.5** | 插件市场：从 GitHub 远程获取插件索引 | 🔴 高 | 3d | 🔜 |
+| **5.4** | 插件管理 UI：启用/停用/卸载 | 🟡 中 | 2d | ✅ 已合入 |
+| **5.5** | 插件市场：从 GitHub 远程获取插件索引 | 🔴 高 | 3d | 🚧 本分支 |
 | **5.6** | 插件签名验证 | 🟡 中 | 2d | 🔜 钩子已预留 |
 
 **交付：** `plugins/market` 模块 + 同步引擎
@@ -495,6 +495,23 @@ app/.../plugins/unifiedinbox/
 | 门面 | `PluginCatalog` 接口 + Hilt `PluginModule`；单测用 Fake |
 | 安全提示 | UI 注明 MVP 签名为 AllowAll（5.6） |
 | 非目标 | 5.5 市场下载、完整签名校验 UI、安装向导 |
+
+
+#### Phase 5.5 设计要点（`feat/phase5-5-plugin-market`）
+
+| 项 | 说明 |
+|----|------|
+| 设计文档 | `docs/plugin-market.md`、`docs/dynamic-plugins.md` §10 |
+| 默认索引 URL | `https://raw.githubusercontent.com/Cuering/LanXin-Android/main/docs/plugin-market-index.sample.json`（`MarketDefaults.DEFAULT_CATALOG_URL`） |
+| 配置 | DataStore `plugin_market_catalog_url`；市场页可改；空则默认 |
+| 模块 | `app/.../plugin/market/*` + Hilt `PluginMarketModule` |
+| 门面 | `PluginCatalog.loadDynamicPlugin` 供安装后单包加载 |
+| 管线 | 下载 → size/sha256 → `plugin-packages/` → loadDynamicPlugin |
+| UI | `PluginMarketScreen` / ViewModel；路由 `PLUGIN_MARKET` |
+| 入口 | 设置「插件市场」+ 插件管理页内入口 |
+| 回退 | 远程失败 → 内置 `SampleMarketCatalog` |
+| 单测 | parser / verifier / installer / repository / ViewModel；Fake 补 `loadDynamicPlugin` |
+| 非目标 | 5.6 证书白名单、商店账号、付费 |
 
 ---
 
