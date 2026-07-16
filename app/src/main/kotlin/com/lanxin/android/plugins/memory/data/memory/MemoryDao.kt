@@ -44,7 +44,7 @@ interface MemoryDao {
     fun getActiveMemoryCount(): Flow<Int>
 
     @Query(
-        "SELECT * FROM memory_nodes WHERE content LIKE '%' || :keyword || '%" +
+        "SELECT * FROM memory_nodes WHERE content LIKE '%' || :keyword || '%' " +
             "ORDER BY importance DESC LIMIT :limit"
     )
     suspend fun searchMemoriesForInject(keyword: String, limit: Int = 5): List<MemoryEntity>
