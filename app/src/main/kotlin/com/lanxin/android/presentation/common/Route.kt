@@ -57,4 +57,6 @@ object Route {
     const val UNIFIED_FILE_BROWSER = "unified_file_browser"
 
     const val UNIFIED_SEARCH = "unified_search"
+
+    const val PLUGIN_MANAGER = "plugin_manager"
 }

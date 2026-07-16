@@ -71,7 +71,8 @@ fun SettingScreen(
     onNavigateToKnowledge: () -> Unit = {},
     onNavigateToScheduler: () -> Unit = {},
     onNavigateToUnifiedInbox: () -> Unit = {},
-    onNavigateToUnifiedSearch: () -> Unit = {}
+    onNavigateToUnifiedSearch: () -> Unit = {},
+    onNavigateToPluginManager: () -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
     val scrollBehavior = pinnedExitUntilCollapsedScrollBehavior(
@@ -181,6 +182,14 @@ fun SettingScreen(
                 title = "统一搜索",
                 description = "memory/knowledge/chat/跨会话 四路 RRF 融合与命中数",
                 onItemClick = onNavigateToUnifiedSearch,
+                showTrailingIcon = true,
+                showLeadingIcon = false
+            )
+
+            SettingItem(
+                title = "插件管理",
+                description = "启用/停用插件，扫描与卸载动态 .apk 包",
+                onItemClick = onNavigateToPluginManager,
                 showTrailingIcon = true,
                 showLeadingIcon = false
             )
