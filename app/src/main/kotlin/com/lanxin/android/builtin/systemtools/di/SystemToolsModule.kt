@@ -17,7 +17,15 @@
 package com.lanxin.android.builtin.systemtools.di
 
 import com.lanxin.android.builtin.systemtools.SystemToolsPlugin
+import com.lanxin.android.builtin.systemtools.data.AndroidAlarmSetter
+import com.lanxin.android.builtin.systemtools.data.AndroidCalendarReader
+import com.lanxin.android.builtin.systemtools.data.AndroidSystemToolsIntentLauncher
+import com.lanxin.android.builtin.systemtools.data.AndroidSystemToolsPermissionChecker
 import com.lanxin.android.builtin.systemtools.data.SystemToolsPreferences
+import com.lanxin.android.builtin.systemtools.domain.AlarmClockGateway
+import com.lanxin.android.builtin.systemtools.domain.CalendarGateway
+import com.lanxin.android.builtin.systemtools.domain.SystemToolsIntentLauncher
+import com.lanxin.android.builtin.systemtools.domain.SystemToolsPermissionChecker
 import com.lanxin.android.builtin.systemtools.domain.SystemToolsSettings
 import com.lanxin.android.plugin.PluginManager
 import dagger.Binds
@@ -39,6 +47,26 @@ abstract class SystemToolsModule {
     @Binds
     @Singleton
     abstract fun bindSystemToolsSettings(impl: SystemToolsPreferences): SystemToolsSettings
+
+    @Binds
+    @Singleton
+    abstract fun bindCalendarGateway(impl: AndroidCalendarReader): CalendarGateway
+
+    @Binds
+    @Singleton
+    abstract fun bindAlarmClockGateway(impl: AndroidAlarmSetter): AlarmClockGateway
+
+    @Binds
+    @Singleton
+    abstract fun bindIntentLauncher(
+        impl: AndroidSystemToolsIntentLauncher
+    ): SystemToolsIntentLauncher
+
+    @Binds
+    @Singleton
+    abstract fun bindPermissionChecker(
+        impl: AndroidSystemToolsPermissionChecker
+    ): SystemToolsPermissionChecker
 }
 
 /**

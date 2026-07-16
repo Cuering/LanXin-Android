@@ -28,7 +28,14 @@ data class AlarmIntentSpec(
     val action: String,
     val extras: Map<String, Any?> = emptyMap(),
     val description: String = ""
-)
+) {
+    /** 转为可启动的 [IntentLaunchSpec]。 */
+    fun toLaunchSpec(): IntentLaunchSpec = IntentLaunchSpec(
+        action = action,
+        extras = extras,
+        description = description
+    )
+}
 
 object AlarmIntentBuilder {
 

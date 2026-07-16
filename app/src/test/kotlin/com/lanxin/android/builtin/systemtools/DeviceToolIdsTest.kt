@@ -26,13 +26,36 @@ import com.lanxin.android.builtin.systemtools.data.NoteCreateDeviceTool
 import com.lanxin.android.builtin.systemtools.data.NoteListDeviceTool
 import com.lanxin.android.builtin.systemtools.data.StubCalendarGateway
 import com.lanxin.android.builtin.systemtools.data.StubNotesStore
+import com.lanxin.android.builtin.systemtools.domain.AlarmClockGateway
+import com.lanxin.android.builtin.systemtools.domain.AlarmClockResult
 import com.lanxin.android.builtin.systemtools.domain.DeviceToolIds
+import com.lanxin.android.builtin.systemtools.domain.IntentLaunchResult
+import com.lanxin.android.builtin.systemtools.domain.IntentLaunchSpec
+import com.lanxin.android.builtin.systemtools.domain.SetAlarmClockRequest
 import com.lanxin.android.builtin.systemtools.domain.SystemToolsConfig
+import com.lanxin.android.builtin.systemtools.domain.SystemToolsIntentLauncher
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DeviceToolIdsTest {
+
+    private class OkAlarmClock : AlarmClockGateway {
+        override fun canScheduleExactAlarms() = true
+        override fun setAlarmClock(request: SetAlarmClockRequest) = AlarmClockResult.Ok(
+            triggerAtEpochMs = request.triggerAtEpochMs,
+            requestCode = 1,
+            message = request.message
+        )
+    }
+
+    private class OkLauncher : SystemToolsIntentLauncher {
+        override fun launch(spec: IntentLaunchSpec) = IntentLaunchResult.Ok(
+            action = spec.action,
+            launched = true,
+            description = spec.description
+        )
+    }
 
     @Test
     fun `stable tool names include alarm and calendar`() {
@@ -46,11 +69,12 @@ class DeviceToolIdsTest {
     fun `registry exposes m1 tools`() {
         val gateway = StubCalendarGateway()
         val notes = StubNotesStore()
+        val launcher = OkLauncher()
         val registry = DeviceToolRegistry(
-            alarmSet = AlarmSetDeviceTool(),
-            alarmShow = AlarmShowDeviceTool(),
+            alarmSet = AlarmSetDeviceTool(OkAlarmClock(), launcher),
+            alarmShow = AlarmShowDeviceTool(launcher),
             calendarList = CalendarListUpcomingDeviceTool(gateway),
-            calendarCreate = CalendarCreateEventDeviceTool(gateway),
+            calendarCreate = CalendarCreateEventDeviceTool(gateway, gateway),
             noteCreate = NoteCreateDeviceTool(notes),
             noteList = NoteListDeviceTool(notes),
             noteAppend = NoteAppendDeviceTool(notes)

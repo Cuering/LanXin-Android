@@ -28,6 +28,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -35,6 +36,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -42,6 +44,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -50,6 +53,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -61,6 +67,19 @@ fun SystemToolsScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val config = state.config
+    val perms = state.permissions
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    // 从系统设置返回时刷新权限状态
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.refresh()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     LaunchedEffect(state.snackbarMessage) {
         state.snackbarMessage?.let {
@@ -104,24 +123,67 @@ fun SystemToolsScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "Phase 7 · System Tools 骨架",
+                        text = "Phase 7.2 · 日历 + 闹钟 Intent",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "日历 / 系统闹钟 Intent / 内置笔记 / 用户文件（M2）。" +
-                            "默认全部关闭；写与删默认需确认。" +
-                            "不修改系统分区、不 root、不在服务器下模型。",
+                        text = "日历：读 Instances（READ_CALENDAR）；写优先 INSERT Intent。" +
+                            "闹钟：setAlarmClock 默认；mode=intent 真 startActivity。" +
+                            "默认全关；写操作默认需 confirmed。",
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "隐私：日历/文件仅在用户开启对应分项且授权后可用；" +
-                            "闹钟优先系统 Intent，不替代系统时钟 App。",
+                        text = "隐私：日历仅在授权后可读；闹钟不抢系统时钟 App；" +
+                            "不修改系统分区、不在服务器下模型。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+            }
+
+            // 权限状态
+            Card {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "运行时权限",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "日历读取：${perms.calendarLabel}",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        text = perms.calendarHint,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (!perms.calendarReadGranted) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(onClick = viewModel::openCalendarPermissionSettings) {
+                            Text("打开应用权限设置（日历）")
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "精确闹钟：${perms.exactAlarmLabel}",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        text = perms.exactAlarmHint,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (!perms.canScheduleExactAlarms) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedButton(onClick = viewModel::openExactAlarmSettings) {
+                            Text("打开「允许精确闹钟」")
+                        }
+                    }
                 }
             }
 
@@ -133,14 +195,14 @@ fun SystemToolsScreen(
             )
             SwitchRow(
                 title = "日历",
-                description = "list / create（M1 stub；真机需 READ/WRITE 或 Intent）",
+                description = "list（Instances）/ create（INSERT Intent，需确认）",
                 checked = config.calendarEnabled,
                 onCheckedChange = viewModel::setCalendar,
                 enabled = config.masterEnabled
             )
             SwitchRow(
                 title = "闹钟",
-                description = "AlarmClock Intent；应用内提醒仍走定时任务",
+                description = "setAlarmClock 默认；mode=intent 真启动系统时钟 App",
                 checked = config.alarmEnabled,
                 onCheckedChange = viewModel::setAlarm,
                 enabled = config.masterEnabled
@@ -154,7 +216,7 @@ fun SystemToolsScreen(
             )
             SwitchRow(
                 title = "用户文件",
-                description = "SAF / MediaStore（M2）；非系统分区",
+                description = "SAF / MediaStore（7.4）；非系统分区",
                 checked = config.userFileEnabled,
                 onCheckedChange = viewModel::setUserFile,
                 enabled = config.masterEnabled
@@ -169,7 +231,7 @@ fun SystemToolsScreen(
             Card {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "M1 stub 工具（${state.stubToolNames.size}）",
+                        text = "已注册工具（${state.stubToolNames.size}）",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold
                     )
