@@ -16,6 +16,7 @@
 
 package com.lanxin.android.builtin.sync.data
 
+import com.lanxin.android.builtin.sync.domain.LwwDecision
 import com.lanxin.android.builtin.sync.domain.LwwResolver
 import com.lanxin.android.builtin.sync.domain.SyncCycleResult
 import com.lanxin.android.builtin.sync.domain.SyncItem
@@ -33,11 +34,12 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
- * 同步引擎骨架实现。
+ * 同步引擎实现（Phase 5.1 骨架 + 5.2 LWW 完整路径）。
  *
  * - outbox：InMemory（进程级）
  * - memory：enqueue / pull 合并写入 MemoryRepository
- * - knowledge：接口预留，pull 时忽略非 memory（或仅记录）
+ * - knowledge：列表层 LWW 可测；落库适配后置
+ * - push.applied 与 pull items 统一走 [applyRemoteItem] → LWW
  *
  * 不接入 ChatViewModel，不污染会话。
  *
@@ -47,7 +49,8 @@ class DefaultSyncRepository(
     private val syncClient: HttpSyncClient,
     private val preferences: SyncPreferences,
     private val outbox: InMemorySyncOutbox,
-    private val memoryRepository: MemoryRepository
+    private val memoryRepository: MemoryRepository,
+    private val preferRemote: Boolean = true
 ) : SyncRepository {
 
     private val cycleMutex = Mutex()
@@ -90,6 +93,9 @@ class DefaultSyncRepository(
         val pending = outbox.snapshot()
         var pushed = 0
         var rejected = 0
+        var merged = 0
+        var skipped = 0
+        var conflictResolved = 0
         var serverTime = preferences.getLastServerTime()
 
         if (pending.isNotEmpty()) {
@@ -111,10 +117,13 @@ class DefaultSyncRepository(
                     pending.filter { it.itemId in rejectedIds }.forEach { entry ->
                         outbox.markAttempt(entry.localId, "rejected")
                     }
-                    // 服务端 LWW 最终态可选回写
-                    resp.applied
-                        .filter { it.type == SyncItemType.MEMORY }
-                        .forEach { applyMemoryRemote(it) }
+                    // 服务端 LWW 最终态：与 pull 共用同一入口
+                    resp.applied.forEach { item ->
+                        val outcome = applyRemoteItem(item)
+                        merged += outcome.mergedDelta
+                        skipped += outcome.skippedDelta
+                        conflictResolved += outcome.conflictDelta
+                    }
                 },
                 onFailure = { e ->
                     pending.forEach { outbox.markAttempt(it.localId, e.message) }
@@ -143,6 +152,9 @@ class DefaultSyncRepository(
             return SyncCycleResult(
                 pushed = pushed,
                 rejected = rejected,
+                merged = merged,
+                skipped = skipped,
+                conflictResolved = conflictResolved,
                 serverTime = serverTime,
                 error = "pull 失败: ${e.message}"
             )
@@ -152,11 +164,12 @@ class DefaultSyncRepository(
             serverTime = pullResp.serverTime
         }
 
-        // 3) merge memory
-        var merged = 0
-        val memoryItems = pullResp.items.filter { it.type == SyncItemType.MEMORY }
-        for (remote in memoryItems) {
-            if (applyMemoryRemote(remote)) merged++
+        // 3) merge：统一 LWW 入口（memory 落库；knowledge 列表层可后续扩展）
+        for (remote in pullResp.items) {
+            val outcome = applyRemoteItem(remote)
+            merged += outcome.mergedDelta
+            skipped += outcome.skippedDelta
+            conflictResolved += outcome.conflictDelta
         }
 
         if (serverTime > 0) {
@@ -168,15 +181,27 @@ class DefaultSyncRepository(
             pulled = pullResp.items.size,
             merged = merged,
             rejected = rejected,
+            skipped = skipped,
+            conflictResolved = conflictResolved,
             serverTime = serverTime
         )
     }
 
     /**
-     * 将远端 memory 条目按 LWW 合并进本地。
-     * @return 是否发生写入/删除
+     * push.applied 与 pull 共用的远端条目应用入口。
+     * memory 走 LWW + MemoryRepository；其它 type 暂不落库（计 skipped）。
      */
-    private suspend fun applyMemoryRemote(remote: SyncItem): Boolean {
+    private suspend fun applyRemoteItem(remote: SyncItem): ApplyOutcome {
+        return when (remote.type) {
+            SyncItemType.MEMORY -> applyMemoryRemote(remote)
+            else -> ApplyOutcome(skippedDelta = 1) // knowledge 等：无存储适配时跳过
+        }
+    }
+
+    /**
+     * 将远端 memory 条目按 LWW 合并进本地。
+     */
+    private suspend fun applyMemoryRemote(remote: SyncItem): ApplyOutcome {
         val draft = SyncItemMapper.toMemoryDraft(remote)
         val localId = draft.localId
         val existing: MemoryEntity? = if (localId != null && localId > 0) {
@@ -185,36 +210,59 @@ class DefaultSyncRepository(
             null
         }
 
-        if (existing != null) {
-            val localItem = SyncItemMapper.fromMemory(existing, deviceId = null)
-            if (!LwwResolver.shouldApply(localItem, remote, preferRemote = true)) {
-                return false
-            }
-            if (remote.deleted) {
-                memoryRepository.deleteMemory(existing.id)
-                return true
-            }
-            memoryRepository.updateMemory(
-                existing.copy(
+        val localItem: SyncItem? = existing?.let {
+            SyncItemMapper.fromMemory(it, deviceId = null)
+        }
+
+        val decision = LwwResolver.decide(localItem, remote, preferRemote)
+        when (decision) {
+            LwwDecision.SKIP -> return ApplyOutcome(skippedDelta = 1)
+            LwwDecision.APPLY_NEW -> {
+                // 本地无此 id：tombstone 无需落库
+                if (remote.deleted) return ApplyOutcome(skippedDelta = 1)
+                memoryRepository.addMemory(
                     content = draft.content,
                     type = draft.type,
                     importance = draft.importance,
-                    metadata = draft.metadata,
-                    lastAccessedAt = draft.updatedAt
+                    metadata = draft.metadata
                 )
-            )
-            return true
+                return ApplyOutcome(mergedDelta = 1)
+            }
+            LwwDecision.APPLY -> {
+                val conflict = LwwResolver.isConflictResolution(localItem, remote, preferRemote)
+                if (existing == null) {
+                    // decide 在 existing==null 时只返回 APPLY_NEW，此处防御
+                    if (remote.deleted) return ApplyOutcome(skippedDelta = 1)
+                    memoryRepository.addMemory(
+                        content = draft.content,
+                        type = draft.type,
+                        importance = draft.importance,
+                        metadata = draft.metadata
+                    )
+                    return ApplyOutcome(mergedDelta = 1)
+                }
+                if (remote.deleted) {
+                    memoryRepository.deleteMemory(existing.id)
+                    return ApplyOutcome(
+                        mergedDelta = 1,
+                        conflictDelta = if (conflict) 1 else 0
+                    )
+                }
+                memoryRepository.updateMemory(
+                    existing.copy(
+                        content = draft.content,
+                        type = draft.type,
+                        importance = draft.importance,
+                        metadata = draft.metadata,
+                        lastAccessedAt = draft.updatedAt
+                    )
+                )
+                return ApplyOutcome(
+                    mergedDelta = 1,
+                    conflictDelta = if (conflict) 1 else 0
+                )
+            }
         }
-
-        // 本地无此 id：tombstone 无需落库
-        if (remote.deleted) return false
-        memoryRepository.addMemory(
-            content = draft.content,
-            type = draft.type,
-            importance = draft.importance,
-            metadata = draft.metadata
-        )
-        return true
     }
 
     /**
@@ -245,4 +293,11 @@ class DefaultSyncRepository(
         )
         enqueue(item, SyncOutboxOp.DELETE)
     }
+
+    /** 单条 apply 的计数增量。 */
+    private data class ApplyOutcome(
+        val mergedDelta: Int = 0,
+        val skippedDelta: Int = 0,
+        val conflictDelta: Int = 0
+    )
 }
