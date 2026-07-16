@@ -1,7 +1,7 @@
 # LanXin Android 架构设计（定稿 v1.0）
 
 > 基于 GPT Mobile 源码改造，引入插件化架构，借鉴 AstrBot 设计思路。
-> 当前状态：**Phase 1 ✅ → Phase 2 ✅ → Phase 3 ✅ → Phase 4 ✅ → Phase 5.1–5.7 ✅ → Phase 6.1 ✅ → Phase 6.2 ✅ → Phase 6.3 ✅ → Phase 6.4 ✅ 骨架 → 桌宠语音会话 M1 🚧** → **Phase 7 系统工具 🔜**
+> 当前状态：**Phase 1 ✅ → Phase 2 ✅ → Phase 3 ✅ → Phase 4 ✅ → Phase 5.1–5.7 ✅ → Phase 6.1 ✅ → Phase 6.2 ✅ → Phase 6.3 ✅ → Phase 6.4 ✅ 骨架 → 桌宠语音会话 M1 🚧** → **Phase 7 系统工具 🔜** · **桌宠 + 操控手机 = 陪伴操控一体**
 > - Step①~⑧ 全部完成
 > - 知识库 P0~P6、Unified Inbox 均已落地
 > - Phase 4：品牌换皮 + Memory 编辑 UI + UnifiedSearch 四路 RRF
@@ -18,7 +18,7 @@
 > - Phase 6.4：Sherpa-ONNX 离线语音识别（ASR）骨架 ✅（`feat/phase6-4-offline-asr`）
 > - Phase 6 主线 M1：妹居风格桌宠 + VoiceSession 听→想→说 ✅（#48 已合 main）
 > - Phase 6 主线 M2a：路径就绪闭环 + 设置「已就绪/缺失」🚧（#49）
-> - Phase 7：系统工具（日历 / 闹钟 / 笔记 / 非系统文件）🔜（`docs/system-tools.md` + `builtin/systemtools`）
+> - Phase 7：系统工具（日历 / 闹钟 / 笔记 / 非系统文件）🔜——**与桌宠合并为「陪伴操控一体」**（`docs/system-tools.md` + `builtin/systemtools` + VoiceSession）
 
 ---
 
@@ -651,6 +651,9 @@ app/.../plugins/unifiedinbox/
 
 #### Phase 6 桌宠语音会话 M1（`feat/phase6-pet-voice-session`）
 
+> **产品合并（2026-07）：** 桌宠与「操控手机」（Phase 7 系统工具）为 **陪伴操控一体**——模块可分，入口与会话不可分。见 Phase 7.4。
+
+
 | 项 | 说明 |
 |----|------|
 | 设计文档 | `docs/meiju-style-pet.md`、`builtin/pet/README.md` |
@@ -676,7 +679,8 @@ app/.../plugins/unifiedinbox/
 
 ### Phase 7 — 系统工具 / 设备技能（System Tools & Device Skills）
 
-> 目标：让兰心通过 **统一 Tool/Skill 接口** 调用手机能力——**系统日历、闹钟、笔记、用户文件**等；聊天、桌宠 VoiceSession、MCP 共用同一套工具。  
+> 目标：让兰心通过 **统一 Tool/Skill 接口** 调用手机能力——**系统日历、闹钟、笔记、用户文件**等。
+> **与桌宠合并：** 操控手机不是旁路 App，而是桌宠/语音会话的 **行动层**；聊天、桌宠 VoiceSession、MCP **共用**同一套工具与确认门闸。  
 > 详细设计：`docs/system-tools.md`（落地时与本文同步）。模块建议：`builtin/systemtools/`（或 `builtin/device/`）。
 
 #### 7.0 原则
@@ -706,7 +710,7 @@ app/.../plugins/unifiedinbox/
 | **7.2 闹钟 + 日历** | Intent 设闹钟；日历读列表 + 创建（确认流） | 🔴 高 | 🔜 |
 | **7.3 笔记** | 应用内笔记 CRUD + 导出/分享 | 🟡 中 | 🔜 |
 | **7.4 文件** | SAF 授权目录列表、读文本摘要、写/分享/删（确认） | 🔴 高 | 🔜 |
-| **7.5 对话接入** | ChatRouter `needsTools` + 桌宠 VoiceSession 可调用上述工具 | 🔴 高 | 🔜 |
+| **7.5 对话/桌宠一体接入** | ChatRouter `needsTools` + **桌宠 VoiceSession 同一链路**调工具（听→想→办→说） | 🔴 高 | 🔜 |
 | **7.6 打磨** | 权限引导 UX、隐私文案、失败降级、审计日志（可选） | 🟡 中 | 🔜 |
 
 #### 7.3 架构要点
@@ -730,13 +734,38 @@ Contract Intent  Store    SAF/MediaStore
 - **设置**：`系统能力` 分项开关（日历/闹钟/笔记/文件），总开关可一键全关。  
 - **非目标（本阶段）**：无障碍模拟点击第三方 App、厂商笔记私有协议逆向、系统分区文件管理。
 
-#### 7.4 与 Phase 6 关系
+#### 7.4 与 Phase 6：**桌宠 + 操控手机 = 同一条产品线**
 
-| Phase 6 | Phase 7 |
-|---------|---------|
-| 听得见、说得出、本地脑、桌宠形象 | **办得了事**（日程/闹钟/笔记/文件） |
-| VoiceSession 听→想→说 | 「想」之后 **tool_call** 调系统工具再总结回复 |
-| debug 模型路径在用户/应用可访问目录 | 文件工具同样 **只碰用户授权路径** |
+> 哥哥拍板：**桌宠和操控手机合在一起**，不要拆成两套互不相关的功能。
+
+| 表现层（桌宠 / 语音） | 行动层（系统工具） |
+|----------------------|-------------------|
+| 悬浮窗、Live2D/占位、听→想→说 | 日历 / 闹钟 / 笔记 / 用户文件 |
+| VoiceSession 状态机 | ToolRegistry + 确认门闸 |
+| 「兰心在桌面陪着」 | 「兰心能动手办事」 |
+
+**一体工作流（目标态）：**
+
+```
+用户对桌宠说话 / 点快捷
+        │
+        ▼
+  VoiceSession（听 → 想）
+        │
+        ├─ 纯闲聊 → 本地/云端回复 → TTS/字幕
+        │
+        └─ 要办事 → SystemToolsCoordinator（权限 + 确认）
+                      ├─ 日历 / 闹钟 / 笔记 / 文件 …
+                      └─ 结果回灌 → 想（总结）→ 说
+```
+
+| 原分述 | 合并后 |
+|--------|--------|
+| Phase 6 只负责形象与语音 | Phase 6：**感官 + 会话壳**（听得见、看得到、说得出） |
+| Phase 7 只负责系统 API | Phase 7：**双手**（同一会话里 tool_call，桌宠与聊天共用） |
+| 两套入口 | **统一入口**：桌宠 / 聊天 / 快捷指令 → 同一 ToolRegistry |
+
+实现上仍可按模块拆 PR（`builtin/pet` 与 `builtin/systemtools`），但 **产品叙事、设置信息架构、VoiceSession 钩子必须一体**：设置里「桌宠与助手能力」同级编排，而不是「桌宠一页、系统工具另一宇宙」。
 
 #### 7.5 遗留对照（本阶段纳入）
 
@@ -780,7 +809,7 @@ Phase 4（基础夯实）   Phase 5（平台扩展）     Phase 6（端侧智能
 | 系统日历 / 闹钟 Intent | **Phase 7.2** | CalendarContract + AlarmClock |
 | 笔记（应用内 + 导出/分享） | **Phase 7.3** | 无统一系统笔记 API |
 | 非系统文件管理（SAF） | **Phase 7.4** | 用户授权目录，禁止系统分区 |
-| 对话/桌宠调用系统工具 | **Phase 7.5** | ToolRegistry + 确认门闸 |
+| 对话/桌宠调用系统工具（**与桌宠一体**） | **Phase 7.5** | 同一 VoiceSession / ToolRegistry + 确认门闸 |
 
 ---
 
