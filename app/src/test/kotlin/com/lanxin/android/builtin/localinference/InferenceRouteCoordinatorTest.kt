@@ -9,6 +9,7 @@ import com.lanxin.android.builtin.localinference.domain.LocalInferenceConfig
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceSettings
 import com.lanxin.android.builtin.localinference.domain.LocalLlmEngine
 import com.lanxin.android.builtin.localinference.domain.NetworkStatusProvider
+import com.lanxin.android.builtin.localinference.domain.RouteReason
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -30,7 +31,7 @@ class InferenceRouteCoordinatorTest {
         )
         val d = c.decide()
         assertEquals(InferenceRouteTarget.LOCAL, d.target)
-        assertEquals("offline_fallback", d.reason)
+        assertEquals(RouteReason.OFFLINE_LOCAL, d.reason)
     }
 
     @Test
@@ -43,6 +44,7 @@ class InferenceRouteCoordinatorTest {
         )
         val d = c.decide()
         assertEquals(InferenceRouteTarget.UNAVAILABLE, d.target)
+        assertEquals(RouteReason.OFFLINE_LOCAL_UNAVAILABLE, d.reason)
     }
 
     @Test
@@ -55,7 +57,7 @@ class InferenceRouteCoordinatorTest {
         )
         val d = c.decide()
         assertEquals(InferenceRouteTarget.CLOUD, d.target)
-        assertEquals("cloud_preferred", d.reason)
+        assertEquals(RouteReason.DEFAULT_CLOUD, d.reason)
     }
 
     @Test
@@ -68,7 +70,7 @@ class InferenceRouteCoordinatorTest {
         )
         val d = c.decide()
         assertEquals(InferenceRouteTarget.LOCAL, d.target)
-        assertEquals("user_prefer_local", d.reason)
+        assertEquals(RouteReason.PREFER_LOCAL, d.reason)
     }
 
     @Test
@@ -84,6 +86,19 @@ class InferenceRouteCoordinatorTest {
     }
 
     @Test
+    fun `needsTools forces cloud when online`() = runBlocking {
+        val c = coordinator(
+            network = true,
+            ready = true,
+            preferLocal = true,
+            enabled = true
+        )
+        val d = c.decide(needsTools = true)
+        assertEquals(InferenceRouteTarget.CLOUD, d.target)
+        assertEquals(RouteReason.NEED_TOOLS_CLOUD, d.reason)
+    }
+
+    @Test
     fun `previewLabel includes network and route`() = runBlocking {
         val c = coordinator(
             network = false,
@@ -94,6 +109,7 @@ class InferenceRouteCoordinatorTest {
         val label = c.previewLabel()
         assertTrue(label.contains("无网"))
         assertTrue(label.contains("本地"))
+        assertTrue(label.contains(RouteReason.OFFLINE_LOCAL) || label.contains("路由="))
     }
 
     private fun coordinator(
