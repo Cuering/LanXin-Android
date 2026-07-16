@@ -184,6 +184,13 @@
       }, 1200);
 
       setPhase('IDLE');
+
+      // Debug: 真 Live2D 需自备合规 model3.json；见 docs/debug-assets.md
+      // bash scripts/download-debug-live2d.sh  → live2d_model_path
+      if (!window.__LANXIN_LIVE2D_HINT__) {
+        window.__LANXIN_LIVE2D_HINT__ = true;
+        console.info('[LanXin Pet] placeholder only. Open-source Live2D sample: docs/debug-assets.md');
+      }
     })();
   </script>
 </body>

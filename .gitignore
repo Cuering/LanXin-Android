@@ -55,3 +55,25 @@ libs/sherpa-onnx/**
 # optional local APK analysis only
 *妹居*.apk
 meiju_apk_extract/**
+
+# Debug assets: downloaded models stay local (scripts only in git)
+# Ignore everything under debug-assets, then re-include keepers.
+/debug-assets/*
+!/debug-assets/.gitkeep
+!/debug-assets/README.md
+!/debug-assets/live2d/
+!/debug-assets/asr/
+!/debug-assets/tts/
+/debug-assets/live2d/*
+/debug-assets/asr/*
+/debug-assets/tts/*
+!/debug-assets/live2d/.gitkeep
+!/debug-assets/asr/.gitkeep
+!/debug-assets/tts/.gitkeep
+/debug-assets/.tmp/
+app/src/debug/assets/vendor/*
+!app/src/debug/assets/vendor/.gitkeep
+# common voice / live2d weight dumps (local only)
+*.wav
+*.mp3
+**/sherpa-onnx-*-models/**

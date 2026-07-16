@@ -66,6 +66,21 @@ builtin/voice/        6.4 ASR + M1 TtsEngine / StubTtsEngine
 - 可：文档记录结构、接口名；自有 HTML；stub 引擎；本机 `unzip -l` 学习
 - `.gitignore` 已覆盖 `*.mnn` / ASR 模型等
 
+### 5.1 Debug 默认走开源（非妹居）
+
+真机/集成测试资源请用官方/开源栈，**不要**默认依赖妹居解包：
+
+| 能力 | 推荐 | 脚本 |
+|------|------|------|
+| Live2D | Niziiro Mao / Haru（Live2D Sample） | `scripts/download-debug-live2d.sh` |
+| ASR | sherpa-onnx zipformer zh-14M | `scripts/download-debug-asr.sh` |
+| TTS | matcha-baker / melo（sherpa-onnx） | `scripts/download-debug-tts.sh` |
+
+一键：`bash scripts/download-debug-assets.sh`  
+完整许可、体积、路径约定：[`docs/debug-assets.md`](./debug-assets.md)
+
+妹居 APK **仅**本机架构对照；设置页与脚本默认路径全部指向 `debug-assets/`。
+
 ## 6. 设置入口
 
 设置 → **桌宠 / 语音陪伴**
