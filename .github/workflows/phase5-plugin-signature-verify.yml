@@ -1,0 +1,97 @@
+# Phase 5.6 插件签名验证：策略 / 白名单 / ConfigStore / UI 策略展示
+name: Phase5 Plugin Signature Verify
+
+on:
+  push:
+    branches: [main, 'feat/phase5*']
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/plugin/**'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/plugin/**'
+      - 'app/src/test/kotlin/com/lanxin/android/plugin/dynamic/**'
+      - 'app/src/test/kotlin/com/lanxin/android/presentation/ui/plugin/**'
+      - 'docs/plugin-signature.md'
+      - 'docs/dynamic-plugins.md'
+      - 'ARCHITECTURE.md'
+      - '.github/workflows/phase5-plugin-signature-verify.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/plugin/**'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/plugin/**'
+      - 'app/src/test/kotlin/com/lanxin/android/plugin/dynamic/**'
+      - 'app/src/test/kotlin/com/lanxin/android/presentation/ui/plugin/**'
+      - 'docs/plugin-signature.md'
+      - 'docs/dynamic-plugins.md'
+      - 'ARCHITECTURE.md'
+      - '.github/workflows/phase5-plugin-signature-verify.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: phase5-sig-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: Plugin signature unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: gradle
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup local.properties and debug keystore
+        run: |
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+          rm -f debug-keystore.jks
+          keytool -genkeypair -v -keystore debug-keystore.jks -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Create assets model dir (models gitignored)
+        run: |
+          mkdir -p app/src/main/assets/models/gte-small
+          touch app/src/main/assets/models/gte-small/.gitkeep
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run signature and related unit tests
+        run: |
+          ./gradlew :app:testDebugUnitTest \
+            --tests "com.lanxin.android.plugin.dynamic.PluginSignatureVerifierTest" \
+            --tests "com.lanxin.android.plugin.dynamic.PluginSignatureConfigStoreTest" \
+            --tests "com.lanxin.android.plugin.dynamic.DynamicPluginLoaderTest" \
+            --tests "com.lanxin.android.plugin.dynamic.PluginManagerDynamicTest" \
+            --tests "com.lanxin.android.presentation.ui.plugin.PluginManagerViewModelTest" \
+            --no-daemon --stacktrace
+
+      - name: Surfaces and docs present
+        run: |
+          test -f docs/plugin-signature.md
+          test -f docs/dynamic-plugins.md
+          test -f app/src/main/kotlin/com/lanxin/android/plugin/dynamic/PluginSignatureVerifier.kt
+          test -f app/src/main/kotlin/com/lanxin/android/plugin/dynamic/ApkCertDigestProvider.kt
+          test -f app/src/main/kotlin/com/lanxin/android/plugin/dynamic/PluginSignatureConfigStore.kt
+          test -f app/src/test/kotlin/com/lanxin/android/plugin/dynamic/PluginSignatureVerifierTest.kt
+          test -f app/src/test/kotlin/com/lanxin/android/plugin/dynamic/PluginSignatureConfigStoreTest.kt
+          grep -E -n "SignaturePolicy|ALLOWLIST|AllowAllPluginSignatureVerifier" \
+            app/src/main/kotlin/com/lanxin/android/plugin/dynamic/PluginSignatureVerifier.kt
+          grep -E -n "plugin-signature.json|SIGNATURE_CONFIG_FILE_NAME" \
+            app/src/main/kotlin/com/lanxin/android/plugin/dynamic/PluginPackagePaths.kt
+          grep -E -n "currentSignaturePolicy|setSignatureConfig|StoreBackedPluginSignatureVerifier" \
+            app/src/main/kotlin/com/lanxin/android/plugin/PluginManager.kt
+          grep -E -n "signaturePolicy|签名策略" \
+            app/src/main/kotlin/com/lanxin/android/presentation/ui/plugin/PluginManagerScreen.kt
+          grep -E -n "5\\.6|签名" ARCHITECTURE.md
+          grep -E -n "5\\.6|allowlist|plugin-signature" docs/dynamic-plugins.md
+          grep -E -n "allow_all|allowlist|plugin-signature.json" docs/plugin-signature.md

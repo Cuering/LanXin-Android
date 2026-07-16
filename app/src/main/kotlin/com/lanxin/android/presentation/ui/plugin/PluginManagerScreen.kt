@@ -61,6 +61,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lanxin.android.plugin.dynamic.PluginLoadResult
 import com.lanxin.android.plugin.dynamic.PluginRecord
+import com.lanxin.android.plugin.dynamic.PluginSignatureStatus
 import com.lanxin.android.plugin.dynamic.PluginSource
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -122,6 +123,7 @@ fun PluginManagerScreen(
                     HeaderCard(
                         packagesPath = state.packagesPath,
                         recordCount = state.records.size,
+                        signaturePolicy = state.signaturePolicy,
                         onScan = { viewModel.refresh(scanDynamic = true) },
                         scanEnabled = !state.isLoading,
                         onOpenMarket = onNavigateToMarket
@@ -173,7 +175,8 @@ fun PluginManagerScreen(
 
                 item {
                     Text(
-                        text = "说明：签名校验 MVP 为 AllowAll（5.6 将换实现）。" +
+                        text = "说明：签名策略见页眉与各动态插件条目。" +
+                            "配置文件 filesDir/plugin-signature.json（allow_all / deny_all / allowlist）。" +
                             "卸载仅移除运行时注册；删除 APK 会从磁盘移除包文件。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -229,6 +232,7 @@ fun PluginManagerScreen(
 private fun HeaderCard(
     packagesPath: String,
     recordCount: Int,
+    signaturePolicy: String,
     onScan: () -> Unit,
     scanEnabled: Boolean,
     onOpenMarket: () -> Unit = {}
@@ -257,6 +261,14 @@ private fun HeaderCard(
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis
             )
+            if (signaturePolicy.isNotBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "签名策略：$signaturePolicy",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             Spacer(modifier = Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -275,6 +287,7 @@ private fun HeaderCard(
 
 @Composable
 private fun FailureCard(failure: PluginLoadResult.Failure) {
+    val isSignature = failure.reason.contains("签名")
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -287,6 +300,13 @@ private fun FailureCard(failure: PluginLoadResult.Failure) {
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Medium
             )
+            if (isSignature) {
+                Text(
+                    text = "签名问题",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
             Text(
                 text = failure.reason,
                 style = MaterialTheme.typography.bodySmall,
@@ -375,6 +395,25 @@ private fun PluginRecordCard(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
+            }
+
+            if (record.source == PluginSource.DYNAMIC ||
+                record.signature.status != PluginSignatureStatus.NOT_APPLICABLE
+            ) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = record.signature.displayLabel(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = when (record.signature.status) {
+                        PluginSignatureStatus.TRUSTED ->
+                            MaterialTheme.colorScheme.primary
+                        PluginSignatureStatus.REJECTED ->
+                            MaterialTheme.colorScheme.error
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
 
             if (record.description.isNotBlank()) {

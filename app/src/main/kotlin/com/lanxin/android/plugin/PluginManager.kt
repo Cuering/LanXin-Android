@@ -1,7 +1,6 @@
 package com.lanxin.android.plugin
 
 import android.content.Context
-import com.lanxin.android.plugin.dynamic.AllowAllPluginSignatureVerifier
 import com.lanxin.android.plugin.dynamic.AndroidPathClassLoaderFactory
 import com.lanxin.android.plugin.dynamic.DynamicDiscoverResult
 import com.lanxin.android.plugin.dynamic.DynamicPluginClassLoaderFactory
@@ -11,9 +10,14 @@ import com.lanxin.android.plugin.dynamic.PluginLoadResult
 import com.lanxin.android.plugin.dynamic.PluginPackagePaths
 import com.lanxin.android.plugin.dynamic.PluginPackageScanner
 import com.lanxin.android.plugin.dynamic.PluginRecord
+import com.lanxin.android.plugin.dynamic.PluginSignatureConfig
+import com.lanxin.android.plugin.dynamic.PluginSignatureConfigStore
+import com.lanxin.android.plugin.dynamic.PluginSignatureInfo
 import com.lanxin.android.plugin.dynamic.PluginSignatureVerifier
 import com.lanxin.android.plugin.dynamic.PluginSource
 import com.lanxin.android.plugin.dynamic.PluginStateStore
+import com.lanxin.android.plugin.dynamic.SignaturePolicy
+import com.lanxin.android.plugin.dynamic.StoreBackedPluginSignatureVerifier
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import javax.inject.Inject
@@ -32,9 +36,9 @@ import kotlinx.serialization.json.put
  * 负责插件的注册、加载、生命周期管理，
  * 以及 MCP 工具的注册与调度。
  *
- * Phase 5.3：支持从 `filesDir/plugin-packages/` 动态加载 .apk 插件包，
- * 并提供 enable / disable / unload 状态机（见 docs/dynamic-plugins.md）。
+ * Phase 5.3：支持从 `filesDir/plugin-packages/` 动态加载 .apk 插件包。
  * Phase 5.5：市场安装后可通过 [loadDynamicPlugin] 单包加载。
+ * Phase 5.6：签名策略 AllowAll / DenyAll / Allowlist（见 docs/plugin-signature.md）。
  */
 @Singleton
 class PluginManager @Inject constructor(
@@ -56,11 +60,32 @@ class PluginManager @Inject constructor(
         PluginStateStore(PluginPackagePaths.stateFile(appContext.filesDir))
     }
 
+    private val defaultSignaturePolicy: SignaturePolicy by lazy {
+        val debuggable = runCatching {
+            (appContext.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        }.getOrDefault(true)
+        if (debuggable) SignaturePolicy.ALLOW_ALL else SignaturePolicy.ALLOWLIST
+    }
+
+    private val signatureConfigStore: PluginSignatureConfigStore by lazy {
+        PluginSignatureConfigStore(
+            file = PluginPackagePaths.signatureConfigFile(appContext.filesDir),
+            defaultPolicy = defaultSignaturePolicy
+        )
+    }
+
     @Volatile
     private var classLoaderFactory: DynamicPluginClassLoaderFactory = AndroidPathClassLoaderFactory
 
     @Volatile
-    private var signatureVerifier: PluginSignatureVerifier = AllowAllPluginSignatureVerifier
+    private var signatureVerifierOverride: PluginSignatureVerifier? = null
+
+    private val storeBackedVerifier: PluginSignatureVerifier by lazy {
+        StoreBackedPluginSignatureVerifier(signatureConfigStore)
+    }
+
+    private fun activeSignatureVerifier(): PluginSignatureVerifier =
+        signatureVerifierOverride ?: storeBackedVerifier
 
     @Volatile
     private var appVersionName: String = runCatching {
@@ -70,13 +95,23 @@ class PluginManager @Inject constructor(
     /** 单测注入：替换 ClassLoader 工厂 / 签名校验 / App 版本。 */
     fun configureDynamicLoading(
         classLoaderFactory: DynamicPluginClassLoaderFactory = this.classLoaderFactory,
-        signatureVerifier: PluginSignatureVerifier = this.signatureVerifier,
+        signatureVerifier: PluginSignatureVerifier? = this.signatureVerifierOverride,
         appVersionName: String = this.appVersionName
     ) {
         this.classLoaderFactory = classLoaderFactory
-        this.signatureVerifier = signatureVerifier
+        this.signatureVerifierOverride = signatureVerifier
         this.appVersionName = appVersionName
     }
+
+    /** 当前签名策略配置（UI / 单测）。 */
+    fun getSignatureConfig(): PluginSignatureConfig = signatureConfigStore.load()
+
+    /** 更新签名策略（立即影响后续 load）。 */
+    fun setSignatureConfig(config: PluginSignatureConfig) {
+        signatureConfigStore.save(config)
+    }
+
+    override fun currentSignaturePolicy(): String = getSignatureConfig().policy.wireName
 
     /**
      * 可选：单测用的插件工厂（跳过 dex 实例化）。
@@ -108,27 +143,15 @@ class PluginManager @Inject constructor(
         }
     }
 
-    /**
-     * 获取所有已注册的插件列表。
-     */
     fun getPlugins(): List<LanXinPlugin> = plugins.values.toList()
 
-    /**
-     * 按 ID 获取插件。
-     */
     @Suppress("UNCHECKED_CAST")
     fun <T : LanXinPlugin> get(id: String): T? {
         return plugins[id] as? T
     }
 
-    /**
-     * 获取所有已注册的工具（仅已 load 的插件贡献）。
-     */
     fun getTools(): List<ToolDef> = tools.values.toList()
 
-    /**
-     * 调用指定工具。
-     */
     suspend fun callTool(name: String, args: JsonObject): JsonObject {
         val tool = tools[name]
             ?: return buildJsonObject { put("error", "工具 $name 未找到") }
@@ -139,18 +162,10 @@ class PluginManager @Inject constructor(
         }
     }
 
-    /** 插件是否启用；未写入状态时默认 true。 */
     fun isEnabled(pluginId: String): Boolean = stateStore.isEnabled(pluginId)
 
-    /**
-     * 启用 / 停用插件。
-     *
-     * - disable：若已 load 则 onUnload 并移除其工具
-     * - enable：若已注册且未 load 则 onLoad
-     */
     override suspend fun setEnabled(pluginId: String, enabled: Boolean): Boolean {
         if (pluginId !in plugins && pluginId !in dynamicHandles) {
-            // 仍持久化，便于尚未扫描到的包
             stateStore.setEnabled(pluginId, enabled)
             return false
         }
@@ -170,26 +185,14 @@ class PluginManager @Inject constructor(
         return true
     }
 
-    /**
-     * 按类型查找已注册插件（Phase 2 API）。
-     *
-     * 非 inline：避免 public-API inline 访问 private [plugins]。
-     */
     fun <T : LanXinPlugin> getPluginsByType(clazz: Class<T>): List<T> =
         plugins.values.filterIsInstance(clazz)
 
-    /**
-     * 便捷重载：按 reified 类型查找（内部拷贝列表，不直接暴露 private map）。
-     */
     inline fun <reified T : LanXinPlugin> getPluginsByType(): List<T> {
         val snapshot = getPlugins()
         return snapshot.filterIsInstance<T>()
     }
 
-    /**
-     * 扫描 `filesDir/plugin-packages/` 并加载动态插件。
-     * 失败项记入结果，不抛异常、不中断宿主。
-     */
     override suspend fun discoverAndLoadDynamicPlugins(
         packagesDir: File?
     ): DynamicDiscoverResult {
@@ -201,7 +204,7 @@ class PluginManager @Inject constructor(
 
         val loader = DynamicPluginLoader(
             classLoaderFactory = classLoaderFactory,
-            signatureVerifier = signatureVerifier,
+            signatureVerifier = activeSignatureVerifier(),
             appVersionName = appVersionName,
             pluginFactory = testPluginFactory
         )
@@ -217,13 +220,10 @@ class PluginManager @Inject constructor(
         return DynamicDiscoverResult(successes = successes, failures = failures)
     }
 
-    /**
-     * 加载单个动态插件包。
-     */
     override suspend fun loadDynamicPlugin(apkFile: File): PluginLoadResult {
         val loader = DynamicPluginLoader(
             classLoaderFactory = classLoaderFactory,
-            signatureVerifier = signatureVerifier,
+            signatureVerifier = activeSignatureVerifier(),
             appVersionName = appVersionName,
             pluginFactory = testPluginFactory
         )
@@ -234,10 +234,6 @@ class PluginManager @Inject constructor(
         return result
     }
 
-    /**
-     * 卸载动态插件（从注册表移除并 onUnload）。
-     * 编译期插件返回 false。
-     */
     override suspend fun unloadPlugin(pluginId: String): Boolean {
         if (pluginId in compiledIds && pluginId !in dynamicHandles) {
             return false
@@ -253,9 +249,6 @@ class PluginManager @Inject constructor(
         return true
     }
 
-    /**
-     * 插件记录列表（编译期 + 动态），供 5.4 管理 UI。
-     */
     override fun getPluginRecords(): List<PluginRecord> {
         val records = mutableListOf<PluginRecord>()
         for ((id, plugin) in plugins) {
@@ -270,7 +263,12 @@ class PluginManager @Inject constructor(
                 enabled = isEnabled(id),
                 removable = isDynamic && (handle?.manifest?.removable ?: true),
                 apkPath = handle?.apkFile?.absolutePath,
-                author = handle?.manifest?.author.orEmpty()
+                author = handle?.manifest?.author.orEmpty(),
+                signature = if (isDynamic) {
+                    handle?.signature ?: PluginSignatureInfo.unknown()
+                } else {
+                    PluginSignatureInfo.notApplicable()
+                }
             )
         }
         return records.sortedBy { it.id }
@@ -281,9 +279,6 @@ class PluginManager @Inject constructor(
     override fun packagesDirectory(): File =
         PluginPackagePaths.ensurePackagesDir(appContext.filesDir)
 
-    /**
-     * 卸载所有插件，释放资源。
-     */
     suspend fun destroy() {
         plugins.values.forEach {
             runCatching { it.onUnload() }
@@ -298,14 +293,11 @@ class PluginManager @Inject constructor(
         scope.cancel()
     }
 
-    // ── 内部 ──
-
     private suspend fun loadOne(pluginId: String, plugin: LanXinPlugin) {
         try {
             plugin.onLoad(createContext(pluginId))
             loadedIds.add(pluginId)
         } catch (_: Exception) {
-            // 单插件 onLoad 失败不拖垮宿主
             removeToolsFor(pluginId)
             loadedIds.remove(pluginId)
         }
@@ -335,7 +327,6 @@ class PluginManager @Inject constructor(
                     )
                 }
 
-                // 已加载过同一动态 id：先卸载再换包
                 if (id in dynamicHandles) {
                     unloadPlugin(id)
                 }
@@ -345,7 +336,8 @@ class PluginManager @Inject constructor(
                     manifest = pkg.manifest,
                     apkFile = pkg.apkFile,
                     classLoader = pkg.classLoader,
-                    plugin = pkg.plugin
+                    plugin = pkg.plugin,
+                    signature = pkg.signature
                 )
 
                 val enabled = isEnabled(id)
@@ -365,7 +357,8 @@ class PluginManager @Inject constructor(
                         enabled = enabled,
                         removable = true,
                         apkPath = apkFile.absolutePath,
-                        author = pkg.manifest.author
+                        author = pkg.manifest.author,
+                        signature = pkg.signature
                     ),
                     loaded = didLoad
                 )

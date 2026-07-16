@@ -15,6 +15,9 @@ object PluginPackagePaths {
     /** enable/disable 状态文件名（相对 filesDir）。 */
     const val STATE_FILE_NAME = "plugin-state.json"
 
+    /** 签名策略配置文件名（相对 filesDir）。 */
+    const val SIGNATURE_CONFIG_FILE_NAME = "plugin-signature.json"
+
     /** APK 内清单 entry 路径。 */
     const val MANIFEST_ENTRY = "assets/lanxin-plugin.json"
 
@@ -26,6 +29,9 @@ object PluginPackagePaths {
 
     fun stateFile(filesDir: File): File =
         File(filesDir, STATE_FILE_NAME)
+
+    fun signatureConfigFile(filesDir: File): File =
+        File(filesDir, SIGNATURE_CONFIG_FILE_NAME)
 
     fun ensurePackagesDir(filesDir: File): File =
         packagesDir(filesDir).also { it.mkdirs() }

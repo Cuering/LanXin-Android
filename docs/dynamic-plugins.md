@@ -1,8 +1,8 @@
-# 动态插件加载设计（Phase 5.3–5.5）
+# 动态插件加载设计（Phase 5.3–5.6）
 
-> 状态：5.3 加载 ✅；5.4 管理 UI ✅；5.5 插件市场 ✅（`feat/phase5-5-plugin-market`）  
-> 范围：从 `filesDir` 发现 / 解析 / 加载 `.apk` 插件包 + 管理界面 + 远程市场索引安装  
-> 非目标：5.6 完整签名校验（钩子已预留）
+> 状态：5.3 加载 ✅；5.4 管理 UI ✅；5.5 插件市场 ✅；5.6 签名验证 ✅  
+> 范围：从 `filesDir` 发现 / 解析 / 加载 `.apk` 插件包 + 管理界面 + 远程市场索引安装 + 签名策略  
+> 非目标：证书链在线吊销、商店账号体系
 
 ---
 
@@ -13,6 +13,7 @@
 | `context.filesDir/plugin-packages/` | **外部插件包目录**（放置 `*.apk`；市场下载目标） |
 | `context.filesDir/plugins/<pluginId>/` | 插件运行时私有数据（既有 `PluginContext.filesDir`） |
 | `context.filesDir/plugin-state.json` | enable / disable 持久化（简单 JSON） |
+| `context.filesDir/plugin-signature.json` | 签名策略 + 证书白名单（5.6） |
 
 **为何不把 .apk 放在 `filesDir/plugins/`？**  
 该路径已被 `PluginManager.createContext` 用作各插件的数据目录（`plugins/<id>/`），与包文件混放会冲突。
@@ -71,7 +72,7 @@ App 启动 / 手动 refresh / 市场安装后
   │
   ├─ 2. 对每个 apk（或市场单包 loadDynamicPlugin）:
   │     ├─ PluginManifestParser.parseFromApk(apk)
-  │     ├─ PluginSignatureVerifier.verify(apk)   // 5.6 钩子；默认 AllowAll
+  │     ├─ PluginSignatureVerifier.verify(apk)   // 5.6：AllowAll / DenyAll / Allowlist
   │     ├─ minAppVersion 检查（VersionComparator）
   │     ├─ id 与已注册 builtin/compiled 冲突 → 失败不崩溃
   │     ├─ enable 状态（默认 true，可读 plugin-state.json）
@@ -115,30 +116,34 @@ App 启动 / 手动 refresh / 市场安装后
 | `discoverAndLoadDynamicPlugins()` | 扫描并加载 |
 | `loadDynamicPlugin(file)` | 单包加载（5.5 市场安装后） |
 | `unloadPlugin(id)` | 仅动态插件；编译期插件返回 false |
-| `getPluginRecords()` | 含 source / enabled / apkPath 的列表 |
+| `getPluginRecords()` | 含 source / enabled / apkPath / signature 的列表 |
 | `packagesDirectory()` | 动态包目录 |
+| `currentSignaturePolicy()` | 当前策略 wire 名（5.6） |
 
 ### 4.2 隔离边界（MVP）
 
 - **类加载隔离**：动态插件使用独立 ClassLoader，parent 为 App ClassLoader（可访问 `LanXinPlugin` 等宿主 API）。
 - **数据隔离**：`PluginContext.filesDir` 仍为 `filesDir/plugins/<id>/`。
 - **进程隔离**：不做；插件与宿主同进程（手机端性能优先）。
-- **权限**：插件代码与宿主同 UID；5.6 签名 + 后续能力声明再收紧。
+- **权限**：插件代码与宿主同 UID；签名策略 + 后续能力声明再收紧。
 
 ---
 
-## 5. 安全边界（5.6 预留）
+## 5. 安全边界（Phase 5.6）
+
+详见 **`docs/plugin-signature.md`**。
 
 ```kotlin
-interface PluginSignatureVerifier {
+fun interface PluginSignatureVerifier {
     fun verify(apkFile: File): PluginSignatureResult
 }
 
-// MVP：AllowAllPluginSignatureVerifier — 始终 TRUSTED
-// 5.6：校验 APK 签名证书是否在信任列表
+// AllowAll / DenyAll / Configurable(Allowlist)
+// 配置：filesDir/plugin-signature.json
+// debug 默认 allow_all；release(非 debuggable) 默认 allowlist
 ```
 
-加载管线在 ClassLoader 创建 **之前** 调用 verifier；`REJECTED` 则不加载并记 Failure。
+加载管线在 ClassLoader 创建 **之前** 调用 verifier；`Rejected` 则不加载并记 Failure（reason 含策略名）。
 
 市场侧另有 **文件完整性** 钩子：`PluginPackageVerifier`（size + 可选 sha256），与签名校验分离。
 
@@ -154,25 +159,26 @@ interface PluginSignatureVerifier {
 | 清单解析 | 内存 JSON + 临时 zip 内 `assets/lanxin-plugin.json` |
 | 扫描 | 临时目录放置假 .apk / 非 apk |
 | enable 状态机 | `PluginStateStore` load/save/setEnabled |
-| 签名钩子 | AllowAll / RejectAll |
+| 签名 | AllowAll / DenyAll / Allowlist / ConfigStore |
 | PluginManager | mock loader 注入、冲突 id、disable 后 callTool 不可用 |
 | 失败不崩溃 | 坏 JSON / 缺 entry / verifier reject |
-| 管理 UI | `PluginManagerViewModelTest` + Fake `PluginCatalog`（含 `loadDynamicPlugin` stub） |
+| 管理 UI | `PluginManagerViewModelTest` + Fake `PluginCatalog` |
 | 市场 | parser / verifier / installer / repository / ViewModel |
 
 ---
 
-## 7. 后续
+## 7. 阶段对照
 
-| 阶段 | 内容 |
-|------|------|
-| 5.4 | 管理 UI：列表 / 启用 / 停用 / 卸载文件 ✅ |
-| 5.5 | 市场：GitHub 索引下载到 `plugin-packages/` ✅ |
-| 5.6 | 签名证书白名单 + 用户确认 |
+| 阶段 | 内容 | 状态 |
+|------|------|:----:|
+| 5.3 | 扫描 / 清单 / ClassLoader / enable | ✅ |
+| 5.4 | 管理 UI：列表 / 启用 / 停用 / 卸载 | ✅ |
+| 5.5 | 市场：GitHub 索引下载到 `plugin-packages/` | ✅ |
+| 5.6 | 签名策略 + 证书白名单 + UI 状态 | ✅ |
 
 ---
 
-## 9. 管理 UI（Phase 5.4）
+## 9. 管理 UI（Phase 5.4 + 5.6）
 
 | 项 | 说明 |
 |----|------|
@@ -184,16 +190,16 @@ interface PluginSignatureVerifier {
 
 ### 9.1 能力
 
-- 列表：编译期 + 动态插件（id / name / version / source / enabled / author）
+- 列表：编译期 + 动态插件（id / name / version / source / enabled / author / signature）
 - 启用/停用：`PluginCatalog.setEnabled`
 - 重新扫描：`discoverAndLoadDynamicPlugins`，并展示 `getLastDynamicFailures`
 - 动态插件卸载：`unloadPlugin`（APK 保留）
 - 删除 APK：unload + 删除 `apkPath` 文件（二次确认）
-- 提示：签名 MVP 为 AllowAll（5.6 换实现）
+- 页眉展示当前签名策略；失败项标注签名问题
 
 ### 9.2 单测
 
-- `PluginManagerViewModelTest`：Fake `PluginCatalog`，覆盖 refresh / setEnabled / unload / deleteApk；Fake 实现 `loadDynamicPlugin`
+- `PluginManagerViewModelTest`：Fake `PluginCatalog`，覆盖 refresh / setEnabled / unload / deleteApk / 策略名
 
 ---
 
@@ -207,7 +213,7 @@ interface PluginSignatureVerifier {
 | 入口 | 设置 →「插件市场」；插件管理页 →「插件市场」 |
 | 默认索引 URL | `https://raw.githubusercontent.com/Cuering/LanXin-Android/main/docs/plugin-market-index.sample.json` |
 | 配置覆盖 | DataStore 键 `plugin_market_catalog_url`（`MarketPreferences` / `MarketSettings`） |
-| 安装管线 | 下载 → size/sha256 校验 → 落入 `plugin-packages/` → `PluginCatalog.loadDynamicPlugin` |
+| 安装管线 | 下载 → size/sha256 校验 → 落入 `plugin-packages/` → `PluginCatalog.loadDynamicPlugin`（含签名） |
 | 回退 | 远程失败时 `CompositePluginMarketRepository` 回退内置 sample |
 
 ---
@@ -216,5 +222,5 @@ interface PluginSignatureVerifier {
 
 | 字段 | 值 |
 |------|-----|
-| design_version | 3 |
-| phase | 5.5 |
+| design_version | 4 |
+| phase | 5.6 |

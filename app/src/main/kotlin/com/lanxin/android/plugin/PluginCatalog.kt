@@ -3,10 +3,11 @@ package com.lanxin.android.plugin
 import com.lanxin.android.plugin.dynamic.DynamicDiscoverResult
 import com.lanxin.android.plugin.dynamic.PluginLoadResult
 import com.lanxin.android.plugin.dynamic.PluginRecord
+import com.lanxin.android.plugin.dynamic.SignaturePolicy
 import java.io.File
 
 /**
- * 插件目录门面（Phase 5.4 UI / 5.5 市场 / 单测可替换）。
+ * 插件目录门面（Phase 5.4 UI / 5.5 市场 / 5.6 签名 / 单测可替换）。
  *
  * [PluginManager] 为默认实现；UI 与单测仅依赖本接口，避免 mock 具体类。
  */
@@ -39,4 +40,10 @@ interface PluginCatalog {
 
     /** 动态插件包目录（用于 UI 提示路径）。 */
     fun packagesDirectory(): File
+
+    /**
+     * 当前签名策略 wire 名（Phase 5.6）。
+     * 默认 [SignaturePolicy.ALLOW_ALL] 便于 Fake 实现。
+     */
+    fun currentSignaturePolicy(): String = SignaturePolicy.ALLOW_ALL.wireName
 }
