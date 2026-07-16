@@ -27,7 +27,7 @@ class PluginMarketRepositoryTest {
                 url: String,
                 destFile: File,
                 onProgress: (Float) -> Unit
-            ) = Result.failure(UnsupportedOperationException())
+            ): Result<Long> = Result.failure(UnsupportedOperationException("not used"))
         }
         val repo = RemotePluginMarketRepository(
             catalogUrlProvider = { "https://example.invalid/index.json" },
@@ -40,9 +40,10 @@ class PluginMarketRepositoryTest {
     @Test
     fun `composite falls back to sample`() = runBlocking {
         val failing = object : PluginMarketRepository {
-            override suspend fun fetchCatalog() =
+            override suspend fun fetchCatalog(): Result<MarketCatalog> =
                 Result.failure(IllegalStateException("down"))
-            override suspend fun search(query: String) = fetchCatalog().map { emptyList() }
+            override suspend fun search(query: String): Result<List<MarketPluginEntry>> =
+                Result.failure(IllegalStateException("down"))
         }
         val composite = CompositePluginMarketRepository(
             remote = failing,
