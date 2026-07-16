@@ -20,6 +20,7 @@ import com.lanxin.android.builtin.systemtools.domain.AlarmClockGateway
 import com.lanxin.android.builtin.systemtools.domain.AlarmClockResult
 import com.lanxin.android.builtin.systemtools.domain.AlarmClockTimeResolver
 import com.lanxin.android.builtin.systemtools.domain.AlarmIntentBuilder
+import com.lanxin.android.builtin.systemtools.domain.CalendarCreateResult
 import com.lanxin.android.builtin.systemtools.domain.CalendarEvent
 import com.lanxin.android.builtin.systemtools.domain.CalendarGateway
 import com.lanxin.android.builtin.systemtools.domain.CalendarListResult
@@ -32,7 +33,9 @@ import com.lanxin.android.builtin.systemtools.domain.DeviceTool
 import com.lanxin.android.builtin.systemtools.domain.DeviceToolIds
 import com.lanxin.android.builtin.systemtools.domain.DeviceToolOutcome
 import com.lanxin.android.builtin.systemtools.domain.DeviceToolSideEffect
+import com.lanxin.android.builtin.systemtools.domain.IntentLaunchResult
 import com.lanxin.android.builtin.systemtools.domain.SetAlarmClockRequest
+import com.lanxin.android.builtin.systemtools.domain.SystemToolsIntentLauncher
 import com.lanxin.android.builtin.systemtools.domain.boolArg
 import com.lanxin.android.builtin.systemtools.domain.intArg
 import javax.inject.Inject
@@ -41,19 +44,20 @@ import javax.inject.Singleton
 /**
  * Phase 7.2 设备工具实现。
  *
- * - [AlarmSetDeviceTool]：默认 setAlarmClock；`mode=intent` 时回退 AlarmClock Intent 规格
- * - [AlarmShowDeviceTool]：SHOW_ALARMS Intent 规格
+ * - [AlarmSetDeviceTool]：默认 setAlarmClock；`mode=intent` 时 startActivity SET_ALARM
+ * - [AlarmShowDeviceTool]：startActivity SHOW_ALARMS
  * - [CalendarListUpcomingDeviceTool]：CalendarContract / stub Gateway
- * - [CalendarCreateEventDeviceTool]：stub 写入（优先后续 Intent）
+ * - [CalendarCreateEventDeviceTool]：优先 INSERT Intent；`mode=stub` 内存写入
  * - Notes 三件套：内存笔记
  */
 @Singleton
 class AlarmSetDeviceTool @Inject constructor(
-    private val alarmClock: AlarmClockGateway
+    private val alarmClock: AlarmClockGateway,
+    private val intentLauncher: SystemToolsIntentLauncher
 ) : DeviceTool {
     override val name = DeviceToolIds.ALARM_SET
     override val description =
-        "设置闹钟：默认 AlarmManager.setAlarmClock；mode=intent 时用系统 AlarmClock Intent"
+        "设置闹钟：默认 AlarmManager.setAlarmClock；mode=intent 时 startActivity SET_ALARM"
     override val capability = DeviceCapability.ALARM
     override val permissions = listOf(DevicePermission.NONE)
     override val sideEffect = DeviceToolSideEffect.LAUNCH_INTENT
@@ -71,18 +75,28 @@ class AlarmSetDeviceTool @Inject constructor(
     private fun invokeIntentMode(args: Map<String, Any?>): DeviceToolOutcome {
         return try {
             val spec = AlarmIntentBuilder.fromSetAlarmArgs(args)
-            DeviceToolOutcome.Ok(
-                data = mapOf(
-                    "ok" to true,
-                    "mode" to "intent",
-                    "action" to spec.action,
-                    "extras" to spec.extras,
-                    "description" to spec.description,
-                    "launched" to false,
-                    "note" to "Intent 规格；宿主可 startActivity，本工具不强制启动"
-                ),
-                message = spec.description
-            )
+            when (val result = intentLauncher.launch(spec.toLaunchSpec())) {
+                is IntentLaunchResult.Ok -> DeviceToolOutcome.Ok(
+                    data = mapOf(
+                        "ok" to true,
+                        "mode" to "intent",
+                        "action" to result.action,
+                        "extras" to spec.extras,
+                        "description" to result.description.ifBlank { spec.description },
+                        "launched" to result.launched,
+                        "resolved_activity" to result.resolvedActivity
+                    ),
+                    message = result.description.ifBlank { spec.description }
+                )
+                is IntentLaunchResult.ActivityNotFound -> DeviceToolOutcome.Error(
+                    message = result.message,
+                    code = "activity_not_found"
+                )
+                is IntentLaunchResult.Error -> DeviceToolOutcome.Error(
+                    message = result.message,
+                    code = result.code
+                )
+            }
         } catch (e: IllegalArgumentException) {
             DeviceToolOutcome.Error(message = e.message ?: "invalid args", code = "invalid_args")
         }
@@ -138,9 +152,11 @@ class AlarmSetDeviceTool @Inject constructor(
 }
 
 @Singleton
-class AlarmShowDeviceTool @Inject constructor() : DeviceTool {
+class AlarmShowDeviceTool @Inject constructor(
+    private val intentLauncher: SystemToolsIntentLauncher
+) : DeviceTool {
     override val name = DeviceToolIds.ALARM_SHOW
-    override val description = "打开系统闹钟列表（AlarmClock.ACTION_SHOW_ALARMS）"
+    override val description = "打开系统闹钟列表（AlarmClock.ACTION_SHOW_ALARMS + startActivity）"
     override val capability = DeviceCapability.ALARM
     override val permissions = listOf(DevicePermission.NONE)
     override val sideEffect = DeviceToolSideEffect.LAUNCH_INTENT
@@ -148,15 +164,26 @@ class AlarmShowDeviceTool @Inject constructor() : DeviceTool {
 
     override suspend fun invoke(args: Map<String, Any?>, confirmed: Boolean): DeviceToolOutcome {
         val spec = AlarmIntentBuilder.showAlarms()
-        return DeviceToolOutcome.Ok(
-            data = mapOf(
-                "ok" to true,
-                "action" to spec.action,
-                "launched" to false,
-                "description" to spec.description
-            ),
-            message = spec.description
-        )
+        return when (val result = intentLauncher.launch(spec.toLaunchSpec())) {
+            is IntentLaunchResult.Ok -> DeviceToolOutcome.Ok(
+                data = mapOf(
+                    "ok" to true,
+                    "action" to result.action,
+                    "launched" to result.launched,
+                    "resolved_activity" to result.resolvedActivity,
+                    "description" to result.description.ifBlank { spec.description }
+                ),
+                message = result.description.ifBlank { spec.description }
+            )
+            is IntentLaunchResult.ActivityNotFound -> DeviceToolOutcome.Error(
+                message = result.message,
+                code = "activity_not_found"
+            )
+            is IntentLaunchResult.Error -> DeviceToolOutcome.Error(
+                message = result.message,
+                code = result.code
+            )
+        }
     }
 }
 
@@ -207,12 +234,14 @@ class CalendarListUpcomingDeviceTool @Inject constructor(
 
 @Singleton
 class CalendarCreateEventDeviceTool @Inject constructor(
-    private val gateway: CalendarGateway
+    private val gateway: CalendarGateway,
+    private val stubGateway: StubCalendarGateway
 ) : DeviceTool {
     override val name = DeviceToolIds.CALENDAR_CREATE_EVENT
-    override val description = "创建简单日历事件（当前 stub；优先后续 Intent 少权限）"
+    override val description =
+        "创建日历事件：默认系统日历 INSERT Intent（少权限）；mode=stub 内存写入"
     override val capability = DeviceCapability.CALENDAR
-    override val permissions = listOf(DevicePermission.WRITE_CALENDAR)
+    override val permissions = listOf(DevicePermission.NONE)
     override val sideEffect = DeviceToolSideEffect.WRITE
     override val confirmationLevel = ConfirmationLevel.CONFIRM
 
@@ -224,23 +253,57 @@ class CalendarCreateEventDeviceTool @Inject constructor(
         val end = (args["end_epoch_ms"] as? Number)?.toLong()
             ?: args["end_epoch_ms"]?.toString()?.toLongOrNull()
             ?: (start + 3_600_000L)
+        val request = CreateCalendarEventRequest(
+            title = title.ifBlank { "未命名事件" },
+            startEpochMs = start,
+            endEpochMs = end,
+            location = args["location"]?.toString(),
+            description = args["description"]?.toString()
+        )
+        val mode = args["mode"]?.toString()?.lowercase()?.trim().orEmpty()
         return try {
-            val event = gateway.create(
-                CreateCalendarEventRequest(
-                    title = title.ifBlank { "未命名事件" },
-                    startEpochMs = start,
-                    endEpochMs = end,
-                    location = args["location"]?.toString(),
-                    description = args["description"]?.toString()
-                )
-            )
-            DeviceToolOutcome.Ok(
-                data = mapOf("ok" to true, "stub" to true, "event" to event.toMap()),
-                message = "已创建事件 ${event.id}"
-            )
+            val result = if (mode == "stub") {
+                stubGateway.create(request)
+            } else {
+                gateway.create(request)
+            }
+            mapCreateResult(result)
         } catch (e: IllegalArgumentException) {
             DeviceToolOutcome.Error(e.message ?: "create failed", "invalid_args")
         }
+    }
+
+    private fun mapCreateResult(result: CalendarCreateResult): DeviceToolOutcome = when (result) {
+        is CalendarCreateResult.Created -> DeviceToolOutcome.Ok(
+            data = mapOf(
+                "ok" to true,
+                "mode" to if (result.stub) "stub" else "provider",
+                "stub" to result.stub,
+                "event" to result.event.toMap()
+            ),
+            message = "已创建事件 ${result.event.id}"
+        )
+        is CalendarCreateResult.IntentLaunched -> DeviceToolOutcome.Ok(
+            data = mapOf(
+                "ok" to true,
+                "mode" to "intent",
+                "launched" to true,
+                "action" to result.action,
+                "resolved_activity" to result.resolvedActivity,
+                "title" to result.request.title,
+                "start_epoch_ms" to result.request.startEpochMs,
+                "end_epoch_ms" to result.request.endEpochMs
+            ),
+            message = result.description
+        )
+        is CalendarCreateResult.ActivityNotFound -> DeviceToolOutcome.Error(
+            message = result.message,
+            code = "activity_not_found"
+        )
+        is CalendarCreateResult.Error -> DeviceToolOutcome.Error(
+            message = result.message,
+            code = result.code
+        )
     }
 }
 

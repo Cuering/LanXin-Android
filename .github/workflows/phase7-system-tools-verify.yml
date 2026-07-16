@@ -44,8 +44,11 @@ jobs:
           grep -q 'DeviceTool' app/src/main/kotlin/com/lanxin/android/builtin/systemtools/domain/DeviceTool.kt 2>/dev/null || { echo 'Missing DeviceTool interface'; exit 1; }
           test -f app/src/main/kotlin/com/lanxin/android/builtin/systemtools/data/AndroidCalendarReader.kt || { echo 'Missing AndroidCalendarReader'; exit 1; }
           test -f app/src/main/kotlin/com/lanxin/android/builtin/systemtools/data/AndroidAlarmSetter.kt || { echo 'Missing AndroidAlarmSetter'; exit 1; }
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/systemtools/data/AndroidSystemToolsIntentLauncher.kt || { echo 'Missing IntentLauncher'; exit 1; }
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/systemtools/domain/CalendarIntentBuilder.kt || { echo 'Missing CalendarIntentBuilder'; exit 1; }
           test -f app/src/main/kotlin/com/lanxin/android/builtin/systemtools/receiver/SystemToolsAlarmReceiver.kt || { echo 'Missing SystemToolsAlarmReceiver'; exit 1; }
           grep -q 'READ_CALENDAR' app/src/main/AndroidManifest.xml || { echo 'Missing READ_CALENDAR permission'; exit 1; }
+          grep -q 'SystemToolsIntentLauncher' app/src/main/kotlin/com/lanxin/android/builtin/systemtools/data/StubDeviceTools.kt || { echo 'alarm/calendar tools must use IntentLauncher'; exit 1; }
           grep -q '7.2' docs/system-tools.md || { echo 'docs must mention 7.2'; exit 1; }
 
       - name: Surface check - no model curl

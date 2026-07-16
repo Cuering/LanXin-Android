@@ -19,7 +19,7 @@
 > - Phase 6 主线 M1：妹居风格桌宠 + VoiceSession 听→想→说 ✅（#48 已合 main）
 > - Phase 6 主线 M2a：资源路径就绪 + 设置体验 + fetch 脚本指引 🚧（#49 / `feat/phase6-pet-m2-engines`）
 > - Phase 7.1：系统工具骨架 ✅（#52）——DeviceTool + Gate + stub + 设置总开关；**陪伴操控一体**
-> - Phase 7.2：日历读取 + setAlarmClock 🚧（`feat/phase7.2-calendar-alarm`）——Instances + 精确闹钟 + 权限引导
+> - Phase 7.2：闹钟 Intent 真启动 + 日历读/写 🚧（`feat/phase7.2-calendar-alarm`）——SET_ALARM/SHOW_ALARMS startActivity + Instances + INSERT Intent + 确认流
 
 ---
 
@@ -713,7 +713,7 @@ app/.../plugins/unifiedinbox/
 | 阶段 | 内容 | 优先级 | 状态 |
 |------|------|--------|------|
 | **7.1 骨架** | `DeviceTool` 接口 + 权限门闸 + Fake/Stub + 单测 + 设置总开关 + 本文档 | 🔴 高 | ✅ |
-| **7.2 闹钟 + 日历** | `setAlarmClock` + 权限引导；日历 Instances 读列表 + 创建确认流 | 🔴 高 | 🚧 |
+| **7.2 闹钟 + 日历** | Intent 真 startActivity + setAlarmClock；日历 Instances + INSERT Intent + 确认流 + 权限引导 | 🔴 高 | 🚧 |
 | **7.3 笔记** | 应用内笔记 CRUD + 导出/分享 | 🟡 中 | 🔜 |
 | **7.4 文件** | SAF 授权目录列表、读文本摘要、写/分享/删（确认） | 🔴 高 | 🔜 |
 | **7.5 对话/桌宠一体接入** | ChatRouter `needsTools` + **桌宠 VoiceSession 同一链路**调工具（听→想→办→说） | 🔴 高 | 🔜 |

@@ -16,6 +16,7 @@
 
 package com.lanxin.android.builtin.systemtools.data
 
+import com.lanxin.android.builtin.systemtools.domain.CalendarCreateResult
 import com.lanxin.android.builtin.systemtools.domain.CalendarEvent
 import com.lanxin.android.builtin.systemtools.domain.CalendarGateway
 import com.lanxin.android.builtin.systemtools.domain.CalendarListResult
@@ -53,7 +54,7 @@ class StubCalendarGateway @Inject constructor() : CalendarGateway {
         return CalendarListResult.Ok(list)
     }
 
-    override fun create(request: CreateCalendarEventRequest): CalendarEvent {
+    override fun create(request: CreateCalendarEventRequest): CalendarCreateResult {
         require(request.title.isNotBlank()) { "title 不能为空" }
         require(request.endEpochMs >= request.startEpochMs) { "end 必须 ≥ start" }
         val event = CalendarEvent(
@@ -64,7 +65,7 @@ class StubCalendarGateway @Inject constructor() : CalendarGateway {
             location = request.location
         )
         events.add(event)
-        return event
+        return CalendarCreateResult.Created(event = event, stub = true)
     }
 
     /** 单测用：清空并重置样例。 */

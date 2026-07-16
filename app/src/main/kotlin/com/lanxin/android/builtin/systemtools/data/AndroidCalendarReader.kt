@@ -22,24 +22,30 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.provider.CalendarContract
 import androidx.core.content.ContextCompat
+import com.lanxin.android.builtin.systemtools.domain.CalendarCreateResult
 import com.lanxin.android.builtin.systemtools.domain.CalendarEvent
 import com.lanxin.android.builtin.systemtools.domain.CalendarGateway
+import com.lanxin.android.builtin.systemtools.domain.CalendarIntentBuilder
 import com.lanxin.android.builtin.systemtools.domain.CalendarListResult
 import com.lanxin.android.builtin.systemtools.domain.CalendarQueryParams
 import com.lanxin.android.builtin.systemtools.domain.CreateCalendarEventRequest
+import com.lanxin.android.builtin.systemtools.domain.IntentLaunchResult
+import com.lanxin.android.builtin.systemtools.domain.SystemToolsIntentLauncher
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * 真机日历读取：ContentResolver + [CalendarContract.Instances]。
+ * 真机日历：
+ * - 读：[CalendarContract.Instances]
+ * - 写：优先 Intent（`ACTION_INSERT` + Events.CONTENT_URI），不申请 WRITE_CALENDAR
  *
- * - 无 `READ_CALENDAR` 时返回 [CalendarListResult.PermissionDenied]，不崩溃
- * - 写操作（create）本阶段仍走 stub / 后续 Intent，避免强依赖 WRITE_CALENDAR
+ * 无 `READ_CALENDAR` 时 list 返回 [CalendarListResult.PermissionDenied]，不崩溃。
  */
 @Singleton
 class AndroidCalendarReader @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val intentLauncher: SystemToolsIntentLauncher,
     private val stubFallback: StubCalendarGateway
 ) : CalendarGateway {
 
@@ -67,10 +73,33 @@ class AndroidCalendarReader @Inject constructor(
         }
     }
 
-    override fun create(request: CreateCalendarEventRequest): CalendarEvent {
-        // Phase 7.2：写日历仍用 stub（优先后续 Intent 少权限路径）
-        return stubFallback.create(request)
+    override fun create(request: CreateCalendarEventRequest): CalendarCreateResult {
+        // 优先 Intent 少权限；mode=stub 由 DeviceTool 层直接走 StubCalendarGateway
+        return try {
+            require(request.endEpochMs >= request.startEpochMs) { "end 必须 ≥ start" }
+            val spec = CalendarIntentBuilder.fromCreateRequest(request)
+            when (val result = intentLauncher.launch(spec)) {
+                is IntentLaunchResult.Ok -> CalendarCreateResult.IntentLaunched(
+                    action = result.action,
+                    description = result.description.ifBlank { spec.description },
+                    resolvedActivity = result.resolvedActivity,
+                    request = request
+                )
+                is IntentLaunchResult.ActivityNotFound ->
+                    CalendarCreateResult.ActivityNotFound(result.message)
+                is IntentLaunchResult.Error ->
+                    CalendarCreateResult.Error(result.message, result.code)
+            }
+        } catch (e: IllegalArgumentException) {
+            CalendarCreateResult.Error(e.message ?: "invalid args", "invalid_args")
+        } catch (e: Exception) {
+            CalendarCreateResult.Error(e.message ?: e.toString())
+        }
     }
+
+    /** 单测 / 降级：内存 stub 写入。 */
+    fun createStub(request: CreateCalendarEventRequest): CalendarCreateResult =
+        stubFallback.create(request)
 
     fun hasReadCalendarPermission(): Boolean {
         return ContextCompat.checkSelfPermission(

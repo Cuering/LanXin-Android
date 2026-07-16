@@ -35,7 +35,35 @@ interface CalendarGateway {
         days: Int = 7
     ): CalendarListResult
 
-    fun create(request: CreateCalendarEventRequest): CalendarEvent
+    /**
+     * 创建事件。
+     *
+     * 真机默认走 Intent 少权限路径，返回 [CalendarCreateResult.IntentLaunched]；
+     * stub 内存写入返回 [CalendarCreateResult.Created]。
+     */
+    fun create(request: CreateCalendarEventRequest): CalendarCreateResult
+}
+
+/** 日历创建结果（Intent 路径 / stub / 错误）。 */
+sealed class CalendarCreateResult {
+    /** stub 或 ContentProvider 直接写入成功。 */
+    data class Created(
+        val event: CalendarEvent,
+        val stub: Boolean = true
+    ) : CalendarCreateResult()
+
+    /** 已调起系统日历 INSERT Intent（用户在系统 UI 确认）。 */
+    data class IntentLaunched(
+        val action: String,
+        val description: String,
+        val resolvedActivity: String? = null,
+        val request: CreateCalendarEventRequest
+    ) : CalendarCreateResult()
+
+    data class ActivityNotFound(val message: String) : CalendarCreateResult()
+
+    data class Error(val message: String, val code: String = "calendar_create_error") :
+        CalendarCreateResult()
 }
 
 /** 日历列表结果（含权限/错误语义，不抛崩溃）。 */

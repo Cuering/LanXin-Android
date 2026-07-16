@@ -17,15 +17,20 @@
 package com.lanxin.android.builtin.systemtools
 
 import com.lanxin.android.builtin.systemtools.data.AlarmSetDeviceTool
+import com.lanxin.android.builtin.systemtools.data.AlarmShowDeviceTool
 import com.lanxin.android.builtin.systemtools.domain.AlarmClockGateway
 import com.lanxin.android.builtin.systemtools.domain.AlarmClockResult
 import com.lanxin.android.builtin.systemtools.domain.AlarmClockTimeResolver
 import com.lanxin.android.builtin.systemtools.domain.AlarmIntentBuilder
 import com.lanxin.android.builtin.systemtools.domain.DeviceToolIds
 import com.lanxin.android.builtin.systemtools.domain.DeviceToolOutcome
+import com.lanxin.android.builtin.systemtools.domain.IntentLaunchResult
+import com.lanxin.android.builtin.systemtools.domain.IntentLaunchSpec
 import com.lanxin.android.builtin.systemtools.domain.SetAlarmClockRequest
+import com.lanxin.android.builtin.systemtools.domain.SystemToolsIntentLauncher
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -49,16 +54,35 @@ class AlarmSetterTest {
         }
     }
 
+    private class RecordingLauncher(
+        private val result: (IntentLaunchSpec) -> IntentLaunchResult = {
+            IntentLaunchResult.Ok(
+                action = it.action,
+                launched = true,
+                resolvedActivity = "fake/.Alarm",
+                description = it.description
+            )
+        }
+    ) : SystemToolsIntentLauncher {
+        var lastSpec: IntentLaunchSpec? = null
+        var launchCount = 0
+        override fun launch(spec: IntentLaunchSpec): IntentLaunchResult {
+            lastSpec = spec
+            launchCount++
+            return result(spec)
+        }
+    }
+
     @Test
     fun `tool name is stable`() {
-        val tool = AlarmSetDeviceTool(FakeAlarmClock())
+        val tool = AlarmSetDeviceTool(FakeAlarmClock(), RecordingLauncher())
         assertEquals(DeviceToolIds.ALARM_SET, tool.name)
     }
 
     @Test
     fun `setAlarmClock schedules with hour minutes`() = runBlocking {
         val fake = FakeAlarmClock()
-        val tool = AlarmSetDeviceTool(fake)
+        val tool = AlarmSetDeviceTool(fake, RecordingLauncher())
         val outcome = tool.invoke(
             mapOf("hour" to 8, "minutes" to 30, "message" to "起床"),
             confirmed = true
@@ -74,7 +98,7 @@ class AlarmSetterTest {
     @Test
     fun `setAlarmClock with absolute trigger`() = runBlocking {
         val fake = FakeAlarmClock()
-        val tool = AlarmSetDeviceTool(fake)
+        val tool = AlarmSetDeviceTool(fake, RecordingLauncher())
         val trigger = System.currentTimeMillis() + 60_000L
         val outcome = tool.invoke(
             mapOf("trigger_at_epoch_ms" to trigger, "message" to "药"),
@@ -90,7 +114,7 @@ class AlarmSetterTest {
             canExact = false,
             onSet = { AlarmClockResult.NeedsExactAlarmPermission() }
         )
-        val tool = AlarmSetDeviceTool(fake)
+        val tool = AlarmSetDeviceTool(fake, RecordingLauncher())
         val outcome = tool.invoke(
             mapOf("hour" to 9, "minutes" to 0),
             confirmed = true
@@ -103,11 +127,12 @@ class AlarmSetterTest {
     }
 
     @Test
-    fun `intent mode builds AlarmClock spec without gateway`() = runBlocking {
+    fun `intent mode launches SET_ALARM via launcher`() = runBlocking {
         val fake = FakeAlarmClock(
             onSet = { error("should not call setAlarmClock in intent mode") }
         )
-        val tool = AlarmSetDeviceTool(fake)
+        val launcher = RecordingLauncher()
+        val tool = AlarmSetDeviceTool(fake, launcher)
         val outcome = tool.invoke(
             mapOf(
                 "mode" to "intent",
@@ -119,7 +144,36 @@ class AlarmSetterTest {
         ) as DeviceToolOutcome.Ok
         assertEquals("intent", outcome.data["mode"])
         assertEquals(AlarmIntentBuilder.ACTION_SET_ALARM, outcome.data["action"])
-        assertEquals(null, fake.lastRequest)
+        assertEquals(true, outcome.data["launched"])
+        assertEquals(1, launcher.launchCount)
+        assertEquals(AlarmIntentBuilder.ACTION_SET_ALARM, launcher.lastSpec!!.action)
+        assertEquals(7, launcher.lastSpec!!.extras[AlarmIntentBuilder.EXTRA_HOUR])
+        assertEquals(15, launcher.lastSpec!!.extras[AlarmIntentBuilder.EXTRA_MINUTES])
+        assertNull(fake.lastRequest)
+    }
+
+    @Test
+    fun `intent mode activity not found maps to error`() = runBlocking {
+        val launcher = RecordingLauncher {
+            IntentLaunchResult.ActivityNotFound("no clock app", it.action)
+        }
+        val tool = AlarmSetDeviceTool(FakeAlarmClock(), launcher)
+        val outcome = tool.invoke(
+            mapOf("mode" to "intent", "hour" to 6, "minutes" to 0),
+            confirmed = true
+        )
+        assertTrue(outcome is DeviceToolOutcome.Error)
+        assertEquals("activity_not_found", (outcome as DeviceToolOutcome.Error).code)
+    }
+
+    @Test
+    fun `alarm_show launches SHOW_ALARMS`() = runBlocking {
+        val launcher = RecordingLauncher()
+        val tool = AlarmShowDeviceTool(launcher)
+        val outcome = tool.invoke(emptyMap()) as DeviceToolOutcome.Ok
+        assertEquals(AlarmIntentBuilder.ACTION_SHOW_ALARMS, outcome.data["action"])
+        assertEquals(true, outcome.data["launched"])
+        assertEquals(AlarmIntentBuilder.ACTION_SHOW_ALARMS, launcher.lastSpec!!.action)
     }
 
     @Test
@@ -163,7 +217,7 @@ class AlarmSetterTest {
 
     @Test
     fun `missing hour without trigger returns error`() = runBlocking {
-        val tool = AlarmSetDeviceTool(FakeAlarmClock())
+        val tool = AlarmSetDeviceTool(FakeAlarmClock(), RecordingLauncher())
         val outcome = tool.invoke(mapOf("minutes" to 0), confirmed = true)
         assertTrue(outcome is DeviceToolOutcome.Error)
         assertEquals("invalid_args", (outcome as DeviceToolOutcome.Error).code)

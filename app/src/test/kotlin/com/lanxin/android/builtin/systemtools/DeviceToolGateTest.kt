@@ -17,19 +17,48 @@
 package com.lanxin.android.builtin.systemtools
 
 import com.lanxin.android.builtin.systemtools.data.AlarmSetDeviceTool
+import com.lanxin.android.builtin.systemtools.data.CalendarCreateEventDeviceTool
 import com.lanxin.android.builtin.systemtools.data.CalendarListUpcomingDeviceTool
 import com.lanxin.android.builtin.systemtools.data.StubCalendarGateway
+import com.lanxin.android.builtin.systemtools.domain.AlarmClockGateway
+import com.lanxin.android.builtin.systemtools.domain.AlarmClockResult
 import com.lanxin.android.builtin.systemtools.domain.DeviceToolGate
 import com.lanxin.android.builtin.systemtools.domain.DeviceToolOutcome
+import com.lanxin.android.builtin.systemtools.domain.IntentLaunchResult
+import com.lanxin.android.builtin.systemtools.domain.IntentLaunchSpec
+import com.lanxin.android.builtin.systemtools.domain.SetAlarmClockRequest
 import com.lanxin.android.builtin.systemtools.domain.SystemToolsConfig
+import com.lanxin.android.builtin.systemtools.domain.SystemToolsIntentLauncher
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DeviceToolGateTest {
 
-    private val alarm = AlarmSetDeviceTool()
+    private class OkAlarmClock : AlarmClockGateway {
+        override fun canScheduleExactAlarms() = true
+        override fun setAlarmClock(request: SetAlarmClockRequest) = AlarmClockResult.Ok(
+            triggerAtEpochMs = request.triggerAtEpochMs,
+            requestCode = 1,
+            message = request.message
+        )
+    }
+
+    private class OkLauncher : SystemToolsIntentLauncher {
+        override fun launch(spec: IntentLaunchSpec) = IntentLaunchResult.Ok(
+            action = spec.action,
+            launched = true,
+            description = spec.description
+        )
+    }
+
+    private val alarm = AlarmSetDeviceTool(OkAlarmClock(), OkLauncher())
     private val calendarList = CalendarListUpcomingDeviceTool(StubCalendarGateway())
+    private val calendarCreate = CalendarCreateEventDeviceTool(
+        StubCalendarGateway(),
+        StubCalendarGateway()
+    )
 
     @Test
     fun `master off denies`() = runBlocking {
@@ -65,7 +94,7 @@ class DeviceToolGateTest {
     }
 
     @Test
-    fun `write with confirm succeeds stub`() = runBlocking {
+    fun `write with confirm schedules alarm`() = runBlocking {
         val gate = DeviceToolGate {
             SystemToolsConfig(
                 masterEnabled = true,
@@ -76,8 +105,51 @@ class DeviceToolGateTest {
         val out = gate.invoke(alarm, mapOf("hour" to 8, "minutes" to 15), confirmed = true)
         assertTrue(out is DeviceToolOutcome.Ok)
         val data = (out as DeviceToolOutcome.Ok).data
-        assertTrue(data["action"] == "android.intent.action.SET_ALARM")
-        assertTrue(data["stub"] == true)
+        assertEquals("set_alarm_clock", data["mode"])
+        assertEquals(true, data["scheduled"])
+    }
+
+    @Test
+    fun `calendar create without confirm needs confirmation`() = runBlocking {
+        val gate = DeviceToolGate {
+            SystemToolsConfig(
+                masterEnabled = true,
+                calendarEnabled = true,
+                requireConfirmOnWrite = true
+            )
+        }
+        val out = gate.invoke(
+            calendarCreate,
+            mapOf(
+                "title" to "会",
+                "start_epoch_ms" to System.currentTimeMillis() + 60_000L,
+                "mode" to "stub"
+            ),
+            confirmed = false
+        )
+        assertTrue(out is DeviceToolOutcome.NeedsConfirmation)
+    }
+
+    @Test
+    fun `calendar create with confirm succeeds stub`() = runBlocking {
+        val gate = DeviceToolGate {
+            SystemToolsConfig(
+                masterEnabled = true,
+                calendarEnabled = true,
+                requireConfirmOnWrite = true
+            )
+        }
+        val out = gate.invoke(
+            calendarCreate,
+            mapOf(
+                "title" to "会",
+                "start_epoch_ms" to System.currentTimeMillis() + 60_000L,
+                "mode" to "stub"
+            ),
+            confirmed = true
+        )
+        assertTrue(out is DeviceToolOutcome.Ok)
+        assertEquals("stub", (out as DeviceToolOutcome.Ok).data["mode"])
     }
 
     @Test

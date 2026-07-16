@@ -123,14 +123,14 @@ fun SystemToolsScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "Phase 7.2 · 日历读取 + 精确闹钟",
+                        text = "Phase 7.2 · 日历 + 闹钟 Intent",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "日历：CalendarContract.Instances（READ_CALENDAR）。" +
-                            "闹钟：AlarmManager.setAlarmClock（可回退 AlarmClock Intent）。" +
+                        text = "日历：读 Instances（READ_CALENDAR）；写优先 INSERT Intent。" +
+                            "闹钟：setAlarmClock 默认；mode=intent 真 startActivity。" +
                             "默认全关；写操作默认需 confirmed。",
                         style = MaterialTheme.typography.bodyMedium
                     )
@@ -195,14 +195,14 @@ fun SystemToolsScreen(
             )
             SwitchRow(
                 title = "日历",
-                description = "list（Instances）/ create（stub，需确认）",
+                description = "list（Instances）/ create（INSERT Intent，需确认）",
                 checked = config.calendarEnabled,
                 onCheckedChange = viewModel::setCalendar,
                 enabled = config.masterEnabled
             )
             SwitchRow(
                 title = "闹钟",
-                description = "setAlarmClock 默认；mode=intent 用系统时钟 App",
+                description = "setAlarmClock 默认；mode=intent 真启动系统时钟 App",
                 checked = config.alarmEnabled,
                 onCheckedChange = viewModel::setAlarm,
                 enabled = config.masterEnabled
