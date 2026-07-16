@@ -137,7 +137,7 @@ app/src/main/kotlin/com/lanxin/android/builtin/systemtools/
 | **7.1 骨架** | DeviceTool + 门闸 + Stub + 设置 | ✅ |
 | **7.2 闹钟 + 日历** | Intent 真启动 + setAlarmClock；日历 Instances + INSERT Intent + 确认流 + 权限引导 | ✅ |
 | **7.3 笔记** | Room CRUD + SAF 导出/导入 + 设置状态 | ✅ |
-| **7.4 文件** | SAF 选取/导入 + imports 列表/读/写/分享/删 | 🚧 本 PR |
+| **7.4 文件** | SAF 选取/导入 + imports 列表/读/写/分享/删 | 🚧 |
 | **7.5 一体接入** | ChatRouter + VoiceSession tool 钩子 | 🔜 |
 | **7.6 打磨** | UX / 审计 | 🔜 |
 
