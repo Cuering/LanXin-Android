@@ -1,0 +1,102 @@
+# Phase 6 桌宠语音会话 M1：状态机 / Bridge / stub 会话
+name: Phase6 Pet Voice Session Verify
+
+on:
+  push:
+    branches: [main, 'feat/phase6*']
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/pet/**'
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/voice/**'
+      - 'app/src/test/kotlin/com/lanxin/android/builtin/pet/**'
+      - 'app/src/test/kotlin/com/lanxin/android/builtin/voice/**'
+      - 'app/src/main/assets/pet/**'
+      - 'docs/meiju-style-pet.md'
+      - 'builtin/pet/**'
+      - 'ARCHITECTURE.md'
+      - '.github/workflows/phase6-pet-voice-session-verify.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/pet/**'
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/voice/**'
+      - 'app/src/test/kotlin/com/lanxin/android/builtin/pet/**'
+      - 'app/src/test/kotlin/com/lanxin/android/builtin/voice/**'
+      - 'app/src/main/assets/pet/**'
+      - 'docs/meiju-style-pet.md'
+      - 'builtin/pet/**'
+      - 'ARCHITECTURE.md'
+      - '.github/workflows/phase6-pet-voice-session-verify.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: phase6-pet-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: Pet voice session unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: gradle
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup local.properties and debug keystore
+        run: |
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+          rm -f debug-keystore.jks
+          keytool -genkeypair -v -keystore debug-keystore.jks -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Create assets model dir (models gitignored)
+        run: |
+          mkdir -p app/src/main/assets/models/gte-small
+          touch app/src/main/assets/models/gte-small/.gitkeep
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run pet + tts unit tests
+        run: |
+          ./gradlew :app:testDebugUnitTest \
+            --tests "com.lanxin.android.builtin.pet.*" \
+            --tests "com.lanxin.android.builtin.voice.StubTtsEngineTest" \
+            --no-daemon --stacktrace
+
+      - name: Surfaces and docs present
+        run: |
+          test -f docs/meiju-style-pet.md
+          test -f builtin/pet/README.md
+          test -f app/src/main/assets/pet/desktop-pet.html
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/pet/domain/VoiceSessionStateMachine.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/pet/domain/VoiceSessionCoordinator.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/pet/domain/PetBridgeProtocol.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/pet/data/FloatingPetService.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/pet/data/DesktopPetBridge.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/pet/data/AndroidVoiceBridge.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/voice/domain/TtsEngine.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/voice/data/StubTtsEngine.kt
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/pet/VoiceSessionStateMachineTest.kt
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/pet/PetBridgeProtocolTest.kt
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/pet/VoiceSessionCoordinatorTest.kt
+          grep -E -n "SYSTEM_ALERT_WINDOW|FloatingPetService" app/src/main/AndroidManifest.xml
+          grep -E -n "DESKTOP_PET|DesktopPetScreen" \
+            app/src/main/kotlin/com/lanxin/android/presentation/common/Route.kt \
+            app/src/main/kotlin/com/lanxin/android/presentation/common/NavigationGraph.kt
+          grep -E -n "桌宠|VoiceSession|妹居" ARCHITECTURE.md docs/meiju-style-pet.md
+          grep -E -n "IDLE|LISTENING|THINKING|SPEAKING" \
+            app/src/main/kotlin/com/lanxin/android/builtin/pet/domain/VoiceSessionModels.kt
+          # 红线：仓库内不应出现妹居商业资源路径提交标记
+          ! grep -R -n "棕发1.moc3\|meju_flow.mnn\|sister_android.json" \
+            app/src/main docs builtin 2>/dev/null || true

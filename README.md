@@ -53,6 +53,19 @@ app/         壳应用（Compose UI 入口）
 | [builtin/statistics/README.md](./builtin/statistics/README.md) | 数据统计 |
 | [builtin/scheduler/README.md](./builtin/scheduler/README.md) | 定时任务 |
 | [builtin/platform/README.md](./builtin/platform/README.md) | 手机平台工具 |
+| [docs/debug-assets.md](./docs/debug-assets.md) | Debug：免费 Live2D + 开源 ASR/TTS 资源 |
+| [builtin/pet/README.md](./builtin/pet/README.md) | 桌宠 / 语音陪伴（Phase 6） |
+| [docs/meiju-style-pet.md](./docs/meiju-style-pet.md) | 妹居风格架构对照（资源不入库） |
+
+### Debug 语音 / Live2D 资源
+
+大模型**不进 git**。需要本机调试时：
+
+```bash
+bash scripts/download-debug-assets.sh
+```
+
+详见 [docs/debug-assets.md](./docs/debug-assets.md)。
 
 ## License
 

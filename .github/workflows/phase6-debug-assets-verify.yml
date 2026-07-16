@@ -1,0 +1,90 @@
+# Phase 6 Debug Assets：只检查文档/脚本/目录约定存在；不下载大模型
+name: Phase6 Debug Assets Verify
+
+on:
+  push:
+    branches: [main, 'feat/phase6*']
+    paths:
+      - 'docs/debug-assets.md'
+      - 'docs/meiju-style-pet.md'
+      - 'scripts/download-debug-*.sh'
+      - 'debug-assets/**'
+      - 'builtin/pet/**'
+      - '.github/workflows/phase6-debug-assets-verify.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/debug-assets.md'
+      - 'docs/meiju-style-pet.md'
+      - 'scripts/download-debug-*.sh'
+      - 'debug-assets/**'
+      - 'builtin/pet/**'
+      - '.github/workflows/phase6-debug-assets-verify.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: phase6-debug-assets-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docs-and-scripts:
+    name: Docs + download scripts present
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Required files exist
+        run: |
+          set -euo pipefail
+          test -f docs/debug-assets.md
+          test -f docs/meiju-style-pet.md
+          test -f debug-assets/README.md
+          test -f scripts/download-debug-assets.sh
+          test -f scripts/download-debug-live2d.sh
+          test -f scripts/download-debug-asr.sh
+          test -f scripts/download-debug-tts.sh
+          test -f app/src/main/assets/pet/desktop-pet.html
+          test -f builtin/pet/README.md
+
+      - name: Scripts are bash + executable bits recommended
+        run: |
+          set -euo pipefail
+          for s in scripts/download-debug-assets.sh \
+                   scripts/download-debug-live2d.sh \
+                   scripts/download-debug-asr.sh \
+                   scripts/download-debug-tts.sh; do
+            head -1 "$s" | grep -qE 'bash|sh'
+            bash -n "$s"
+          done
+
+      - name: Docs mention open-source stack (not Meiju defaults)
+        run: |
+          set -euo pipefail
+          grep -E -n "Niziiro Mao|CubismWebSamples|sherpa-onnx|matcha|live2d_model_path|offline_asr_model_path|tts_model_dir" \
+            docs/debug-assets.md
+          grep -E -n "model-terms|Free Material|Sample Data" docs/debug-assets.md
+          grep -E -n "禁止|妹居" docs/debug-assets.md docs/meiju-style-pet.md
+
+      - name: gitignore covers large binaries
+        run: |
+          set -euo pipefail
+          grep -E -n 'debug-assets/\*\*|^\*\.onnx|\*\.moc3|models/live2d|models/tts|models/offline-asr' .gitignore
+
+      - name: Dry-run scripts (no network download)
+        run: |
+          set -euo pipefail
+          SKIP_DOWNLOAD=1 bash scripts/download-debug-assets.sh
+
+      - name: No commercial Meiju dump markers in tracked trees
+        run: |
+          set -euo pipefail
+          # 红线：不应在文档/脚本外误提交妹居资源文件名
+          if grep -R -n --include='*.kt' --include='*.xml' --include='*.json' \
+              -e '棕发1\.moc3' -e 'meju_flow\.mnn' -e 'sister_android\.json' \
+              app/src/main docs scripts builtin 2>/dev/null; then
+            echo "Found forbidden Meiju asset markers in source trees" >&2
+            exit 1
+          fi
+          echo "OK: no Meiju commercial dump markers"

@@ -97,7 +97,16 @@ docs/voice-asr.md   ← 本文
 
 - **禁止**提交真实 `.so`、ONNX 权重、tokens 大文件到 git
 - 真机：`adb push` 到 `filesDir/models/offline-asr/` 或外部存储后在设置页填绝对路径
-- 后续可文档化下载脚本；本 PR 不打包进 APK
+- **Debug 下载脚本**（推荐小模型）：
+
+```bash
+bash scripts/download-debug-asr.sh
+# 默认: sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23 (~70MB)
+# 备选: ASR_VARIANT=paraformer-small | bilingual-small
+```
+
+解压目录约定：`debug-assets/asr/<model>/`（gitignore）。  
+设置键：`offline_asr_model_path`。详见 [`docs/debug-assets.md`](./debug-assets.md)。
 
 ## Chat 接入（边界）
 

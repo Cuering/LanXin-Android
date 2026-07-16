@@ -1,0 +1,332 @@
+/*
+ * Copyright 2025 LanXin Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.lanxin.android.builtin.pet.presentation
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DesktopPetScreen(
+    onBackAction: () -> Unit,
+    viewModel: DesktopPetViewModel = hiltViewModel()
+) {
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    var live2dDraft by remember { mutableStateOf("") }
+    var ttsDirDraft by remember { mutableStateOf("") }
+    var ttsRefDraft by remember { mutableStateOf("") }
+
+    DisposableEffect(lifecycleOwner) {
+        val obs = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.refresh()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(obs)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
+    }
+
+    LaunchedEffect(state.live2dModelPathConfigured, state.ttsModelDirResolved, state.ttsReferenceResolved) {
+        // 仅在外部刷新时同步 draft（用户正在编辑时不强制覆盖已有输入）
+        if (live2dDraft.isEmpty()) live2dDraft = state.live2dModelPathConfigured
+        if (ttsDirDraft.isEmpty() && state.ttsModelDirResolved.isNotBlank()) {
+            // 展示 resolved 仅作 hint；保存时写配置
+        }
+    }
+
+    LaunchedEffect(state.snackbarMessage) {
+        state.snackbarMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearSnackbar()
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("桌宠 / 语音陪伴") },
+                navigationIcon = {
+                    IconButton(onClick = onBackAction) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "返回"
+                        )
+                    }
+                }
+            )
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 16.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                "妹居级体验骨架：路径配置一等公民 + 语音会话状态机。默认关，不偷偷录音/截屏。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            if (state.isBusy) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("总开关", fontWeight = FontWeight.SemiBold)
+                            Text(
+                                "关闭时不启动悬浮层、不跑会话",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        Switch(
+                            checked = state.enabled,
+                            onCheckedChange = viewModel::setEnabled
+                        )
+                    }
+                }
+            }
+
+            // 资源路径 + 来源标注（勿宣传为可分发）
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("资源路径", fontWeight = FontWeight.SemiBold)
+                    Text(
+                        state.live2dSourceLabel,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        "TTS：${state.ttsSourceLabel} · ASR：${state.asrSourceLabel}",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    if (state.isDebugBuild) {
+                        Text(
+                            "Debug：若 filesDir/meiju-ref 存在约定资源则自动选用；" +
+                                "妹居 so/moc3/mnn/wav 仅本地，禁止入库与分发。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        Text(
+                            "Release：不依赖妹居资源；路径空则占位。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    OutlinedTextField(
+                        value = live2dDraft,
+                        onValueChange = { live2dDraft = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("live2d_model_path") },
+                        placeholder = { Text("model3.json 绝对路径") },
+                        supportingText = {
+                            Text(
+                                "生效：" + state.live2dModelPathResolved.ifBlank { "（空 → 占位）" },
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        },
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = ttsDirDraft,
+                        onValueChange = { ttsDirDraft = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("tts_model_dir") },
+                        placeholder = { Text("TTS 模型目录") },
+                        supportingText = {
+                            Text(
+                                "生效：" + state.ttsModelDirResolved.ifBlank { "（空）" },
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        },
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = ttsRefDraft,
+                        onValueChange = { ttsRefDraft = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("tts_reference_audio") },
+                        placeholder = { Text("参考音 .wav") },
+                        supportingText = {
+                            Text(
+                                "生效：" + state.ttsReferenceResolved.ifBlank { "（空）" },
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        },
+                        singleLine = true
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            viewModel.setLive2dModelPath(live2dDraft)
+                            viewModel.setTtsModelDir(ttsDirDraft)
+                            viewModel.setTtsReferenceAudio(ttsRefDraft)
+                        }
+                    ) {
+                        Text("保存路径")
+                    }
+                    Text(
+                        "换 Live2D / TTS / ASR 只改设置项，不改 VoiceSession 状态机。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("悬浮权限", fontWeight = FontWeight.SemiBold)
+                    Text(
+                        if (state.canDrawOverlays) "已授予 SYSTEM_ALERT_WINDOW"
+                        else "未授予 — 需「显示在其他应用上层」",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    OutlinedButton(
+                        onClick = viewModel::requestOverlayPermission,
+                        enabled = !state.canDrawOverlays
+                    ) {
+                        Text(if (state.canDrawOverlays) "权限已就绪" else "去系统设置授权")
+                    }
+                }
+            }
+
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("桌宠控制", fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "悬浮层：${if (state.overlayRunning) "运行中" else "未运行"}",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = viewModel::startPet,
+                            enabled = state.enabled && state.canDrawOverlays
+                        ) { Text("启动桌宠") }
+                        OutlinedButton(onClick = viewModel::stopPet) {
+                            Text("停止桌宠")
+                        }
+                    }
+                }
+            }
+
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("语音会话", fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "IDLE → LISTENING → THINKING → SPEAKING → IDLE",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text("状态预览", fontWeight = FontWeight.Medium)
+                    Text(
+                        state.sessionPreview.ifBlank { "phase=IDLE" },
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    if (state.subtitle.isNotBlank()) {
+                        Text("气泡：${state.subtitle}", style = MaterialTheme.typography.bodyMedium)
+                    }
+                    Button(
+                        onClick = viewModel::runDemoRound,
+                        enabled = state.enabled && !state.isBusy
+                    ) {
+                        Text("试运行 stub 一轮（听→想→说）")
+                    }
+                    Text(
+                        "无需真 so / 真麦克风；气泡走桌宠会话，不塞 Chat 输入框。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+    }
+}

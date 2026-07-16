@@ -75,7 +75,8 @@ fun SettingScreen(
     onNavigateToPluginManager: () -> Unit = {},
     onNavigateToPluginMarket: () -> Unit = {},
     onNavigateToLocalInference: () -> Unit = {},
-    onNavigateToOfflineAsr: () -> Unit = {}
+    onNavigateToOfflineAsr: () -> Unit = {},
+    onNavigateToDesktopPet: () -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
     val scrollBehavior = pinnedExitUntilCollapsedScrollBehavior(
@@ -217,6 +218,14 @@ fun SettingScreen(
                 title = "离线语音识别",
                 description = "默认关；Sherpa-ONNX 骨架；试转写走 stub，不偷偷录音",
                 onItemClick = onNavigateToOfflineAsr,
+                showTrailingIcon = true,
+                showLeadingIcon = false
+            )
+
+            SettingItem(
+                title = "桌宠 / 语音陪伴",
+                description = "默认关；悬浮窗 + 听想说会话；stub 演示不塞 Chat 输入框",
+                onItemClick = onNavigateToDesktopPet,
                 showTrailingIcon = true,
                 showLeadingIcon = false
             )
