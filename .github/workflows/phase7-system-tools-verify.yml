@@ -43,7 +43,12 @@ jobs:
 
       - name: Surface check - no model curl
         run: |
-          if grep -rn "curl.*sherpa-onnx\|curl.*modelscope\|wget.*sherpa" .github/workflows/phase7-system-tools-verify.yml 2>/dev/null; then
-            echo "ERROR: Found model download commands in workflow file"
+          # Search source/script directories for model download commands, excluding this workflow file
+          found=$(grep -rn "curl.*sherpa-onnx\|curl.*modelscope\|wget.*sherpa" \
+            app/ scripts/ builtin/ docs/ 2>/dev/null || true)
+          if [ -n "$found" ]; then
+            echo "ERROR: Found model download commands in source files:"
+            echo "$found"
             exit 1
           fi
+          echo "OK: No model download commands found in source code"
