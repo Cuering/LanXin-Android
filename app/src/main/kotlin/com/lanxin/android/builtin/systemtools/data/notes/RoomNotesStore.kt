@@ -14,30 +14,28 @@
  * limitations under the License.
  */
 
-package com.lanxin.android.builtin.systemtools.data
+package com.lanxin.android.builtin.systemtools.data.notes
 
 import com.lanxin.android.builtin.systemtools.domain.NoteEntry
 import com.lanxin.android.builtin.systemtools.domain.NotesStore
 import java.util.UUID
-import java.util.concurrent.CopyOnWriteArrayList
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * 内存笔记存储（单测 / 无 Room 场景）。
- * 生产绑定 [com.lanxin.android.builtin.systemtools.data.notes.RoomNotesStore]。
+ * Room 持久化笔记存储（应用私有 DB）。
  */
 @Singleton
-class StubNotesStore @Inject constructor() : NotesStore {
-
-    private val notes = CopyOnWriteArrayList<NoteEntry>()
+class RoomNotesStore @Inject constructor(
+    private val dao: NoteDao
+) : NotesStore {
 
     override suspend fun list(limit: Int): List<NoteEntry> {
         val n = limit.coerceIn(1, 500)
-        return notes.sortedByDescending { it.updatedAtEpochMs }.take(n)
+        return dao.list(n).map { it.toDomain() }
     }
 
-    override suspend fun get(id: String): NoteEntry? = notes.firstOrNull { it.id == id }
+    override suspend fun get(id: String): NoteEntry? = dao.getById(id)?.toDomain()
 
     override suspend fun create(title: String, body: String): NoteEntry {
         require(title.isNotBlank() || body.isNotBlank()) { "title 或 body 至少填一项" }
@@ -48,71 +46,54 @@ class StubNotesStore @Inject constructor() : NotesStore {
             body = body,
             updatedAtEpochMs = now
         )
-        notes.add(entry)
+        dao.upsert(entry.toEntity(createdAtEpochMs = now))
         return entry
     }
 
     override suspend fun append(id: String, text: String): NoteEntry {
         require(text.isNotBlank()) { "append text 不能为空" }
-        val idx = notes.indexOfFirst { it.id == id }
-        require(idx >= 0) { "笔记不存在: $id" }
-        val old = notes[idx]
-        val updated = old.copy(
-            body = if (old.body.isEmpty()) text else old.body + "\n" + text,
+        val existing = dao.getById(id) ?: throw IllegalArgumentException("笔记不存在: $id")
+        val newBody = if (existing.body.isEmpty()) text else existing.body + "\n" + text
+        val updated = existing.copy(
+            body = newBody,
             updatedAtEpochMs = System.currentTimeMillis()
         )
-        notes[idx] = updated
-        return updated
+        dao.upsert(updated)
+        return updated.toDomain()
     }
 
     override suspend fun update(id: String, title: String?, body: String?): NoteEntry {
-        val idx = notes.indexOfFirst { it.id == id }
-        require(idx >= 0) { "笔记不存在: $id" }
+        val existing = dao.getById(id) ?: throw IllegalArgumentException("笔记不存在: $id")
         if (title == null && body == null) {
             throw IllegalArgumentException("title 或 body 至少提供一项")
         }
-        val old = notes[idx]
-        val updated = old.copy(
-            title = title?.ifBlank { old.title }?.trim() ?: old.title,
-            body = body ?: old.body,
+        val updated = existing.copy(
+            title = title?.ifBlank { existing.title }?.trim() ?: existing.title,
+            body = body ?: existing.body,
             updatedAtEpochMs = System.currentTimeMillis()
         )
         if (updated.title.isBlank() && updated.body.isBlank()) {
             throw IllegalArgumentException("更新后标题与正文不能都为空")
         }
-        notes[idx] = updated
-        return updated
+        dao.upsert(updated)
+        return updated.toDomain()
     }
 
-    override suspend fun delete(id: String): Boolean {
-        val idx = notes.indexOfFirst { it.id == id }
-        if (idx < 0) return false
-        notes.removeAt(idx)
-        return true
-    }
+    override suspend fun delete(id: String): Boolean = dao.delete(id) > 0
 
-    override suspend fun count(): Int = notes.size
+    override suspend fun count(): Int = dao.count()
 
     override suspend fun clearAll() {
-        notes.clear()
+        dao.clearAll()
     }
 
-    override suspend fun upsertAll(notesToWrite: List<NoteEntry>): Int {
-        var n = 0
-        for (note in notesToWrite) {
-            val idx = notes.indexOfFirst { it.id == note.id }
-            if (idx >= 0) {
-                notes[idx] = note
-            } else {
-                notes.add(note)
-            }
-            n++
+    override suspend fun upsertAll(notes: List<NoteEntry>): Int {
+        if (notes.isEmpty()) return 0
+        val entities = notes.map { note ->
+            val existing = dao.getById(note.id)
+            note.toEntity(createdAtEpochMs = existing?.createdAtEpochMs ?: note.updatedAtEpochMs)
         }
-        return n
-    }
-
-    /** 单测重置。 */
-    fun resetForTest() {
-        notes.clear()
+        dao.upsertAll(entities)
+        return entities.size
     }
 }

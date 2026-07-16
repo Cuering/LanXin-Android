@@ -50,9 +50,9 @@ class SystemToolsPlugin @Inject constructor(
 
     override val id = "lanxin.systemtools"
     override val name = "系统能力"
-    override val version = "0.2.0"
+    override val version = "0.3.0"
     override val description =
-        "日历读+创建 Intent / setAlarmClock+AlarmClock Intent / 内置笔记（Phase 7.2，默认关，写操作需确认）"
+        "日历/闹钟/应用内笔记 CRUD+SAF（Phase 7.3，默认关，写/删需确认）"
 
     private val gate = DeviceToolGate { settings.getConfig() }
 
@@ -107,7 +107,7 @@ class SystemToolsPlugin @Inject constructor(
         register(
             context,
             name = DeviceToolIds.NOTE_CREATE,
-            description = "创建内置笔记（需 confirmed）",
+            description = "创建应用内笔记（Room，需 confirmed）",
             properties = buildJsonObject {
                 put("title", stringProp("标题"))
                 put("body", stringProp("正文"))
@@ -117,7 +117,7 @@ class SystemToolsPlugin @Inject constructor(
         register(
             context,
             name = DeviceToolIds.NOTE_LIST,
-            description = "列出内置笔记",
+            description = "列出应用内笔记",
             properties = buildJsonObject {
                 put("limit", intProp("最多条数，默认 50"))
             }
@@ -132,6 +132,51 @@ class SystemToolsPlugin @Inject constructor(
                 put("confirmed", boolProp("用户已确认"))
             },
             required = listOf("id", "text")
+        )
+        register(
+            context,
+            name = DeviceToolIds.NOTE_UPDATE,
+            description = "更新笔记标题/正文（需 confirmed）",
+            properties = buildJsonObject {
+                put("id", stringProp("笔记 id"))
+                put("title", stringProp("新标题（可选）"))
+                put("body", stringProp("新正文（可选）"))
+                put("confirmed", boolProp("用户已确认"))
+            },
+            required = listOf("id")
+        )
+        register(
+            context,
+            name = DeviceToolIds.NOTE_DELETE,
+            description = "删除笔记（高危，需 confirmed）",
+            properties = buildJsonObject {
+                put("id", stringProp("笔记 id"))
+                put("confirmed", boolProp("用户已明确批准删除"))
+            },
+            required = listOf("id")
+        )
+        register(
+            context,
+            name = DeviceToolIds.NOTE_EXPORT,
+            description = "导出笔记：share 分享 / saf 写 uri / preview 预览",
+            properties = buildJsonObject {
+                put("format", stringProp("json（默认）| markdown"))
+                put("mode", stringProp("share（默认）| saf | preview"))
+                put("uri", stringProp("mode=saf 时必填 content Uri"))
+                put("limit", intProp("最多导出条数，默认 500"))
+                put("confirmed", boolProp("用户已确认"))
+            }
+        )
+        register(
+            context,
+            name = DeviceToolIds.NOTE_IMPORT,
+            description = "从 SAF uri 或 json_text 导入笔记（需 confirmed）",
+            properties = buildJsonObject {
+                put("uri", stringProp("OpenDocument 选中的 content Uri"))
+                put("json_text", stringProp("直接传入 JSON 文本（可与 uri 二选一）"))
+                put("strategy", stringProp("merge（默认）| replace"))
+                put("confirmed", boolProp("用户已确认"))
+            }
         )
     }
 

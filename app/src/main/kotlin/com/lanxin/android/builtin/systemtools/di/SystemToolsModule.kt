@@ -16,14 +16,21 @@
 
 package com.lanxin.android.builtin.systemtools.di
 
+import android.content.Context
 import com.lanxin.android.builtin.systemtools.SystemToolsPlugin
 import com.lanxin.android.builtin.systemtools.data.AndroidAlarmSetter
 import com.lanxin.android.builtin.systemtools.data.AndroidCalendarReader
 import com.lanxin.android.builtin.systemtools.data.AndroidSystemToolsIntentLauncher
 import com.lanxin.android.builtin.systemtools.data.AndroidSystemToolsPermissionChecker
 import com.lanxin.android.builtin.systemtools.data.SystemToolsPreferences
+import com.lanxin.android.builtin.systemtools.data.notes.AndroidNotesSafGateway
+import com.lanxin.android.builtin.systemtools.data.notes.NoteDao
+import com.lanxin.android.builtin.systemtools.data.notes.NotesDatabase
+import com.lanxin.android.builtin.systemtools.data.notes.RoomNotesStore
 import com.lanxin.android.builtin.systemtools.domain.AlarmClockGateway
 import com.lanxin.android.builtin.systemtools.domain.CalendarGateway
+import com.lanxin.android.builtin.systemtools.domain.NotesSafGateway
+import com.lanxin.android.builtin.systemtools.domain.NotesStore
 import com.lanxin.android.builtin.systemtools.domain.SystemToolsIntentLauncher
 import com.lanxin.android.builtin.systemtools.domain.SystemToolsPermissionChecker
 import com.lanxin.android.builtin.systemtools.domain.SystemToolsSettings
@@ -32,6 +39,7 @@ import dagger.Binds
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import dagger.hilt.migration.DisableInstallInCheck
 import javax.inject.Singleton
@@ -67,14 +75,30 @@ abstract class SystemToolsModule {
     abstract fun bindPermissionChecker(
         impl: AndroidSystemToolsPermissionChecker
     ): SystemToolsPermissionChecker
+
+    @Binds
+    @Singleton
+    abstract fun bindNotesStore(impl: RoomNotesStore): NotesStore
+
+    @Binds
+    @Singleton
+    abstract fun bindNotesSafGateway(impl: AndroidNotesSafGateway): NotesSafGateway
 }
 
 /**
- * Phase 7 系统能力 DI — 插件注册。
+ * Phase 7 系统能力 DI — Room 与插件注册。
  */
 @Module
 @InstallIn(SingletonComponent::class)
 object SystemToolsRegistrationModule {
+
+    @Provides
+    @Singleton
+    fun provideNotesDatabase(@ApplicationContext context: Context): NotesDatabase =
+        NotesDatabase.getInstance(context)
+
+    @Provides
+    fun provideNoteDao(db: NotesDatabase): NoteDao = db.noteDao()
 
     @Provides
     @Singleton

@@ -12,6 +12,7 @@ on:
     branches:
       - feat/phase7-system-tools-skeleton
       - feat/phase7.2-calendar-alarm
+      - feat/phase7.3-notes
 
 concurrency:
   group: phase7-${{ github.head_ref || github.ref_name }}
@@ -50,6 +51,17 @@ jobs:
           grep -q 'READ_CALENDAR' app/src/main/AndroidManifest.xml || { echo 'Missing READ_CALENDAR permission'; exit 1; }
           grep -q 'SystemToolsIntentLauncher' app/src/main/kotlin/com/lanxin/android/builtin/systemtools/data/StubDeviceTools.kt || { echo 'alarm/calendar tools must use IntentLauncher'; exit 1; }
           grep -q '7.2' docs/system-tools.md || { echo 'docs must mention 7.2'; exit 1; }
+          # Phase 7.3 notes surfaces
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/systemtools/domain/NotesStore.kt || { echo 'Missing NotesStore'; exit 1; }
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/systemtools/data/notes/RoomNotesStore.kt || { echo 'Missing RoomNotesStore'; exit 1; }
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/systemtools/data/notes/NotesDatabase.kt || { echo 'Missing NotesDatabase'; exit 1; }
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/systemtools/data/notes/AndroidNotesSafGateway.kt || { echo 'Missing AndroidNotesSafGateway'; exit 1; }
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/systemtools/NotesStoreTest.kt || { echo 'Missing NotesStoreTest'; exit 1; }
+          grep -q 'NOTE_EXPORT' app/src/main/kotlin/com/lanxin/android/builtin/systemtools/domain/DeviceTool.kt || { echo 'Missing NOTE_EXPORT id'; exit 1; }
+          grep -q 'NOTE_IMPORT' app/src/main/kotlin/com/lanxin/android/builtin/systemtools/domain/DeviceTool.kt || { echo 'Missing NOTE_IMPORT id'; exit 1; }
+          grep -q 'NotesStore' app/src/main/kotlin/com/lanxin/android/builtin/systemtools/data/StubDeviceTools.kt || { echo 'note tools must use NotesStore'; exit 1; }
+          grep -q '7.3' docs/system-tools.md || { echo 'docs must mention 7.3'; exit 1; }
+          grep -q 'Room' docs/system-tools.md || { echo 'docs must mention Room for notes'; exit 1; }
 
       - name: Surface check - no model curl
         run: |

@@ -23,7 +23,11 @@ import com.lanxin.android.builtin.systemtools.data.CalendarListUpcomingDeviceToo
 import com.lanxin.android.builtin.systemtools.data.DeviceToolRegistry
 import com.lanxin.android.builtin.systemtools.data.NoteAppendDeviceTool
 import com.lanxin.android.builtin.systemtools.data.NoteCreateDeviceTool
+import com.lanxin.android.builtin.systemtools.data.NoteDeleteDeviceTool
+import com.lanxin.android.builtin.systemtools.data.NoteExportDeviceTool
+import com.lanxin.android.builtin.systemtools.data.NoteImportDeviceTool
 import com.lanxin.android.builtin.systemtools.data.NoteListDeviceTool
+import com.lanxin.android.builtin.systemtools.data.NoteUpdateDeviceTool
 import com.lanxin.android.builtin.systemtools.data.StubCalendarGateway
 import com.lanxin.android.builtin.systemtools.data.StubNotesStore
 import com.lanxin.android.builtin.systemtools.domain.AlarmClockGateway
@@ -31,6 +35,8 @@ import com.lanxin.android.builtin.systemtools.domain.AlarmClockResult
 import com.lanxin.android.builtin.systemtools.domain.DeviceToolIds
 import com.lanxin.android.builtin.systemtools.domain.IntentLaunchResult
 import com.lanxin.android.builtin.systemtools.domain.IntentLaunchSpec
+import com.lanxin.android.builtin.systemtools.domain.NotesIoResult
+import com.lanxin.android.builtin.systemtools.domain.NotesSafGateway
 import com.lanxin.android.builtin.systemtools.domain.SetAlarmClockRequest
 import com.lanxin.android.builtin.systemtools.domain.SystemToolsConfig
 import com.lanxin.android.builtin.systemtools.domain.SystemToolsIntentLauncher
@@ -57,19 +63,33 @@ class DeviceToolIdsTest {
         )
     }
 
-    @Test
-    fun `stable tool names include alarm and calendar`() {
-        assertTrue(DeviceToolIds.ALL.contains("alarm_set"))
-        assertTrue(DeviceToolIds.ALL.contains("calendar_list_upcoming"))
-        assertTrue(DeviceToolIds.M1_STUB_READY.contains("alarm_set"))
-        assertTrue(DeviceToolIds.M1_STUB_READY.contains("calendar_list_upcoming"))
+    private class NoopSaf : NotesSafGateway {
+        override fun writeText(uriString: String, text: String, mimeType: String) =
+            NotesIoResult.Ok("ok", bytes = text.length, uri = uriString)
+
+        override fun readText(uriString: String) = NotesIoResult.Ok("{}", bytes = 2, uri = uriString)
+
+        override fun shareText(text: String, mimeType: String, chooserTitle: String) =
+            NotesIoResult.Ok("shared", bytes = text.length)
     }
 
     @Test
-    fun `registry exposes m1 tools`() {
+    fun `stable tool names include alarm calendar notes`() {
+        assertTrue(DeviceToolIds.ALL.contains("alarm_set"))
+        assertTrue(DeviceToolIds.ALL.contains("calendar_list_upcoming"))
+        assertTrue(DeviceToolIds.ALL.contains("note_export"))
+        assertTrue(DeviceToolIds.ALL.contains("note_import"))
+        assertTrue(DeviceToolIds.M1_STUB_READY.contains("alarm_set"))
+        assertTrue(DeviceToolIds.M1_STUB_READY.contains("note_delete"))
+        assertEquals(7, DeviceToolIds.NOTES_READY.size)
+    }
+
+    @Test
+    fun `registry exposes phase73 tools`() {
         val gateway = StubCalendarGateway()
         val notes = StubNotesStore()
         val launcher = OkLauncher()
+        val saf = NoopSaf()
         val registry = DeviceToolRegistry(
             alarmSet = AlarmSetDeviceTool(OkAlarmClock(), launcher),
             alarmShow = AlarmShowDeviceTool(launcher),
@@ -77,9 +97,14 @@ class DeviceToolIdsTest {
             calendarCreate = CalendarCreateEventDeviceTool(gateway, gateway),
             noteCreate = NoteCreateDeviceTool(notes),
             noteList = NoteListDeviceTool(notes),
-            noteAppend = NoteAppendDeviceTool(notes)
+            noteAppend = NoteAppendDeviceTool(notes),
+            noteUpdate = NoteUpdateDeviceTool(notes),
+            noteDelete = NoteDeleteDeviceTool(notes),
+            noteExport = NoteExportDeviceTool(notes, saf),
+            noteImport = NoteImportDeviceTool(notes, saf)
         )
         assertEquals(DeviceToolIds.M1_STUB_READY, registry.names())
+        assertTrue(registry.names().containsAll(DeviceToolIds.NOTES_READY))
     }
 
     @Test
