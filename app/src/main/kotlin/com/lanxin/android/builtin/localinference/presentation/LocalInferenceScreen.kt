@@ -107,7 +107,7 @@ fun LocalInferenceScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "Phase 6.1 · MNN 骨架（stub）",
+                        text = "Phase 6.2 · 离线兜底 + MNN 骨架（stub）",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -115,9 +115,36 @@ fun LocalInferenceScreen(
                     Text(
                         text = "总开关默认关闭；关闭时不 load so / 不占模型内存。" +
                             "模型自备：轻量 0.5B/1.5B 或标准 7B Q4（16G 推荐）。" +
-                            "本地无 tool_call，记忆/KB 由 App 注入；插件 UI 照常可用。" +
-                            "真实 MNN so 见 docs/local-inference.md。",
+                            "本地无 tool_call，记忆/KB 由 App 注入。" +
+                            "仅当开关已开且模型就绪时，无网才自动走本地；有网默认云端。",
                         style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "当前路由预览",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = state.routePreview.ifBlank { "刷新中…" },
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "离线兜底：无网 + 本地就绪 → 自动本地；" +
+                            "无网 + 本地未就绪 → 提示去设置加载模型；" +
+                            "有网默认云端（可开「优先本地」）。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
                     )
                 }
             }
@@ -149,7 +176,7 @@ fun LocalInferenceScreen(
                 Column(modifier = Modifier.weight(1f)) {
                     Text("优先本地路由", style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        "为 6.2/6.3 ChatRouter 预留偏好",
+                        "有网时优先本地（需模型就绪）；完整 ChatRouter 见 6.3",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

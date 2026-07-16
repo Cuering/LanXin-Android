@@ -1,26 +1,67 @@
-# Phase 6.1 — 本地推理引擎（MNN 骨架）
+# 本地推理引擎（Phase 6.1–6.2）
 
-> 分支：`feat/phase6-1-mnn-local-inference`  
-> 状态：**进行中（MVP 可合入）**
+> 分支：`feat/phase6-2-offline-local-fallback`  
+> 状态：**6.1 ✅ 骨架 · 6.2 🚧 离线兜底可合入**
 
 ## 目标
 
-落地端侧 LLM 推理抽象层，使 Chat 可在后续 6.2/6.3 无缝切换云端 ↔ 本地。
+落地端侧 LLM 推理抽象层，并在 **无网络且本地就绪** 时自动 fallback 到本地小模型。
 
 ## 能力边界
 
 | 能力 | 状态 |
 |------|------|
-| `LocalLlmEngine` 接口（load / unload / generate / stream / isReady / isAvailable） | ✅ |
-| `StubLocalLlmEngine`（无 MNN so，路径校验 + stub 回复） | ✅ |
-| `MnnNativeBridge` JNI 接入点 | ✅ 预留 |
-| DataStore 配置（启用 / 模型路径 / maxTokens / preferLocal） | ✅ |
-| `LocalInferenceProvider` → `ApiState` 流 | ✅ |
-| `InferenceRouteSelector` 纯逻辑路由 | ✅（6.2/6.3 扩展） |
-| 设置页 UI「本地推理」 | ✅ |
+| `LocalLlmEngine` 接口（load / unload / generate / stream / isReady / isAvailable） | ✅ 6.1 |
+| `StubLocalLlmEngine`（无 MNN so，路径校验 + stub 回复） | ✅ 6.1 |
+| `MnnNativeBridge` JNI 接入点 | ✅ 6.1 预留 |
+| DataStore 配置（启用 / 模型路径 / maxTokens / preferLocal） | ✅ 6.1 |
+| `LocalInferenceProvider` → `ApiState` 流 | ✅ 6.1 |
+| `InferenceRouteSelector` 纯逻辑路由 | ✅ 6.1 |
+| 设置页 UI「本地推理」 | ✅ 6.1 |
+| `NetworkStatusProvider`（ConnectivityManager） | ✅ **6.2** |
+| `InferenceRouteCoordinator` 设置+引擎+网络 | ✅ **6.2** |
+| `ChatRepositoryImpl` 最小侵入接入 fallback | ✅ **6.2** |
+| 无网 + 本地就绪 → 自动本地 | ✅ **6.2** |
+| 无网 + 本地不可用 → 明确错误引导 | ✅ **6.2** |
+| 状态文案「本地离线生成中…」 | ✅ **6.2** |
+| 设置页路由预览 | ✅ **6.2** |
 | 真实 MNN so + tokenizer + 量化模型 | ❌ 后续 |
-| 无网络自动切本地（6.2） | ❌ 后续 |
 | ChatRouter 完整重构（6.3） | ❌ 后续 |
+
+## Phase 6.2 行为
+
+### 产品边界
+
+1. `local_inference_enabled` **默认关**；关则 **永不** 走本地、不 load so  
+2. 仅当 **开关已开 + 引擎 READY（已 load）** 时，无网才 fallback 本地  
+3. 本地 **不做 tool_call**；记忆/KB 仍 App 侧检索注入  
+4. 有网默认仍云端（`preferLocal` + ready 时本地）  
+5. 模型路径自备；分档：轻量 0.5B/1.5B，标准 7B Q4 / 16G  
+
+### 路由落地
+
+```
+ChatViewModel.runChatWithTools
+        │  状态：GENERATING / GENERATING_LOCAL；本地时 remainingRounds=0
+        ▼
+ChatRepositoryImpl.completeChat
+        │  InferenceRouteCoordinator.decide()
+        ├─ LOCAL        → LocalInferenceProvider.completeAsApiState
+        ├─ UNAVAILABLE  → ApiState.Error（引导去设置）
+        └─ CLOUD        → 原 completeChatCloud（OpenAI/…）
+```
+
+`localAvailable` **仅** `engine.isReady`（已 load），不是「开关开了就算」。
+
+### 网络检测
+
+`ConnectivityNetworkStatusProvider`：`activeNetwork` + `NET_CAPABILITY_INTERNET` + `VALIDATED`  
+（与 `SystemInfoTool.networkJson` 一致）。
+
+### 错误文案（无网且本地不可用）
+
+> 当前无网络，且本地推理不可用。请到「设置 → 本地推理」打开开关、填写模型路径并加载模型后再试。
+
 
 ## 产品方案（已定）
 
@@ -63,7 +104,7 @@
 
 ### 与 6.2 / 6.3
 
-- 6.2：仅当开关已开且模型 ready 时，无网才 fallback 本地
+- 6.2：✅ 仅当开关已开且模型 ready 时，无网才 fallback 本地（见上文）
 - 6.3：ChatRouter 云端 ↔ 本地；需要工具的任务优先云端
 
 
@@ -76,12 +117,16 @@ app/src/main/kotlin/com/lanxin/android/builtin/localinference/
 │   ├── LocalInferenceProvider.kt
 │   ├── LocalInferenceSettings.kt
 │   ├── LocalInferenceModels.kt
-│   └── InferenceRouteSelector.kt
+│   ├── InferenceRouteSelector.kt
+│   ├── InferenceRouteCoordinator.kt
+│   ├── NetworkStatusProvider.kt
+│   └── ChatLocalFallback.kt
 ├── data/
 │   ├── StubLocalLlmEngine.kt
 │   ├── MnnNativeBridge.kt
 │   ├── LocalInferencePreferences.kt
-│   └── DefaultLocalInferenceProvider.kt
+│   ├── DefaultLocalInferenceProvider.kt
+│   └── ConnectivityNetworkStatusProvider.kt
 ├── di/
 │   └── LocalInferenceModule.kt
 └── presentation/
@@ -134,9 +179,9 @@ ChatViewModel / ChatRepository
                     └─ LocalLlmEngine.stream / generate
 ```
 
-6.1 **不改** `ChatRepositoryImpl.completeChat` 主路径；Provider 可注入供手动或后续 Router 调用。
+6.2 **已接入** `ChatRepositoryImpl.completeChat`：入口路由 → 本地 / 错误 / 云端。
 
-路由预览（`InferenceRouteSelector`）：
+路由预览（`InferenceRouteSelector` + `InferenceRouteCoordinator`）：
 
 1. `preferLocal && localAvailable` → LOCAL  
 2. `!network && localAvailable` → LOCAL（离线兜底预览）  
@@ -157,8 +202,19 @@ ChatViewModel / ChatRepository
 - 妹居 MeiJu（若可访问）：本地推理封装  
 - 本仓 knowledge 的 ONNX 懒加载模式（`OnnxEmbeddingService`）
 
-## 非目标（6.1）
+## 非目标（6.2）
 
-- 打包任何大模型文件进 APK / git  
+- 完整 ChatRouter 大重构（6.3）  
+- 真实 MNN so / 量化权重  
 - ASR / TTS / 桌宠（6.4–6.7）  
+- 本地 tool_call  
 - 修改 AstrBot 系统源码  
+- 打包任何大模型文件进 APK / git  
+
+## 单测
+
+```bash
+./gradlew :app:testDebugUnitTest \
+  --tests "com.lanxin.android.builtin.localinference.*" \
+  --tests "com.lanxin.android.data.repository.ChatRepositoryImplTest"
+```

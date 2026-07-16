@@ -57,6 +57,10 @@ import com.lanxin.android.data.network.GroqAPI
 import com.lanxin.android.data.network.LanXinAPI
 import com.lanxin.android.data.network.OpenAIAPI
 import com.lanxin.android.data.repository.SettingRepository
+import com.lanxin.android.builtin.localinference.domain.ChatLocalFallback
+import com.lanxin.android.builtin.localinference.domain.InferenceRouteCoordinator
+import com.lanxin.android.builtin.localinference.domain.LocalInferenceProvider
+import com.lanxin.android.builtin.localinference.domain.NetworkStatusProvider
 import com.lanxin.android.util.AttachmentPayloadCache
 import com.lanxin.android.util.FileUtils
 import com.lanxin.android.util.stripAssistantErrorNote
@@ -85,8 +89,25 @@ class ChatRepositoryImpl @Inject constructor(
     private val googleAPI: GoogleAPI,
     private val lanXinAPI: LanXinAPI,
     private val attachmentUploadCoordinator: AttachmentUploadCoordinator,
-    private val contextBuilder: ContextBuilder
+    private val contextBuilder: ContextBuilder,
+    private val localInferenceProvider: LocalInferenceProvider? = null,
+    private val inferenceRouteCoordinator: InferenceRouteCoordinator? = null,
+    private val networkStatusProvider: NetworkStatusProvider? = null
 ) : ChatRepository {
+
+    /**
+     * 最近一次 completeChat 路由决策原因（调试 / UX；默认 null）。
+     */
+    @Volatile
+    var lastRouteReason: String? = null
+        private set
+
+    /**
+     * 最近一次是否走本地生成。
+     */
+    @Volatile
+    var lastUsedLocal: Boolean = false
+        private set
 
     private fun isImageFile(extension: String): Boolean = extension in setOf("jpg", "jpeg", "png", "gif", "bmp", "webp", "tiff", "svg")
 
@@ -125,6 +146,45 @@ class ChatRepositoryImpl @Inject constructor(
     }
 
     override suspend fun completeChat(
+        userMessages: List<MessageV2>,
+        assistantMessages: List<List<MessageV2>>,
+        platform: PlatformV2
+    ): Flow<ApiState> {
+        // Phase 6.2：最小侵入离线/本地路由（完整 ChatRouter 见 6.3）
+        val coordinator = inferenceRouteCoordinator
+        val localProvider = localInferenceProvider
+        if (coordinator != null && localProvider != null) {
+            val decision = coordinator.decide()
+            lastRouteReason = decision.reason
+            lastUsedLocal = ChatLocalFallback.shouldUseLocal(decision)
+            if (ChatLocalFallback.shouldEmitUnavailable(decision)) {
+                val networkOk = networkStatusProvider?.isNetworkAvailable() ?: false
+                val message = ChatLocalFallback.unavailableMessage(decision, networkOk)
+                return flow {
+                    emit(ApiState.Loading)
+                    emit(ApiState.Error(message))
+                    emit(ApiState.Done)
+                }
+            }
+            if (ChatLocalFallback.shouldUseLocal(decision)) {
+                val prompt = ChatLocalFallback.extractPrompt(userMessages.map { it.content })
+                // 记忆/KB 已在 App 侧注入 userMessages；本地不做 tool_call
+                return localProvider.completeAsApiState(
+                    prompt = prompt,
+                    systemPrompt = platform.systemPrompt?.takeIf { it.isNotBlank() }
+                )
+            }
+        } else {
+            lastRouteReason = "cloud_default_no_router"
+            lastUsedLocal = false
+        }
+        return completeChatCloud(userMessages, assistantMessages, platform)
+    }
+
+    /**
+     * 云端 Provider 完成路径（6.1 原逻辑）。
+     */
+    private suspend fun completeChatCloud(
         userMessages: List<MessageV2>,
         assistantMessages: List<List<MessageV2>>,
         platform: PlatformV2

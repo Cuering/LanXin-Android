@@ -275,6 +275,7 @@
     <string name="chat_status_searching_memory">Searching memory…</string>
     <string name="chat_status_searching_knowledge">Searching knowledge…</string>
     <string name="chat_status_generating">Generating…</string>
+    <string name="chat_status_generating_local">Generating offline (local)…</string>
     <string name="chat_status_calling_tools">Calling tools…</string>
     <string name="chat_status_done">Done</string>
     <string name="chat_refs_title">References</string>

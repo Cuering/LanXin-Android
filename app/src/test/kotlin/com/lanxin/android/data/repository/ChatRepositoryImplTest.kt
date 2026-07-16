@@ -30,6 +30,17 @@ import com.lanxin.android.plugins.chat.data.AttachmentUploadCoordinator
 import com.lanxin.android.plugins.chat.data.ChatRepositoryImpl
 import com.lanxin.android.plugins.chat.data.entity.MessageV2
 import com.lanxin.android.plugins.chat.data.entity.PlatformV2
+import com.lanxin.android.builtin.localinference.domain.InferenceRouteCoordinator
+import com.lanxin.android.builtin.localinference.domain.LocalEngineState
+import com.lanxin.android.builtin.localinference.domain.LocalGenerateRequest
+import com.lanxin.android.builtin.localinference.domain.LocalGenerateResult
+import com.lanxin.android.builtin.localinference.domain.LocalInferenceConfig
+import com.lanxin.android.builtin.localinference.domain.LocalInferenceProvider
+import com.lanxin.android.builtin.localinference.domain.LocalInferenceSettings
+import com.lanxin.android.builtin.localinference.domain.LocalLlmEngine
+import com.lanxin.android.builtin.localinference.domain.NetworkStatusProvider
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import com.lanxin.android.plugins.chat.data.streamPreparedApiState
 import com.lanxin.android.plugins.chat.data.validateResponseInputPartsOrThrow
 import java.io.File
@@ -46,6 +57,7 @@ import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ChatRepositoryImplTest {
@@ -327,31 +339,197 @@ class ChatRepositoryImplTest {
         assertEquals(1, openAIAPI.streamChatCompletionCalls)
     }
 
+
+    @Test
+    fun `offline with local ready uses local provider and skips cloud`() = runBlocking {
+        val openAIAPI = RecordingOpenAIAPI()
+        val local = RecordingLocalProvider(listOf(ApiState.Loading, ApiState.Success("local-hi"), ApiState.Done))
+        val repository = createRepository(
+            openAIAPI = openAIAPI,
+            localProvider = local,
+            networkAvailable = false,
+            localReady = true,
+            preferLocal = false
+        )
+
+        val states = repository.completeChat(
+            userMessages = listOf(MessageV2(content = "Hello offline", platformType = null)),
+            assistantMessages = emptyList(),
+            platform = customPlatform()
+        ).toList()
+
+        assertEquals(
+            listOf(ApiState.Loading, ApiState.Success("local-hi"), ApiState.Done),
+            states
+        )
+        assertEquals(0, openAIAPI.streamChatCompletionCalls)
+        assertEquals(1, local.calls)
+        assertEquals(true, repository.lastUsedLocal)
+        assertEquals("offline_fallback", repository.lastRouteReason)
+    }
+
+    @Test
+    fun `offline without local ready emits guidance error`() = runBlocking {
+        val openAIAPI = RecordingOpenAIAPI()
+        val local = RecordingLocalProvider(emptyList())
+        val repository = createRepository(
+            openAIAPI = openAIAPI,
+            localProvider = local,
+            networkAvailable = false,
+            localReady = false,
+            preferLocal = false
+        )
+
+        val states = repository.completeChat(
+            userMessages = listOf(MessageV2(content = "Hello", platformType = null)),
+            assistantMessages = emptyList(),
+            platform = customPlatform()
+        ).toList()
+
+        assertEquals(ApiState.Loading, states.first())
+        assertTrue(states[1] is ApiState.Error)
+        val err = (states[1] as ApiState.Error).message
+        assertTrue(err.contains("本地推理") || err.contains("无网络"))
+        assertEquals(ApiState.Done, states.last())
+        assertEquals(0, openAIAPI.streamChatCompletionCalls)
+        assertEquals(0, local.calls)
+        assertEquals(false, repository.lastUsedLocal)
+    }
+
+    @Test
+    fun `online without preferLocal keeps cloud path`() = runBlocking {
+        val openAIAPI = RecordingOpenAIAPI()
+        val local = RecordingLocalProvider(listOf(ApiState.Success("should-not")))
+        val repository = createRepository(
+            openAIAPI = openAIAPI,
+            localProvider = local,
+            networkAvailable = true,
+            localReady = true,
+            preferLocal = false
+        )
+
+        repository.completeChat(
+            userMessages = listOf(MessageV2(content = "Hi", platformType = null)),
+            assistantMessages = emptyList(),
+            platform = customPlatform()
+        ).toList()
+
+        assertEquals(1, openAIAPI.streamChatCompletionCalls)
+        assertEquals(0, local.calls)
+        assertEquals(false, repository.lastUsedLocal)
+        assertEquals("cloud_preferred", repository.lastRouteReason)
+    }
+
+    @Test
+    fun `preferLocal online uses local when ready`() = runBlocking {
+        val openAIAPI = RecordingOpenAIAPI()
+        val local = RecordingLocalProvider(listOf(ApiState.Loading, ApiState.Success("prefer"), ApiState.Done))
+        val repository = createRepository(
+            openAIAPI = openAIAPI,
+            localProvider = local,
+            networkAvailable = true,
+            localReady = true,
+            preferLocal = true
+        )
+
+        val states = repository.completeChat(
+            userMessages = listOf(MessageV2(content = "Hi", platformType = null)),
+            assistantMessages = emptyList(),
+            platform = customPlatform()
+        ).toList()
+
+        assertEquals(ApiState.Success("prefer"), states[1])
+        assertEquals(0, openAIAPI.streamChatCompletionCalls)
+        assertEquals(1, local.calls)
+        assertEquals("user_prefer_local", repository.lastRouteReason)
+    }
+
+
     private fun createRepository(
         groqAPI: GroqAPI = FakeGroqAPI(emptyFlow()),
         openAIAPI: OpenAIAPI = RecordingOpenAIAPI(),
         googleAPI: GoogleAPI = FakeGoogleAPI(),
-        lanXinAPI: LanXinAPI = FakeLanXinAPI()
-    ): ChatRepositoryImpl = ChatRepositoryImpl(
-        context = ContextWrapper(null),
-        chatRoomDao = proxy(),
-        messageDao = proxy(),
-        chatRoomV2Dao = proxy(),
-        messageV2Dao = proxy(),
-        chatPlatformModelV2Dao = proxy(),
-        settingRepository = proxy(),
-        openAIAPI = openAIAPI,
-        groqAPI = groqAPI,
-        anthropicAPI = FakeAnthropicAPI(),
-        googleAPI = googleAPI,
-        lanXinAPI = lanXinAPI,
-        attachmentUploadCoordinator = AttachmentUploadCoordinator(
-            openAIAPI,
-            FakeAnthropicAPI(),
-            googleAPI
-        ),
-        contextBuilder = ContextBuilder()
-    )
+        lanXinAPI: LanXinAPI = FakeLanXinAPI(),
+        localProvider: LocalInferenceProvider? = null,
+        networkAvailable: Boolean = true,
+        localReady: Boolean = false,
+        preferLocal: Boolean = false
+    ): ChatRepositoryImpl {
+        val coordinator = if (localProvider != null) {
+            InferenceRouteCoordinator(
+                networkStatusProvider = NetworkStatusProvider { networkAvailable },
+                settings = object : LocalInferenceSettings {
+                    override suspend fun getConfig() = LocalInferenceConfig(
+                        enabled = true,
+                        modelPath = "stub://demo-model"
+                    )
+                    override suspend fun setEnabled(enabled: Boolean) = Unit
+                    override suspend fun setModelPath(path: String?) = Unit
+                    override suspend fun setMaxTokens(maxTokens: Int) = Unit
+                    override suspend fun setTemperature(temperature: Float) = Unit
+                    override suspend fun isPreferLocal() = preferLocal
+                    override suspend fun setPreferLocal(prefer: Boolean) = Unit
+                },
+                engine = object : LocalLlmEngine {
+                    private val st = MutableStateFlow(
+                        if (localReady) LocalEngineState.READY else LocalEngineState.IDLE
+                    )
+                    override val state: StateFlow<LocalEngineState> = st
+                    override val isReady: Boolean get() = localReady
+                    override val isAvailable: Boolean get() = true
+                    override val lastError: String? = null
+                    override suspend fun load(config: LocalInferenceConfig) = localReady
+                    override suspend fun unload() = Unit
+                    override suspend fun generate(request: LocalGenerateRequest) =
+                        LocalGenerateResult("x", isStub = true)
+                    override fun stream(request: LocalGenerateRequest) = emptyFlow<String>()
+                }
+            )
+        } else {
+            null
+        }
+        return ChatRepositoryImpl(
+            context = ContextWrapper(null),
+            chatRoomDao = proxy(),
+            messageDao = proxy(),
+            chatRoomV2Dao = proxy(),
+            messageV2Dao = proxy(),
+            chatPlatformModelV2Dao = proxy(),
+            settingRepository = proxy(),
+            openAIAPI = openAIAPI,
+            groqAPI = groqAPI,
+            anthropicAPI = FakeAnthropicAPI(),
+            googleAPI = googleAPI,
+            lanXinAPI = lanXinAPI,
+            attachmentUploadCoordinator = AttachmentUploadCoordinator(
+                openAIAPI,
+                FakeAnthropicAPI(),
+                googleAPI
+            ),
+            contextBuilder = ContextBuilder(),
+            localInferenceProvider = localProvider,
+            inferenceRouteCoordinator = coordinator,
+            networkStatusProvider = if (localProvider != null) {
+                NetworkStatusProvider { networkAvailable }
+            } else {
+                null
+            }
+        )
+    }
+
+    private class RecordingLocalProvider(
+        private val states: List<ApiState>
+    ) : LocalInferenceProvider {
+        var calls: Int = 0
+            private set
+
+        override fun canServe(): Boolean = true
+
+        override fun completeAsApiState(prompt: String, systemPrompt: String?): Flow<ApiState> {
+            calls += 1
+            return flowOf(*states.toTypedArray())
+        }
+    }
 
     private fun groqPlatform(reasoning: Boolean, model: String) = PlatformV2(
         uid = "groq-platform",

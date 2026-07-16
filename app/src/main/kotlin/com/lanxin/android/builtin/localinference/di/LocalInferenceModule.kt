@@ -16,12 +16,14 @@
 
 package com.lanxin.android.builtin.localinference.di
 
+import com.lanxin.android.builtin.localinference.data.ConnectivityNetworkStatusProvider
 import com.lanxin.android.builtin.localinference.data.DefaultLocalInferenceProvider
 import com.lanxin.android.builtin.localinference.data.LocalInferencePreferences
 import com.lanxin.android.builtin.localinference.data.StubLocalLlmEngine
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceProvider
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceSettings
 import com.lanxin.android.builtin.localinference.domain.LocalLlmEngine
+import com.lanxin.android.builtin.localinference.domain.NetworkStatusProvider
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -30,7 +32,7 @@ import dagger.hilt.migration.DisableInstallInCheck
 import javax.inject.Singleton
 
 /**
- * Phase 6.1 本地推理 DI。
+ * Phase 6.x 本地推理 DI。
  *
  * 对齐 KnowledgeModule / SyncModule 风格。
  * 后续 MNN 实现就绪后，将 [StubLocalLlmEngine] 绑定替换为 MnnLocalLlmEngine。
@@ -51,4 +53,8 @@ abstract class LocalInferenceModule {
     @Binds
     @Singleton
     abstract fun bindLocalInferenceProvider(impl: DefaultLocalInferenceProvider): LocalInferenceProvider
+
+    @Binds
+    @Singleton
+    abstract fun bindNetworkStatusProvider(impl: ConnectivityNetworkStatusProvider): NetworkStatusProvider
 }
