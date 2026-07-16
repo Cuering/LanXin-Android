@@ -106,8 +106,7 @@ fun SystemToolsScreen(
                 .format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))
             viewModel.exportUserTextToUri(
                 it.toString(),
-                text = "兰心用户文件导出 $stamp
-",
+                text = "兰心用户文件导出 $stamp\n",
                 mime = "text/plain"
             )
         }
