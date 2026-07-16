@@ -14,6 +14,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import org.json.JSONArray
+import org.json.JSONObject
 
 @Singleton
 class MemoryRepository @Inject constructor(
@@ -132,8 +134,8 @@ class MemoryRepository @Inject constructor(
     ): Long {
         val metadata = JSONObject().apply {
             put("name", name)
-            putsIfAbsent("applies_when", JSONArray(appliesWhen ?: emptyList()))
-            putsIfAbsent("does_not_apply_when", JSONArray(doesNotApplyWhen ?: emptyList()))
+            put("applies_when", JSONArray(appliesWhen ?: emptyList<String>()))
+            put("does_not_apply_when", JSONArray(doesNotApplyWhen ?: emptyList<String>()))
             if (!rules.isNullOrEmpty()) put("rules", rules)
         }.toString()
         return addMemory(content, MemoryType.JUDGMENT, 8.0f, "permanent", metadata)
