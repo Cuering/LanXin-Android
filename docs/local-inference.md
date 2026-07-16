@@ -49,7 +49,7 @@ ChatRouter.decide() → InferenceRouteDecision(target, reason)
 ### 产品规则（严格）
 
 1. 开关默认关 / 引擎未 ready → 不走本地  
-2. **需要 tool_call / MCP 工具** 且云端可选 → **CLOUD**（`need_tools_cloud`）  
+2. **需要 tool_call / MCP 工具**（工具 follow-up 轮 / 显式 needsTools）且云端可选 → **CLOUD**（`need_tools_cloud`）；首轮纯对话可 preferLocal  
 3. preferLocal + ready（且无 tool 强制）→ LOCAL（`prefer_local`）  
 4. 无网 + ready → LOCAL（`offline_local`）  
 5. 无网 + 未就绪 → UNAVAILABLE（`offline_local_unavailable`，引导设置）  
