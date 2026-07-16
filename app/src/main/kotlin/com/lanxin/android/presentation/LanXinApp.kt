@@ -76,7 +76,7 @@ class LanXinApp : Application(), Configuration.Provider {
                 )
             }
             dynamic.failures.forEach { f ->
-                log.warn("动态插件加载失败 id=${f.pluginId}: ${f.reason}")
+                log.warning("动态插件加载失败 id=${f.pluginId}: ${f.reason}")
             }
         }
     }
