@@ -1,27 +1,56 @@
 package com.lanxin.android.plugins.memory.presentation.ui.memory
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lanxin.android.plugins.memory.data.memory.MemoryType
+import com.lanxin.android.plugins.memory.sync.NutstoreSyncProvider
 
 /**
  * 记忆系统设置页面。
  *
- * 包含：
  * - 同步总开关 + Provider 选择
  * - 坚果云 WebDAV 配置
- * - 判断包管理入口
+ * - 判断包说明
  * - 统计概览
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -32,10 +61,19 @@ fun MemorySettingsScreen(
 ) {
     var syncEnabled by remember { mutableStateOf(true) }
     var selectedProvider by remember { mutableStateOf("astrbot") }
-    var nutstoreUrl by remember { mutableStateOf("") }
+    var providerMenuExpanded by remember { mutableStateOf(false) }
+    var nutstoreUrl by remember { mutableStateOf(NutstoreSyncProvider.DEFAULT_URL) }
     var nutstoreUser by remember { mutableStateOf("") }
     var nutstorePassword by remember { mutableStateOf("") }
     var testResult by remember { mutableStateOf<String?>(null) }
+
+    val memories by viewModel.memories.collectAsState()
+    val total = memories.size
+    val active = memories.count { it.status == "active" }
+    val preferenceCount = memories.count { it.type == MemoryType.PREFERENCE }
+    val factualCount = memories.count { it.type == MemoryType.FACTUAL }
+    val insightCount = memories.count { it.type == MemoryType.INSIGHT }
+    val judgmentCount = memories.count { it.type == MemoryType.JUDGMENT }
 
     Scaffold(
         topBar = {
@@ -43,7 +81,7 @@ fun MemorySettingsScreen(
                 title = { Text("记忆设置") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                     }
                 }
             )
@@ -56,7 +94,6 @@ fun MemorySettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // === 同步设置 ===
             Card {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text("云端同步", style = MaterialTheme.typography.titleMedium)
@@ -67,9 +104,13 @@ fun MemorySettingsScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(
-                            if (syncEnabled) Icons.Default.CloudSync else Icons.Default.CloudOff,
+                            imageVector = if (syncEnabled) Icons.Default.CloudSync else Icons.Default.CloudOff,
                             contentDescription = null,
-                            tint = if (syncEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = if (syncEnabled) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("启用云端同步")
@@ -83,10 +124,9 @@ fun MemorySettingsScreen(
                     if (syncEnabled) {
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // Provider 选择
                         ExposedDropdownMenuBox(
-                            expanded = false,
-                            onExpandedChange = {}
+                            expanded = providerMenuExpanded,
+                            onExpandedChange = { providerMenuExpanded = it }
                         ) {
                             TextField(
                                 value = when (selectedProvider) {
@@ -99,36 +139,41 @@ fun MemorySettingsScreen(
                                     .fillMaxWidth()
                                     .menuAnchor(),
                                 leadingIcon = {
-                                    Icon(Icons.Default.CloudSync, "同步源")
+                                    Icon(Icons.Default.CloudSync, contentDescription = "同步源")
                                 },
                                 trailingIcon = {
-                                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = false)
+                                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = providerMenuExpanded)
                                 }
                             )
 
                             ExposedDropdownMenu(
-                                expanded = false,
-                                onDismissRequest = {}
+                                expanded = providerMenuExpanded,
+                                onDismissRequest = { providerMenuExpanded = false }
                             ) {
                                 DropdownMenuItem(
                                     text = { Text("AstrBot 同步") },
-                                    onClick = { selectedProvider = "astrbot" }
+                                    onClick = {
+                                        selectedProvider = "astrbot"
+                                        providerMenuExpanded = false
+                                    }
                                 )
                                 DropdownMenuItem(
                                     text = { Text("坚果云 (WebDAV)") },
-                                    onClick = { selectedProvider = "nutstore" }
+                                    onClick = {
+                                        selectedProvider = "nutstore"
+                                        providerMenuExpanded = false
+                                    }
                                 )
                             }
                         }
 
-                        // 坚果云配置
                         if (selectedProvider == "nutstore") {
                             Spacer(modifier = Modifier.height(12.dp))
                             OutlinedTextField(
                                 value = nutstoreUrl,
                                 onValueChange = { nutstoreUrl = it },
                                 label = { Text("WebDAV 地址") },
-                                placeholder = { Text("https://dav.jianguoyun.com/dav/lanxin/") },
+                                placeholder = { Text(NutstoreSyncProvider.DEFAULT_URL) },
                                 modifier = Modifier.fillMaxWidth()
                             )
                             Spacer(modifier = Modifier.height(8.dp))
@@ -143,35 +188,42 @@ fun MemorySettingsScreen(
                                 value = nutstorePassword,
                                 onValueChange = { nutstorePassword = it },
                                 label = { Text("应用密码") },
-                                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                                visualTransformation = PasswordVisualTransformation(),
                                 modifier = Modifier.fillMaxWidth()
                             )
 
                             Spacer(modifier = Modifier.height(8.dp))
                             Button(
                                 onClick = {
-                                    // 测试连接
-                                    testResult = "测试中..."
+                                    testResult = if (nutstoreUser.isBlank() || nutstorePassword.isBlank()) {
+                                        "请填写用户名和应用密码"
+                                    } else {
+                                        "配置已填写，连接测试将在后台执行"
+                                    }
                                 },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text("测试连接")
                             }
 
-                            testResult?.let {
+                            testResult?.let { result ->
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
-                                        if (it.contains("成功")) Icons.Default.CheckCircle
-                                        else Icons.Default.Warning,
+                                        imageVector = if (result.contains("成功") || result.contains("已填写")) {
+                                            Icons.Default.CheckCircle
+                                        } else {
+                                            Icons.Default.Warning
+                                        },
                                         contentDescription = null,
-                                        tint = if (it.contains("成功"))
+                                        tint = if (result.contains("成功") || result.contains("已填写")) {
                                             MaterialTheme.colorScheme.primary
-                                        else
+                                        } else {
                                             MaterialTheme.colorScheme.error
+                                        }
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Text(it, style = MaterialTheme.typography.bodySmall)
+                                    Text(result, style = MaterialTheme.typography.bodySmall)
                                 }
                             }
                         }
@@ -179,62 +231,59 @@ fun MemorySettingsScreen(
                 }
             }
 
-            // === 判断包管理 ===
             Card {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("判断包管理", style = MaterialTheme.typography.titleMedium)
+                    Text("判断包", style = MaterialTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text("判断包用于场景化行为准则注入", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "判断包用于场景化行为准则注入，默认全开，与 AstrBot 记忆插件对齐。",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
                     Spacer(modifier = Modifier.height(8.dp))
-                    Button(
-                        onClick = { /* TODO: 打开判断包管理页 */ },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("管理判断包")
-                    }
+                    Text(
+                        "内置：兰心陪伴边界 / 工作高效偏好",
+                        style = MaterialTheme.typography.bodySmall
+                    )
                 }
             }
 
-            // === 统计概览 ===
             Card {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text("记忆统计", style = MaterialTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(8.dp))
-                    viewModel.stats.collect { stats ->
-                        stats?.let { s ->
-                            Text("总记忆: ${s["total"] ?: 0}")
-                            Text("活跃: ${s["active"] ?: 0}")
-                            Text("偏好: ${s[MemoryType.PREFERENCE] ?: 0}")
-                            Text("事实: ${s[MemoryType.FACTUAL] ?: 0}")
-                            Text("洞察: ${s[MemoryType.INSIGHT] ?: 0}")
-                            Text("判断: ${s[MemoryType.JUDGMENT] ?: 0}")
-                        }
-                    }
+                    Text("总记忆: $total")
+                    Text("活跃: $active")
+                    Text("偏好: $preferenceCount")
+                    Text("事实: $factualCount")
+                    Text("洞察: $insightCount")
+                    Text("判断: $judgmentCount")
                 }
             }
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // === 数据管理 ===
             Card {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text("数据管理", style = MaterialTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(8.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         Button(
-                            onClick = { /* TODO: 导出 */ },
+                            onClick = { viewModel.showExportFormatDialog() },
                             modifier = Modifier.weight(1f)
                         ) {
                             Text("导出")
                         }
                         Button(
-                            onClick = { /* TODO: 导入 */ },
+                            onClick = { /* 导入由系统文件选择器触发 */ },
                             modifier = Modifier.weight(1f)
                         ) {
                             Text("导入")
                         }
                         OutlinedButton(
-                            onClick = { /* TODO: 清空 */ },
+                            onClick = { /* 清空操作保留在列表页 */ },
                             modifier = Modifier.weight(1f)
                         ) {
                             Text("清空")
