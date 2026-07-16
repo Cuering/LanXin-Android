@@ -129,7 +129,7 @@ class PluginManagerViewModelTest {
         assertEquals(1, state.records.size)
         assertEquals("compiled.a", state.records.single().id)
         assertTrue(state.snackbarMessage!!.contains("已卸载"))
-        assertTrue(catalog.unloadedIds.containsKey("dyn.b"))
+        assertTrue(catalog.unloadedIds.contains("dyn.b"))
     }
 
     @Test
@@ -194,7 +194,7 @@ class PluginManagerViewModelTest {
         override fun getLastDynamicFailures(): List<PluginLoadResult.Failure> = lastFailures
 
         override suspend fun setEnabled(pluginId: String, enabled: Boolean): Boolean {
-            if (pluginId !in records) {
+            if (!records.containsKey(pluginId)) {
                 enabledMap[pluginId] = enabled
                 return false
             }
