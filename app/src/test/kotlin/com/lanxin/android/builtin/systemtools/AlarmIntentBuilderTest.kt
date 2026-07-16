@@ -70,6 +70,7 @@ class AlarmIntentBuilderTest {
             minutes = 0,
             daysOfWeek = listOf(2, 3, 4, 5, 6)
         )
+
         @Suppress("UNCHECKED_CAST")
         val days = spec.extras[AlarmIntentBuilder.EXTRA_DAYS] as List<Int>
         assertEquals(listOf(2, 3, 4, 5, 6), days)

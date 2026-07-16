@@ -74,7 +74,7 @@ object Route {
 
     /** 桌宠 / 语音陪伴（Phase 6 主线 M1） */
     const val DESKTOP_PET = "desktop_pet"
-}
 
     /** 系统能力：日历 / 闹钟 / 笔记 / 用户文件（Phase 7） */
     const val SYSTEM_TOOLS = "system_tools"
+}

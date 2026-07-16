@@ -72,6 +72,7 @@ class CalendarListUpcomingStubTest {
         )
         assertTrue(created is DeviceToolOutcome.Ok)
         val list = listTool.invoke(mapOf("limit" to 50)) as DeviceToolOutcome.Ok
+
         @Suppress("UNCHECKED_CAST")
         val events = list.data["events"] as List<Map<String, Any?>>
         assertTrue(events.any { it["title"] == "Phase7 单测" })

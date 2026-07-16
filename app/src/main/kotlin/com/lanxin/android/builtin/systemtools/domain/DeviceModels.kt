@@ -39,8 +39,10 @@ enum class DevicePermission {
     NONE,
     READ_CALENDAR,
     WRITE_CALENDAR,
+
     /** SAF / persistable URI；用户授权后可用 */
     SAF_TREE,
+
     /** 应用私有目录读写 */
     APP_PRIVATE_STORAGE
 }
@@ -49,8 +51,10 @@ enum class DevicePermission {
 enum class ConfirmationLevel {
     /** 只读 / 展示 Intent，无需确认 */
     NONE,
+
     /** 默认：执行前需用户确认（UI 或 tool 批准） */
     CONFIRM,
+
     /** 高危：必须显式批准（删除等） */
     EXPLICIT_APPROVE
 }
