@@ -12,6 +12,7 @@
 - 数据统计：对话轮数、token 估算、按日活跃度（`builtin/statistics`）
 - 定时任务：周期/一次性 BASIC 回调与 ACTIVE_AGENT 提醒（`builtin/scheduler`）
 - 手机平台工具：剪贴板 / 已安装应用 / 系统信息（`builtin/platform`）
+- 系统能力：日历 / 闹钟 Intent / 笔记 / 用户文件骨架（`builtin/systemtools`，默认关）
 - 自动更新 / 版本回退 + 数据备份还原（`core/updater`）
 - 日志系统 + 日志查看插件（`core/log` + `plugins/logger`）
 - Skill 加载器（`app/skill`）
@@ -56,6 +57,8 @@ app/         壳应用（Compose UI 入口）
 | [docs/debug-assets.md](./docs/debug-assets.md) | Debug：免费 Live2D + 开源 ASR/TTS 资源 |
 | [builtin/pet/README.md](./builtin/pet/README.md) | 桌宠 / 语音陪伴（Phase 6） |
 | [docs/meiju-style-pet.md](./docs/meiju-style-pet.md) | 妹居风格架构对照（资源不入库） |
+| [docs/system-tools.md](./docs/system-tools.md) | Phase 7 系统能力（日历/闹钟/笔记/文件） |
+| [builtin/systemtools/README.md](./builtin/systemtools/README.md) | 系统能力模块 |
 
 ### Debug 语音 / Live2D 资源
 
