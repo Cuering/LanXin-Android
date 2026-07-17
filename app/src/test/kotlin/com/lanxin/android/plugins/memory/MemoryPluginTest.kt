@@ -2,10 +2,16 @@ package com.lanxin.android.plugins.memory
 
 import com.lanxin.android.plugin.PluginContext
 import com.lanxin.android.plugin.ToolDef
+import com.lanxin.android.plugins.memory.data.memory.MemoryDao
+import com.lanxin.android.plugins.memory.data.memory.MemoryEntity
 import com.lanxin.android.plugins.memory.data.memory.MemoryExportItem
 import com.lanxin.android.plugins.memory.data.memory.MemoryExportPayload
+import com.lanxin.android.plugins.memory.data.memory.MemoryRepository
 import com.lanxin.android.plugins.memory.data.memory.MemoryType
+import com.lanxin.android.plugins.memory.data.memory.TypeCount
 import java.io.File
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
@@ -69,11 +75,8 @@ class MemoryPluginTest {
     }
 
     private fun memoryPlugin(): MemoryPlugin {
-        val repository = org.mockito.kotlin.mock<com.lanxin.android.plugins.memory.data.memory.MemoryRepository>()
-        val fake = FakeMemoryRepository()
-        org.mockito.kotlin.whenever(repository.exportToJsonText(org.mockito.kotlin.anyOrNull())).thenAnswer {
-            fake.exportToJsonText(it.arguments[0] as String?)
-        }
+        val dao = FakeMemoryDao()
+        val repository = MemoryRepository(dao)
         return MemoryPlugin(repository)
     }
 
@@ -93,43 +96,68 @@ class MemoryPluginTest {
     }
 }
 
-private class FakeMemoryRepository {
-    private val json = Json { encodeDefaults = true }
+/** Minimal fake DAO that returns sample memories for export tests. */
+private class FakeMemoryDao : MemoryDao {
 
-    suspend fun exportToJsonText(typeFilter: String?): String {
-        val all = sampleItems()
-        val filtered = if (typeFilter.isNullOrBlank()) {
-            all
-        } else {
-            all.filter { it.type.equals(typeFilter, ignoreCase = true) }
-        }
-        return json.encodeToString(
-            MemoryExportPayload.serializer(),
-            MemoryExportPayload(
-                version = 1,
-                exportedAt = 1_700_100_000_000L,
-                memories = filtered
-            )
-        )
-    }
-
-    private fun sampleItems() = listOf(
-        MemoryExportItem(
+    private val samples = listOf(
+        MemoryEntity(
             id = 1,
             content = "喜欢草莓",
             type = MemoryType.PREFERENCE,
             importance = 8f,
             createdAt = 1_700_000_000_000L,
+            lastAccessedAt = 1_700_000_000_000L,
+            status = "active",
             lifecycle = "permanent",
-            metadata = "{\"tags\":[\"food\"]}"
+            metadata = """{"tags":["food"]}"""
         ),
-        MemoryExportItem(
+        MemoryEntity(
             id = 2,
             content = "普通聊天",
             type = MemoryType.CHAT,
             importance = 3f,
             createdAt = 1_700_000_100_000L,
+            status = "active",
             lifecycle = "normal"
         )
     )
+
+    override suspend fun getAllMemoriesOnce(): List<MemoryEntity> = samples
+
+    // ---- stubs (not called by the memory_export tool path) ----
+
+    override fun getAllMemories(): Flow<List<MemoryEntity>> = flowOf(samples)
+    override fun getMemoriesByType(type: String): Flow<List<MemoryEntity>> = error("not mocked")
+    override suspend fun searchMemories(keyword: String): List<MemoryEntity> = error("not mocked")
+    override suspend fun getMemoryById(id: Long): MemoryEntity? = error("not mocked")
+    override suspend fun insertMemory(memory: MemoryEntity): Long = error("not mocked")
+    override suspend fun updateMemory(memory: MemoryEntity) = error("not mocked")
+    override suspend fun deleteMemory(memory: MemoryEntity) = error("not mocked")
+    override suspend fun deleteMemoryById(id: Long) = error("not mocked")
+    override fun getMemoryCount(): Flow<Int> = error("not mocked")
+    override fun getActiveMemoryCount(): Flow<Int> = error("not mocked")
+    override suspend fun searchMemoriesForInject(keyword: String, limit: Int): List<MemoryEntity> = error("not mocked")
+    override suspend fun touchMemory(id: Long, timestamp: Long) = error("not mocked")
+    override suspend fun getTypeCounts(): List<TypeCount> = error("not mocked")
+    override suspend fun getActiveCountOnce(): Int = error("not mocked")
+    override suspend fun getTotalCountOnce(): Int = error("not mocked")
+    override suspend fun getAllIds(): List<Long> = error("not mocked")
+    override suspend fun existsByContentAndType(content: String, type: String): Boolean = error("not mocked")
+    override suspend fun insertMemoryIgnore(memory: MemoryEntity): Long = error("not mocked")
+    override suspend fun insertMemories(memories: List<MemoryEntity>) = error("not mocked")
+    override suspend fun deleteAll() = error("not mocked")
+    override suspend fun getJudgmentMemories(): List<MemoryEntity> = error("not mocked")
+    override suspend fun getExpiredMemories(cutoff: Long): List<MemoryEntity> = error("not mocked")
+    override suspend fun touchMemoryById(id: Long, timestamp: Long) = error("not mocked")
+    override suspend fun markExpired(id: Long) = error("not mocked")
+    override suspend fun deleteExpiredMemories() = error("not mocked")
+    override suspend fun getUserProfile(): com.lanxin.android.plugins.memory.data.memory.UserEntity? = error("not mocked")
+    override suspend fun upsertUserProfile(entity: com.lanxin.android.plugins.memory.data.memory.UserEntity) = error("not mocked")
+    override suspend fun getEvolutionEntries(limit: Int): List<com.lanxin.android.plugins.memory.data.memory.EvolutionEntry> = error("not mocked")
+    override suspend fun insertEvolutionEntry(entry: com.lanxin.android.plugins.memory.data.memory.EvolutionEntry) = error("not mocked")
+    override suspend fun getPendingTaskResume(): com.lanxin.android.plugins.memory.data.memory.TaskResumeEntity? = error("not mocked")
+    override suspend fun markTaskResumeResolved(id: Long) = error("not mocked")
+    override suspend fun insertTaskResume(resume: com.lanxin.android.plugins.memory.data.memory.TaskResumeEntity) = error("not mocked")
+    override suspend fun getUnarchivedDialogs(limit: Int): List<com.lanxin.android.plugins.memory.data.memory.DialogEntity> = error("not mocked")
+    override suspend fun markDialogArchived(id: Long) = error("not mocked")
 }
