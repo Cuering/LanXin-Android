@@ -17,7 +17,9 @@
 package com.lanxin.android.builtin.platform.di
 
 import com.lanxin.android.builtin.platform.PlatformPlugin
+import com.lanxin.android.builtin.platform.data.DeviceSensingPreferences
 import com.lanxin.android.builtin.platform.data.WebSearchPreferences
+import com.lanxin.android.builtin.platform.domain.DeviceSensingSettings
 import com.lanxin.android.builtin.platform.domain.WebSearchSettings
 import com.lanxin.android.plugin.PluginManager
 import dagger.Binds
@@ -32,6 +34,7 @@ import javax.inject.Singleton
  * 手机平台工具模块 DI — 绑定。
  *
  * - WebSearchSettings → WebSearchPreferences（DataStore）
+ * - DeviceSensingSettings → DeviceSensingPreferences（DataStore）
  */
 @Module
 @DisableInstallInCheck
@@ -41,6 +44,10 @@ abstract class PlatformBindModule {
     @Binds
     @Singleton
     abstract fun bindWebSearchSettings(impl: WebSearchPreferences): WebSearchSettings
+
+    @Binds
+    @Singleton
+    abstract fun bindDeviceSensingSettings(impl: DeviceSensingPreferences): DeviceSensingSettings
 }
 
 /**
