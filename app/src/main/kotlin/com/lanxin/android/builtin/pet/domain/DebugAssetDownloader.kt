@@ -46,6 +46,7 @@ class DebugAssetDownloader @Inject constructor(
 ) {
 
     private val mutex = Mutex()
+
     @Volatile
     private var activeJob: Job? = null
 

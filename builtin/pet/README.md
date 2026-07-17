@@ -52,7 +52,7 @@ bash scripts/fetch-debug-assets.sh
 |------|------|--------|:----------:|
 | Live2D | **仓内** Niziiro Mao（优先） | `live2d_model_path`（可空） | 可选更新 |
 | ASR | sherpa zipformer zh-14M | `offline_asr_model_path` | ✅ |
-| TTS | matcha-icefall-zh-baker | `tts_model_dir` |
+| TTS | matcha-icefall-zh-baker | `tts_model_dir` | ✅ |
 | 本地脑 | Qwen2.5-1.5B（自备） | `local_inference_model_path` |
 
 **ASR/TTS 大包不进 git**；主路径 App 内下载到 filesDir；脚本可选。禁止 AstrBot 服务器缓存模型当交付。
