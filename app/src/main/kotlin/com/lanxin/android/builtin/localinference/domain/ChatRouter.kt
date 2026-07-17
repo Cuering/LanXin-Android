@@ -162,4 +162,27 @@ object ChatRouter {
             cloudAvailable = cloudAvailable
         )
     )
+
+    /**
+     * Phase 7.5：合并设备工具意图到路由上下文。
+     *
+     * 当 [deviceToolIntentHit] 为 true（如 [com.lanxin.android.builtin.systemtools.domain.DeviceToolBridge.detectsToolIntent]）
+     * 时，将 needsTools 置 true，优先云端 tool_call；本地仍可走 DeviceToolBridge 直办。
+     */
+    fun decideWithDeviceToolHint(
+        preferLocal: Boolean,
+        localReady: Boolean,
+        networkAvailable: Boolean? = null,
+        cloudAvailable: Boolean? = null,
+        needsTools: Boolean = false,
+        deviceToolIntentHit: Boolean = false
+    ): InferenceRouteDecision = decide(
+        ChatRouteContext(
+            preferLocal = preferLocal,
+            localReady = localReady,
+            networkAvailable = networkAvailable,
+            needsTools = needsTools || deviceToolIntentHit,
+            cloudAvailable = cloudAvailable
+        )
+    )
 }

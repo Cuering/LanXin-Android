@@ -2,9 +2,15 @@
 
 统一设备工具：日历 / 精确闹钟 / 内置笔记 / 用户文件。
 
-与桌宠 VoiceSession、Chat、MCP **共用** `DeviceTool` 契约——**陪伴操控一体**。
+与桌宠 VoiceSession、Chat、MCP **共用** `DeviceTool` 契约（经 `DeviceToolBridge`）——**陪伴操控一体**（Phase 7.5）。
 
 详见 [docs/system-tools.md](../../docs/system-tools.md)。
+
+## 7.5 一体接入
+
+- `DeviceToolBridge`：意图 / 发现 / Gate / 回灌文案
+- `DeviceToolIntentResolver`：关键词 → tool id
+- `VoiceSessionCoordinator`：听→想→办→说
 
 ## 7.4 工具
 
@@ -28,7 +34,8 @@
 
 实现在 `app/src/main/kotlin/com/lanxin/android/builtin/systemtools/`：
 
-- `domain/DeviceTool` + `DeviceToolGate` + `CalendarGateway` + `AlarmClockGateway`
+- `domain/DeviceTool` + `DeviceToolGate` + `DeviceToolBridge` + `DeviceToolIntentResolver`
+- `domain/CalendarGateway` + `AlarmClockGateway`
 - `domain/NotesStore` + `NotesCodec` + `NotesSafGateway`
 - `domain/UserFileStore`（Catalog + IoGateway + 排序）
 - `domain/SystemToolsIntentLauncher` + `CalendarIntentBuilder` + `AlarmIntentBuilder`

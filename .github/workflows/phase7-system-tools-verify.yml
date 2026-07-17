@@ -5,6 +5,7 @@ on:
     branches: [ main ]
     paths:
       - 'app/**/builtin/systemtools/**'
+      - 'app/**/builtin/pet/**'
       - 'docs/system-tools.md'
       - 'builtin/systemtools/**'
       - 'ARCHITECTURE.md'
@@ -14,6 +15,7 @@ on:
       - feat/phase7.2-calendar-alarm
       - feat/phase7.3-notes
       - feat/phase7.4-file-manager
+      - feat/phase7.5-voice-chat-tools
 
 concurrency:
   group: phase7-${{ github.head_ref || github.ref_name }}
@@ -38,7 +40,7 @@ jobs:
 
       - name: System Tools Unit Tests
         run: |
-          ./gradlew :app:testDebugUnitTest --tests "com.lanxin.android.builtin.systemtools.*" --no-daemon
+          ./gradlew :app:testDebugUnitTest --tests "com.lanxin.android.builtin.systemtools.*" --tests "com.lanxin.android.builtin.pet.VoiceSessionToolBridgeTest" --no-daemon
 
       - name: Surface check - docs present
         run: |
@@ -76,6 +78,18 @@ jobs:
           grep -q 'file_pick' docs/system-tools.md || { echo 'docs must mention file_pick'; exit 1; }
           grep -q 'DocumentsContract' app/src/main/kotlin/com/lanxin/android/builtin/systemtools/data/files/AndroidUserFileIoGateway.kt || { echo 'must use DocumentsContract for delete'; exit 1; }
           grep -q 'takePersistableUriPermission' app/src/main/kotlin/com/lanxin/android/builtin/systemtools/data/files/AndroidUserFileIoGateway.kt || { echo 'must takePersistable'; exit 1; }
+          # Phase 7.5 voice/chat bridge surfaces
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/systemtools/domain/DeviceToolBridge.kt || { echo 'Missing DeviceToolBridge'; exit 1; }
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/systemtools/domain/DeviceToolIntentResolver.kt || { echo 'Missing DeviceToolIntentResolver'; exit 1; }
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/systemtools/DeviceToolBridgeTest.kt || { echo 'Missing DeviceToolBridgeTest'; exit 1; }
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/pet/VoiceSessionToolBridgeTest.kt || { echo 'Missing VoiceSessionToolBridgeTest'; exit 1; }
+          grep -q 'DeviceToolBridge' app/src/main/kotlin/com/lanxin/android/builtin/pet/domain/VoiceSessionCoordinator.kt || { echo 'VoiceSession must use DeviceToolBridge'; exit 1; }
+          grep -q 'voiceTurn' app/src/main/kotlin/com/lanxin/android/builtin/systemtools/domain/DeviceToolBridge.kt || { echo 'Missing voiceTurn'; exit 1; }
+          grep -q 'chatTurn' app/src/main/kotlin/com/lanxin/android/builtin/systemtools/domain/DeviceToolBridge.kt || { echo 'Missing chatTurn'; exit 1; }
+          grep -q 'voiceTurn' app/src/main/kotlin/com/lanxin/android/builtin/pet/domain/VoiceSessionCoordinator.kt || { echo 'VoiceSession must call voiceTurn'; exit 1; }
+          grep -q 'decideWithDeviceToolHint' app/src/main/kotlin/com/lanxin/android/builtin/localinference/domain/ChatRouter.kt || { echo 'ChatRouter must expose decideWithDeviceToolHint'; exit 1; }
+          grep -q '7.5' docs/system-tools.md || { echo 'docs must mention 7.5'; exit 1; }
+          grep -q 'DeviceToolBridge' docs/system-tools.md || { echo 'docs must mention DeviceToolBridge'; exit 1; }
 
       - name: Surface check - no model curl
         run: |

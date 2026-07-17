@@ -16,6 +16,10 @@
 
 package com.lanxin.android.builtin.pet.domain
 
+import com.lanxin.android.builtin.systemtools.domain.DeviceToolBridge
+import com.lanxin.android.builtin.systemtools.domain.DeviceToolInvocation
+import com.lanxin.android.builtin.systemtools.domain.DeviceToolOutcome
+import com.lanxin.android.builtin.systemtools.domain.DeviceToolTurn
 import com.lanxin.android.builtin.voice.domain.TtsEngine
 import com.lanxin.android.builtin.voice.domain.TtsSynthesizeRequest
 import javax.inject.Inject
@@ -27,31 +31,30 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /**
- * 桌宠语音会话协调器：听 → 想 → 说。
+ * 桌宠语音会话协调器：听 → 想 → **办** → 说。
  *
  * - 输入：ASR 文本（可 stub）
  * - 思考：[PetChatResponder]（stub / 后续 ChatRouter）
+ * - 办事：[DeviceToolBridge]（Registry + Gate，与 Chat/MCP 同一路径）
  * - 输出：[TtsEngine] + 字幕气泡（**不**塞 Chat 输入框）
  *
  * 默认不录音、不截屏；仅用户 / 设置页显式触发。
+ * 系统工具默认关；写操作需确认策略由 Gate 决定。
  *
- * ## Phase 7 一体钩子（预留，本 PR 不接线）
- *
- * 目标态：听 → 想 → **办**（`DeviceToolRegistry` + `DeviceToolGate`）→ 说。
- * Chat / MCP / VoiceSession 共用同一套系统工具与确认门闸，见 `docs/system-tools.md`。
+ * ## Phase 7.5 一体接入
  *
  * ```
- * // TODO(phase7.5): after think / when tool_call needed —
- * // val outcome = deviceToolGate.invoke(registry.get(name)!!, args, confirmed)
- * // feed outcome back into responder / TTS (听→想→办→说)
+ * 听 → 想 → DeviceToolBridge.resolveAndInvoke → 结果并入回复 → 说
  * ```
+ *
+ * Chat / MCP / VoiceSession 共用同一套系统工具与确认门闸，见 `docs/system-tools.md` §7.5。
  */
 @Singleton
 class VoiceSessionCoordinator @Inject constructor(
     private val responder: PetChatResponder,
     private val ttsEngine: TtsEngine,
-    private val petSettings: PetSettings
-    // TODO(phase7.5): inject DeviceToolRegistry + DeviceToolGate when wiring tools
+    private val petSettings: PetSettings,
+    private val deviceToolBridge: DeviceToolBridge
 ) {
 
     private val mutex = Mutex()
@@ -64,8 +67,12 @@ class VoiceSessionCoordinator @Inject constructor(
      * 跑完整一轮会话（状态机驱动）。
      *
      * @param input ASR 文本；stub 演示可传固定句
+     * @param toolConfirmed 若本轮命中写操作工具，是否视为用户已确认
      */
-    suspend fun runRound(input: VoiceSessionInput): VoiceSessionResult = mutex.withLock {
+    suspend fun runRound(
+        input: VoiceSessionInput,
+        toolConfirmed: Boolean = false
+    ): VoiceSessionResult = mutex.withLock {
         val started = System.currentTimeMillis()
         var snap = _snapshot.value
         val config = petSettings.getConfig()
@@ -102,7 +109,11 @@ class VoiceSessionCoordinator @Inject constructor(
         snap = VoiceSessionStateMachine.onAsrDone(snap, text)
         _snapshot.value = snap
 
-        val reply = runCatching { responder.respond(text) }
+        // 办：统一 DeviceToolBridge.voiceTurn（意图未命中 → 纯闲聊）
+        val toolTurn = deviceToolBridge.voiceTurn(text, confirmed = toolConfirmed)
+        val toolInvocation: DeviceToolInvocation? = toolTurn.toInvocationOrNull()
+
+        val chatReply = runCatching { responder.respond(text) }
             .getOrElse { e ->
                 snap = VoiceSessionStateMachine.fail(snap, e.message ?: "think_failed")
                 _snapshot.value = snap
@@ -113,9 +124,13 @@ class VoiceSessionCoordinator @Inject constructor(
                     phase = snap.phase,
                     isStub = input.isStub,
                     error = snap.lastError,
-                    durationMs = System.currentTimeMillis() - started
+                    durationMs = System.currentTimeMillis() - started,
+                    toolName = toolTurn.plan?.toolName,
+                    toolOutcome = toolTurn.outcome
                 )
             }
+
+        val reply = composeReply(chatReply, toolTurn)
 
         snap = VoiceSessionStateMachine.onThinkDone(snap, reply)
         _snapshot.value = snap
@@ -147,7 +162,9 @@ class VoiceSessionCoordinator @Inject constructor(
                 phase = snap.phase,
                 isStub = input.isStub,
                 error = "tts_failed:${e.message}",
-                durationMs = System.currentTimeMillis() - started
+                durationMs = System.currentTimeMillis() - started,
+                toolName = toolTurn.plan?.toolName,
+                toolOutcome = toolTurn.outcome
             )
         }
 
@@ -163,12 +180,14 @@ class VoiceSessionCoordinator @Inject constructor(
             subtitle = tts.subtitle.ifBlank { reply },
             phase = snap.phase,
             isStub = input.isStub || tts.isStub,
-            durationMs = System.currentTimeMillis() - started
+            durationMs = System.currentTimeMillis() - started,
+            toolName = toolTurn.plan?.toolName,
+            toolOutcome = toolTurn.outcome
         )
     }
 
     /**
-     * 设置页试运行：固定 stub 一轮「听→想→说」。
+     * 设置页试运行：固定 stub 一轮「听→想→说」（不强制工具）。
      */
     suspend fun runDemoRound(): VoiceSessionResult {
         return runRound(
@@ -182,5 +201,21 @@ class VoiceSessionCoordinator @Inject constructor(
 
     suspend fun reset() = mutex.withLock {
         _snapshot.value = VoiceSessionStateMachine.reset(_snapshot.value)
+    }
+
+    private fun composeReply(
+        chatReply: String,
+        turn: DeviceToolTurn
+    ): String {
+        val outcome = turn.outcome ?: return chatReply
+        val toolLine = turn.summary
+            ?: deviceToolBridge.summarize(outcome, toolName = turn.plan?.toolName)
+        return when (outcome) {
+            is DeviceToolOutcome.Ok -> "$toolLine $chatReply".trim()
+            is DeviceToolOutcome.NeedsConfirmation ->
+                "$toolLine 你确认的话再说一遍并批准哦～"
+            is DeviceToolOutcome.Denied,
+            is DeviceToolOutcome.Error -> toolLine
+        }
     }
 }

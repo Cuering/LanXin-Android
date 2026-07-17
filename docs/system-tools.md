@@ -1,9 +1,9 @@
 # Phase 7 — System Tools / Device Skills
 
-> 状态：**7.1 骨架 ✅** · **7.2 闹钟 Intent + 日历读/写 ✅** · **7.3 笔记 Room + SAF ✅** · **7.4 用户文件 SAF 🚧**（`feat/phase7.4-file-manager`）  
+> 状态：**7.1 骨架 ✅** · **7.2 闹钟 Intent + 日历读/写 ✅** · **7.3 笔记 Room + SAF ✅** · **7.4 用户文件 SAF ✅** · **7.5 对话/桌宠一体接入 🚧**（`feat/phase7.5-voice-chat-tools`）  
 > 模块：`builtin/systemtools` + `app/.../builtin/systemtools/*`  
 > 产品线：**桌宠 + 操控手机 = 陪伴操控一体**（与 Phase 6 VoiceSession 同一会话，非旁路 App）  
-> 与 ChatRouter `needsTools`、桌宠 VoiceSession、MCP 共用统一 `DeviceTool` 契约。
+> 与 ChatRouter `needsTools`、桌宠 VoiceSession、MCP 共用统一 `DeviceTool` 契约（经 `DeviceToolBridge.chatTurn` / `voiceTurn`）。
 
 ## 1. 目标与范围
 
@@ -26,12 +26,13 @@
         │
         ├─ 纯闲聊 → 回复 → 说（TTS / 字幕）
         │
-        └─ 要办事 → DeviceToolGate（开关 + 确认）
-                      ├─ DeviceToolRegistry（alarm / calendar / notes / files）
-                      └─ 结果回灌 → 想（总结）→ 说
+        └─ 要办事 → DeviceToolBridge（发现 + 意图）
+                      └─ DeviceToolGate（开关 + 确认）
+                            ├─ DeviceToolRegistry（alarm / calendar / notes / files）
+                            └─ 结果回灌 → 想（总结）→ 说
 ```
 
-工具给 **Chat 与 VoiceSession 共用**，不是旁路独立 App。
+工具给 **Chat 与 VoiceSession 共用**，不是旁路独立 App。入口统一为 `DeviceToolBridge`。
 
 ## 2. 架构
 
@@ -40,10 +41,17 @@ DeviceTool (interface)
     ├── name / capability / permissions / sideEffect / confirmationLevel
     └── invoke(args, confirmed)
 
-DeviceToolGate
-    ├── master switch
-    ├── per-capability switch
-    └── write/delete confirmation
+DeviceToolBridge  ← Phase 7.5 统一入口（Chat / VoiceSession / 测试）
+    ├── chatTurn / voiceTurn（一轮上下文 + 可选执行）
+    ├── DeviceToolIntentResolver（轻量关键词 → tool id + args）
+    ├── DeviceToolRegistry（发现）
+    └── DeviceToolGate
+            ├── master switch
+            ├── per-capability switch
+            └── write/delete confirmation
+
+ChatRouter.decideWithDeviceToolHint(deviceToolIntentHit)
+    └── needsTools |= intent hit → 优先云端
 
 CalendarGateway ──► AndroidCalendarReader (Instances + INSERT Intent) | StubCalendarGateway
 AlarmClockGateway ──► AndroidAlarmSetter (setAlarmClock) | Fake
@@ -54,7 +62,10 @@ UserFileCatalog ──► InMemoryUserFileCatalog
 UserFileIoGateway ──► AndroidUserFileIoGateway (SAF + imports)
 
 SystemToolsPlugin (LanXinPlugin)
-    └── registerTool → MCP / Chat tool_call
+    └── registerTool → MCP / Chat tool_call（同样经 Gate）
+
+VoiceSessionCoordinator
+    └── deviceToolBridge.resolveAndInvoke → 结果并入 reply → TTS
 ```
 
 ### 代码位置
@@ -66,6 +77,8 @@ app/src/main/kotlin/com/lanxin/android/builtin/systemtools/
 │   ├── DeviceModels.kt
 │   ├── DeviceTool.kt
 │   ├── DeviceToolGate.kt
+│   ├── DeviceToolBridge.kt          # 7.5 统一桥
+│   ├── DeviceToolIntentResolver.kt  # 7.5 意图 → plan
 │   ├── AlarmIntentBuilder.kt
 │   ├── CalendarIntentBuilder.kt
 │   ├── AlarmClockGateway.kt
@@ -137,8 +150,8 @@ app/src/main/kotlin/com/lanxin/android/builtin/systemtools/
 | **7.1 骨架** | DeviceTool + 门闸 + Stub + 设置 | ✅ |
 | **7.2 闹钟 + 日历** | Intent 真启动 + setAlarmClock；日历 Instances + INSERT Intent + 确认流 + 权限引导 | ✅ |
 | **7.3 笔记** | Room CRUD + SAF 导出/导入 + 设置状态 | ✅ |
-| **7.4 文件** | SAF 选取/导入 + imports 列表/读/写/分享/删 | 🚧 |
-| **7.5 一体接入** | ChatRouter + VoiceSession tool 钩子 | 🔜 |
+| **7.4 文件** | SAF 选取/导入 + imports 列表/读/写/分享/删 | ✅ |
+| **7.5 一体接入** | DeviceToolBridge chat/voice turn + VoiceSession + ChatRouter hint | 🚧 |
 | **7.6 打磨** | UX / 审计 | 🔜 |
 
 ### 7.4 交付清单
@@ -151,6 +164,19 @@ app/src/main/kotlin/com/lanxin/android/builtin/systemtools/
 - [x] 设置页：OpenDocument 导入、CreateDocument 写文本、最近文件列表/分享
 - [x] 单测：`UserFileStoreTest` + Gate 确认 / Registry
 - [x] 文档 + CI surface check（7.4 路径）
+
+### 7.5 交付清单（对话 / 桌宠一体）
+
+- [x] `DeviceToolBridge`：Registry 发现 + Gate 调用 + `summarize` 回灌文案
+- [x] `chatTurn` / `voiceTurn`：统一一轮入口（上下文 + 意图 + 可选执行）
+- [x] `DeviceToolIntentResolver`：高置信关键词 → tool id / 默认 args（无 LLM）
+- [x] `VoiceSessionCoordinator` 注入 Bridge：听 → 想 → **办**（`voiceTurn`）→ 说
+- [x] `ChatRouter.decideWithDeviceToolHint`：设备工具意图 → `needsTools`
+- [x] 默认仍尊重 SystemTools 总开关 / 分项 / 写确认；**不**默认全开
+- [x] 单测：`DeviceToolBridgeTest`（意图→Gate→stub + chat/voice turn）+ `VoiceSessionToolBridgeTest` + ChatRouter hint
+- [x] 文档 + ARCHITECTURE 交叉链接；CI surface check（7.5 路径）
+- [ ] Chat UI 深度 tool_call 回灌（既有 `SystemToolsPlugin` + `ToolCallEngine`；本 PR 不重做整条会话）
+- [ ] 云端 LLM 结构化 tool_call 替代关键词解析（可后续）
 
 ## 5. 权限表
 
@@ -188,6 +214,7 @@ app/src/main/kotlin/com/lanxin/android/builtin/systemtools/
 
 ```bash
 ./gradlew :app:testDebugUnitTest --tests "com.lanxin.android.builtin.systemtools.*"
+./gradlew :app:testDebugUnitTest --tests "com.lanxin.android.builtin.pet.VoiceSessionToolBridgeTest"
 ```
 
 - `AlarmIntentBuilderTest` / `AlarmSetterTest`（含 intent 真启动 Fake）
@@ -196,12 +223,14 @@ app/src/main/kotlin/com/lanxin/android/builtin/systemtools/
 - `DeviceToolIdsTest` / `SystemToolsConfigTest`
 - `NotesStoreTest`（CRUD / Codec / Gate / export-import）
 - `UserFileStoreTest`（排序 / catalog / pick-write-list-read-delete / Gate）
+- `DeviceToolBridgeTest`（7.5：意图 → 选 id → Gate → stub 结果）
+- `VoiceSessionToolBridgeTest`（7.5：会话 E2E 办→说）
 
-## 9. 明确不做（本 PR）
+## 9. 明确不做（本 PR / 7.5）
 
-- VoiceSession 一体接入（7.5）
-- WRITE_CALENDAR ContentProvider 直写
-- 厂商笔记 App 私有协议
-- 服务器下载 / auto-merge
+- 重做整条 Chat 会话 / 云端 tool_call 解析器
+- 厂商笔记 App 私有协议 / 深度厂商日历
+- 服务器下载模型 / auto-merge
 - MANAGE_EXTERNAL_STORAGE 全盘扫描
 - DocumentTree 持久树递归（可后续增强）
+- WRITE_CALENDAR ContentProvider 直写

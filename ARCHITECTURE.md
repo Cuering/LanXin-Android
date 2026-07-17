@@ -1,7 +1,7 @@
 # LanXin Android 架构设计（定稿 v1.0）
 
 > 基于 GPT Mobile 源码改造，引入插件化架构，借鉴 AstrBot 设计思路。
-> 当前状态：**Phase 1 ✅ → Phase 2 ✅ → Phase 3 ✅ → Phase 4 ✅ → Phase 5.1–5.7 ✅ → Phase 6.1 ✅ → Phase 6.2 ✅ → Phase 6.3 ✅ → Phase 6.4 ✅ 骨架 → 桌宠 M1 ✅ → M2a 路径闭环 🚧** → **Phase 7.1 系统工具骨架 ✅ → 7.2 日历+闹钟 ✅ → 7.3 笔记 ✅ → 7.4 用户文件 🚧** · **桌宠 + 操控手机 = 陪伴操控一体**
+> 当前状态：**Phase 1 ✅ → Phase 2 ✅ → Phase 3 ✅ → Phase 4 ✅ → Phase 5.1–5.7 ✅ → Phase 6.1 ✅ → Phase 6.2 ✅ → Phase 6.3 ✅ → Phase 6.4 ✅ 骨架 → 桌宠 M1 ✅ → M2a 路径闭环 🚧** → **Phase 7.1 系统工具骨架 ✅ → 7.2 日历+闹钟 ✅ → 7.3 笔记 ✅ → 7.4 用户文件 ✅ → 7.5 对话/桌宠一体 ✅** · **桌宠 + 操控手机 = 陪伴操控一体**
 > - Step①~⑧ 全部完成
 > - 知识库 P0~P6、Unified Inbox 均已落地
 > - Phase 4：品牌换皮 + Memory 编辑 UI + UnifiedSearch 四路 RRF
@@ -21,7 +21,8 @@
 > - Phase 7.1：系统工具骨架 ✅（#52）——DeviceTool + Gate + stub + 设置总开关；**陪伴操控一体**
 > - Phase 7.2：闹钟 Intent 真启动 + 日历读/写 ✅（#53）——SET_ALARM/SHOW_ALARMS startActivity + Instances + INSERT Intent + 确认流
 > - Phase 7.3：应用内笔记 Room CRUD + SAF 导出/导入 ✅（#54）
-> - Phase 7.4：用户文件 SAF 选取/导入 + imports 列表/读/写/分享/删 🚧（`feat/phase7.4-file-manager`）
+> - Phase 7.4：用户文件 SAF 选取/导入 + imports 列表/读/写/分享/删 ✅（#55）
+> - Phase 7.5：对话/桌宠一体接入 🚧（`feat/phase7.5-voice-chat-tools`）——DeviceToolBridge chat/voice turn + VoiceSession 听→想→办→说
 
 ---
 
@@ -68,7 +69,7 @@ LanXin-Android/
 │   ├── local_inference/    本地推理（MNN 骨架 + 离线 + ChatRouter）✅ 6.1 · ✅ 6.2 · ✅ 6.3
 │   ├── voice/              离线 ASR ✅ 6.4 · TTS stub ✅ M1
 │   ├── pet/                桌宠悬浮 + VoiceSession ✅ M1 · 路径就绪 🚧 M2a
-│   └── systemtools/        系统能力（日历/闹钟/笔记/用户文件）🚧 Phase 7.4
+│   └── systemtools/        系统能力（日历/闹钟/笔记/用户文件）+ Bridge ✅ Phase 7.5
 │
 ├── plugins/                [外部插件] — 可选增强，可拔插
 │   ├── memory/             记忆系统 ✅（5.7 判断包/Decide/衰减维护/坚果云同步配置）
@@ -186,7 +187,7 @@ Phase 4（已落地 ✅）       Phase 5（5.1–5.7 ✅）
 | `builtin/local_inference/` | ✅ 6.1 · ✅ 6.2 · ✅ 6.3 | 高 | MNN 骨架 + 离线兜底 + ChatRouter（见第十四节） |
 | `builtin/voice/` | ✅ 6.4 ASR 骨架 · ✅ M1 TTS stub · 🔜 真 TTS | 高 | Sherpa-ONNX ASR + Bert-VITS2 TTS（见第十四节 / meiju-style-pet） |
 | `builtin/pet/` | ✅ M1 · 🚧 M2a 路径闭环 | 高 | 悬浮 WebView + VoiceSession + 资源就绪（见第十四节） |
-| `builtin/systemtools/` | 🚧 Phase 7.3 | 中 | DeviceTool + CalendarContract + setAlarmClock + Room 笔记 + SAF（见第十四节 / system-tools） |
+| `builtin/systemtools/` | ✅ Phase 7.5 | 中 | DeviceTool + Bridge + Gate + Calendar/Alarm/Notes/Files（见第十四节 / system-tools） |
 
 ---
 
@@ -658,7 +659,7 @@ app/.../plugins/unifiedinbox/
 
 #### Phase 6 桌宠语音会话 M1 ✅ / M2a 🚧（`feat/phase6-pet-m2-engines`）
 
-> **产品合并（2026-07）：** 桌宠与「操控手机」（Phase 7 系统工具）为 **陪伴操控一体**——模块可分，入口与会话不可分。见 Phase 7.4。
+> **产品合并（2026-07）：** 桌宠与「操控手机」（Phase 7 系统工具）为 **陪伴操控一体**——模块可分，入口与会话不可分。见 Phase **7.5** / `docs/system-tools.md`。
 
 
 | 项 | 说明 |
@@ -717,8 +718,8 @@ app/.../plugins/unifiedinbox/
 | **7.1 骨架** | `DeviceTool` 接口 + 权限门闸 + Fake/Stub + 单测 + 设置总开关 + 本文档 | 🔴 高 | ✅ |
 | **7.2 闹钟 + 日历** | Intent 真 startActivity + setAlarmClock；日历 Instances + INSERT Intent + 确认流 + 权限引导 | 🔴 高 | ✅ |
 | **7.3 笔记** | 应用内笔记 Room CRUD + SAF 导出/导入 | 🟡 中 | ✅ |
-| **7.4 文件** | SAF 选取/导入 + imports 列表/读/写/分享/删（确认） | 🔴 高 | 🚧 |
-| **7.5 对话/桌宠一体接入** | ChatRouter `needsTools` + **桌宠 VoiceSession 同一链路**调工具（听→想→办→说） | 🔴 高 | 🔜 |
+| **7.4 文件** | SAF 选取/导入 + imports 列表/读/写/分享/删（确认） | 🔴 高 | ✅ |
+| **7.5 对话/桌宠一体接入** | `DeviceToolBridge` chat/voice turn + VoiceSession + ChatRouter hint | 🔴 高 | 🚧 |
 | **7.6 打磨** | 权限引导 UX、隐私文案、失败降级、审计日志（可选） | 🟡 中 | 🔜 |
 
 #### 7.3 架构要点
@@ -786,6 +787,20 @@ Contract Intent  Store    SAF/MediaStore
 | 桌宠/聊天语音触发上述能力 | **7.5** |
 
 
+
+#### Phase 7.5 设计要点（`feat/phase7.5-voice-chat-tools`）🚧
+
+| 项 | 说明 |
+|----|------|
+| 统一入口 | `DeviceToolBridge`：`chatTurn` / `voiceTurn` + 发现 + 意图 + Gate + summarize |
+| 意图 | `DeviceToolIntentResolver` 关键词 → tool id（无 LLM；不替代云端 tool_call） |
+| 桌宠 | `VoiceSessionCoordinator` → `voiceTurn`：听→想→**办**→说 |
+| ChatRouter | `decideWithDeviceToolHint(deviceToolIntentHit)` → needsTools 优先云端 |
+| Chat / MCP | 既有 `SystemToolsPlugin` 经 Gate；Bridge 可被 Chat 工具路由复用 |
+| 安全 | 默认全关；写/删确认不变 |
+| 单测 | `DeviceToolBridgeTest` + `VoiceSessionToolBridgeTest` + ChatRouter hint |
+| 非目标 | 重做整条会话、厂商深度、下模型 |
+
 #### Phase 7.1 设计要点（`feat/phase7-system-tools-skeleton`）🚧
 
 | 项 | 说明 |
@@ -798,7 +813,7 @@ Contract Intent  Store    SAF/MediaStore
 | 配置 | DataStore `system_tools_*`；**默认全关**；写操作默认需确认 |
 | UI | 设置 →「系统能力」→ `Route.SYSTEM_TOOLS`（桌宠旁同级） |
 | 插件 | `SystemToolsPlugin`（`lanxin.systemtools`）注册 MCP tools |
-| 一体钩子 | VoiceSessionCoordinator 预留 `DeviceToolRegistry` 注释；ChatRouter `needsTools` 既有 |
+| 一体钩子 | **7.5** `DeviceToolBridge` + `VoiceSessionCoordinator` 听→想→办→说；Chat/MCP 经 Plugin+Gate |
 | 单测 | AlarmIntentBuilder / Calendar stub / Gate / Config / Ids |
 | CI | `.github/workflows/phase7-system-tools-verify.yml`（不 curl 模型） |
 | 非目标 | 厂商笔记深度、无障碍乱点、系统分区、完整 7.2–7.5 |

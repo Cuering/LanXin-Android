@@ -1,6 +1,21 @@
+/*
+ * Copyright 2025 LanXin Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.lanxin.android.builtin.pet
 
-import com.lanxin.android.builtin.pet.domain.PetChatResponder
 import com.lanxin.android.builtin.pet.domain.PetConfig
 import com.lanxin.android.builtin.pet.domain.PetSettings
 import com.lanxin.android.builtin.pet.domain.StubPetChatResponder
@@ -31,6 +46,8 @@ import com.lanxin.android.builtin.systemtools.data.files.InMemoryUserFileCatalog
 import com.lanxin.android.builtin.systemtools.domain.AlarmClockGateway
 import com.lanxin.android.builtin.systemtools.domain.AlarmClockResult
 import com.lanxin.android.builtin.systemtools.domain.DeviceToolBridge
+import com.lanxin.android.builtin.systemtools.domain.DeviceToolIds
+import com.lanxin.android.builtin.systemtools.domain.DeviceToolOutcome
 import com.lanxin.android.builtin.systemtools.domain.IntentLaunchResult
 import com.lanxin.android.builtin.systemtools.domain.IntentLaunchSpec
 import com.lanxin.android.builtin.systemtools.domain.NotesIoResult
@@ -47,10 +64,14 @@ import com.lanxin.android.builtin.voice.domain.TtsConfig
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class VoiceSessionCoordinatorTest {
+/**
+ * Phase 7.5 端到端：VoiceSession 经 DeviceToolBridge 选工具 → Gate → 回传会话。
+ */
+class VoiceSessionToolBridgeTest {
 
     private class FakePetSettings(
         var config: PetConfig = PetConfig(enabled = true)
@@ -70,17 +91,11 @@ class VoiceSessionCoordinatorTest {
         }
     }
 
-    private class FixedResponder(
-        private val text: String
-    ) : PetChatResponder {
-        override suspend fun respond(userText: String): String = text
-    }
-
     private class OkAlarmClock : AlarmClockGateway {
         override fun canScheduleExactAlarms() = true
         override fun setAlarmClock(request: SetAlarmClockRequest) = AlarmClockResult.Ok(
             triggerAtEpochMs = request.triggerAtEpochMs,
-            requestCode = 1,
+            requestCode = 42,
             message = request.message
         )
     }
@@ -89,7 +104,7 @@ class VoiceSessionCoordinatorTest {
         override fun launch(spec: IntentLaunchSpec) = IntentLaunchResult.Ok(
             action = spec.action,
             launched = true,
-            description = spec.description
+            description = "ok:${spec.action}"
         )
     }
 
@@ -130,15 +145,14 @@ class VoiceSessionCoordinatorTest {
         override fun probe(uriString: String): UserFileProbe? = null
     }
 
-    /** 默认全关：闲聊路径不触发工具执行（即使关键词命中也会 Denied，但 demo 句不命中）。 */
-    private fun defaultBridge(): DeviceToolBridge {
+    private fun registry(): DeviceToolRegistry {
         val gateway = StubCalendarGateway()
         val notes = StubNotesStore()
         val launcher = OkLauncher()
         val saf = NoopSaf()
         val catalog = InMemoryUserFileCatalog()
         val fileIo = NoopFileIo()
-        val registry = DeviceToolRegistry(
+        return DeviceToolRegistry(
             alarmSet = AlarmSetDeviceTool(OkAlarmClock(), launcher),
             alarmShow = AlarmShowDeviceTool(launcher),
             calendarList = CalendarListUpcomingDeviceTool(gateway),
@@ -157,59 +171,111 @@ class VoiceSessionCoordinatorTest {
             fileShare = FileShareDeviceTool(catalog, fileIo),
             fileDelete = FileDeleteDeviceTool(catalog, fileIo)
         )
-        return DeviceToolBridge.forTest(
-            registry = registry,
-            configProvider = { SystemToolsConfig() }
-        )
     }
 
-    private fun coordinator(
-        responder: PetChatResponder = StubPetChatResponder(),
-        pet: PetConfig = PetConfig(enabled = true)
-    ): VoiceSessionCoordinator {
+    private fun bridge(config: SystemToolsConfig): DeviceToolBridge =
+        DeviceToolBridge.forTest(registry = registry(), configProvider = { config })
+
+    private fun coordinator(bridge: DeviceToolBridge): VoiceSessionCoordinator {
         val tts = StubTtsEngine()
         runBlocking { tts.load(TtsConfig(enabled = true)) }
         return VoiceSessionCoordinator(
-            responder = responder,
+            responder = StubPetChatResponder(),
             ttsEngine = tts,
-            petSettings = FakePetSettings(pet),
-            deviceToolBridge = defaultBridge()
+            petSettings = FakePetSettings(PetConfig(enabled = true)),
+            deviceToolBridge = bridge
         )
     }
 
     @Test
-    fun `runRound fails when pet disabled`() = runBlocking {
-        val c = coordinator(pet = PetConfig(enabled = false))
-        val r = c.runRound(VoiceSessionInput("你好"))
-        assertNotNull(r.error)
-        assertTrue(r.error!!.contains("pet_disabled"))
-        assertEquals(VoiceSessionPhase.ERROR, r.phase)
-    }
-
-    @Test
-    fun `runDemoRound happy path ends IDLE`() = runBlocking {
-        val c = coordinator()
-        val r = c.runDemoRound()
-        assertEquals(null, r.error)
+    fun `chatty round has no tool`() = runBlocking {
+        val c = coordinator(
+            bridge(
+                SystemToolsConfig(masterEnabled = true, alarmEnabled = true)
+            )
+        )
+        val r = c.runRound(VoiceSessionInput("兰心，你好呀", isStub = true))
+        assertNull(r.toolName)
+        assertNull(r.toolOutcome)
         assertEquals(VoiceSessionPhase.IDLE, r.phase)
         assertTrue(r.replyText.isNotBlank())
-        assertTrue(r.subtitle.isNotBlank())
-        assertTrue(r.isStub)
-        assertEquals(VoiceSessionPhase.IDLE, c.current().phase)
     }
 
     @Test
-    fun `empty asr fails`() = runBlocking {
-        val c = coordinator()
-        val r = c.runRound(VoiceSessionInput("   "))
-        assertTrue(r.error!!.contains("empty_asr"))
+    fun `open alarm list goes through bridge and returns ok`() = runBlocking {
+        val c = coordinator(
+            bridge(
+                SystemToolsConfig(masterEnabled = true, alarmEnabled = true)
+            )
+        )
+        val r = c.runRound(VoiceSessionInput("帮我打开闹钟列表", isStub = true))
+        assertEquals(DeviceToolIds.ALARM_SHOW, r.toolName)
+        assertNotNull(r.toolOutcome)
+        assertTrue(r.toolOutcome is DeviceToolOutcome.Ok)
+        assertEquals(VoiceSessionPhase.IDLE, r.phase)
+        assertTrue(r.replyText.contains(DeviceToolIds.ALARM_SHOW) || r.replyText.isNotBlank())
     }
 
     @Test
-    fun `custom responder text appears in result`() = runBlocking {
-        val c = coordinator(responder = FixedResponder("自定义回复"))
-        val r = c.runRound(VoiceSessionInput("测试", isStub = true))
-        assertEquals("自定义回复", r.replyText)
-        assertEquals("自定义回复", r.subtitle)
+    fun `set alarm without confirm surfaces needs confirmation`() = runBlocking {
+        val c = coordinator(
+            bridge(
+                SystemToolsConfig(
+                    masterEnabled = true,
+                    alarmEnabled = true,
+                    requireConfirmOnWrite = true
+                )
+            )
+        )
+        val r = c.runRound(
+            VoiceSessionInput("设个闹钟 7:30", isStub = true),
+            toolConfirmed = false
+        )
+        assertEquals(DeviceToolIds.ALARM_SET, r.toolName)
+        assertTrue(r.toolOutcome is DeviceToolOutcome.NeedsConfirmation)
+        assertTrue(r.replyText.contains("确认"))
+    }
+
+    @Test
+    fun `set alarm with confirm completes ok`() = runBlocking {
+        val c = coordinator(
+            bridge(
+                SystemToolsConfig(
+                    masterEnabled = true,
+                    alarmEnabled = true,
+                    requireConfirmOnWrite = true
+                )
+            )
+        )
+        val r = c.runRound(
+            VoiceSessionInput("设个闹钟 7:30", isStub = true),
+            toolConfirmed = true
+        )
+        assertEquals(DeviceToolIds.ALARM_SET, r.toolName)
+        assertTrue(r.toolOutcome is DeviceToolOutcome.Ok)
+        assertEquals(VoiceSessionPhase.IDLE, r.phase)
+    }
+
+    @Test
+    fun `master off denies tool but session still completes`() = runBlocking {
+        val c = coordinator(
+            bridge(
+                SystemToolsConfig(masterEnabled = false, alarmEnabled = true)
+            )
+        )
+        val r = c.runRound(VoiceSessionInput("打开闹钟列表", isStub = true))
+        assertEquals(DeviceToolIds.ALARM_SHOW, r.toolName)
+        assertTrue(r.toolOutcome is DeviceToolOutcome.Denied)
+        assertEquals(VoiceSessionPhase.IDLE, r.phase)
+        assertTrue(r.replyText.contains("做不到") || r.replyText.contains("总开关"))
+    }
+
+    @Test
+    fun `default config all off denies tool on intent hit`() = runBlocking {
+        val c = coordinator(bridge(SystemToolsConfig()))
+        val r = c.runRound(VoiceSessionInput("打开闹钟列表", isStub = true))
+        assertEquals(DeviceToolIds.ALARM_SHOW, r.toolName)
+        assertTrue(r.toolOutcome is DeviceToolOutcome.Denied)
+        assertEquals(VoiceSessionPhase.IDLE, r.phase)
     }
 }

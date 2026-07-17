@@ -42,6 +42,32 @@ class ChatRouterTest {
     }
 
     @Test
+    fun `decideWithDeviceToolHint forces cloud when intent hit`() {
+        val d = ChatRouter.decideWithDeviceToolHint(
+            preferLocal = true,
+            localReady = true,
+            networkAvailable = true,
+            needsTools = false,
+            deviceToolIntentHit = true
+        )
+        assertEquals(InferenceRouteTarget.CLOUD, d.target)
+        assertEquals(RouteReason.NEED_TOOLS_CLOUD, d.reason)
+    }
+
+    @Test
+    fun `decideWithDeviceToolHint keeps preferLocal when no intent`() {
+        val d = ChatRouter.decideWithDeviceToolHint(
+            preferLocal = true,
+            localReady = true,
+            networkAvailable = true,
+            needsTools = false,
+            deviceToolIntentHit = false
+        )
+        assertEquals(InferenceRouteTarget.LOCAL, d.target)
+        assertEquals(RouteReason.PREFER_LOCAL, d.reason)
+    }
+
+    @Test
     fun `offline ready selects offline_local`() {
         val d = ChatRouter.decide(
             ChatRouteContext(
