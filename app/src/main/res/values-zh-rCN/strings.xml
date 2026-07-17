@@ -247,4 +247,12 @@
     <string name="gemini_safety_block_only_high">仅屏蔽高风险</string>
     <string name="gemini_safety_block_medium_and_above">屏蔽中等及以上</string>
     <string name="gemini_safety_block_low_and_above">屏蔽低及以上</string>
+    <string name="fetch_remote_models">从 API 拉取模型列表</string>
+    <string name="fetch_remote_models_hint">通过 OpenAI 兼容 /models 接口加载</string>
+    <string name="fetch_remote_models_loading">正在加载模型…</string>
+    <string name="fetch_remote_models_error">拉取失败：%1$s</string>
+    <string name="fetch_remote_models_count">共 %1$d 个模型 — 点选应用</string>
+    <string name="current_model_selected">当前已选</string>
+    <string name="tap_to_select_model">点此使用该模型</string>
+    <string name="remote_models_truncated">…还有 %1$d 个（可手动输入模型名）</string>
 </resources>

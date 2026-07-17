@@ -110,6 +110,7 @@ LanXin-Android/
 | Skill 加载方式 | asset + file 两级扫描，SKILL.md frontmatter 解析 | 借鉴 AstrBot，内置 skill 预置 asset，用户自定义放 filesDir |
 | 子代理编排 | ❌ 不建议在手机端做 | 多 agent 编排太重，性能/耗电/内存都成问题 |
 | 动态插件包路径 | `filesDir/plugin-packages/*.apk`，与 `plugins/<id>/` 数据目录分离 | 避免与 PluginContext.filesDir 冲突 |
+| 提供商模型列表 | OpenAI 兼容走 `GET {apiUrl}/models`；Anthropic/Google/兰心仍手输 | 对齐 AstrBot；不改 ChatRouter / needsTools |
 
 ---
 
@@ -854,6 +855,7 @@ Phase 4（基础夯实）   Phase 5（平台扩展）     Phase 6（端侧智能
 | 笔记（应用内 + 导出/分享） | **Phase 7.3** | 无统一系统笔记 API |
 | 非系统文件管理（SAF） | **Phase 7.4** | 用户授权目录，禁止系统分区 |
 | 对话/桌宠调用系统工具（**与桌宠一体**） | **Phase 7.5** | 同一 VoiceSession / ToolRegistry + 确认门闸 |
+| OpenAI 兼容模型列表 / 提供商配置对齐 | **提供商对齐 P0** | `OpenAiModelListClient` + 设置页拉取；见 `docs/provider-alignment.md` |
 
 ---
 

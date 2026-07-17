@@ -1,0 +1,101 @@
+# Provider alignment：OpenAI 兼容模型列表 + 配置路径
+name: Provider Align Verify
+
+on:
+  push:
+    branches: [main, 'feat/provider*']
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/data/network/OpenAiModelListClient.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/data/network/ProviderModelListSupport.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/data/dto/openai/response/OpenAiModelsResponse.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/setting/PlatformSettingViewModel.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/setting/PlatformSettingScreen.kt'
+      - 'app/src/test/kotlin/com/lanxin/android/data/network/**'
+      - 'docs/provider-alignment.md'
+      - 'ARCHITECTURE.md'
+      - '.github/workflows/provider-align-verify.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/data/network/OpenAiModelListClient.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/data/network/ProviderModelListSupport.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/data/dto/openai/response/OpenAiModelsResponse.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/setting/PlatformSettingViewModel.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/setting/PlatformSettingScreen.kt'
+      - 'app/src/test/kotlin/com/lanxin/android/data/network/**'
+      - 'docs/provider-alignment.md'
+      - 'ARCHITECTURE.md'
+      - '.github/workflows/provider-align-verify.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: provider-align-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: Provider model list unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: gradle
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup local.properties and debug keystore
+        run: |
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+          rm -f debug-keystore.jks
+          keytool -genkeypair -v -keystore debug-keystore.jks -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Create assets model dir (models gitignored)
+        run: |
+          mkdir -p app/src/main/assets/models/gte-small
+          touch app/src/main/assets/models/gte-small/.gitkeep
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run provider model list unit tests
+        run: |
+          ./gradlew :app:testDebugUnitTest \
+            --tests "com.lanxin.android.data.network.OpenAiModelListClientTest" \
+            --tests "com.lanxin.android.data.network.ProviderModelListSupportTest" \
+            --tests "com.lanxin.android.data.network.NetworkClientTest" \
+            --no-daemon --stacktrace
+
+      - name: Surfaces and docs present
+        run: |
+          test -f docs/provider-alignment.md
+          test -f app/src/main/kotlin/com/lanxin/android/data/network/OpenAiModelListClient.kt
+          test -f app/src/main/kotlin/com/lanxin/android/data/network/ProviderModelListSupport.kt
+          test -f app/src/main/kotlin/com/lanxin/android/data/dto/openai/response/OpenAiModelsResponse.kt
+          test -f app/src/test/kotlin/com/lanxin/android/data/network/OpenAiModelListClientTest.kt
+          test -f app/src/test/kotlin/com/lanxin/android/data/network/ProviderModelListSupportTest.kt
+          grep -E -n "supportsOpenAiCompatibleModelList|modelsEndpoint|normalizeModelIds" \
+            app/src/main/kotlin/com/lanxin/android/data/network/ProviderModelListSupport.kt
+          grep -E -n "listModels|parseModelsBody|OpenAiModelListResult" \
+            app/src/main/kotlin/com/lanxin/android/data/network/OpenAiModelListClient.kt
+          grep -E -n "fetchRemoteModels|remoteModelListState|OpenAiModelListClient" \
+            app/src/main/kotlin/com/lanxin/android/presentation/ui/setting/PlatformSettingViewModel.kt
+          grep -E -n "fetchRemoteModels|remoteModelListState|fetch_remote_models" \
+            app/src/main/kotlin/com/lanxin/android/presentation/ui/setting/PlatformSettingScreen.kt
+          grep -E -n "fetch_remote_models" \
+            app/src/main/res/values/strings.xml \
+            app/src/main/res/values-zh-rCN/strings.xml
+          # ChatRouter / needsTools must remain untouched by this slice surface
+          grep -E -n "need_tools_cloud|object ChatRouter" \
+            app/src/main/kotlin/com/lanxin/android/builtin/localinference/domain/ChatRouter.kt
+          grep -E -n "提供商对齐|OpenAiModelList|/models|provider-alignment" \
+            docs/provider-alignment.md ARCHITECTURE.md
