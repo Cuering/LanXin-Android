@@ -53,8 +53,26 @@ class ArchiveExtractorTest {
         try {
             ArchiveExtractor.safeResolve(dest, "../evil.txt")
             org.junit.Assert.fail("expected zip-slip rejection")
-        } catch (e: IllegalStateException) {
-            assertTrue(e.message!!.contains("非法"))
+        } catch (e: SecurityException) {
+            assertTrue(e.message!!.contains("zip-slip") || e.message!!.contains("outside"))
         }
+    }
+
+    @Test
+    fun extractZip_rejectsZipSlipEntry() {
+        val zip = tmp.newFile("slip.zip")
+        ZipOutputStream(FileOutputStream(zip)).use { zos ->
+            zos.putNextEntry(ZipEntry("../evil.txt"))
+            zos.write("pwn".toByteArray())
+            zos.closeEntry()
+        }
+        val dest = tmp.newFolder("out")
+        try {
+            ArchiveExtractor.extract(zip, dest)
+            org.junit.Assert.fail("expected zip-slip rejection")
+        } catch (e: SecurityException) {
+            assertTrue(e.message!!.contains("outside") || e.message!!.contains("evil"))
+        }
+        assertTrue(!File(dest, "../evil.txt").exists() || !File(dest.parentFile, "evil.txt").exists())
     }
 }

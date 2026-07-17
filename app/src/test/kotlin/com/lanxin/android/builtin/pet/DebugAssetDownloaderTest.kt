@@ -67,8 +67,8 @@ class DebugAssetDownloaderTest {
         try {
             ArchiveExtractor.safeResolve(dest, "../evil.txt")
             org.junit.Assert.fail("expected zip-slip rejection")
-        } catch (e: IllegalStateException) {
-            assertTrue(e.message!!.contains("非法"))
+        } catch (e: SecurityException) {
+            assertTrue(e.message!!.contains("zip-slip") || e.message!!.contains("非法"))
         }
     }
 

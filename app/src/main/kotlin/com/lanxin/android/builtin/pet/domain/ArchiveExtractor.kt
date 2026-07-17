@@ -20,6 +20,7 @@ import java.io.BufferedInputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.io.InputStream
 import java.util.zip.GZIPInputStream
 import java.util.zip.ZipInputStream
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
@@ -27,6 +28,9 @@ import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
 
 /**
  * 解压 zip / tar.bz2 / tar.gz 到目标目录（防 zip-slip）。
+ *
+ * 每个条目在写入前校验 `resolved.canonicalPath` 是否以
+ * `targetDir.canonicalPath` 为前缀，拒绝目录穿越。
  */
 object ArchiveExtractor {
 
@@ -46,21 +50,25 @@ object ArchiveExtractor {
     }
 
     private fun extractZip(archive: File, destDir: File) {
-        val root = destDir.canonicalFile
-        val rootPath = root.canonicalPath
+        // CodeQL java/zipslip: 校验必须与 sink 同作用域可见
+        val targetDir = destDir.canonicalFile
         ZipInputStream(BufferedInputStream(FileInputStream(archive))).use { zis ->
             while (true) {
                 val entry = zis.nextEntry ?: break
-                val target = File(root, entry.name).canonicalFile
-                val targetPath = target.canonicalPath
-                require(targetPath.startsWith(rootPath + File.separator) || targetPath == rootPath) {
-                    "Zip-slip: ${entry.name} -> $targetPath"
+                val resolvedFile = File(targetDir, entry.name).canonicalFile
+                // 拒绝 zip-slip：resolved 必须落在 targetDir 内
+                if (!resolvedFile.canonicalPath.startsWith(targetDir.canonicalPath + File.separator) &&
+                    resolvedFile.canonicalPath != targetDir.canonicalPath
+                ) {
+                    throw SecurityException(
+                        "Zip entry is outside of the target dir: ${entry.name}",
+                    )
                 }
                 if (entry.isDirectory) {
-                    target.mkdirs()
+                    resolvedFile.mkdirs()
                 } else {
-                    target.parentFile?.mkdirs()
-                    FileOutputStream(target).use { out -> zis.copyTo(out) }
+                    resolvedFile.parentFile?.mkdirs()
+                    FileOutputStream(resolvedFile).use { out -> zis.copyTo(out) }
                 }
                 zis.closeEntry()
             }
@@ -69,7 +77,7 @@ object ArchiveExtractor {
 
     private fun extractTarCompressed(archive: File, destDir: File, bzip2: Boolean) {
         val raw = BufferedInputStream(FileInputStream(archive))
-        val compressed = if (bzip2) {
+        val compressed: InputStream = if (bzip2) {
             BZip2CompressorInputStream(raw)
         } else {
             GZIPInputStream(raw)
@@ -77,43 +85,44 @@ object ArchiveExtractor {
         extractTar(compressed, destDir)
     }
 
-    private fun extractTar(input: java.io.InputStream, destDir: File) {
-        val root = destDir.canonicalFile
-        val rootPath = root.canonicalPath
+    private fun extractTar(input: InputStream, destDir: File) {
+        // CodeQL java/zipslip: 校验必须与 sink 同作用域可见
+        val targetDir = destDir.canonicalFile
         TarArchiveInputStream(input).use { tis ->
             while (true) {
                 val entry = tis.nextEntry ?: break
                 if (!tis.canReadEntryData(entry)) continue
-                val target = File(root, entry.name).canonicalFile
-                val targetPath = target.canonicalPath
-                require(targetPath.startsWith(rootPath + File.separator) || targetPath == rootPath) {
-                    "Tar-slip: ${entry.name} -> $targetPath"
+                val resolvedFile = File(targetDir, entry.name).canonicalFile
+                // 拒绝 zip-slip / tar-slip：resolved 必须落在 targetDir 内
+                if (!resolvedFile.canonicalPath.startsWith(targetDir.canonicalPath + File.separator) &&
+                    resolvedFile.canonicalPath != targetDir.canonicalPath
+                ) {
+                    throw SecurityException(
+                        "Tar entry is outside of the target dir: ${entry.name}",
+                    )
                 }
                 if (entry.isDirectory) {
-                    target.mkdirs()
+                    resolvedFile.mkdirs()
                 } else {
-                    target.parentFile?.mkdirs()
-                    FileOutputStream(target).use { out -> tis.copyTo(out) }
+                    resolvedFile.parentFile?.mkdirs()
+                    FileOutputStream(resolvedFile).use { out -> tis.copyTo(out) }
                 }
             }
         }
     }
 
     /**
-     * 解析归档条目相对路径到目标目录；拒绝跳出 [root]（zip-slip 防护）。
-     *
-     * @param root 已 canonical（由调用方计算一次即可）
-     * @param entryName 归档内相对路径
-     * @throws IllegalStateException 若路径尝试跳出 root
+     * 解析归档条目相对路径；拒绝跳出 [destDir]（zip-slip）。
+     * 供单测与调用方复用。
      */
-    fun safeResolve(root: File, entryName: String): File {
-        // 用 canonical 解析所有 .. 和符号链接
-        val dest = File(root, entryName).canonicalFile
-        val rootPath = root.canonicalPath
-        val destPath = dest.canonicalPath
-        require(destPath.startsWith(rootPath + File.separator) || destPath == rootPath) {
-            "非法归档路径（zip-slip）: $entryName -> $destPath"
+    fun safeResolve(destDir: File, entryName: String): File {
+        val targetDir = destDir.canonicalFile
+        val resolvedFile = File(targetDir, entryName).canonicalFile
+        if (!resolvedFile.canonicalPath.startsWith(targetDir.canonicalPath + File.separator) &&
+            resolvedFile.canonicalPath != targetDir.canonicalPath
+        ) {
+            throw SecurityException("非法归档路径（zip-slip）: $entryName")
         }
-        return dest
+        return resolvedFile
     }
 }
