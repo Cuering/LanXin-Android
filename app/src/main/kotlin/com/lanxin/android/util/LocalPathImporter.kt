@@ -67,7 +67,7 @@ class LocalPathImporter @Inject constructor(
     }
 
     /**
-     * 导入单个文件到 `user-picked/<kind>/import_*/<name>`。
+     * 导入单个文件到 `user-picked/<kind>/import_<stamp>/<name>`。
      */
     suspend fun importFile(
         uriString: String,
