@@ -38,6 +38,7 @@ import com.lanxin.android.presentation.ui.setting.SettingScreen
 import com.lanxin.android.builtin.localinference.presentation.LocalInferenceScreen
 import com.lanxin.android.builtin.pet.presentation.DesktopPetScreen
 import com.lanxin.android.builtin.systemtools.presentation.SystemToolsScreen
+import com.lanxin.android.builtin.platform.presentation.DeviceSensingScreen
 import com.lanxin.android.builtin.platform.presentation.WebSearchScreen
 import com.lanxin.android.builtin.voice.presentation.VoiceAsrScreen
 import com.lanxin.android.presentation.ui.setting.SettingViewModelV2
@@ -78,6 +79,7 @@ fun SetupNavGraph(navController: NavHostController) {
         desktopPetScreenNavigation(navController)
         systemToolsScreenNavigation(navController)
         webSearchScreenNavigation(navController)
+        deviceSensingScreenNavigation(navController)
     }
 }
 
@@ -134,6 +136,14 @@ fun NavGraphBuilder.systemToolsScreenNavigation(navController: NavHostController
 fun NavGraphBuilder.webSearchScreenNavigation(navController: NavHostController) {
     composable(Route.WEB_SEARCH) {
         WebSearchScreen(
+            onBackAction = { navController.navigateUp() }
+        )
+    }
+}
+
+fun NavGraphBuilder.deviceSensingScreenNavigation(navController: NavHostController) {
+    composable(Route.DEVICE_SENSING) {
+        DeviceSensingScreen(
             onBackAction = { navController.navigateUp() }
         )
     }
@@ -453,7 +463,8 @@ fun NavGraphBuilder.settingNavigation(navController: NavHostController) {
                 onNavigateToOfflineAsr = { navController.navigate(Route.OFFLINE_ASR) },
                 onNavigateToDesktopPet = { navController.navigate(Route.DESKTOP_PET) },
                 onNavigateToSystemTools = { navController.navigate(Route.SYSTEM_TOOLS) },
-                onNavigateToWebSearch = { navController.navigate(Route.WEB_SEARCH) }
+                onNavigateToWebSearch = { navController.navigate(Route.WEB_SEARCH) },
+                onNavigateToDeviceSensing = { navController.navigate(Route.DEVICE_SENSING) }
             )
         }
         composable(Route.ADD_PLATFORM) {

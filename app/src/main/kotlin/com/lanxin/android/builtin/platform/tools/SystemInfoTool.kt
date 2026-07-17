@@ -37,6 +37,9 @@ import kotlinx.serialization.json.put
  * 设备系统信息：型号、Android 版本、屏幕、网络、电量等。
  * 主要依赖 [Build]、[ConnectivityManager]、[BatteryManager]；
  * 电量通过粘性广播 [Intent.ACTION_BATTERY_CHANGED] 读取，无需额外权限。
+ *
+ * Agent 可见性与执行受 [com.lanxin.android.builtin.platform.domain.DeviceSensingGate] 门闸
+ * （默认关；设置 → 设备感知）。本类只负责采集，不含权限策略。
  */
 @Singleton
 class SystemInfoTool @Inject constructor(

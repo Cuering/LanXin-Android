@@ -65,7 +65,8 @@ class ChatViewModel @Inject constructor(
     private val autoKnowledgeService: AutoKnowledgeService,
     private val skillEngine: SkillEngine,
     private val inferenceRouteCoordinator: InferenceRouteCoordinator,
-    private val webSearchSettings: com.lanxin.android.builtin.platform.domain.WebSearchSettings
+    private val webSearchSettings: com.lanxin.android.builtin.platform.domain.WebSearchSettings,
+    private val deviceSensingSettings: com.lanxin.android.builtin.platform.domain.DeviceSensingSettings
 ) : ViewModel() {
     sealed class LoadingState {
         data object Idle : LoadingState()
@@ -871,21 +872,28 @@ class ChatViewModel @Inject constructor(
     }
 
     /**
-     * 按联网搜索开关 + 当前人格 tools/skills 过滤 MCP 工具。
+     * 按联网搜索 / 设备感知开关 + 当前人格 tools/skills 过滤 MCP 工具。
      * - web_search：关则从列表移除（默认安全）
-     * - persona 为 null 或 tools/skills 均为 null 时仅应用 web_search 门闸
+     * - system_info：关则从列表移除（默认安全）
+     * - persona 为 null 或 tools/skills 均为 null 时仅应用上述门闸
      * - **不**因此把 needsTools 置 true（首轮仍 preferLocal）
      */
     private suspend fun resolvePersonaFilteredTools(): PersonaFilteredTools {
         val webSearchConfig = runCatching { webSearchSettings.getConfig() }
             .getOrDefault(com.lanxin.android.builtin.platform.domain.WebSearchConfig())
-        val gatedTools = com.lanxin.android.builtin.platform.domain.WebSearchGate.filterTools(
+        val deviceSensingConfig = runCatching { deviceSensingSettings.getConfig() }
+            .getOrDefault(com.lanxin.android.builtin.platform.domain.DeviceSensingConfig())
+        val afterWebSearch = com.lanxin.android.builtin.platform.domain.WebSearchGate.filterTools(
             tools = toolCallEngine.getRegisteredTools(),
             config = webSearchConfig
         )
+        val gatedTools = com.lanxin.android.builtin.platform.domain.DeviceSensingGate.filterTools(
+            tools = afterWebSearch,
+            config = deviceSensingConfig
+        )
         val persona = runCatching { personaRepository.getCurrent() }.getOrNull()
         if (persona == null || (persona.tools == null && persona.skills == null)) {
-            // 无人格限制：仅从 prompt 去掉 web_search；执行侧 PlatformPlugin 门闸再拦一次
+            // 无人格限制：仅从 prompt 去掉关着的门闸工具；执行侧 PlatformPlugin 再拦一次
             return PersonaFilteredTools(
                 tools = gatedTools,
                 allowedNames = null

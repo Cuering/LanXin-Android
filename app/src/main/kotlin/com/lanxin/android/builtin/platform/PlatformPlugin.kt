@@ -16,6 +16,9 @@
 
 package com.lanxin.android.builtin.platform
 
+import com.lanxin.android.builtin.platform.domain.DeviceSensingConfig
+import com.lanxin.android.builtin.platform.domain.DeviceSensingGate
+import com.lanxin.android.builtin.platform.domain.DeviceSensingSettings
 import com.lanxin.android.builtin.platform.domain.WebSearchConfig
 import com.lanxin.android.builtin.platform.domain.WebSearchGate
 import com.lanxin.android.builtin.platform.domain.WebSearchSettings
@@ -44,7 +47,7 @@ import kotlinx.serialization.json.put
  * MCP 工具：
  * - clipboard_get / clipboard_set
  * - app_install_check
- * - system_info
+ * - system_info（受 [DeviceSensingSettings] 门闸；默认关）
  * - file_read / file_write / file_list
  * - web_search（受 [WebSearchSettings] 门闸；默认关）
  * - app_intent
@@ -59,14 +62,15 @@ class PlatformPlugin @Inject constructor(
     private val fileOpsTool: FileOpsTool,
     private val webSearchTool: WebSearchTool,
     private val appIntentTool: AppIntentTool,
-    private val webSearchSettings: WebSearchSettings
+    private val webSearchSettings: WebSearchSettings,
+    private val deviceSensingSettings: DeviceSensingSettings
 ) : LanXinPlugin {
 
     override val id = "lanxin.platform"
     override val name = "手机平台工具"
-    override val version = "1.2.0"
+    override val version = "1.3.0"
     override val description =
-        "Android 专属能力：剪贴板、已安装应用、系统信息、本地文件、联网搜索（默认关）、Intent 唤起"
+        "Android 专属能力：剪贴板、已安装应用、设备感知（默认关）、本地文件、联网搜索（默认关）、Intent 唤起"
 
     override suspend fun onLoad(context: PluginContext) {
         context.registerTool(
@@ -151,14 +155,18 @@ class PlatformPlugin @Inject constructor(
 
         context.registerTool(
             ToolDef(
-                name = "system_info",
-                description = "返回设备信息：型号、厂商、Android 版本/SDK、屏幕尺寸、网络状态、电量等",
+                name = DeviceSensingConfig.TOOL_NAME,
+                description = "返回设备信息：型号、厂商、Android 版本/SDK、屏幕尺寸、网络状态、电量等；需在设置中开启设备感知",
                 parameters = buildJsonObject {
                     put("type", "object")
                     put("properties", buildJsonObject { })
                 },
                 handler = {
-                    runCatching { systemInfoTool.collect() }.toToolResult()
+                    runCatching {
+                        val config = deviceSensingSettings.getConfig()
+                        DeviceSensingGate.denyIfDisabled(config)?.let { return@runCatching it }
+                        systemInfoTool.collect()
+                    }.toToolResult()
                 }
             )
         )

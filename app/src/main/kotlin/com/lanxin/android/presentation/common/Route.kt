@@ -80,4 +80,7 @@ object Route {
 
     /** 联网搜索（WebSearch / web_search 配置） */
     const val WEB_SEARCH = "web_search_settings"
+
+    /** 设备感知（system_info 配置） */
+    const val DEVICE_SENSING = "device_sensing_settings"
 }

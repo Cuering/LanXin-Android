@@ -25,6 +25,7 @@
 > - Phase 7.4：用户文件 SAF 选取/导入 + imports 列表/读/写/分享/删 ✅（#55）
 > - Phase 7.5：对话/桌宠一体接入 🚧（`feat/phase7.5-voice-chat-tools`）——DeviceToolBridge chat/voice turn + VoiceSession 听→想→办→说
 > - 联网搜索（WebSearch）：配置门闸 + 设置页 + Agent 按开关启用 ✅（`feat/websearch-config`）——默认关；不改 ChatRouter needsTools
+> - 设备感知（system_info）：配置门闸 + 设置页 + Agent 按开关启用 ✅（`feat/device-sensing-gate`）——默认关；只读；不改 ChatRouter needsTools
 
 ---
 
@@ -113,6 +114,7 @@ LanXin-Android/
 | 动态插件包路径 | `filesDir/plugin-packages/*.apk`，与 `plugins/<id>/` 数据目录分离 | 避免与 PluginContext.filesDir 冲突 |
 | 提供商模型列表 | OpenAI 兼容走 `GET {apiUrl}/models`；Anthropic/Google/兰心仍手输 | 对齐 AstrBot；不改 ChatRouter / needsTools |
 | 联网搜索 web_search | 默认关；设置页开关；Gate 过滤工具列表 + 拒绝执行 | 外发查询需用户授权；有工具 ≠ needsTools 首轮强制云端 |
+| 设备感知 system_info | 默认关；设置页开关；Gate 过滤 + 拒绝执行；只读 | 设备/网络/电量上下文需用户授权；不含位置/通讯录 |
 
 ---
 
@@ -185,7 +187,7 @@ Phase 4（已落地 ✅）       Phase 5（5.1–5.7 ✅）
 | `builtin/persona/` | ✅ Phase 2 | 低 | Step⑤ 人格 system prompt + MCP 工具 + 设置页；P6 tools/skills 过滤 + Mood |
 | `builtin/statistics/` | ✅ Phase 2 | 低 | 对话轮数、token 估算 + MCP + 设置页 |
 | `builtin/scheduler/` | ✅ Phase 2 | 中 | WorkManager + AlarmManager 双轨调度 |
-| `builtin/platform/` | ✅ Phase 2 · WebSearch 配置 ✅ | 低 | 剪贴板 / 应用 / 系统信息 / 文件 / **联网搜索（默认关）** / Intent |
+| `builtin/platform/` | ✅ Phase 2 · WebSearch ✅ · 设备感知 ✅ | 低 | 剪贴板 / 应用 / **system_info（默认关）** / 文件 / **联网搜索（默认关）** / Intent |
 | `builtin/knowledge/` | ✅ Phase 3 | 高 | GTE-small(ONNX) + ObjectBox + BM25 RRF 混合检索 |
 | `plugins/unified_inbox/` | ✅ Phase 3 | 中 | 跨 session 历史 + 跨工作区文件浏览 |
 | `builtin/local_inference/` | ✅ 6.1 · ✅ 6.2 · ✅ 6.3 | 高 | MNN 骨架 + 离线兜底 + ChatRouter（见第十四节） |
@@ -859,6 +861,7 @@ Phase 4（基础夯实）   Phase 5（平台扩展）     Phase 6（端侧智能
 | 对话/桌宠调用系统工具（**与桌宠一体**） | **Phase 7.5** | 同一 VoiceSession / ToolRegistry + 确认门闸 |
 | OpenAI 兼容模型列表 / 提供商配置对齐 | **提供商对齐 P0** | `OpenAiModelListClient` + 设置页拉取；见 `docs/provider-alignment.md` |
 | 联网搜索 web_search 配置门闸 | **WebSearch 配置** | DataStore + WebSearchGate + 设置页；默认关；见 `docs/websearch.md` |
+| 设备感知 system_info 配置门闸 | **Device Sensing** | DataStore + DeviceSensingGate + 设置页；默认关；见 `docs/device-sensing.md` |
 
 ---
 
