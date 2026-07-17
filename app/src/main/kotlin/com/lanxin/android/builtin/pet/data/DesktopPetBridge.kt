@@ -83,8 +83,12 @@ class DesktopPetBridge(
     }
 
     /** Native 侧编码会话状态，供 evaluateJavascript 推送。 */
-    fun encodeSession(snapshot: VoiceSessionSnapshot): String {
-        val msg = PetBridgeProtocol.sessionStateMessage(snapshot)
+    fun encodeSession(
+        snapshot: VoiceSessionSnapshot,
+        displayMode: com.lanxin.android.builtin.pet.domain.Live2dDisplayController.Live2dDisplayMode =
+            com.lanxin.android.builtin.pet.domain.Live2dDisplayController.Live2dDisplayMode.PLACEHOLDER
+    ): String {
+        val msg = PetBridgeProtocol.sessionStateMessage(snapshot, displayMode = displayMode)
         lastOutbound = PetBridgeProtocol.encode(msg)
         return lastOutbound
     }
@@ -98,6 +102,16 @@ class DesktopPetBridge(
     /** Native → Web：编码 Live2D 加载决策。 */
     fun encodeLoadLive2d(decision: com.lanxin.android.builtin.pet.domain.Live2dDisplayController.Decision): String {
         val msg = PetBridgeProtocol.loadLive2dMessage(decision)
+        lastOutbound = PetBridgeProtocol.encode(msg)
+        return lastOutbound
+    }
+
+    /** Native → Web：编码表情/口型姿态。 */
+    fun encodeExpression(
+        pose: com.lanxin.android.builtin.pet.domain.PetExpressionController.Pose,
+        phase: com.lanxin.android.builtin.pet.domain.VoiceSessionPhase
+    ): String {
+        val msg = PetBridgeProtocol.setExpressionMessage(pose, phase)
         lastOutbound = PetBridgeProtocol.encode(msg)
         return lastOutbound
     }

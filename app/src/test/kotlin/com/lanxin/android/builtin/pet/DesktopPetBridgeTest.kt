@@ -47,6 +47,20 @@ class DesktopPetBridgeTest {
         )
         assertTrue(out.contains("command=SESSION_STATE"))
         assertTrue(out.contains("phase=THINKING"))
+        assertTrue(out.contains("expression=THINKING"))
+        assertEquals(out, bridge.lastOutbound)
+    }
+
+    @Test
+    fun `encodeExpression writes outbound`() {
+        val bridge = DesktopPetBridge {}
+        val pose = com.lanxin.android.builtin.pet.domain.PetExpressionController.poseFor(
+            VoiceSessionPhase.SPEAKING
+        )
+        val out = bridge.encodeExpression(pose, VoiceSessionPhase.SPEAKING)
+        assertTrue(out.contains("command=SET_EXPRESSION"))
+        assertTrue(out.contains("expression=SPEAKING"))
+        assertTrue(out.contains("mouthAnimating=true"))
         assertEquals(out, bridge.lastOutbound)
     }
 

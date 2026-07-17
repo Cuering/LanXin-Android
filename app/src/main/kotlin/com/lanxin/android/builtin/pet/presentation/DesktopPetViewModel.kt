@@ -25,6 +25,7 @@ import com.lanxin.android.builtin.pet.data.FloatingPetService
 import com.lanxin.android.builtin.pet.data.OverlayPermissionHelper
 import com.lanxin.android.builtin.pet.domain.DebugOpenSourcePaths
 import com.lanxin.android.builtin.pet.domain.Live2dDisplayController
+import com.lanxin.android.builtin.pet.domain.PetExpressionController
 import com.lanxin.android.builtin.pet.domain.PetPathReadiness
 import com.lanxin.android.builtin.pet.domain.PetResourceResolver
 import com.lanxin.android.builtin.pet.domain.PetSettings
@@ -75,6 +76,12 @@ data class DesktopPetUiState(
     /** M2b：显示模式短标签（占位 / Live2D 壳 / 降级）。 */
     val live2dDisplayLabel: String = "占位",
     val live2dDisplayMode: String = Live2dDisplayController.Live2dDisplayMode.PLACEHOLDER.name,
+    /** M2b 打磨：当前会话表情短标签（随相位）。 */
+    val expressionLabel: String = "闲置",
+    val expressionName: String = PetExpressionController.Expression.IDLE_SMILE.name,
+    val mouthAnimating: Boolean = false,
+    /** 缺资源时的用户可读引导（占位/降级仍可演示表情）。 */
+    val resourceGuide: String = "",
     /** 汇总：就绪 / 缺失引导 fetch 脚本。 */
     val resourceSummary: String = "",
     /** 本地脑路径键 + 1.5B 说明（M2a 预留展示）。 */
@@ -105,6 +112,12 @@ class DesktopPetViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             sessionCoordinator.snapshot.collect { snap ->
+                val mode = runCatching {
+                    Live2dDisplayController.Live2dDisplayMode.valueOf(
+                        _uiState.value.live2dDisplayMode
+                    )
+                }.getOrDefault(Live2dDisplayController.Live2dDisplayMode.PLACEHOLDER)
+                val pose = PetExpressionController.poseFor(snap.phase, mode)
                 _uiState.update {
                     it.copy(
                         phase = snap.phase,
@@ -112,6 +125,9 @@ class DesktopPetViewModel @Inject constructor(
                         replyText = snap.replyText,
                         subtitle = snap.subtitle,
                         lastError = snap.lastError,
+                        expressionLabel = pose.shortLabel,
+                        expressionName = pose.expression.name,
+                        mouthAnimating = pose.mouthAnimating,
                         sessionPreview = formatPreview(
                             snap.phase.name,
                             snap.asrText,
@@ -158,6 +174,12 @@ class DesktopPetViewModel @Inject constructor(
             val live2dDecision = Live2dDisplayController.decide(resolved.live2dModelPath)
             val can = OverlayPermissionHelper.canDrawOverlays(app)
             val snap = sessionCoordinator.current()
+            val pose = PetExpressionController.poseFor(snap.phase, live2dDecision.mode)
+            val guide = PetExpressionController.guideForMissingResources(
+                live2dReady = live2dCheck.ready,
+                asrReady = asrCheck.ready,
+                ttsReady = ttsCheck.ready
+            )
             _uiState.update {
                 it.copy(
                     enabled = config.enabled,
@@ -180,6 +202,10 @@ class DesktopPetViewModel @Inject constructor(
                     ttsReady = ttsCheck.ready,
                     live2dDisplayLabel = live2dDecision.shortLabel,
                     live2dDisplayMode = live2dDecision.mode.name,
+                    expressionLabel = pose.shortLabel,
+                    expressionName = pose.expression.name,
+                    mouthAnimating = pose.mouthAnimating,
+                    resourceGuide = guide,
                     resourceSummary = PetPathReadiness.summaryMessage(
                         live2dCheck,
                         asrCheck,
