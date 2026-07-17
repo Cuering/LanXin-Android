@@ -17,15 +17,34 @@
 package com.lanxin.android.builtin.platform.di
 
 import com.lanxin.android.builtin.platform.PlatformPlugin
+import com.lanxin.android.builtin.platform.data.WebSearchPreferences
+import com.lanxin.android.builtin.platform.domain.WebSearchSettings
 import com.lanxin.android.plugin.PluginManager
+import dagger.Binds
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import dagger.hilt.migration.DisableInstallInCheck
 import javax.inject.Singleton
 
 /**
- * 手机平台工具模块 DI。
+ * 手机平台工具模块 DI — 绑定。
+ *
+ * - WebSearchSettings → WebSearchPreferences（DataStore）
+ */
+@Module
+@DisableInstallInCheck
+@InstallIn(SingletonComponent::class)
+abstract class PlatformBindModule {
+
+    @Binds
+    @Singleton
+    abstract fun bindWebSearchSettings(impl: WebSearchPreferences): WebSearchSettings
+}
+
+/**
+ * 手机平台工具模块 DI — 注册。
  *
  * - ClipboardTool / AppInstallCheckTool / SystemInfoTool / PlatformPlugin 使用 @Inject constructor
  * - 通过 [providePlatformPluginRegistration] 注册到 PluginManager
