@@ -4,8 +4,9 @@
 
 - **禁止** commit 真实 `.onnx` / 妹居商业资源 / ASR·TTS 大包
 - **禁止**把本目录当 AstrBot 服务器缓存交付
-- Live2D 官方 Sample **已进** `app/src/main/assets/pet/live2d/Mao/`；本目录仅作脚本旁路 / 覆盖
-- 在**开发者机器**拉取 ASR/TTS（可选 Live2D 覆盖）：
+- Live2D 官方 Sample **已进** `app/src/main/assets/pet/live2d/Mao/`；本目录仅作覆盖
+- **推荐**：手机 App 设置页「一键下载」到 `filesDir/debug-assets/`
+- 可选：开发者机器脚本拉取后 adb push
 
 ```bash
 bash scripts/fetch-debug-assets.sh
@@ -24,4 +25,4 @@ debug-assets/
 └── tts/             # sherpa-onnx TTS 解压目录
 ```
 
-真机：`adb push` 到 App `filesDir/debug-assets/`，设置页应显示「已就绪」。
+真机 App 内下载或 `adb push` 到 App `filesDir/debug-assets/` 后，设置页应显示「已就绪」。

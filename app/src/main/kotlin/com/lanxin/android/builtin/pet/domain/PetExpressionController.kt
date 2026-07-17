@@ -135,7 +135,7 @@ object PetExpressionController {
             if (!asrReady) add("ASR")
             if (!ttsReady) add("TTS")
         }
-        return "缺失 ${missing.joinToString("、")}：开发者机运行 bash scripts/fetch-debug-assets.sh，" +
-            "再 adb push 到 filesDir/debug-assets/。缺资源时仍可用占位/降级表情演示听→想→说。"
+        return "缺失 ${missing.joinToString("、")}：设置页「一键下载」到 filesDir/debug-assets/，" +
+            "或可选脚本 fetch-debug-assets.sh。缺资源时仍可用占位/降级表情演示听→想→说。"
     }
 }

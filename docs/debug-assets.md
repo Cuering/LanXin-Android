@@ -1,41 +1,62 @@
 # Debug 资源方案：免费可爱 Live2D + 开源中文语音
 
-> 状态：**M1** · **M2a 路径闭环** · **M2b 壳** · **M2b 打磨：表情/口型 + 降级引导**  
-> 相关：[`meiju-style-pet.md`](./meiju-style-pet.md) · [`voice-asr.md`](./voice-asr.md) · [`local-inference.md`](./local-inference.md)
+> 状态：**M1** · **M2a 路径闭环** · **M2b 壳** · **M2b 打磨** · **App 内一键下载 + 国内镜像**  
+> 相关：[`meiju-style-pet.md`](./meiju-style-pet.md) · [`voice-asr.md`](./voice-asr.md) · [`local-inference.md`](./local-inference.md) · [`live2d-mao-sample.md`](./live2d-mao-sample.md)
 
 ## 0. 原则
 
 | 原则 | 说明 |
 |------|------|
-| 默认走开源 | **Live2D 仓内官方 Sample Mao** + sherpa-onnx ASR/TTS（脚本） |
+| 默认走开源 | **Live2D 仓内官方 Sample Mao** + sherpa-onnx ASR/TTS |
 | Live2D 进仓 | `app/src/main/assets/pet/live2d/Mao/`（~4MB，白名单）见 [`live2d-mao-sample.md`](./live2d-mao-sample.md) |
-| ASR/TTS 大文件不进 git | 脚本拉到 `debug-assets/`（已 gitignore） |
-| **下载位置** | ASR/TTS **仅开发者机器**（脚本）；**禁止** AstrBot 服务器缓存模型当交付 |
-| CI 无 ASR/TTS 仍绿 | stub / 占位 HTML；Live2D 单测不依赖真机 assets 拷贝 |
-| 妹居仅 fallback | **禁止**上传妹居 so / moc3 / mnn / wav / 商业人设到 GitHub |
+| **主路径：App 内下载** | 设置页「一键下载」→ `filesDir/debug-assets/`（不进 git） |
+| 国内镜像 | 官方 GitHub / ghproxy 类镜像；失败自动回退 |
+| ASR/TTS 大文件不进 git | 仅本机 filesDir；**禁止** commit 权重 |
+| **禁止** | AstrBot 服务器缓存模型当交付；妹居商业资源入库 |
+| 脚本可选 | `fetch-debug-assets.sh` + adb push 为开发者备用 |
+| CI 无大包仍绿 | mock transport 单测；不 curl 真实数百 MB |
 | 分发合规 | Live2D Sample Terms；ASR/TTS Apache-2.0 |
+
+### App 内一键下载（推荐）
+
+桌宠设置页（`DesktopPetScreen`）：
+
+1. 选择镜像：**国内镜像**（默认）或 **官方**
+2. 分项按钮：下载 Live2D（可选覆盖）/ ASR / TTS
+3. 进度条、取消、失败短文案
+4. 成功写回：`live2d_model_path` / `offline_asr_model_path` / `tts_model_dir`
+5. Live2D 仓内 Mao 仍为默认兜底；下载可覆盖到 `debug-assets/live2d/Mao/`
+6. 本地脑：**不**提供一键下载；仅「自备路径」文案（见 [`local-inference.md`](./local-inference.md)）
+
+实现要点：
+
+| 类型 | 类 |
+|------|-----|
+| Catalog / 镜像 | `DebugAssetCatalog` · `DebugAssetMirror` |
+| 下载 | `DebugAssetDownloader` + `AssetDownloadTransport` |
+| 传输 | `KtorAssetDownloadTransport` |
+| 解压 | `ArchiveExtractor`（zip / tar.bz2 / tar.gz，防 zip-slip） |
+| DI | `PetModule` binds transport |
 
 ### Live2D（优先仓内）
 
-开箱使用仓内 Mao，**无需**再跑下载脚本。自定义覆盖可选：
+开箱使用仓内 Mao，**无需**下载。可选 App 内「更新」或脚本覆盖：
 
 ```bash
 bash scripts/download-debug-live2d.sh   # 可选：覆盖到 debug-assets
 bash scripts/vendor-live2d-mao.sh       # 从上游重同步仓内 assets
 ```
 
-### ASR / TTS（脚本）
+### ASR / TTS（App 内优先；脚本备用）
 
 ```bash
+# 开发者机备用
 bash scripts/fetch-debug-assets.sh
 # 等价：
 bash scripts/download-debug-assets.sh
-# 分项：
 bash scripts/download-debug-asr.sh
 bash scripts/download-debug-tts.sh
 ```
-
-设置页 ASR/TTS 缺失时文案指向上述脚本（本 PR **不**含 App 内下载）。
 
 ---
 
@@ -45,7 +66,7 @@ bash scripts/download-debug-tts.sh
 
 | 优先级 | 模型 | 来源 | 许可 |
 |:------:|------|------|------|
-| **1** | **Niziiro Mao** | [CubismWebSamples Mao](https://github.com/Live2D/CubismWebSamples/tree/develop/Samples/Resources/Mao) | [Sample Terms](https://www.live2d.com/en/learn/sample/model-terms) |
+| **1** | **Niziiro Mao** | 仓内 assets / [CubismWebSamples Mao](https://github.com/Live2D/CubismWebSamples/tree/develop/Samples/Resources/Mao) | [Sample Terms](https://www.live2d.com/en/learn/sample/model-terms) |
 | 2 | Haru | 同上仓库 | 同上 |
 
 | Key | 默认 |
@@ -76,14 +97,14 @@ bash scripts/download-debug-tts.sh
 | `tts_model_dir` | `debug-assets/tts/<解压目录名>` |
 | `tts_enabled` | **默认 false** |
 
-### D. 本地脑（路径预留，M2a 设置页展示）
+### D. 本地脑（路径预留，不强制下载）
 
 | Key | 说明 |
 |-----|------|
 | `local_inference_model_path` | 默认选型 **Qwen2.5-1.5B-Instruct**（MNN 量化，用户自备） |
 | 放置建议 | `{filesDir}/models/local-llm/light/` |
 
-本阶段**可不下载权重**。详见 [`local-inference.md`](./local-inference.md)。
+本阶段**不在 App 内一键下载**本地脑权重。详见 [`local-inference.md`](./local-inference.md)。
 
 ### E. 妹居（仅文档 fallback）
 
@@ -107,8 +128,8 @@ LanXin-Android/
 │   ├── desktop-pet.html
 │   └── live2d/Mao/               # 官方 Sample（可 commit）
 ├── scripts/
-│   ├── vendor-live2d-mao.sh      # 重同步仓内 Mao
-│   ├── fetch-debug-assets.sh     # ASR/TTS / 可选 Live2D 覆盖
+│   ├── vendor-live2d-mao.sh
+│   ├── fetch-debug-assets.sh     # 可选备用
 │   ├── download-debug-assets.sh
 │   ├── download-debug-live2d.sh
 │   ├── download-debug-asr.sh
@@ -116,25 +137,25 @@ LanXin-Android/
 └── docs/debug-assets.md
 ```
 
-真机：
+真机（脚本备用）：
 
 ```bash
 adb push debug-assets/ /sdcard/Android/data/<pkg>/files/debug-assets/
 # 或 run-as 拷到 filesDir/debug-assets/
 ```
 
+App 内下载直接写入 `Context.filesDir/debug-assets/`，无需 adb。
+
 ---
 
-## 3. 设置页就绪语义（M2a）
+## 3. 设置页就绪语义
 
 | 状态 | 条件 | UI |
 |------|------|-----|
 | **已就绪** | 路径存在（文件或非空目录）；或 `stub://` | 绿色/✓ 短标签 |
-| **已就绪（内置示例）** | Live2D 仓内 Sample 逻辑路径或已安装 | 绿色/✓ |
-| **未就绪** | ASR/TTS 空路径等 | 引导 `fetch-debug-assets.sh` |
-| **路径无效** | 配置了但文件不存在 | 提示检查路径 |
-
-引擎 so 未接入时仍可标「路径已就绪（待引擎）」——不阻塞路径闭环。
+| **已就绪（内置示例）** | Live2D 仓内 Sample | 绿色/✓ |
+| **未就绪** | ASR/TTS 空路径等 | **一键下载** + 可选脚本说明 |
+| **路径无效** | 配置了但文件不存在 | 提示检查路径 / 重新下载 |
 
 ---
 
@@ -144,7 +165,8 @@ adb push debug-assets/ /sdcard/Android/data/<pkg>/files/debug-assets/
 |------|------|
 | 主仓 commit 数百 MB 模型 | ❌ |
 | 官方 Sample Mao 进 assets（白名单） | ✅ |
-| 脚本 + gitignore（ASR/TTS） | ✅ |
+| App 内下载到 filesDir | ✅ |
+| 脚本 + gitignore（ASR/TTS） | ✅ 备用 |
 | 妹居资源进仓 | ❌ |
 | ASR/TTS/本地脑权重进仓 | ❌ |
 | AstrBot 服务器下载当交付 | ❌ |
@@ -153,9 +175,9 @@ adb push debug-assets/ /sdcard/Android/data/<pkg>/files/debug-assets/
 
 ## 5. CI
 
-- pet / ASR / TTS **stub 单测**绿（含 `BuiltInLive2dAssetsTest` / `Live2dDisplayControllerTest` / `PetPathReadinessTest`）
-- **不**在 CI 下载 ASR/TTS 大包；Live2D 用仓内 Mao 存在性检查 + 临时 fixture
-- 检查：`app/src/main/assets/pet/live2d/Mao/Mao.model3.json`、`docs/live2d-mao-sample.md`、`scripts/vendor-live2d-mao.sh`、`docs/debug-assets.md`、`fetch-debug-assets.sh`
+- pet / ASR / TTS **stub 单测**绿（含 `DebugAssetDownloaderTest` / `DebugAssetCatalogTest` / `ArchiveExtractorTest`）
+- **不**在 CI 下载 ASR/TTS 大包；transport mock
+- 检查：仓内 Mao、`docs/debug-assets.md`、`fetch-debug-assets.sh`（仍保留）
 
 ---
 
@@ -166,7 +188,8 @@ adb push debug-assets/ /sdcard/Android/data/<pkg>/files/debug-assets/
 | **M1** | HTML 占位 + Stub；路径约定 |
 | **M2a** | 路径校验 + 设置就绪 + fetch 文案 |
 | **M2b** | Live2D 真显示（WebView 壳 + 降级）|
-| **M2b 打磨** | 会话表情/口型 + 设置引导；缺资源仍可占位演示 |
+| **M2b 打磨** | 会话表情/口型 + 设置引导 |
+| **App 内下载** | 一键 Live2D/ASR/TTS + 国内镜像回退 |
 | **M2c** | 能 load 模型文件则引擎 READY |
 | **M3/M4** | 真 TTS / 合规 Live2D |
 

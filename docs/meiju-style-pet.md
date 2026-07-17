@@ -47,30 +47,33 @@ IDLE → LISTENING → THINKING → SPEAKING → IDLE
 
 - `PetPathReadiness`：Live2D 文件 / ASR·TTS 非空目录 / `stub://` → **已就绪**
 - Live2D 仓内 Sample（逻辑路径 / 已安装）→ **已就绪（内置示例）**
-- ASR/TTS 空或无效 → **未就绪 / 路径无效**，明细指向 `scripts/fetch-debug-assets.sh`
+- ASR/TTS 空或无效 → **未就绪 / 路径无效**，明细引导 **App 内一键下载**（脚本可选）
 - Live2D 解析优先级：
   1. 用户配置 `live2d_model_path`
   2. 仓内官方 Sample（`BuiltInLive2dAssets` / `filesDir/builtin-live2d/Mao/`）
-  3. `filesDir/debug-assets/**`（脚本旁路）
+  3. `filesDir/debug-assets/**`（App 内下载或脚本旁路）
   4. `meiju-ref/**`（仅本机 debug）
 
 ### 3.2 设置页
 
 - 展示 Live2D / ASR / TTS 来源标签 + 就绪短标签
-- Live2D 默认开箱（仓内 Mao）；ASR/TTS 缺失时说明跑 **开发者机 GitHub 仓库脚本**
-- **本阶段不含** App 内一键下载按钮（下一刀）
-- 预留 `local_inference_model_path` 与 **Qwen2.5-1.5B** 说明（链 `docs/local-inference.md`）
+- **App 内一键下载**（推荐）：Live2D Mao / ASR zipformer-14M / TTS matcha-baker
+  - 镜像：官方 + 国内 ghproxy 类（可配置，失败回退官方）
+  - 进度、可取消、失败短文案；落盘 `filesDir/debug-assets/**` 后写配置键
+  - Live2D 仓内 Mao 仍默认就绪；下载可作更新/覆盖
+- 本地脑：仅说明自备路径，**不**提供 App 内下载
+- 可选：高级手填路径 / 开发者脚本说明
 
-### 3.3 脚本
+### 3.3 脚本（可选旁路）
 
 | 脚本 | 说明 |
 |------|------|
 | `scripts/vendor-live2d-mao.sh` | 将官方 CubismWebSamples Mao 同步到 `app/src/main/assets/pet/live2d/Mao/` |
-| `scripts/fetch-debug-assets.sh` | ASR/TTS（可选 Live2D 覆盖）入口 |
+| `scripts/fetch-debug-assets.sh` | 开发者机 ASR/TTS（可选 Live2D 覆盖）入口 |
 | `scripts/download-debug-assets.sh` | 同上完整下载 |
 | 分项 `download-debug-live2d/asr/tts.sh` | 分项 |
 
-**硬性**：ASR/TTS 下载只在开发者机器；禁止 AstrBot 服务器 `/data/download` 当交付；禁止 App 内下载进本 PR。
+**硬性**：大文件不进 git；**禁止** AstrBot 服务器 `/data/download` 当交付缓存。推荐手机 App 内下载。
 
 ## 4. 妹居 2.2.2 → 兰心 映射
 

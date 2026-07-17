@@ -182,7 +182,10 @@ fun VoiceAsrScreen(
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("模型路径") },
                 supportingText = {
-                    Text("绝对路径或 stub://demo；推荐小模型目录；大文件勿提交 git")
+                    Text(
+                        "绝对路径或 stub://demo；推荐小模型目录；大文件勿提交 git。" +
+                            "完整一键下载见「桌宠 / 语音陪伴」设置页。"
+                    )
                 },
                 singleLine = true
             )

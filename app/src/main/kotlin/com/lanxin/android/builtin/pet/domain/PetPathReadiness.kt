@@ -115,7 +115,7 @@ object PetPathReadiness {
     fun missingHint(kind: Kind): String = when (kind) {
         Kind.LIVE2D ->
             "Live2D：默认使用仓内官方 Sample Mao；若仍未就绪请检查 APK assets " +
-                "pet/live2d/Mao/。可选 bash scripts/fetch-debug-assets.sh 覆盖自定义模型。"
+                "pet/live2d/Mao/。可选设置页「下载 Live2D」覆盖到 debug-assets。"
         Kind.ASR, Kind.TTS -> DebugOpenSourcePaths.FETCH_SCRIPT_HINT
         Kind.LOCAL_LLM -> DebugOpenSourcePaths.LOCAL_LLM_DEFAULT_HINT
     }

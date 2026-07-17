@@ -32,6 +32,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -43,6 +44,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -60,6 +62,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.lanxin.android.builtin.pet.domain.DebugAssetKind
+import com.lanxin.android.builtin.pet.domain.DebugAssetMirror
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -121,7 +125,8 @@ fun DesktopPetScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                "M2b 打磨：Live2D 壳 + 会话表情/口型联动。默认关，不偷偷录音/截屏；资源仅开发者机/脚本拉取。",
+                "M2b 打磨：Live2D 壳 + 会话表情/口型联动。默认关，不偷偷录音/截屏。" +
+                    "语音资源可在本页一键下载到本机 filesDir（不进 git）。",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -209,16 +214,111 @@ fun DesktopPetScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                    // —— App 内一键下载 ——
+                    Text("一键下载（本机 filesDir）", fontWeight = FontWeight.Medium)
+                    Text(
+                        state.live2dLicenseHint,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("镜像", style = MaterialTheme.typography.bodySmall)
+                        FilterChip(
+                            selected = state.preferredMirror == DebugAssetMirror.MIRROR_GHPROXY,
+                            onClick = {
+                                viewModel.setPreferredMirror(DebugAssetMirror.MIRROR_GHPROXY)
+                            },
+                            label = { Text("国内镜像") }
+                        )
+                        FilterChip(
+                            selected = state.preferredMirror == DebugAssetMirror.OFFICIAL,
+                            onClick = {
+                                viewModel.setPreferredMirror(DebugAssetMirror.OFFICIAL)
+                            },
+                            label = { Text("官方") }
+                        )
+                    }
+                    Text(
+                        "国内镜像失败会自动回退官方 GitHub。ASR/TTS 较大，请连 Wi‑Fi。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                    state.downloadItems.forEach { item ->
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        "${item.displayName}（${item.sizeHint}）",
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                    Text(
+                                        buildString {
+                                            append(item.statusText)
+                                            if (item.ready && item.readyPath.isNotBlank()) {
+                                                append(" · ")
+                                                append(item.readyPath.takeLast(48))
+                                            }
+                                            item.lastError?.let {
+                                                append(" · ")
+                                                append(it)
+                                            }
+                                        },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (item.lastError != null) {
+                                            MaterialTheme.colorScheme.error
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        }
+                                    )
+                                }
+                                if (item.downloading) {
+                                    TextButton(onClick = viewModel::cancelDownload) {
+                                        Text("取消")
+                                    }
+                                } else {
+                                    OutlinedButton(
+                                        onClick = { viewModel.startDownload(item.kind) },
+                                        enabled = !state.downloadBusy
+                                    ) {
+                                        Text(
+                                            when {
+                                                item.ready && item.kind == DebugAssetKind.LIVE2D ->
+                                                    "更新"
+                                                item.ready -> "重新下载"
+                                                else -> "下载"
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                            if (item.downloading && item.percent in 0..100) {
+                                LinearProgressIndicator(
+                                    progress = { item.percent / 100f },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            } else if (item.downloading) {
+                                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                            }
+                        }
+                    }
+                    if (state.downloadBusy) {
+                        OutlinedButton(onClick = viewModel::cancelDownload) {
+                            Text("取消当前下载")
+                        }
+                    }
+
                     val anyMissing = !state.live2dReady || !state.asrReady || !state.ttsReady
                     if (anyMissing) {
-                        OutlinedButton(onClick = viewModel::showFetchAssetsHint) {
-                            Text("如何拉取资源（fetch-debug-assets.sh）")
+                        TextButton(onClick = viewModel::showFetchAssetsHint) {
+                            Text("高级：脚本拉取说明（可选）")
                         }
-                        Text(
-                            "仅文档/文案指向 GitHub 脚本；App 与 AstrBot 服务器不下载模型。",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.secondary
-                        )
                     } else {
                         Text(
                             "路径均已就绪（引擎 so 可后续接；本阶段不强制真推理）。",
@@ -242,69 +342,67 @@ fun DesktopPetScreen(
                         )
                     }
 
-                    OutlinedTextField(
-                        value = live2dDraft,
-                        onValueChange = { live2dDraft = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("live2d_model_path") },
-                        placeholder = { Text("model3.json 绝对路径") },
-                        supportingText = {
-                            Text(
-                                "生效：" + state.live2dModelPathResolved.ifBlank { "（空 → 占位）" },
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        },
-                        singleLine = true
-                    )
-                    OutlinedTextField(
-                        value = ttsDirDraft,
-                        onValueChange = { ttsDirDraft = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("tts_model_dir") },
-                        placeholder = { Text("TTS 模型目录") },
-                        supportingText = {
-                            Text(
-                                "生效：" + state.ttsModelDirResolved.ifBlank { "（空）" },
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        },
-                        singleLine = true
-                    )
-                    OutlinedTextField(
-                        value = ttsRefDraft,
-                        onValueChange = { ttsRefDraft = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("tts_reference_audio") },
-                        placeholder = { Text("参考音 .wav") },
-                        supportingText = {
-                            Text(
-                                "生效：" + state.ttsReferenceResolved.ifBlank { "（空）" },
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        },
-                        singleLine = true
-                    )
-                    OutlinedButton(
-                        onClick = {
-                            viewModel.setLive2dModelPath(live2dDraft)
-                            viewModel.setTtsModelDir(ttsDirDraft)
-                            viewModel.setTtsReferenceAudio(ttsRefDraft)
+                    var advancedOpen by remember { mutableStateOf(false) }
+                    TextButton(onClick = { advancedOpen = !advancedOpen }) {
+                        Text(if (advancedOpen) "收起高级：手填路径" else "高级：手填路径")
+                    }
+                    if (advancedOpen) {
+                        OutlinedTextField(
+                            value = live2dDraft,
+                            onValueChange = { live2dDraft = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("live2d_model_path") },
+                            placeholder = { Text("model3.json 绝对路径") },
+                            supportingText = {
+                                Text(
+                                    "生效：" +
+                                        state.live2dModelPathResolved.ifBlank { "（空 → 占位）" },
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            },
+                            singleLine = true
+                        )
+                        OutlinedTextField(
+                            value = ttsDirDraft,
+                            onValueChange = { ttsDirDraft = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("tts_model_dir") },
+                            placeholder = { Text("TTS 模型目录") },
+                            supportingText = {
+                                Text(
+                                    "生效：" + state.ttsModelDirResolved.ifBlank { "（空）" },
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            },
+                            singleLine = true
+                        )
+                        OutlinedTextField(
+                            value = ttsRefDraft,
+                            onValueChange = { ttsRefDraft = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("tts_reference_audio") },
+                            placeholder = { Text("参考音 .wav") },
+                            supportingText = {
+                                Text(
+                                    "生效：" + state.ttsReferenceResolved.ifBlank { "（空）" },
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            },
+                            singleLine = true
+                        )
+                        OutlinedButton(
+                            onClick = {
+                                viewModel.setLive2dModelPath(live2dDraft)
+                                viewModel.setTtsModelDir(ttsDirDraft)
+                                viewModel.setTtsReferenceAudio(ttsRefDraft)
+                            }
+                        ) {
+                            Text("保存路径")
                         }
-                    ) {
-                        Text("保存路径")
                     }
                     Text(
-                        "换 Live2D / TTS / ASR 只改设置项，不改 VoiceSession 状态机。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        "M2b：路径就绪时悬浮层进入 Live2D 渲染壳；失败自动降级占位。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        "打磨：听→想→说 驱动表情/口型；缺资源仍可占位演示，停止桌宠会复位会话并销毁 WebView。",
+                        "换 Live2D / TTS / ASR 只改设置项，不改 VoiceSession 状态机。" +
+                            "仓内已内置 Mao；下载侧重 ASR/TTS 或备用 Live2D。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -331,6 +429,11 @@ fun DesktopPetScreen(
                         state.localLlmHint,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        "本地脑权重大，App 内不提供一键下载；请自备模型并配置路径。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.secondary
                     )
                 }
             }

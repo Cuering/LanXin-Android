@@ -44,7 +44,7 @@ class PetPathReadinessTest {
         assertEquals("未就绪", c.label)
         assertTrue(
             c.detail.contains("Mao") || c.detail.contains("内置") ||
-                c.detail.contains("fetch-debug-assets")
+                c.detail.contains("下载") || c.detail.contains("fetch-debug-assets")
         )
     }
 
@@ -52,7 +52,10 @@ class PetPathReadinessTest {
     fun blankAsr_notReady_withFetchHint() {
         val c = PetPathReadiness.check(PetPathReadiness.Kind.ASR, "")
         assertFalse(c.ready)
-        assertTrue(c.detail.contains("fetch-debug-assets"))
+        assertTrue(
+            c.detail.contains("一键下载") || c.detail.contains("fetch-debug-assets") ||
+                c.detail.contains("debug-assets")
+        )
     }
 
     @Test
@@ -123,7 +126,9 @@ class PetPathReadinessTest {
         val asr = PetPathReadiness.check(PetPathReadiness.Kind.ASR, "")
         val tts = PetPathReadiness.check(PetPathReadiness.Kind.TTS, "")
         val s = PetPathReadiness.summaryMessage(live, asr, tts)
-        assertTrue(s.contains("fetch-debug-assets"))
+        assertTrue(
+            s.contains("下载") || s.contains("fetch-debug-assets")
+        )
         assertTrue(s.contains("Live2D"))
     }
 
