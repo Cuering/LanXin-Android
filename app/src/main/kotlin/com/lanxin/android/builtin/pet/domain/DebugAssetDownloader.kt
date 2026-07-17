@@ -84,6 +84,9 @@ class DebugAssetDownloader @Inject constructor(
 
     /**
      * 下载并安装 [kind]；进度以 [DebugAssetDownloadEvent] 流式上报。
+     *
+     * 终端事件（Completed / Failed / Cancelled）一律在 try/catch **之外** emit，
+     * 避免违反 Flow exception transparency（catch 内禁止 emit）。
      */
     fun download(
         filesDir: File,
@@ -93,6 +96,8 @@ class DebugAssetDownloader @Inject constructor(
         emit(DebugAssetDownloadEvent.Started)
         val job = currentCoroutineContext()[Job]
         activeJob = job
+        // 记录终端结果，catch 内不 emit（Flow exception transparency）
+        var terminal: DebugAssetDownloadEvent? = null
         try {
             mutex.withLock {
                 val usedMirror = when (kind) {
@@ -105,36 +110,32 @@ class DebugAssetDownloader @Inject constructor(
                         }
                 }
                 val path = readyPath(filesDir, kind)
-                if (path.isBlank() || !isReady(filesDir, kind)) {
-                    emit(
-                        DebugAssetDownloadEvent.Failed(
-                            kind = kind,
-                            message = "下载完成但校验失败（缺少关键文件）"
-                        )
+                terminal = if (path.isBlank() || !isReady(filesDir, kind)) {
+                    DebugAssetDownloadEvent.Failed(
+                        kind = kind,
+                        message = "下载完成但校验失败（缺少关键文件）"
                     )
                 } else {
-                    emit(
-                        DebugAssetDownloadEvent.Completed(
-                            kind = kind,
-                            readyPath = path,
-                            mirror = usedMirror
-                        )
+                    DebugAssetDownloadEvent.Completed(
+                        kind = kind,
+                        readyPath = path,
+                        mirror = usedMirror
                     )
                 }
             }
         } catch (_: CancellationException) {
-            emit(DebugAssetDownloadEvent.Cancelled)
-            // 不向下游抛取消，便于 UI collect 正常结束
+            // 不 rethrow：UI collect 正常收 Cancelled；不在 catch 内 emit
+            terminal = DebugAssetDownloadEvent.Cancelled
         } catch (t: Throwable) {
-            emit(
-                DebugAssetDownloadEvent.Failed(
-                    kind = kind,
-                    message = shortError(t)
-                )
+            terminal = DebugAssetDownloadEvent.Failed(
+                kind = kind,
+                message = shortError(t)
             )
         } finally {
             if (activeJob === job) activeJob = null
         }
+        // 正常路径 emit 终端事件（在 catch 块外）
+        terminal?.let { emit(it) }
     }.flowOn(Dispatchers.IO)
 
     private suspend fun installLive2d(
