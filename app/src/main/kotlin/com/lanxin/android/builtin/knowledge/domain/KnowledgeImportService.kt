@@ -18,6 +18,7 @@ package com.lanxin.android.builtin.knowledge.domain
 
 import android.content.Context
 import android.net.Uri
+import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -44,6 +45,166 @@ class KnowledgeImportService @Inject constructor(
     private val pipeline: VectorPipeline,
     private val vectorStore: VectorStore
 ) {
+
+    /**
+     * 从 SAF 目录树批量导入支持的文档（递归扫描子目录，深度有上限）。
+     * 仅处理扩展名为 .txt / .md / .pdf 的文件；跳过其它类型。
+     */
+    fun importFolder(treeUri: Uri): Flow<ImportProgress> = flow {
+        val startedAt = System.currentTimeMillis()
+        emit(
+            ImportProgress(
+                phase = ImportPhase.READING,
+                message = "扫描文件夹…",
+                batchMode = true
+            )
+        )
+
+        val files = try {
+            listSupportedDocuments(treeUri)
+        } catch (e: Exception) {
+            Log.e(TAG, "list folder failed", e)
+            emit(
+                ImportProgress(
+                    phase = ImportPhase.FAILED,
+                    message = e.message ?: "无法读取文件夹",
+                    error = e.message,
+                    batchMode = true,
+                    elapsedMs = System.currentTimeMillis() - startedAt
+                )
+            )
+            return@flow
+        }
+
+        if (files.isEmpty()) {
+            emit(
+                ImportProgress(
+                    phase = ImportPhase.FAILED,
+                    message = "文件夹中没有可导入的 .txt / .md / .pdf",
+                    error = "empty_folder",
+                    batchMode = true,
+                    elapsedMs = System.currentTimeMillis() - startedAt
+                )
+            )
+            return@flow
+        }
+
+        var filesOk = 0
+        var filesFail = 0
+        var totalSuccessChunks = 0
+        var totalFailedChunks = 0
+        var totalChars = 0
+        val names = mutableListOf<String>()
+
+        for ((index, entry) in files.withIndex()) {
+            emit(
+                ImportProgress(
+                    phase = ImportPhase.READING,
+                    fileName = entry.displayName,
+                    message = "导入 ${index + 1}/${files.size}：${entry.displayName}",
+                    batchMode = true,
+                    batchTotal = files.size,
+                    batchDone = index,
+                    batchSuccess = filesOk,
+                    batchFailed = filesFail,
+                    successCount = totalSuccessChunks,
+                    failedCount = totalFailedChunks,
+                    charCount = totalChars
+                )
+            )
+
+            var last: ImportProgress? = null
+            try {
+                importDocument(entry.uri).collect { p -> last = p }
+            } catch (e: Exception) {
+                Log.e(TAG, "folder item failed: ${entry.displayName}", e)
+                filesFail++
+                continue
+            }
+
+            val p = last
+            if (p == null) {
+                filesFail++
+                continue
+            }
+            when (p.phase) {
+                ImportPhase.DONE -> {
+                    filesOk++
+                    totalSuccessChunks += p.successCount
+                    totalFailedChunks += p.failedCount
+                    totalChars += p.charCount
+                    names += entry.displayName
+                }
+                ImportPhase.FAILED -> {
+                    filesFail++
+                }
+                else -> {
+                    // 非终态视为失败，避免卡住
+                    filesFail++
+                }
+            }
+
+            emit(
+                ImportProgress(
+                    phase = ImportPhase.EMBEDDING,
+                    fileName = entry.displayName,
+                    message = "已处理 ${index + 1}/${files.size}",
+                    batchMode = true,
+                    batchTotal = files.size,
+                    batchDone = index + 1,
+                    batchSuccess = filesOk,
+                    batchFailed = filesFail,
+                    successCount = totalSuccessChunks,
+                    failedCount = totalFailedChunks,
+                    charCount = totalChars
+                )
+            )
+        }
+
+        val elapsed = System.currentTimeMillis() - startedAt
+        val storeCount = runCatching { vectorStore.count() }.getOrDefault(0L)
+        if (filesOk == 0) {
+            emit(
+                ImportProgress(
+                    phase = ImportPhase.FAILED,
+                    message = "文件夹导入失败：0/${files.size} 个文件成功" +
+                        if (filesFail > 0) "（失败 $filesFail）" else "",
+                    error = "all_failed",
+                    batchMode = true,
+                    batchTotal = files.size,
+                    batchDone = files.size,
+                    batchSuccess = 0,
+                    batchFailed = filesFail,
+                    elapsedMs = elapsed,
+                    storeCount = storeCount
+                )
+            )
+        } else {
+            val sample = names.take(3).joinToString("、")
+            val more = if (names.size > 3) " 等" else ""
+            emit(
+                ImportProgress(
+                    phase = ImportPhase.DONE,
+                    fileName = sample + more,
+                    message = buildString {
+                        append("文件夹导入完成：成功 $filesOk 个文件")
+                        if (filesFail > 0) append("，失败 $filesFail")
+                        append("，共 $totalSuccessChunks 段")
+                    },
+                    charCount = totalChars,
+                    successCount = totalSuccessChunks,
+                    failedCount = totalFailedChunks,
+                    batchMode = true,
+                    batchTotal = files.size,
+                    batchDone = files.size,
+                    batchSuccess = filesOk,
+                    batchFailed = filesFail,
+                    elapsedMs = elapsed,
+                    storeCount = storeCount
+                )
+            )
+        }
+    }.flowOn(Dispatchers.IO)
 
     /**
      * 从 SAF Uri 导入文档，通过 Flow 推送进度。
@@ -229,6 +390,52 @@ class KnowledgeImportService @Inject constructor(
         vectorStore.clear()
     }
 
+    /**
+     * 递归列举目录树中支持的文档 Uri（深度有上限，避免极端深树）。
+     */
+    private fun listSupportedDocuments(treeUri: Uri, maxDepth: Int = 6): List<TreeDoc> {
+        val out = ArrayList<TreeDoc>()
+        val rootId = DocumentsContract.getTreeDocumentId(treeUri)
+        walkTree(treeUri, rootId, depth = 0, maxDepth = maxDepth, out = out)
+        out.sortBy { it.displayName.lowercase() }
+        return out
+    }
+
+    private fun walkTree(
+        treeUri: Uri,
+        documentId: String,
+        depth: Int,
+        maxDepth: Int,
+        out: MutableList<TreeDoc>
+    ) {
+        if (depth > maxDepth) return
+        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, documentId)
+        val projection = arrayOf(
+            DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+            DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+            DocumentsContract.Document.COLUMN_MIME_TYPE
+        )
+        context.contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
+            val idIdx = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+            val nameIdx = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+            val mimeIdx = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_MIME_TYPE)
+            while (cursor.moveToNext()) {
+                val childId = cursor.getString(idIdx) ?: continue
+                val name = cursor.getString(nameIdx).orEmpty().ifBlank { "item" }
+                val mime = cursor.getString(mimeIdx).orEmpty()
+                if (mime == DocumentsContract.Document.MIME_TYPE_DIR) {
+                    walkTree(treeUri, childId, depth + 1, maxDepth, out)
+                } else {
+                    val ext = DocumentTypes.extensionOf(name)
+                    if (ext in DocumentTypes.EXTENSIONS || documentParser.supports(name, mime)) {
+                        val docUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, childId)
+                        out += TreeDoc(uri = docUri, displayName = name, mimeType = mime)
+                    }
+                }
+            }
+        }
+    }
+
     private fun openInputStream(uri: Uri): InputStream =
         context.contentResolver.openInputStream(uri)
             ?: throw DocumentParseException("无法打开文件：$uri")
@@ -287,6 +494,12 @@ class KnowledgeImportService @Inject constructor(
 
     private data class FileMeta(val displayName: String, val mimeType: String?)
 
+    private data class TreeDoc(
+        val uri: Uri,
+        val displayName: String,
+        val mimeType: String?
+    )
+
     companion object {
         private const val TAG = "KnowledgeImport"
         private const val PROGRESS_EVERY = 3
@@ -314,20 +527,31 @@ data class ImportProgress(
     val failedCount: Int = 0,
     val elapsedMs: Long = 0,
     val storeCount: Long = 0,
-    val error: String? = null
+    val error: String? = null,
+    /** 文件夹批量导入时为 true。 */
+    val batchMode: Boolean = false,
+    val batchTotal: Int = 0,
+    val batchDone: Int = 0,
+    val batchSuccess: Int = 0,
+    val batchFailed: Int = 0
 ) {
     val fraction: Float
-        get() = when (phase) {
-            ImportPhase.IDLE -> 0f
-            ImportPhase.READING -> 0.05f
-            ImportPhase.PARSING -> 0.15f
-            ImportPhase.CHUNKING -> 0.25f
-            ImportPhase.EMBEDDING -> {
-                if (totalChunks <= 0) 0.3f
-                else 0.3f + 0.65f * (doneChunks.toFloat() / totalChunks)
+        get() = when {
+            batchMode && batchTotal > 0 && phase != ImportPhase.FAILED && phase != ImportPhase.IDLE -> {
+                (batchDone.toFloat() / batchTotal).coerceIn(0f, 1f)
             }
-            ImportPhase.DONE -> 1f
-            ImportPhase.FAILED -> 0f
+            else -> when (phase) {
+                ImportPhase.IDLE -> 0f
+                ImportPhase.READING -> 0.05f
+                ImportPhase.PARSING -> 0.15f
+                ImportPhase.CHUNKING -> 0.25f
+                ImportPhase.EMBEDDING -> {
+                    if (totalChunks <= 0) 0.3f
+                    else 0.3f + 0.65f * (doneChunks.toFloat() / totalChunks)
+                }
+                ImportPhase.DONE -> 1f
+                ImportPhase.FAILED -> 0f
+            }
         }
 
     val isTerminal: Boolean

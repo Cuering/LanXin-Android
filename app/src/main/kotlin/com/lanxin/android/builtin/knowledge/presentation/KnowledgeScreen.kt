@@ -34,6 +34,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.AlertDialog
@@ -96,6 +97,12 @@ fun KnowledgeScreen(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         viewModel.importFromUri(uri)
+    }
+
+    val openTreeLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        viewModel.importFromTree(uri)
     }
 
     LaunchedEffect(snackbarMessage) {
@@ -183,10 +190,14 @@ fun KnowledgeScreen(
                     ImportCard(
                         progress = progress,
                         enabled = !progress.isRunning,
-                        onImportClick = {
+                        onImportFileClick = {
                             openDocumentLauncher.launch(DocumentTypes.MIME_TYPES)
                         },
-                        onReset = viewModel::resetProgress
+                        onImportFolderClick = {
+                            openTreeLauncher.launch(null)
+                        },
+                        onReset = viewModel::resetProgress,
+                        onRefresh = viewModel::refreshStatus
                     )
                 }
 
@@ -433,8 +444,10 @@ private fun AutoKnowledgeItemCard(entity: MemoryEntity) {
 private fun ImportCard(
     progress: ImportProgress,
     enabled: Boolean,
-    onImportClick: () -> Unit,
-    onReset: () -> Unit
+    onImportFileClick: () -> Unit,
+    onImportFolderClick: () -> Unit,
+    onReset: () -> Unit,
+    onRefresh: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth()
@@ -449,14 +462,15 @@ private fun ImportCard(
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "支持 .txt / .md / .pdf，自动分段并向量化入库",
+                text = "支持 .txt / .md / .pdf。可点选单个文件，或选择整个文件夹批量导入" +
+                    "（递归扫描子目录中的支持格式）。",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(12.dp))
 
             Button(
-                onClick = onImportClick,
+                onClick = onImportFileClick,
                 enabled = enabled,
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -466,21 +480,50 @@ private fun ImportCard(
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.size(8.dp))
-                Text(if (progress.isRunning) "导入中…" else "选择文件导入")
+                Text(if (progress.isRunning) "导入中…" else "选择文件")
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            OutlinedButton(
+                onClick = onImportFolderClick,
+                enabled = enabled,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    Icons.Filled.FolderOpen,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.size(8.dp))
+                Text("选择文件夹")
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onRefresh,
+                    enabled = enabled,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("刷新状态")
+                }
+                if (progress.phase != ImportPhase.IDLE && progress.isTerminal) {
+                    OutlinedButton(
+                        onClick = onReset,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("清除进度")
+                    }
+                }
             }
 
             if (progress.phase != ImportPhase.IDLE) {
                 Spacer(modifier = Modifier.height(16.dp))
                 ProgressSection(progress)
-                if (progress.isTerminal) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedButton(
-                        onClick = onReset,
-                        modifier = Modifier.align(Alignment.End)
-                    ) {
-                        Text("清除进度")
-                    }
-                }
             }
         }
     }
@@ -521,6 +564,16 @@ private fun ProgressSection(progress: ImportProgress) {
         modifier = Modifier.fillMaxWidth()
     )
 
+    if (progress.batchMode && progress.batchTotal > 0) {
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "文件 ${progress.batchDone}/${progress.batchTotal}" +
+                " · 成功 ${progress.batchSuccess}" +
+                if (progress.batchFailed > 0) " · 失败 ${progress.batchFailed}" else "",
+            style = MaterialTheme.typography.bodySmall
+        )
+    }
+
     if (progress.totalChunks > 0) {
         Spacer(modifier = Modifier.height(8.dp))
         Row(
@@ -544,8 +597,13 @@ private fun ProgressSection(progress: ImportProgress) {
         Spacer(modifier = Modifier.height(8.dp))
         val failPart =
             if (progress.failedCount > 0) " · 失败 ${progress.failedCount}" else ""
+        val batchPart = if (progress.batchMode) {
+            " · ${progress.batchSuccess} 个文件"
+        } else {
+            ""
+        }
         Text(
-            text = "成功 ${progress.successCount} 段$failPart · 耗时 ${formatElapsed(progress.elapsedMs)}",
+            text = "成功 ${progress.successCount} 段$failPart$batchPart · 耗时 ${formatElapsed(progress.elapsedMs)}",
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.primary
@@ -571,7 +629,9 @@ private fun HelpCard() {
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "• 文本按约 512 token 窗口、50 token 重叠切分\n" +
+                text = "• 可「选择文件」导入单个文档，或「选择文件夹」批量导入\n" +
+                    "• 文件夹会递归扫描子目录中的 .txt / .md / .pdf\n" +
+                    "• 文本按约 512 token 窗口、50 token 重叠切分\n" +
                     "• 同一文件再次导入会覆盖对应条目\n" +
                     "• PDF 依赖内置启发式提取，扫描件可能失败\n" +
                     "• 对话自动知识：相似度 >0.85 跳过，0.70~0.85 合并\n" +

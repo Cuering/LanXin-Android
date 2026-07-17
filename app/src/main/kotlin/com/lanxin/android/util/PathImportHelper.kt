@@ -33,7 +33,9 @@ object PathImportHelper {
         ASR("asr"),
         TTS_DIR("tts"),
         TTS_REF("tts-ref"),
-        LOCAL_LLM("local-llm")
+        LOCAL_LLM("local-llm"),
+        /** 知识库文件夹导入暂存（可选；当前以 Document 树直接读为主）。 */
+        KNOWLEDGE("knowledge")
     }
 
     /** 某类资源的私有根目录（每次导入可再分子目录）。 */

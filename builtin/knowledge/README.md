@@ -8,7 +8,7 @@
 用户输入 / 文档
   │
   ├─ 导入流水线 (P2)
-  │     SAF 选文件 → DocumentParser (txt/md/pdf)
+  │     SAF 选文件/文件夹 → DocumentParser (txt/md/pdf)
   │       ├─ Markdown → MarkdownChunker 标题感知分块 (P5b)
   │       └─ 其他   → TextChunker 滑动窗口 (window=512, overlap=50)
   │       → VectorPipeline.index(chunk)
@@ -95,7 +95,7 @@ builtin/knowledge/
 
 ### P2 文档导入
 
-- 格式：PDF / Markdown / TXT（SAF OpenDocument）
+- 格式：PDF / Markdown / TXT（SAF OpenDocument / OpenDocumentTree 批量）
 - **TextChunker**: 滑动窗口 window=512、overlap=50（与 GTE-small max seq 对齐）
 - 估算：CJK 1 字≈1 token，英文词≈1 token
 
@@ -143,7 +143,7 @@ builtin/knowledge/
 
 ## UI 入口
 
-设置 → **知识库** → 选择文件导入（SAF OpenDocument）
+设置 → **知识库** → 选择文件（OpenDocument）或选择文件夹批量导入（OpenDocumentTree）
 
 ## 编译注意
 
