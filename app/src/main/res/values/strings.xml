@@ -315,4 +315,12 @@
     <string name="revision_counter">Revision %1$d/%2$d</string>
     <string name="previous_revision" translatable="false">Previous revision</string>
     <string name="next_revision" translatable="false">Next revision</string>
+    <string name="fetch_remote_models">Fetch models from API</string>
+    <string name="fetch_remote_models_hint">Load model list via OpenAI-compatible /models</string>
+    <string name="fetch_remote_models_loading">Loading models…</string>
+    <string name="fetch_remote_models_error">Failed: %1$s</string>
+    <string name="fetch_remote_models_count">%1$d models available — tap to select</string>
+    <string name="current_model_selected">Currently selected</string>
+    <string name="tap_to_select_model">Tap to use this model</string>
+    <string name="remote_models_truncated">…and %1$d more (type name manually if needed)</string>
 </resources>

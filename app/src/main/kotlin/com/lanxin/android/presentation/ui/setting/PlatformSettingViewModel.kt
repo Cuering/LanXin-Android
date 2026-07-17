@@ -3,9 +3,13 @@ package com.lanxin.android.presentation.ui.setting
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.lanxin.android.plugins.chat.data.entity.PlatformV2
+import com.lanxin.android.data.model.ClientType
 import com.lanxin.android.data.model.GeminiSafetySettings
+import com.lanxin.android.data.network.OpenAiModelListClient
+import com.lanxin.android.data.network.OpenAiModelListResult
+import com.lanxin.android.data.network.ProviderModelListSupport
 import com.lanxin.android.data.repository.SettingRepository
+import com.lanxin.android.plugins.chat.data.entity.PlatformV2
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,6 +21,7 @@ import kotlinx.coroutines.launch
 @HiltViewModel
 class PlatformSettingViewModel @Inject constructor(
     private val settingRepository: SettingRepository,
+    private val openAiModelListClient: OpenAiModelListClient,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -31,6 +36,9 @@ class PlatformSettingViewModel @Inject constructor(
     private val _isDeleted = MutableStateFlow(false)
     val isDeleted: StateFlow<Boolean> = _isDeleted.asStateFlow()
 
+    private val _remoteModelListState = MutableStateFlow(RemoteModelListState())
+    val remoteModelListState: StateFlow<RemoteModelListState> = _remoteModelListState.asStateFlow()
+
     init {
         loadPlatform()
     }
@@ -40,8 +48,62 @@ class PlatformSettingViewModel @Inject constructor(
             val platforms = settingRepository.fetchPlatformV2s()
             val platform = platforms.firstOrNull { it.uid == platformUid }
             _platformState.update { platform }
+            _remoteModelListState.update {
+                it.copy(supported = platform != null && supportsRemoteModelList(platform.compatibleType))
+            }
         }
     }
+
+    fun supportsRemoteModelList(clientType: ClientType): Boolean =
+        ProviderModelListSupport.supportsOpenAiCompatibleModelList(clientType)
+
+    /** Fetch remote model list for OpenAI-compatible platforms (AstrBot-aligned). */
+    fun fetchRemoteModels() {
+        val platform = _platformState.value ?: return
+        if (!supportsRemoteModelList(platform.compatibleType)) return
+        if (_remoteModelListState.value.loading) return
+
+        viewModelScope.launch {
+            _remoteModelListState.update {
+                it.copy(loading = true, error = null)
+            }
+            when (
+                val result = openAiModelListClient.listModels(
+                    apiUrl = platform.apiUrl,
+                    token = platform.token,
+                    timeoutSeconds = platform.timeout.takeIf { it > 0 } ?: OpenAiModelListClient.DEFAULT_TIMEOUT_SECONDS
+                )
+            ) {
+                is OpenAiModelListResult.Success -> {
+                    _remoteModelListState.update {
+                        RemoteModelListState(
+                            supported = true,
+                            loading = false,
+                            models = result.modelIds,
+                            error = null,
+                            lastFetchedAtMs = System.currentTimeMillis()
+                        )
+                    }
+                }
+                is OpenAiModelListResult.Error -> {
+                    _remoteModelListState.update {
+                        it.copy(
+                            loading = false,
+                            error = result.message,
+                            // keep previous models if any
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    fun selectRemoteModel(modelId: String) {
+        val trimmed = modelId.trim()
+        if (trimmed.isEmpty()) return
+        updateApiModel(trimmed)
+    }
+
 
     fun toggleEnabled() {
         _platformState.value?.let { platform ->
@@ -190,4 +252,13 @@ class PlatformSettingViewModel @Inject constructor(
         val isGeminiSafetyDialogOpen: Boolean = false,
         val isDeleteDialogOpen: Boolean = false
     )
+
+    data class RemoteModelListState(
+        val supported: Boolean = false,
+        val loading: Boolean = false,
+        val models: List<String> = emptyList(),
+        val error: String? = null,
+        val lastFetchedAtMs: Long? = null
+    )
 }
+

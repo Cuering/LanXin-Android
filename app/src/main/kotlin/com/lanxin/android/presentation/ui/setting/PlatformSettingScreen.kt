@@ -56,6 +56,8 @@ import com.lanxin.android.presentation.common.SettingItem
 import com.lanxin.android.util.formatPlatformTimeout
 import com.lanxin.android.util.pinnedExitUntilCollapsedScrollBehavior
 
+private const val REMOTE_MODEL_PREVIEW_LIMIT = 24
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlatformSettingScreen(
@@ -163,6 +165,62 @@ fun PlatformSettingScreen(
                         )
                     }
                 )
+                val remoteModels by settingViewModel.remoteModelListState.collectAsStateWithLifecycle()
+                if (remoteModels.supported) {
+                    SettingItem(
+                        modifier = Modifier.height(64.dp),
+                        title = stringResource(R.string.fetch_remote_models),
+                        description = when {
+                            remoteModels.loading -> stringResource(R.string.fetch_remote_models_loading)
+                            remoteModels.error != null ->
+                                stringResource(R.string.fetch_remote_models_error, remoteModels.error!!)
+                            remoteModels.models.isNotEmpty() ->
+                                stringResource(R.string.fetch_remote_models_count, remoteModels.models.size)
+                            else -> stringResource(R.string.fetch_remote_models_hint)
+                        },
+                        enabled = platformData.enabled && !remoteModels.loading,
+                        onItemClick = settingViewModel::fetchRemoteModels,
+                        showTrailingIcon = false,
+                        showLeadingIcon = true,
+                        leadingIcon = {
+                            Icon(
+                                ImageVector.vectorResource(id = R.drawable.ic_model),
+                                contentDescription = stringResource(R.string.fetch_remote_models)
+                            )
+                        }
+                    )
+                    if (remoteModels.models.isNotEmpty()) {
+                        remoteModels.models.take(REMOTE_MODEL_PREVIEW_LIMIT).forEach { modelId ->
+                            SettingItem(
+                                modifier = Modifier.height(56.dp),
+                                title = modelId,
+                                description = if (modelId == platformData.model) {
+                                    stringResource(R.string.current_model_selected)
+                                } else {
+                                    stringResource(R.string.tap_to_select_model)
+                                },
+                                enabled = platformData.enabled,
+                                onItemClick = { settingViewModel.selectRemoteModel(modelId) },
+                                showTrailingIcon = false,
+                                showLeadingIcon = false
+                            )
+                        }
+                        if (remoteModels.models.size > REMOTE_MODEL_PREVIEW_LIMIT) {
+                            SettingItem(
+                                modifier = Modifier.height(48.dp),
+                                title = stringResource(
+                                    R.string.remote_models_truncated,
+                                    remoteModels.models.size - REMOTE_MODEL_PREVIEW_LIMIT
+                                ),
+                                description = null,
+                                enabled = false,
+                                onItemClick = {},
+                                showTrailingIcon = false,
+                                showLeadingIcon = false
+                            )
+                        }
+                    }
+                }
                 // Disable temperature and top_p when reasoning is enabled for OpenAI
                 val isReasoningDisabled = platformData.compatibleType == ClientType.OPENAI && platformData.reasoning
                 val notSetText = stringResource(R.string.not_set)
