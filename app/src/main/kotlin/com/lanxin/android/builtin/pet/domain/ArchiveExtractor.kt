@@ -31,7 +31,7 @@ import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
  *
  * CodeQL java/zipslip: 每个 entry 在写出前用
  * `file.toPath().normalize().startsWith(destinationDir.toPath())` 校验。
- * 与 CodeQL 官方推荐写法一致。
+ * 另显式拒绝绝对路径条目名（Unix 上 File(parent, "/abs") 不会逃逸 dest）。
  */
 object ArchiveExtractor {
 
@@ -56,6 +56,9 @@ object ArchiveExtractor {
             while (true) {
                 val entry = zis.nextEntry ?: break
                 // CodeQL java/zipslip: guard same scope as FileOutputStream sink
+                if (File(entry.name).isAbsolute) {
+                    throw SecurityException("Zip entry is outside of the target dir: ${entry.name}")
+                }
                 val file = File(destinationDir, entry.name)
                 if (!file.toPath().normalize().startsWith(destinationDir.toPath())) {
                     throw SecurityException("Zip entry is outside of the target dir: ${entry.name}")
@@ -88,6 +91,9 @@ object ArchiveExtractor {
                 val entry = tis.nextEntry ?: break
                 if (!tis.canReadEntryData(entry)) continue
                 // CodeQL java/zipslip: guard same scope as FileOutputStream sink
+                if (File(entry.name).isAbsolute) {
+                    throw SecurityException("Tar entry is outside of the target dir: ${entry.name}")
+                }
                 val file = File(destinationDir, entry.name)
                 if (!file.toPath().normalize().startsWith(destinationDir.toPath())) {
                     throw SecurityException("Tar entry is outside of the target dir: ${entry.name}")
@@ -103,10 +109,13 @@ object ArchiveExtractor {
     }
 
     /**
-     * 解析归档条目相对路径；拒绝跳出 [destDir]（zip-slip）。
+     * 解析归档条目相对路径；拒绝绝对路径与跳出 [destDir]（zip-slip）。
      * 供单测与调用方复用。
      */
     fun safeResolve(destDir: File, entryName: String): File {
+        if (File(entryName).isAbsolute) {
+            throw SecurityException("非法归档路径（zip-slip）: $entryName")
+        }
         val destinationDir = destDir.canonicalFile
         val file = File(destinationDir, entryName)
         if (!file.toPath().normalize().startsWith(destinationDir.toPath())) {
