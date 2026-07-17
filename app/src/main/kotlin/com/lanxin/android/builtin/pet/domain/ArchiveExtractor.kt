@@ -29,8 +29,9 @@ import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
 /**
  * 解压 zip / tar.bz2 / tar.gz 到目标目录（防 zip-slip）。
  *
- * 通过 [require] 在 [entry.name] 层面拦截 `..` 路径穿越，
- * 确保 CodeQL java/zipslip 可识别为洁净化处理。
+ * CodeQL java/zipslip: 每个 entry 在写出前用
+ * `file.toPath().normalize().startsWith(destinationDir.toPath())` 校验。
+ * 与 CodeQL 官方推荐写法一致。
  */
 object ArchiveExtractor {
 
@@ -50,20 +51,20 @@ object ArchiveExtractor {
     }
 
     private fun extractZip(archive: File, destDir: File) {
-        val targetDir = destDir.canonicalFile
+        val destinationDir = destDir.canonicalFile
         ZipInputStream(BufferedInputStream(FileInputStream(archive))).use { zis ->
             while (true) {
                 val entry = zis.nextEntry ?: break
-                // CodeQL 可识别：在 entry.name 层面拦截路径穿越
-                require(!entry.name.contains("..")) {
-                    "Zip entry name contains '..': ${entry.name}"
+                // CodeQL java/zipslip: guard same scope as FileOutputStream sink
+                val file = File(destinationDir, entry.name)
+                if (!file.toPath().normalize().startsWith(destinationDir.toPath())) {
+                    throw SecurityException("Zip entry is outside of the target dir: ${entry.name}")
                 }
-                val resolvedFile = File(targetDir, entry.name)
                 if (entry.isDirectory) {
-                    resolvedFile.mkdirs()
+                    file.mkdirs()
                 } else {
-                    resolvedFile.parentFile?.mkdirs()
-                    FileOutputStream(resolvedFile).use { out -> zis.copyTo(out) }
+                    file.parentFile?.mkdirs()
+                    FileOutputStream(file).use { out -> zis.copyTo(out) }
                 }
                 zis.closeEntry()
             }
@@ -81,21 +82,21 @@ object ArchiveExtractor {
     }
 
     private fun extractTar(input: InputStream, destDir: File) {
-        val targetDir = destDir.canonicalFile
+        val destinationDir = destDir.canonicalFile
         TarArchiveInputStream(input).use { tis ->
             while (true) {
                 val entry = tis.nextEntry ?: break
                 if (!tis.canReadEntryData(entry)) continue
-                // CodeQL 可识别：在 entry.name 层面拦截路径穿越
-                require(!entry.name.contains("..")) {
-                    "Tar entry name contains '..': ${entry.name}"
+                // CodeQL java/zipslip: guard same scope as FileOutputStream sink
+                val file = File(destinationDir, entry.name)
+                if (!file.toPath().normalize().startsWith(destinationDir.toPath())) {
+                    throw SecurityException("Tar entry is outside of the target dir: ${entry.name}")
                 }
-                val resolvedFile = File(targetDir, entry.name)
                 if (entry.isDirectory) {
-                    resolvedFile.mkdirs()
+                    file.mkdirs()
                 } else {
-                    resolvedFile.parentFile?.mkdirs()
-                    FileOutputStream(resolvedFile).use { out -> tis.copyTo(out) }
+                    file.parentFile?.mkdirs()
+                    FileOutputStream(file).use { out -> tis.copyTo(out) }
                 }
             }
         }
@@ -106,10 +107,11 @@ object ArchiveExtractor {
      * 供单测与调用方复用。
      */
     fun safeResolve(destDir: File, entryName: String): File {
-        require(!entryName.contains("..")) {
-            "Archive entry name contains '..': $entryName"
+        val destinationDir = destDir.canonicalFile
+        val file = File(destinationDir, entryName)
+        if (!file.toPath().normalize().startsWith(destinationDir.toPath())) {
+            throw SecurityException("非法归档路径（zip-slip）: $entryName")
         }
-        val targetDir = destDir.canonicalFile
-        return File(targetDir, entryName)
+        return file
     }
 }

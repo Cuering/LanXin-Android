@@ -22,6 +22,7 @@ import java.io.FileOutputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -53,8 +54,21 @@ class ArchiveExtractorTest {
         try {
             ArchiveExtractor.safeResolve(dest, "../evil.txt")
             org.junit.Assert.fail("expected zip-slip rejection")
-        } catch (e: IllegalArgumentException) {
-            assertTrue(e.message!!.contains(".."))
+        } catch (e: SecurityException) {
+            assertTrue(
+                e.message!!.contains("zip-slip") || e.message!!.contains("outside"),
+            )
+        }
+    }
+
+    @Test
+    fun safeResolve_rejectsAbsolutePath() {
+        val dest = tmp.newFolder("safe")
+        try {
+            ArchiveExtractor.safeResolve(dest, "/tmp/evil.txt")
+            org.junit.Assert.fail("expected absolute path rejection")
+        } catch (e: SecurityException) {
+            assertTrue(e.message!!.isNotEmpty())
         }
     }
 
@@ -70,9 +84,29 @@ class ArchiveExtractorTest {
         try {
             ArchiveExtractor.extract(zip, dest)
             org.junit.Assert.fail("expected zip-slip rejection")
-        } catch (e: IllegalArgumentException) {
-            assertTrue(e.message!!.contains(".."))
+        } catch (e: SecurityException) {
+            assertTrue(
+                e.message!!.contains("outside") || e.message!!.contains("evil"),
+            )
         }
-        assertTrue(!File(dest, "../evil.txt").exists() || !File(dest.parentFile, "evil.txt").exists())
+        assertFalse(File(dest.parentFile, "evil.txt").exists())
+    }
+
+    @Test
+    fun extractZip_rejectsNestedZipSlip() {
+        val zip = tmp.newFile("nested-slip.zip")
+        ZipOutputStream(FileOutputStream(zip)).use { zos ->
+            zos.putNextEntry(ZipEntry("ok/../../evil2.txt"))
+            zos.write("pwn".toByteArray())
+            zos.closeEntry()
+        }
+        val dest = tmp.newFolder("out2")
+        try {
+            ArchiveExtractor.extract(zip, dest)
+            org.junit.Assert.fail("expected nested zip-slip rejection")
+        } catch (e: SecurityException) {
+            assertTrue(e.message!!.contains("outside") || e.message!!.contains("evil"))
+        }
+        assertFalse(File(dest.parentFile, "evil2.txt").exists())
     }
 }
