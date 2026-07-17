@@ -1,6 +1,6 @@
 # builtin/pet — 桌宠 / 语音陪伴
 
-Phase 6 主线：**M1 ✅** 骨架 · **M2a ✅** 路径就绪 · **M2b ✅** Live2D 壳 · **M2b 打磨 ✅** 表情/口型。
+Phase 6 主线：**M1 ✅** 骨架 · **M2a ✅** 路径就绪 · **M2b ✅** Live2D 壳 · **M2b 打磨 ✅** 表情/口型 · **App 内下载 ✅**。
 
 实现：`app/src/main/kotlin/com/lanxin/android/builtin/pet/`
 
@@ -37,21 +37,25 @@ Phase 6 主线：**M1 ✅** 骨架 · **M2a ✅** 路径就绪 · **M2b ✅** Li
 
 详见 [`docs/live2d-mao-sample.md`](../../docs/live2d-mao-sample.md)。
 
-## Debug 资源（ASR/TTS 等走开源）
+## Debug 资源（走开源）
+
+**推荐：设置 → 桌宠 → 一键下载**（`DebugAssetDownloader` → `filesDir/debug-assets/`，可选国内镜像）。
+
+可选开发者脚本：
 
 ```bash
-bash scripts/fetch-debug-assets.sh   # ASR/TTS / 可选覆盖 Live2D
+bash scripts/fetch-debug-assets.sh
 # 或 bash scripts/download-debug-assets.sh
 ```
 
-| 能力 | 推荐 | 配置键 |
-|------|------|--------|
-| Live2D | **仓内** Niziiro Mao（优先） | `live2d_model_path`（可空） |
-| ASR | sherpa zipformer zh-14M | `offline_asr_model_path` |
+| 能力 | 推荐 | 配置键 | App 内下载 |
+|------|------|--------|:----------:|
+| Live2D | **仓内** Niziiro Mao（优先） | `live2d_model_path`（可空） | 可选更新 |
+| ASR | sherpa zipformer zh-14M | `offline_asr_model_path` | ✅ |
 | TTS | matcha-icefall-zh-baker | `tts_model_dir` |
 | 本地脑 | Qwen2.5-1.5B（自备） | `local_inference_model_path` |
 
-**ASR/TTS 大包不进 git**；仅开发者机脚本（本阶段**无** App 内一键下载）。禁止 AstrBot 服务器缓存模型当交付。
+**ASR/TTS 大包不进 git**；主路径 App 内下载到 filesDir；脚本可选。禁止 AstrBot 服务器缓存模型当交付。
 
 ## 红线
 

@@ -24,6 +24,13 @@ import com.lanxin.android.builtin.localinference.domain.LocalInferenceSettings
 import com.lanxin.android.builtin.pet.data.FloatingPetService
 import com.lanxin.android.builtin.pet.data.OverlayPermissionHelper
 import com.lanxin.android.builtin.pet.domain.BuiltInLive2dAssets
+import com.lanxin.android.builtin.pet.domain.DebugAssetCatalog
+import com.lanxin.android.builtin.pet.domain.DebugAssetDownloadEvent
+import com.lanxin.android.builtin.pet.domain.DebugAssetDownloader
+import com.lanxin.android.builtin.pet.domain.DebugAssetItemUi
+import com.lanxin.android.builtin.pet.domain.DebugAssetKind
+import com.lanxin.android.builtin.pet.domain.DebugAssetLicense
+import com.lanxin.android.builtin.pet.domain.DebugAssetMirror
 import com.lanxin.android.builtin.pet.domain.DebugOpenSourcePaths
 import com.lanxin.android.builtin.pet.domain.Live2dDisplayController
 import com.lanxin.android.builtin.pet.domain.PetExpressionController
@@ -37,6 +44,7 @@ import com.lanxin.android.builtin.voice.domain.TtsEngine
 import com.lanxin.android.builtin.voice.domain.TtsSettings
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -90,7 +98,13 @@ data class DesktopPetUiState(
     val localLlmReadyLabel: String = "未配置",
     val localLlmHint: String = DebugOpenSourcePaths.LOCAL_LLM_DEFAULT_HINT,
     val fetchScriptHint: String = DebugOpenSourcePaths.FETCH_SCRIPT_HINT,
-    val isDebugBuild: Boolean = false
+    val isDebugBuild: Boolean = false,
+    /** App 内下载：镜像偏好。 */
+    val preferredMirror: DebugAssetMirror = DebugAssetMirror.MIRROR_GHPROXY,
+    /** Live2D / ASR / TTS 分项下载 UI。 */
+    val downloadItems: List<DebugAssetItemUi> = emptyList(),
+    val downloadBusy: Boolean = false,
+    val live2dLicenseHint: String = DebugAssetLicense.LIVE2D_HINT
 )
 
 @HiltViewModel
@@ -101,14 +115,22 @@ class DesktopPetViewModel @Inject constructor(
     private val ttsSettings: TtsSettings,
     private val ttsEngine: TtsEngine,
     private val asrSettings: AsrSettings,
-    private val localInferenceSettings: LocalInferenceSettings
+    private val localInferenceSettings: LocalInferenceSettings,
+    private val assetDownloader: DebugAssetDownloader
 ) : AndroidViewModel(application) {
 
     private val isDebugBuild: Boolean =
         (application.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
 
-    private val _uiState = MutableStateFlow(DesktopPetUiState(isDebugBuild = isDebugBuild))
+    private val _uiState = MutableStateFlow(
+        DesktopPetUiState(
+            isDebugBuild = isDebugBuild,
+            downloadItems = defaultDownloadItems()
+        )
+    )
     val uiState: StateFlow<DesktopPetUiState> = _uiState.asStateFlow()
+
+    private var downloadJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -224,6 +246,7 @@ class DesktopPetViewModel @Inject constructor(
                     localLlmHint = DebugOpenSourcePaths.LOCAL_LLM_DEFAULT_HINT,
                     fetchScriptHint = DebugOpenSourcePaths.FETCH_SCRIPT_HINT,
                     isDebugBuild = isDebugBuild,
+                    downloadItems = buildDownloadItems(app.filesDir),
                     phase = snap.phase,
                     asrText = snap.asrText,
                     replyText = snap.replyText,
@@ -337,12 +360,189 @@ class DesktopPetViewModel @Inject constructor(
         }
     }
 
-    /** 将脚本说明推到 snackbar（不在 App 内下载）。 */
+    /** 脚本说明（可选路径）；主路径为 App 内下载。 */
     fun showFetchAssetsHint() {
         _uiState.update {
             it.copy(snackbarMessage = DebugOpenSourcePaths.FETCH_SCRIPT_HINT)
         }
     }
+
+    fun setPreferredMirror(mirror: DebugAssetMirror) {
+        _uiState.update { it.copy(preferredMirror = mirror) }
+    }
+
+    fun startDownload(kind: DebugAssetKind) {
+        if (_uiState.value.downloadBusy) {
+            _uiState.update { it.copy(snackbarMessage = "已有下载进行中，请先取消或等待完成") }
+            return
+        }
+        val app = getApplication<Application>()
+        val mirror = _uiState.value.preferredMirror
+        downloadJob?.cancel()
+        downloadJob = viewModelScope.launch {
+            assetDownloader.download(app.filesDir, kind, mirror).collect { event ->
+                when (event) {
+                    DebugAssetDownloadEvent.Started -> {
+                        patchDownloadItem(kind) {
+                            it.copy(
+                                downloading = true,
+                                percent = 0,
+                                statusText = "开始下载…",
+                                lastError = null
+                            )
+                        }
+                        _uiState.update { it.copy(downloadBusy = true) }
+                    }
+                    is DebugAssetDownloadEvent.Progress -> {
+                        val label = when (event.phase) {
+                            "extracting" -> "解压中…"
+                            "live2d-files" -> "拉取文件 ${event.percent}%"
+                            else -> {
+                                if (event.percent >= 0) "下载中 ${event.percent}%"
+                                else "下载中…"
+                            }
+                        }
+                        patchDownloadItem(kind) {
+                            it.copy(
+                                downloading = true,
+                                percent = event.percent,
+                                statusText = "$label（${event.mirror.name}）"
+                            )
+                        }
+                    }
+                    is DebugAssetDownloadEvent.Completed -> {
+                        onDownloadCompleted(kind, event.readyPath)
+                        patchDownloadItem(kind) {
+                            it.copy(
+                                downloading = false,
+                                ready = true,
+                                readyPath = event.readyPath,
+                                percent = 100,
+                                statusText = "已就绪",
+                                lastError = null
+                            )
+                        }
+                        _uiState.update {
+                            it.copy(
+                                downloadBusy = false,
+                                snackbarMessage = "${kind.name} 下载完成"
+                            )
+                        }
+                        refresh()
+                    }
+                    is DebugAssetDownloadEvent.Failed -> {
+                        patchDownloadItem(kind) {
+                            it.copy(
+                                downloading = false,
+                                percent = -1,
+                                statusText = "失败",
+                                lastError = event.message
+                            )
+                        }
+                        _uiState.update {
+                            it.copy(
+                                downloadBusy = false,
+                                snackbarMessage = "${kind.name} 失败：${event.message}"
+                            )
+                        }
+                    }
+                    DebugAssetDownloadEvent.Cancelled -> {
+                        patchDownloadItem(kind) {
+                            it.copy(
+                                downloading = false,
+                                percent = -1,
+                                statusText = "已取消"
+                            )
+                        }
+                        _uiState.update {
+                            it.copy(
+                                downloadBusy = false,
+                                snackbarMessage = "下载已取消"
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fun cancelDownload() {
+        assetDownloader.cancel()
+        downloadJob?.cancel()
+        downloadJob = null
+        _uiState.update { state ->
+            state.copy(
+                downloadBusy = false,
+                downloadItems = state.downloadItems.map {
+                    if (it.downloading) {
+                        it.copy(downloading = false, statusText = "已取消", percent = -1)
+                    } else {
+                        it
+                    }
+                },
+                snackbarMessage = "下载已取消"
+            )
+        }
+    }
+
+    private suspend fun onDownloadCompleted(kind: DebugAssetKind, readyPath: String) {
+        when (kind) {
+            DebugAssetKind.LIVE2D -> petSettings.setLive2dModelPath(readyPath)
+            DebugAssetKind.ASR -> asrSettings.setModelPath(readyPath)
+            DebugAssetKind.TTS -> ttsSettings.setModelDir(readyPath)
+        }
+    }
+
+    private fun patchDownloadItem(
+        kind: DebugAssetKind,
+        transform: (DebugAssetItemUi) -> DebugAssetItemUi
+    ) {
+        _uiState.update { state ->
+            state.copy(
+                downloadItems = state.downloadItems.map {
+                    if (it.kind == kind) transform(it) else it
+                }
+            )
+        }
+    }
+
+    private fun buildDownloadItems(filesDir: java.io.File): List<DebugAssetItemUi> {
+        val prev = _uiState.value.downloadItems.associateBy { it.kind }
+        return DebugAssetKind.entries.map { kind ->
+            val spec = DebugAssetCatalog.spec(kind)
+            val ready = assetDownloader.isReady(filesDir, kind)
+            val path = assetDownloader.readyPath(filesDir, kind)
+            val old = prev[kind]
+            DebugAssetItemUi(
+                kind = kind,
+                displayName = spec.displayName,
+                sizeHint = spec.sizeHint,
+                licenseHint = spec.licenseHint,
+                ready = ready,
+                readyPath = path,
+                downloading = old?.downloading == true,
+                percent = old?.percent ?: -1,
+                statusText = when {
+                    old?.downloading == true -> old.statusText
+                    ready -> "已就绪"
+                    old?.lastError != null -> "失败"
+                    else -> "未下载"
+                },
+                lastError = if (old?.downloading == true) old.lastError else null
+            )
+        }
+    }
+
+    private fun defaultDownloadItems(): List<DebugAssetItemUi> =
+        DebugAssetKind.entries.map { kind ->
+            val spec = DebugAssetCatalog.spec(kind)
+            DebugAssetItemUi(
+                kind = kind,
+                displayName = spec.displayName,
+                sizeHint = spec.sizeHint,
+                licenseHint = spec.licenseHint
+            )
+        }
 
     fun clearSnackbar() {
         _uiState.update { it.copy(snackbarMessage = null) }

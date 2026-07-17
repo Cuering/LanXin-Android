@@ -21,9 +21,8 @@ import java.io.File
 /**
  * Debug 开源资源约定路径（相对 [Context.filesDir] 或开发机 `debug-assets/`）。
  *
- * 由开发者本机 / GitHub Actions（需要时）执行：
- * - `bash scripts/fetch-debug-assets.sh`（推荐别名）
- * - 或 `bash scripts/download-debug-assets.sh`
+ * **主路径**：App 内设置页一键下载到 `filesDir/debug-assets/`（见 [DebugAssetDownloader]）。
+ * **可选**：开发者本机脚本 `bash scripts/fetch-debug-assets.sh` 后 adb push。
  *
  * **禁止**在 AstrBot 服务器上下载模型作为交付；大权重不进 git。
  *
@@ -50,10 +49,10 @@ object DebugOpenSourcePaths {
     /** TTS 推荐目录名（脚本解压后）。 */
     const val TTS_MATCHA_BAKER_REL = "$ROOT_DIR/tts/matcha-icefall-zh-baker"
 
-    /** 设置页缺失时的一键说明（指向 GitHub 脚本，不在服务端执行下载）。 */
+    /** 设置页缺失时的一键说明（App 内下载优先；脚本可选）。 */
     const val FETCH_SCRIPT_HINT =
-        "资源缺失：请在开发者机器运行 bash scripts/fetch-debug-assets.sh " +
-            "（或 download-debug-assets.sh），再 adb push 到 App filesDir/debug-assets/。" +
+        "资源缺失：请在设置页使用「一键下载」拉取到本机 filesDir/debug-assets/；" +
+            "可选开发者机 bash scripts/fetch-debug-assets.sh 后 adb push。" +
             "详见 docs/debug-assets.md。勿在 AstrBot 服务器拉模型。"
 
     /** 本地脑默认选型说明（路径键见 LocalInferencePreferences）。 */

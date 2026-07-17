@@ -163,6 +163,9 @@ dependencies {
     // Serialization
     implementation(libs.kotlin.serialization)
 
+    // Debug asset archive extract (tar.bz2 / xz)
+    implementation(libs.commons.compress)
+
     // Test
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

@@ -16,7 +16,9 @@
 
 package com.lanxin.android.builtin.pet.di
 
+import com.lanxin.android.builtin.pet.data.KtorAssetDownloadTransport
 import com.lanxin.android.builtin.pet.data.PetPreferences
+import com.lanxin.android.builtin.pet.domain.AssetDownloadTransport
 import com.lanxin.android.builtin.pet.domain.PetChatResponder
 import com.lanxin.android.builtin.pet.domain.PetSettings
 import com.lanxin.android.builtin.pet.domain.StubPetChatResponder
@@ -42,4 +44,10 @@ abstract class PetModule {
     @Binds
     @Singleton
     abstract fun bindPetChatResponder(impl: StubPetChatResponder): PetChatResponder
+
+    @Binds
+    @Singleton
+    abstract fun bindAssetDownloadTransport(
+        impl: KtorAssetDownloadTransport
+    ): AssetDownloadTransport
 }
