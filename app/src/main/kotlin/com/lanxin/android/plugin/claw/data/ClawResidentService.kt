@@ -133,16 +133,21 @@ class ClawResidentService : Service() {
 
     private fun buildNotification(title: String, text: String): Notification {
         ensureChannel()
+        // Explicit package so CodeQL treats these as non-implicit PendingIntents.
+        val openIntent = Intent(this, MainActivity::class.java).setPackage(packageName)
         val open = PendingIntent.getActivity(
             this,
             0,
-            Intent(this, MainActivity::class.java),
+            openIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+        val stopIntent = Intent(this, ClawResidentService::class.java)
+            .setPackage(packageName)
+            .setAction(ACTION_STOP)
         val stop = PendingIntent.getService(
             this,
             1,
-            Intent(this, ClawResidentService::class.java).setAction(ACTION_STOP),
+            stopIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
