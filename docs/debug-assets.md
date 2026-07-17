@@ -10,7 +10,7 @@
 | 默认走开源 | **Live2D 仓内官方 Sample Mao** + sherpa-onnx ASR/TTS（脚本） |
 | Live2D 进仓 | `app/src/main/assets/pet/live2d/Mao/`（~4MB，白名单）见 [`live2d-mao-sample.md`](./live2d-mao-sample.md) |
 | ASR/TTS 大文件不进 git | 脚本拉到 `debug-assets/`（已 gitignore） |
-| **下载位置** | **仅开发者机器** / 后续 App 内；**禁止** AstrBot 服务器缓存模型当交付 |
+| **下载位置** | ASR/TTS **仅开发者机器**（脚本）；**禁止** AstrBot 服务器缓存模型当交付 |
 | CI 无 ASR/TTS 仍绿 | stub / 占位 HTML；Live2D 单测不依赖真机 assets 拷贝 |
 | 妹居仅 fallback | **禁止**上传妹居 so / moc3 / mnn / wav / 商业人设到 GitHub |
 | 分发合规 | Live2D Sample Terms；ASR/TTS Apache-2.0 |

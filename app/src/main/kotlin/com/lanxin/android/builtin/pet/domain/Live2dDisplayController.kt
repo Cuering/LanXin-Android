@@ -88,7 +88,7 @@ object Live2dDisplayController {
                 model3Path = trimmed,
                 model3FileUrl = "file:///android_asset/${BuiltInLive2dAssets.MODEL3_ASSET}",
                 modelDirFileUrl = "file:///android_asset/${BuiltInLive2dAssets.ASSET_ROOT}/",
-                reason = "live2d_builtin_pending_install",
+                reason = "live2d_builtin_asset",
                 shortLabel = "Live2D 壳（内置）"
             )
         }

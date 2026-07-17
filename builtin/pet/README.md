@@ -51,7 +51,7 @@ bash scripts/fetch-debug-assets.sh   # ASR/TTS / 可选覆盖 Live2D
 | TTS | matcha-icefall-zh-baker | `tts_model_dir` |
 | 本地脑 | Qwen2.5-1.5B（自备） | `local_inference_model_path` |
 
-**ASR/TTS 大包不进 git**；仅开发者机脚本 / 后续 App 内下载。禁止 AstrBot 服务器缓存模型当交付。
+**ASR/TTS 大包不进 git**；仅开发者机脚本（本阶段**无** App 内一键下载）。禁止 AstrBot 服务器缓存模型当交付。
 
 ## 红线
 

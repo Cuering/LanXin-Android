@@ -64,11 +64,12 @@ class BuiltInLive2dAssetsTest {
     }
 
     @Test
-    fun displayController_logicalBuiltin_shellPending() {
+    fun displayController_logicalBuiltin_shellAsset() {
         val d = Live2dDisplayController.decide(BuiltInLive2dAssets.LOGICAL_PATH)
         assertEquals(Live2dDisplayController.Live2dDisplayMode.LIVE2D_SHELL, d.mode)
-        assertEquals("live2d_builtin_pending_install", d.reason)
+        assertEquals("live2d_builtin_asset", d.reason)
         assertTrue(d.shortLabel.contains("内置") || d.shortLabel.contains("Live2D"))
+        assertTrue(d.model3FileUrl.startsWith("file:///android_asset/"))
     }
 
     @Test

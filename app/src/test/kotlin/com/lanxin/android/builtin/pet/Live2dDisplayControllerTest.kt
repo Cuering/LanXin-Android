@@ -50,11 +50,13 @@ class Live2dDisplayControllerTest {
     }
 
     @Test
-    fun builtinLogical_shellPendingInstall() {
+    fun builtinLogical_shellUsesAssetUrl() {
         val d = Live2dDisplayController.decide(BuiltInLive2dAssets.LOGICAL_PATH)
         assertEquals(Live2dDisplayController.Live2dDisplayMode.LIVE2D_SHELL, d.mode)
-        assertEquals("live2d_builtin_pending_install", d.reason)
+        assertEquals("live2d_builtin_asset", d.reason)
         assertTrue(d.shortLabel.contains("内置"))
+        assertTrue(d.model3FileUrl.contains("android_asset"))
+        assertTrue(d.model3FileUrl.contains("Mao.model3.json"))
     }
 
     @Test

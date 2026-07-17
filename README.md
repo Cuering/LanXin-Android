@@ -66,10 +66,12 @@ app/         壳应用（Compose UI 入口）
 
 ### Debug 语音 / Live2D 资源
 
-大模型**不进 git**。需要本机调试时：
+- **Live2D 官方 Sample Mao** 已 vendor 进仓：`app/src/main/assets/pet/live2d/Mao/`（~4.2MB，Sample Data Terms）。默认优先级：用户配置 → 内置 → debug-assets → 妹居参考。详见 [docs/live2d-mao-sample.md](./docs/live2d-mao-sample.md)。
+- **ASR / TTS 大包不进 git**。开发者机调试：
 
 ```bash
-bash scripts/download-debug-assets.sh
+bash scripts/fetch-debug-assets.sh
+# 或 bash scripts/download-debug-assets.sh
 ```
 
 详见 [docs/debug-assets.md](./docs/debug-assets.md)。
