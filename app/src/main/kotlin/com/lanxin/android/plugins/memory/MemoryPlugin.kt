@@ -3,6 +3,8 @@ package com.lanxin.android.plugins.memory
 import com.lanxin.android.plugin.LanXinPlugin
 import com.lanxin.android.plugin.PluginContext
 import com.lanxin.android.plugin.ToolDef
+import com.lanxin.android.plugins.memory.data.memory.MemoryExportFormat
+import com.lanxin.android.plugins.memory.data.memory.MemoryMarkdownExporter
 import com.lanxin.android.plugins.memory.data.memory.MemoryRepository
 import com.lanxin.android.plugins.memory.data.memory.MemoryType
 import com.lanxin.android.plugins.memory.domain.memory.ImportStrategy
@@ -127,19 +129,23 @@ class MemoryPlugin @Inject constructor(
             )
         )
 
-        // P4：全量导出（JSON 文本，可选 type 过滤）
+        // P4：全量导出（JSON / Markdown 文本，可选 type 过滤）
         context.registerTool(
             ToolDef(
                 name = "memory_export",
-                description = "导出本地记忆为 JSON 文本（可按 type 过滤）。不含向量，导入后会自动重建索引",
+                description = "导出本地记忆为 JSON 或 Markdown 文本（可按 type 过滤）。不含向量，导入后会自动重建索引",
                 parameters = buildJsonObject {
                     put("type", "object")
                     put("properties", buildJsonObject {
+                        put("format", buildJsonObject {
+                            put("type", "string")
+                            put("description", "导出格式：json / markdown，默认 json")
+                        })
                         put("type_filter", buildJsonObject {
                             put("type", "string")
                             put(
                                 "description",
-                                "可选类型过滤：preference/factual/daily/chat/insight/instruction/relationship/auto_knowledge 等；空=全部"
+                                "可选类型过滤：preference/factual/daily/chat/insight/instruction/relationship/auto_knowledge/permanent/memory 等；空=全部"
                             )
                         })
                     })
@@ -147,12 +153,34 @@ class MemoryPlugin @Inject constructor(
                 handler = { args ->
                     val typeFilter = args["type_filter"]?.jsonPrimitive?.contentOrNull?.trim()
                         ?.takeIf { it.isNotEmpty() }
-                    val jsonText = memoryRepository.exportToJsonText(typeFilter)
+                    val format = when (
+                        args["format"]?.jsonPrimitive?.contentOrNull?.trim()?.lowercase()
+                    ) {
+                        "markdown", "md" -> MemoryExportFormat.MARKDOWN
+                        else -> MemoryExportFormat.JSON
+                    }
+                    val payload = when (format) {
+                        MemoryExportFormat.JSON -> memoryRepository.exportToJsonText(typeFilter)
+                        MemoryExportFormat.MARKDOWN -> {
+                            val jsonText = memoryRepository.exportToJsonText(typeFilter = null)
+                            val exportPayload = kotlinx.serialization.json.Json {
+                                ignoreUnknownKeys = true
+                            }.decodeFromString(
+                                com.lanxin.android.plugins.memory.data.memory.MemoryExportPayload.serializer(),
+                                jsonText
+                            )
+                            MemoryMarkdownExporter.build(
+                                memories = exportPayload.memories,
+                                exportedAt = exportPayload.exportedAt,
+                                typeFilter = typeFilter
+                            )
+                        }
+                    }
                     buildJsonObject {
                         put("ok", true)
-                        put("format", "json")
+                        put("format", format.name.lowercase())
                         put("type_filter", typeFilter ?: "all")
-                        put("payload", jsonText)
+                        put("payload", payload)
                     }
                 }
             )
