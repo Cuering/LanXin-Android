@@ -5,6 +5,9 @@ import com.lanxin.android.plugin.PluginManager
 import com.lanxin.android.plugins.memory.MemoryPlugin
 import com.lanxin.android.plugins.memory.data.memory.MemoryDao
 import com.lanxin.android.plugins.memory.data.memory.MemoryDatabase
+import com.lanxin.android.plugins.memory.domain.memory.MemoryIndexRebuilder
+import com.lanxin.android.plugins.memory.domain.memory.VectorPipelineMemoryIndexRebuilder
+import dagger.Binds
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -46,6 +49,16 @@ object MemoryModule {
         pluginManager.register(plugin)
         return MemoryPluginRegistration(plugin)
     }
+}
+
+@Module
+@InstallIn(SingletonComponent::class)
+abstract class MemoryIndexModule {
+    @Binds
+    @Singleton
+    abstract fun bindMemoryIndexRebuilder(
+        impl: VectorPipelineMemoryIndexRebuilder
+    ): MemoryIndexRebuilder
 }
 
 /** 注册副作用载体，避免与 [MemoryPlugin] 的 @Inject 绑定冲突。 */

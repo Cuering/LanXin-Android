@@ -177,6 +177,14 @@ class VectorPipeline @Inject constructor(
     }
 
     /**
+     * 按 source 批量删除 dense + sparse（导入 REPLACE / 清空场景）。
+     */
+    suspend fun deleteBySource(source: String) {
+        vectorStore.deleteBySource(source)
+        runCatching { sparseStore.deleteBySource(source) }
+    }
+
+    /**
      * 端到端延迟探测：embed + search（空库也可）。
      * @return 耗时毫秒
      */
