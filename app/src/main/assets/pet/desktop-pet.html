@@ -38,8 +38,14 @@
       transition: opacity .25s ease, transform .25s ease;
       margin-bottom: 8px;
       pointer-events: none;
+      z-index: 5;
     }
     #bubble.show { opacity: 1; transform: translateY(0); }
+    #stage {
+      width: 140px; height: 160px;
+      position: relative;
+      display: flex; align-items: center; justify-content: center;
+    }
     #avatar {
       width: 120px; height: 140px;
       border-radius: 24px 24px 32px 32px;
@@ -49,7 +55,9 @@
       align-items: center; justify-content: center;
       position: relative;
       border: 3px solid rgba(255,255,255,.85);
+      z-index: 2;
     }
+    #avatar.hidden { display: none; }
     #face {
       font-size: 42px;
       line-height: 1;
@@ -62,6 +70,46 @@
       background: rgba(0,0,0,.25);
       padding: 2px 8px;
       border-radius: 999px;
+    }
+    #live2d-shell {
+      display: none;
+      width: 140px; height: 160px;
+      border-radius: 20px;
+      overflow: hidden;
+      position: relative;
+      background: linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,183,197,.18));
+      border: 2px solid rgba(255,255,255,.55);
+      box-shadow: 0 10px 24px rgba(232, 93, 142, .35);
+      z-index: 2;
+    }
+    #live2d-shell.active { display: block; }
+    #live2d-canvas {
+      width: 100%; height: 100%;
+      display: block;
+      background: transparent;
+    }
+    #live2d-badge {
+      position: absolute;
+      left: 6px; bottom: 6px;
+      font-size: 10px;
+      font-weight: 700;
+      color: #fff;
+      background: rgba(0,0,0,.45);
+      padding: 2px 6px;
+      border-radius: 999px;
+      pointer-events: none;
+    }
+    #mode-tag {
+      position: absolute;
+      right: 6px; top: 6px;
+      font-size: 9px;
+      font-weight: 700;
+      color: #fff;
+      background: rgba(232, 93, 142, .85);
+      padding: 2px 6px;
+      border-radius: 6px;
+      pointer-events: none;
+      z-index: 3;
     }
     #controls {
       display: flex; gap: 8px; margin-top: 8px;
@@ -83,9 +131,16 @@
 <body>
   <div id="root">
     <div id="bubble"></div>
-    <div id="avatar" title="LanXin Pet Placeholder">
-      <div id="face">😊</div>
-      <div id="status">闲置</div>
+    <div id="stage">
+      <div id="mode-tag">占位</div>
+      <div id="avatar" title="LanXin Pet Placeholder">
+        <div id="face">😊</div>
+        <div id="status">闲置</div>
+      </div>
+      <div id="live2d-shell" title="LanXin Live2D Shell">
+        <canvas id="live2d-canvas" width="280" height="320"></canvas>
+        <div id="live2d-badge">Live2D</div>
+      </div>
     </div>
     <div id="controls">
       <button id="btn-voice" type="button">语音</button>
@@ -97,20 +152,32 @@
       var bubble = document.getElementById('bubble');
       var face = document.getElementById('face');
       var statusEl = document.getElementById('status');
+      var avatar = document.getElementById('avatar');
+      var shell = document.getElementById('live2d-shell');
+      var canvas = document.getElementById('live2d-canvas');
+      var modeTag = document.getElementById('mode-tag');
       var hideTimer = null;
+      var displayMode = 'PLACEHOLDER';
+      var lastPhase = 'IDLE';
+      var animHandle = null;
+      var breathT = 0;
 
       var PHASE_UI = {
-        IDLE:      { face: '😊', label: '闲置' },
-        LISTENING: { face: '👂', label: '在听…' },
-        THINKING:  { face: '💭', label: '想想…' },
-        SPEAKING:  { face: '💬', label: '在说…' },
-        ERROR:     { face: '😅', label: '出错了' }
+        IDLE:      { face: '😊', label: '闲置', tint: '#ffb7c5' },
+        LISTENING: { face: '👂', label: '在听…', tint: '#9ad0ff' },
+        THINKING:  { face: '💭', label: '想想…', tint: '#d2b4ff' },
+        SPEAKING:  { face: '💬', label: '在说…', tint: '#ffd27a' },
+        ERROR:     { face: '😅', label: '出错了', tint: '#ff9a9a' }
       };
 
       function setPhase(phase) {
-        var ui = PHASE_UI[phase] || PHASE_UI.IDLE;
+        lastPhase = phase || 'IDLE';
+        var ui = PHASE_UI[lastPhase] || PHASE_UI.IDLE;
         face.textContent = ui.face;
         statusEl.textContent = ui.label;
+        if (displayMode === 'LIVE2D_SHELL') {
+          modeTag.textContent = 'L2D·' + ui.label;
+        }
       }
 
       function showBubble(text) {
@@ -127,6 +194,198 @@
         bubble.classList.remove('show');
       }
 
+      function reportStatus(mode, reason) {
+        displayMode = mode || 'PLACEHOLDER';
+        safeCall(function () {
+          if (window.DesktopPetBridge && DesktopPetBridge.postMessage) {
+            var lines = [
+              'command=LIVE2D_STATUS',
+              'timestampMs=' + Date.now(),
+              'live2dMode=' + displayMode,
+              'live2dReason=' + (reason || '')
+            ];
+            DesktopPetBridge.postMessage(lines.join('\n'));
+          }
+        });
+      }
+
+      function showPlaceholder(reason, forcedMode) {
+        stopShellAnim();
+        shell.classList.remove('active');
+        avatar.classList.remove('hidden');
+        var r = String(reason || '');
+        var isFallback = forcedMode === 'FALLBACK' ||
+          r.indexOf('fallback') >= 0 ||
+          r.indexOf('missing') >= 0 ||
+          r.indexOf('invalid') >= 0 ||
+          r.indexOf('fail') >= 0;
+        modeTag.textContent = isFallback ? '降级' : '占位';
+        reportStatus(isFallback ? 'FALLBACK' : 'PLACEHOLDER', r);
+      }
+
+      function stopShellAnim() {
+        if (animHandle) {
+          cancelAnimationFrame(animHandle);
+          animHandle = null;
+        }
+      }
+
+      function drawShellFrame(ctx, w, h, phase, t, textures) {
+        ctx.clearRect(0, 0, w, h);
+        var ui = PHASE_UI[phase] || PHASE_UI.IDLE;
+        var scale = 1 + Math.sin(t * 0.04) * 0.02;
+        ctx.save();
+        ctx.translate(w / 2, h / 2 + 8);
+        ctx.scale(scale, scale);
+
+        // soft body glow
+        var g = ctx.createRadialGradient(0, 10, 10, 0, 0, Math.min(w, h) * 0.48);
+        g.addColorStop(0, ui.tint);
+        g.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.ellipse(0, 18, w * 0.32, h * 0.38, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (textures && textures.length) {
+          // stack first few textures centered (Mao often has body/face layers)
+          for (var i = 0; i < Math.min(textures.length, 3); i++) {
+            var img = textures[i];
+            if (!img || !img.complete || !img.naturalWidth) continue;
+            var maxW = w * 0.88;
+            var maxH = h * 0.9;
+            var r = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight);
+            var dw = img.naturalWidth * r;
+            var dh = img.naturalHeight * r;
+            ctx.globalAlpha = i === 0 ? 1 : 0.95;
+            ctx.drawImage(img, -dw / 2, -dh / 2 + 4, dw, dh);
+          }
+        } else {
+          // geometric avatar when textures not yet loaded
+          ctx.fillStyle = ui.tint;
+          ctx.beginPath();
+          ctx.ellipse(0, 10, 42, 56, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#fff';
+          ctx.font = '42px system-ui,sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(ui.face, 0, 0);
+        }
+
+        // phase ring
+        ctx.globalAlpha = 0.85;
+        ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 10, 58 + Math.sin(t * 0.08) * 2, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      function startShellAnim(textures) {
+        stopShellAnim();
+        var ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        var dpr = Math.min(window.devicePixelRatio || 1, 2);
+        var cssW = canvas.clientWidth || 140;
+        var cssH = canvas.clientHeight || 160;
+        canvas.width = Math.floor(cssW * dpr);
+        canvas.height = Math.floor(cssH * dpr);
+        function tick() {
+          breathT += 1;
+          drawShellFrame(ctx, canvas.width, canvas.height, lastPhase, breathT, textures);
+          animHandle = requestAnimationFrame(tick);
+        }
+        tick();
+      }
+
+      function resolveUrl(baseDirUrl, rel) {
+        if (!rel) return '';
+        if (/^https?:\/\//i.test(rel) || /^file:\/\//i.test(rel)) return rel;
+        var base = (baseDirUrl || '').replace(/\/?$/, '/');
+        return base + String(rel).replace(/^\.\//, '');
+      }
+
+      function loadTexturesFromModel3(model3Json, dirUrl, done) {
+        var refs = (model3Json && model3Json.FileReferences) || {};
+        var textures = refs.Textures || refs.textures || [];
+        if (!textures.length) {
+          done([]);
+          return;
+        }
+        var loaded = [];
+        var pending = textures.length;
+        textures.forEach(function (rel, idx) {
+          var url = resolveUrl(dirUrl, rel);
+          var img = new Image();
+          img.onload = function () {
+            loaded[idx] = img;
+            pending -= 1;
+            if (pending <= 0) done(loaded.filter(Boolean));
+          };
+          img.onerror = function () {
+            pending -= 1;
+            if (pending <= 0) done(loaded.filter(Boolean));
+          };
+          img.src = url;
+        });
+      }
+
+      function activateLive2dShell(meta) {
+        var fileUrl = meta.live2dFileUrl || '';
+        var dirUrl = meta.live2dDirUrl || '';
+        if (!fileUrl) {
+          showPlaceholder('live2d_file_url_empty');
+          return;
+        }
+        shell.classList.add('active');
+        avatar.classList.add('hidden');
+        modeTag.textContent = 'Live2D 壳';
+        displayMode = 'LIVE2D_SHELL';
+        startShellAnim([]);
+
+        // fetch model3 (file:// allowed by Service WebSettings)
+        fetch(fileUrl)
+          .then(function (r) {
+            if (!r.ok) throw new Error('http_' + r.status);
+            return r.json();
+          })
+          .then(function (json) {
+            loadTexturesFromModel3(json, dirUrl, function (textures) {
+              startShellAnim(textures);
+              reportStatus('LIVE2D_SHELL', textures.length ? 'textures_ok' : 'textures_empty_geom');
+              if (!textures.length) {
+                // still shell mode with geometric fallback inside canvas
+                modeTag.textContent = 'L2D·几何';
+              }
+            });
+          })
+          .catch(function (err) {
+            // 失败降级占位，不崩
+            showPlaceholder('live2d_load_fail', 'FALLBACK');
+            showBubble('Live2D 加载失败，已降级');
+            console.warn('[LanXin Pet] Live2D shell fallback', err);
+          });
+      }
+
+      function applyLoadLive2d(map) {
+        var mode = (map.live2dMode || map.mode || '').toUpperCase();
+        if (mode === 'LIVE2D_SHELL') {
+          activateLive2dShell({
+            live2dFileUrl: map.live2dFileUrl || '',
+            live2dDirUrl: map.live2dDirUrl || '',
+            live2dPath: map.live2dPath || ''
+          });
+          return;
+        }
+        if (mode === 'FALLBACK') {
+          showPlaceholder(map.live2dReason || 'fallback', 'FALLBACK');
+          return;
+        }
+        showPlaceholder(map.live2dReason || 'placeholder', 'PLACEHOLDER');
+      }
+
       function parseNativeMessage(raw) {
         if (!raw) return;
         var map = {};
@@ -141,11 +400,25 @@
         }
         if (cmd === 'HIDE_BUBBLE') hideBubble();
         if (cmd === 'SESSION_STATE' && map.subtitle) showBubble(map.subtitle);
+        if (cmd === 'LOAD_LIVE2D') applyLoadLive2d(map);
+        if (cmd === 'SET_PET_STATE' && map.phase) setPhase(map.phase);
       }
 
       // Native → Web
       window.onNativePetMessage = function (raw) {
         try { parseNativeMessage(raw); } catch (e) {}
+      };
+
+      // 兼容 M1/M2a：仅推路径字符串
+      window.onLive2dModelPath = function (path) {
+        try {
+          if (!path) {
+            showPlaceholder('path_empty');
+            return;
+          }
+          // 路径字符串 alone 时先标 shell 意图，完整决策走 LOAD_LIVE2D
+          modeTag.textContent = '路径已推';
+        } catch (e) {}
       };
 
       function safeCall(fn) {
@@ -184,12 +457,13 @@
       }, 1200);
 
       setPhase('IDLE');
+      showPlaceholder('boot');
 
-      // Debug: 真 Live2D 需自备合规 model3.json；见 docs/debug-assets.md
+      // Debug: 真 Live2D model3 需自备；见 docs/debug-assets.md
       // bash scripts/download-debug-live2d.sh  → live2d_model_path
       if (!window.__LANXIN_LIVE2D_HINT__) {
         window.__LANXIN_LIVE2D_HINT__ = true;
-        console.info('[LanXin Pet] placeholder only. Open-source Live2D sample: docs/debug-assets.md');
+        console.info('[LanXin Pet] M2b shell: path ready → LOAD_LIVE2D; else placeholder. docs/debug-assets.md');
       }
     })();
   </script>

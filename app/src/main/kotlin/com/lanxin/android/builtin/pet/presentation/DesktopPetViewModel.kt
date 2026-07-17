@@ -24,6 +24,7 @@ import com.lanxin.android.builtin.localinference.domain.LocalInferenceSettings
 import com.lanxin.android.builtin.pet.data.FloatingPetService
 import com.lanxin.android.builtin.pet.data.OverlayPermissionHelper
 import com.lanxin.android.builtin.pet.domain.DebugOpenSourcePaths
+import com.lanxin.android.builtin.pet.domain.Live2dDisplayController
 import com.lanxin.android.builtin.pet.domain.PetPathReadiness
 import com.lanxin.android.builtin.pet.domain.PetResourceResolver
 import com.lanxin.android.builtin.pet.domain.PetSettings
@@ -71,6 +72,9 @@ data class DesktopPetUiState(
     val live2dReady: Boolean = false,
     val asrReady: Boolean = false,
     val ttsReady: Boolean = false,
+    /** M2b：显示模式短标签（占位 / Live2D 壳 / 降级）。 */
+    val live2dDisplayLabel: String = "占位",
+    val live2dDisplayMode: String = Live2dDisplayController.Live2dDisplayMode.PLACEHOLDER.name,
     /** 汇总：就绪 / 缺失引导 fetch 脚本。 */
     val resourceSummary: String = "",
     /** 本地脑路径键 + 1.5B 说明（M2a 预留展示）。 */
@@ -151,6 +155,7 @@ class DesktopPetViewModel @Inject constructor(
                 PetPathReadiness.Kind.LOCAL_LLM,
                 local.modelPath
             )
+            val live2dDecision = Live2dDisplayController.decide(resolved.live2dModelPath)
             val can = OverlayPermissionHelper.canDrawOverlays(app)
             val snap = sessionCoordinator.current()
             _uiState.update {
@@ -173,6 +178,8 @@ class DesktopPetViewModel @Inject constructor(
                     live2dReady = live2dCheck.ready,
                     asrReady = asrCheck.ready,
                     ttsReady = ttsCheck.ready,
+                    live2dDisplayLabel = live2dDecision.shortLabel,
+                    live2dDisplayMode = live2dDecision.mode.name,
                     resourceSummary = PetPathReadiness.summaryMessage(
                         live2dCheck,
                         asrCheck,

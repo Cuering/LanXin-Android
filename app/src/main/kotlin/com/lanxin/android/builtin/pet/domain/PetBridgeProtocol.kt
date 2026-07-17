@@ -40,6 +40,13 @@ object PetBridgeProtocol {
     const val KEY_ROUND = "roundId"
     const val KEY_TS = "timestampMs"
 
+    /** M2b Live2D */
+    const val KEY_LIVE2D_PATH = "live2dPath"
+    const val KEY_LIVE2D_FILE_URL = "live2dFileUrl"
+    const val KEY_LIVE2D_DIR_URL = "live2dDirUrl"
+    const val KEY_LIVE2D_MODE = "live2dMode"
+    const val KEY_LIVE2D_REASON = "live2dReason"
+
     fun encode(message: PetBridgeMessage): String {
         val lines = mutableListOf<String>()
         lines += "$KEY_COMMAND=${message.command.name}"
@@ -95,6 +102,40 @@ object PetBridgeProtocol {
         return PetBridgeMessage(
             command = PetBridgeCommand.SET_PET_STATE,
             payload = mapOf(KEY_PHASE to phase.name),
+            timestampMs = timestampMs
+        )
+    }
+
+    /** Native → Web：推送 Live2D 加载决策。 */
+    fun loadLive2dMessage(
+        decision: Live2dDisplayController.Decision,
+        timestampMs: Long = System.currentTimeMillis()
+    ): PetBridgeMessage {
+        return PetBridgeMessage(
+            command = PetBridgeCommand.LOAD_LIVE2D,
+            payload = mapOf(
+                KEY_LIVE2D_PATH to decision.model3Path,
+                KEY_LIVE2D_FILE_URL to decision.model3FileUrl,
+                KEY_LIVE2D_DIR_URL to decision.modelDirFileUrl,
+                KEY_LIVE2D_MODE to decision.mode.name,
+                KEY_LIVE2D_REASON to decision.reason
+            ),
+            timestampMs = timestampMs
+        )
+    }
+
+    /** Web → Native：显示状态回传。 */
+    fun live2dStatusMessage(
+        mode: String,
+        reason: String = "",
+        timestampMs: Long = System.currentTimeMillis()
+    ): PetBridgeMessage {
+        return PetBridgeMessage(
+            command = PetBridgeCommand.LIVE2D_STATUS,
+            payload = mapOf(
+                KEY_LIVE2D_MODE to mode,
+                KEY_LIVE2D_REASON to reason
+            ),
             timestampMs = timestampMs
         )
     }

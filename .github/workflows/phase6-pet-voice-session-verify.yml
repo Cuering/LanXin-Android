@@ -1,9 +1,9 @@
-# Phase 6 桌宠：M1 状态机 + M2a 路径就绪（无模型下载）
+# Phase 6 桌宠：M1 状态机 + M2a 路径就绪 + M2b Live2D 壳（无模型下载）
 name: Phase6 Pet Voice Session Verify
 
 on:
   push:
-    branches: [main, 'feat/phase6*']
+    branches: [main, 'feat/phase6*', 'feat/m2b*']
     paths:
       - 'app/src/main/kotlin/com/lanxin/android/builtin/pet/**'
       - 'app/src/main/kotlin/com/lanxin/android/builtin/voice/**'
@@ -94,6 +94,7 @@ jobs:
           test -f app/src/main/kotlin/com/lanxin/android/builtin/pet/domain/PetBridgeProtocol.kt
           test -f app/src/main/kotlin/com/lanxin/android/builtin/pet/domain/PetPathReadiness.kt
           test -f app/src/main/kotlin/com/lanxin/android/builtin/pet/domain/DebugOpenSourcePaths.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/pet/domain/Live2dDisplayController.kt
           test -f app/src/main/kotlin/com/lanxin/android/builtin/pet/data/FloatingPetService.kt
           test -f app/src/main/kotlin/com/lanxin/android/builtin/pet/data/DesktopPetBridge.kt
           test -f app/src/main/kotlin/com/lanxin/android/builtin/pet/data/AndroidVoiceBridge.kt
@@ -103,16 +104,22 @@ jobs:
           test -f app/src/test/kotlin/com/lanxin/android/builtin/pet/PetBridgeProtocolTest.kt
           test -f app/src/test/kotlin/com/lanxin/android/builtin/pet/VoiceSessionCoordinatorTest.kt
           test -f app/src/test/kotlin/com/lanxin/android/builtin/pet/PetPathReadinessTest.kt
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/pet/Live2dDisplayControllerTest.kt
           grep -E -n "SYSTEM_ALERT_WINDOW|FloatingPetService" app/src/main/AndroidManifest.xml
           grep -E -n "DESKTOP_PET|DesktopPetScreen" \
             app/src/main/kotlin/com/lanxin/android/presentation/common/Route.kt \
             app/src/main/kotlin/com/lanxin/android/presentation/common/NavigationGraph.kt
-          grep -E -n "桌宠|VoiceSession|妹居|M2a" ARCHITECTURE.md docs/meiju-style-pet.md
+          grep -E -n "桌宠|VoiceSession|妹居|M2a|M2b|Live2D" ARCHITECTURE.md docs/meiju-style-pet.md
           grep -E -n "fetch-debug-assets|已就绪|local_inference_model_path" docs/debug-assets.md docs/meiju-style-pet.md
-          grep -E -n "IDLE|LISTENING|THINKING|SPEAKING" \
+          grep -E -n "IDLE|LISTENING|THINKING|SPEAKING|LOAD_LIVE2D|LIVE2D_STATUS" \
             app/src/main/kotlin/com/lanxin/android/builtin/pet/domain/VoiceSessionModels.kt
+          grep -E -n "LOAD_LIVE2D|LIVE2D_SHELL|onLive2dModelPath|live2d-shell" \
+            app/src/main/assets/pet/desktop-pet.html
+          grep -E -n "Live2dDisplayController|LOAD_LIVE2D" \
+            app/src/main/kotlin/com/lanxin/android/builtin/pet/data/FloatingPetService.kt
           # 红线：仓库内不应出现妹居商业资源 / 大权重
           ! grep -R -n "棕发1.moc3\|meju_flow.mnn\|sister_android.json" \
             app/src/main docs builtin 2>/dev/null || true
           # 不在 workflow 内 curl 模型（排除本检查注释行）
           ! grep -E "curl.*sherpa-onnx.*tar" .github/workflows/phase6-pet-voice-session-verify.yml | grep -v "grep -E"
+          ! grep -E "curl.*CubismWebSamples|curl.*live2d.*Mao" .github/workflows/phase6-pet-voice-session-verify.yml | grep -v "grep -E" || true

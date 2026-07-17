@@ -1,7 +1,7 @@
 # 妹居风格桌宠 + 语音会话（Phase 6 主线）
 
-> 分支：`feat/phase6-pet-m2-engines`（M2a）  
-> 状态：**M1 ✅ 已合 main**（#48）· **M2a 🚧 路径闭环 + 设置就绪体验**  
+> 分支：`feat/m2b-live2d-display`（M2b）  
+> 状态：**M1 ✅**（#48）· **M2a ✅**（#49）· **M2b ✅ Live2D 真显示壳**  
 > 参考包（**仅本机分析，禁止入库**）：`/AstrBot/data/workspaces/妹居2.2.2版本.apk`
 
 ## 1. 产品主线
@@ -32,8 +32,8 @@ IDLE → LISTENING → THINKING → SPEAKING → IDLE
 | 阶段 | 内容 | 状态 |
 |------|------|------|
 | **M1** | 悬浮层 + WebView 占位 + Bridge + VoiceSession + stub TTS | ✅ main `#48` |
-| **M2a** | 真资源路径闭环 + 设置「已就绪/缺失」+ fetch 脚本文案 + 本地脑 1.5B 键说明 | 🚧 本分支 |
-| **M2b** | Live2D 真显示（WebView 加载 model3，失败降级） | 后续 |
+| **M2a** | 真资源路径闭环 + 设置「已就绪/缺失」+ fetch 脚本文案 + 本地脑 1.5B 键说明 | ✅ main `#49` |
+| **M2b** | Live2D 真显示（WebView 渲染壳 + model3/纹理，失败降级） | ✅ 本分支 |
 | **M2c** | sherpa ASR/TTS 可 load 文件则 READY（无 so 仍 stub） | 后续 |
 | **M3** | 真 TTS + 口型 | 后续 |
 | **M4** | 自有/授权 Live2D | 后续 |
@@ -108,11 +108,27 @@ builtin/voice/        ASR + TtsEngine / StubTtsEngine
 ./gradlew :app:testDebugUnitTest \
   --tests "com.lanxin.android.builtin.pet.*" \
   --tests "com.lanxin.android.builtin.voice.StubTtsEngineTest"
+# 含 Live2dDisplayControllerTest
 ```
 
-## 9. 非目标（M2a）
+## 9. M2b 交付
 
-- 真 Live2D 渲染（M2b）
-- 真 sherpa so 接入（M2c）
-- 提交大权重 / 妹居资源
+### 9.1 显示模式
+
+- `Live2dDisplayController`：空路径 → **占位**；model3 可读有效 → **LIVE2D_SHELL**；无效 → **FALLBACK**
+- `FloatingPetService` 推送 `LOAD_LIVE2D`（路径 + file:// URL + mode）
+- `desktop-pet.html`：壳内 Canvas 叠纹理 / 几何呼吸；fetch model3 失败自动降级
+- 设置页展示「显示：Live2D 壳 / 占位 / 降级」
+
+### 9.2 设置与 M2a 一致
+
+- 仍用 `live2d_model_path` + `PetPathReadiness` + fetch 脚本引导
+- 换路径不改 VoiceSession 状态机
+
+### 9.3 非目标（M2b）
+
+- 完整 Cubism Core / 口型同步（M3）
+- 妹居商业 moc3 / 资源入库
+- 重做 VoiceSession
+- CI 下载大模型
 - auto-merge / force-push main

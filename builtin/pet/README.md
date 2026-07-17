@@ -1,6 +1,6 @@
 # builtin/pet — 桌宠 / 语音陪伴
 
-Phase 6 主线：**M1 ✅** 骨架 · **M2a 🚧** 路径就绪闭环。
+Phase 6 主线：**M1 ✅** 骨架 · **M2a ✅** 路径就绪 · **M2b ✅** Live2D 显示壳。
 
 实现：`app/src/main/kotlin/com/lanxin/android/builtin/pet/`
 
@@ -16,7 +16,8 @@ Phase 6 主线：**M1 ✅** 骨架 · **M2a 🚧** 路径就绪闭环。
 - ✅ Stub TTS + Stub 回复；设置页试运行
 - ✅ Debug 资源脚本：`scripts/fetch-debug-assets.sh` / `download-debug-assets.sh`
 - ✅ **M2a**：`PetPathReadiness` + 设置页「已就绪 / 未就绪」+ 本地脑 1.5B 键说明
-- 🔜 M2b Live2D 真显示 · M2c sherpa 可 load · M3 真 TTS · M4 合规 L2D · M5 场景
+- ✅ **M2b**：`Live2dDisplayController` + WebView 渲染壳 + 缺资源 fallback
+- 🔜 M2c sherpa 可 load · M3 真 TTS · M4 合规 L2D · M5 场景
 
 ## 入口
 

@@ -175,6 +175,11 @@ fun DesktopPetScreen(
                         style = MaterialTheme.typography.bodySmall
                     )
                     Text(
+                        "显示：${state.live2dDisplayLabel}（${state.live2dDisplayMode}）",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
                         "ASR：${state.asrSourceLabel} · ${state.asrReadyLabel}" +
                             if (state.asrReady) " ✓" else "",
                         style = MaterialTheme.typography.bodySmall
@@ -277,6 +282,11 @@ fun DesktopPetScreen(
                     }
                     Text(
                         "换 Live2D / TTS / ASR 只改设置项，不改 VoiceSession 状态机。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        "M2b：路径就绪时悬浮层进入 Live2D 渲染壳；失败自动降级占位。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
