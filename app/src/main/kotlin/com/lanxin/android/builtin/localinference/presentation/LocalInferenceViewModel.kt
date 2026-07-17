@@ -24,6 +24,8 @@ import com.lanxin.android.builtin.localinference.domain.LocalInferenceConfig
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceSettings
 import com.lanxin.android.builtin.localinference.domain.LocalLlmEngine
 import com.lanxin.android.builtin.localinference.domain.NetworkStatusProvider
+import com.lanxin.android.util.LocalPathImporter
+import com.lanxin.android.util.PathImportHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -43,6 +45,7 @@ data class LocalInferenceUiState(
     val engineState: LocalEngineState = LocalEngineState.DISABLED,
     val lastError: String? = null,
     val isBusy: Boolean = false,
+    val pathImportBusy: Boolean = false,
     val snackbarMessage: String? = null,
     /** Phase 6.2 路由预览（云端/本地/不可用）。 */
     val routePreview: String = "",
@@ -54,7 +57,8 @@ class LocalInferenceViewModel @Inject constructor(
     private val settings: LocalInferenceSettings,
     private val engine: LocalLlmEngine,
     private val routeCoordinator: InferenceRouteCoordinator,
-    private val networkStatusProvider: NetworkStatusProvider
+    private val networkStatusProvider: NetworkStatusProvider,
+    private val pathImporter: LocalPathImporter
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LocalInferenceUiState())
@@ -108,8 +112,49 @@ class LocalInferenceViewModel @Inject constructor(
 
     fun setModelPath(path: String) {
         viewModelScope.launch {
-            settings.setModelPath(path)
-            _uiState.update { it.copy(modelPath = path.trim()) }
+            settings.setModelPath(path.ifBlank { null })
+            _uiState.update {
+                it.copy(
+                    modelPath = path.trim(),
+                    snackbarMessage = if (path.isBlank()) "已清除本地模型路径" else "本地模型路径已保存"
+                )
+            }
+            refresh()
+        }
+    }
+
+    /** SAF：选择模型文件并导入私有目录。 */
+    fun importModelFromDocument(uriString: String) {
+        if (_uiState.value.pathImportBusy) {
+            _uiState.update { it.copy(snackbarMessage = "正在导入，请稍候") }
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update { it.copy(pathImportBusy = true, isBusy = true) }
+            val result = pathImporter.importFile(uriString, PathImportHelper.Kind.LOCAL_LLM)
+            result.fold(
+                onSuccess = { r ->
+                    settings.setModelPath(r.absolutePath)
+                    _uiState.update {
+                        it.copy(
+                            pathImportBusy = false,
+                            isBusy = false,
+                            modelPath = r.absolutePath,
+                            snackbarMessage = "本地模型已导入"
+                        )
+                    }
+                },
+                onFailure = { e ->
+                    _uiState.update {
+                        it.copy(
+                            pathImportBusy = false,
+                            isBusy = false,
+                            snackbarMessage = "导入失败：${e.message ?: e}"
+                        )
+                    }
+                }
+            )
+            refresh()
         }
     }
 

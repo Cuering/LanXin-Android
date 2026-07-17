@@ -42,6 +42,8 @@ import com.lanxin.android.builtin.pet.domain.VoiceSessionPhase
 import com.lanxin.android.builtin.voice.domain.AsrSettings
 import com.lanxin.android.builtin.voice.domain.TtsEngine
 import com.lanxin.android.builtin.voice.domain.TtsSettings
+import com.lanxin.android.util.LocalPathImporter
+import com.lanxin.android.util.PathImportHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.Job
@@ -68,9 +70,15 @@ data class DesktopPetUiState(
     val live2dModelPathConfigured: String = "",
     /** 解析后的运行时路径。 */
     val live2dModelPathResolved: String = "",
+    /** DataStore 原始配置（用于选择器摘要）。 */
+    val asrModelPathConfigured: String = "",
+    val ttsModelDirConfigured: String = "",
+    val ttsReferenceConfigured: String = "",
     val ttsModelDirResolved: String = "",
     val ttsReferenceResolved: String = "",
     val asrModelPathResolved: String = "",
+    /** 选择器导入进行中。 */
+    val pathImportBusy: Boolean = false,
     /** 设置页标注：当前：自定义 / 内置示例 / Debug 开源包 / 妹居参考 / 占位。 */
     val live2dSourceLabel: String = "当前：占位 / 未配置",
     val ttsSourceLabel: String = "当前：占位 / 未配置",
@@ -116,7 +124,8 @@ class DesktopPetViewModel @Inject constructor(
     private val ttsEngine: TtsEngine,
     private val asrSettings: AsrSettings,
     private val localInferenceSettings: LocalInferenceSettings,
-    private val assetDownloader: DebugAssetDownloader
+    private val assetDownloader: DebugAssetDownloader,
+    private val pathImporter: LocalPathImporter
 ) : AndroidViewModel(application) {
 
     private val isDebugBuild: Boolean =
@@ -213,6 +222,9 @@ class DesktopPetViewModel @Inject constructor(
                     ttsEnabled = tts.enabled,
                     live2dModelPathConfigured = config.live2dModelPath,
                     live2dModelPathResolved = resolved.live2dModelPath,
+                    asrModelPathConfigured = asr.modelPath,
+                    ttsModelDirConfigured = tts.modelDir.ifBlank { tts.modelPath },
+                    ttsReferenceConfigured = tts.referenceAudio,
                     ttsModelDirResolved = resolved.ttsModelDir,
                     ttsReferenceResolved = resolved.ttsReferenceAudio,
                     asrModelPathResolved = resolved.asrModelPath,
@@ -284,6 +296,19 @@ class DesktopPetViewModel @Inject constructor(
         viewModelScope.launch {
             petSettings.setLive2dModelPath(path.ifBlank { null })
             refresh()
+            _uiState.update {
+                it.copy(snackbarMessage = if (path.isBlank()) "已清除 Live2D 自定义路径" else "Live2D 路径已保存")
+            }
+        }
+    }
+
+    fun setAsrModelPath(path: String) {
+        viewModelScope.launch {
+            asrSettings.setModelPath(path.ifBlank { null })
+            refresh()
+            _uiState.update {
+                it.copy(snackbarMessage = if (path.isBlank()) "已清除 ASR 模型路径" else "ASR 路径已保存")
+            }
         }
     }
 
@@ -291,12 +316,103 @@ class DesktopPetViewModel @Inject constructor(
         viewModelScope.launch {
             ttsSettings.setModelDir(path.ifBlank { null })
             refresh()
+            _uiState.update {
+                it.copy(snackbarMessage = if (path.isBlank()) "已清除 TTS 模型目录" else "TTS 目录已保存")
+            }
         }
     }
 
     fun setTtsReferenceAudio(path: String) {
         viewModelScope.launch {
             ttsSettings.setReferenceAudio(path.ifBlank { null })
+            refresh()
+            _uiState.update {
+                it.copy(snackbarMessage = if (path.isBlank()) "已清除 TTS 参考音频" else "TTS 参考音已保存")
+            }
+        }
+    }
+
+    fun setLocalLlmModelPath(path: String) {
+        viewModelScope.launch {
+            localInferenceSettings.setModelPath(path.ifBlank { null })
+            refresh()
+            _uiState.update {
+                it.copy(snackbarMessage = if (path.isBlank()) "已清除本地脑路径" else "本地脑路径已保存")
+            }
+        }
+    }
+
+    /** SAF：选择单个 `*.model3.json` 并导入私有目录。 */
+    fun importLive2dFromDocument(uriString: String) {
+        importPath("Live2D") {
+            val result = pathImporter.importLive2dModel3(uriString)
+            result.getOrNull()?.let { petSettings.setLive2dModelPath(it.absolutePath) }
+            result
+        }
+    }
+
+    /** SAF：选择文件夹，自动定位 model3.json。 */
+    fun importLive2dFromTree(uriString: String) {
+        importPath("Live2D") {
+            val result = pathImporter.importLive2dTree(uriString)
+            result.getOrNull()?.let { petSettings.setLive2dModelPath(it.absolutePath) }
+            result
+        }
+    }
+
+    fun importAsrFromTree(uriString: String) {
+        importPath("ASR") {
+            val result = pathImporter.importTree(uriString, PathImportHelper.Kind.ASR)
+            result.getOrNull()?.let { asrSettings.setModelPath(it.absolutePath) }
+            result
+        }
+    }
+
+    fun importTtsDirFromTree(uriString: String) {
+        importPath("TTS") {
+            val result = pathImporter.importTree(uriString, PathImportHelper.Kind.TTS_DIR)
+            result.getOrNull()?.let { ttsSettings.setModelDir(it.absolutePath) }
+            result
+        }
+    }
+
+    fun importTtsReferenceFromDocument(uriString: String) {
+        importPath("TTS 参考音") {
+            val result = pathImporter.importFile(uriString, PathImportHelper.Kind.TTS_REF)
+            result.getOrNull()?.let { ttsSettings.setReferenceAudio(it.absolutePath) }
+            result
+        }
+    }
+
+    fun importLocalLlmFromDocument(uriString: String) {
+        importPath("本地脑") {
+            val result = pathImporter.importFile(uriString, PathImportHelper.Kind.LOCAL_LLM)
+            result.getOrNull()?.let { localInferenceSettings.setModelPath(it.absolutePath) }
+            result
+        }
+    }
+
+    private fun importPath(label: String, block: suspend () -> Result<*>) {
+        if (_uiState.value.pathImportBusy) {
+            _uiState.update { it.copy(snackbarMessage = "正在导入，请稍候") }
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update { it.copy(pathImportBusy = true) }
+            val result: Result<*> = try {
+                block()
+            } catch (e: Exception) {
+                Result.failure<Any>(e)
+            }
+            _uiState.update {
+                it.copy(
+                    pathImportBusy = false,
+                    snackbarMessage = result.fold(
+                        onSuccess = { "$label 已导入并就绪" },
+                        onFailure = { e -> "$label 导入失败：${e.message ?: e}" }
+                    )
+                )
+            }
             refresh()
         }
     }

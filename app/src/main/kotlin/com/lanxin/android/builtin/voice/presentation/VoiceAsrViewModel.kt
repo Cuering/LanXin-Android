@@ -27,6 +27,8 @@ import com.lanxin.android.builtin.voice.domain.MicPermissionChecker
 import com.lanxin.android.builtin.voice.domain.MicPermissionGate
 import com.lanxin.android.builtin.voice.domain.MicPermissionState
 import com.lanxin.android.builtin.voice.domain.VoiceInputCoordinator
+import com.lanxin.android.util.LocalPathImporter
+import com.lanxin.android.util.PathImportHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -48,6 +50,7 @@ data class VoiceAsrUiState(
     val statusPreview: String = "",
     val lastTranscript: String = "",
     val isBusy: Boolean = false,
+    val pathImportBusy: Boolean = false,
     val snackbarMessage: String? = null
 )
 
@@ -60,7 +63,8 @@ class VoiceAsrViewModel @Inject constructor(
     private val engine: AsrEngine,
     private val coordinator: VoiceInputCoordinator,
     private val permissionChecker: MicPermissionChecker,
-    private val recorder: PcmAudioRecorder
+    private val recorder: PcmAudioRecorder,
+    private val pathImporter: LocalPathImporter
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(VoiceAsrUiState())
@@ -112,8 +116,49 @@ class VoiceAsrViewModel @Inject constructor(
 
     fun setModelPath(path: String) {
         viewModelScope.launch {
-            settings.setModelPath(path)
-            _uiState.update { it.copy(modelPath = path.trim()) }
+            settings.setModelPath(path.ifBlank { null })
+            _uiState.update {
+                it.copy(
+                    modelPath = path.trim(),
+                    snackbarMessage = if (path.isBlank()) "已清除 ASR 模型路径" else "ASR 路径已保存"
+                )
+            }
+            refresh()
+        }
+    }
+
+    /** SAF 选择模型目录并导入私有目录。 */
+    fun importModelFromTree(uriString: String) {
+        if (_uiState.value.pathImportBusy) {
+            _uiState.update { it.copy(snackbarMessage = "正在导入，请稍候") }
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update { it.copy(pathImportBusy = true, isBusy = true) }
+            val result = pathImporter.importTree(uriString, PathImportHelper.Kind.ASR)
+            result.fold(
+                onSuccess = { r ->
+                    settings.setModelPath(r.absolutePath)
+                    _uiState.update {
+                        it.copy(
+                            pathImportBusy = false,
+                            isBusy = false,
+                            modelPath = r.absolutePath,
+                            snackbarMessage = "ASR 模型目录已导入"
+                        )
+                    }
+                },
+                onFailure = { e ->
+                    _uiState.update {
+                        it.copy(
+                            pathImportBusy = false,
+                            isBusy = false,
+                            snackbarMessage = "导入失败：${e.message ?: e}"
+                        )
+                    }
+                }
+            )
+            refresh()
         }
     }
 

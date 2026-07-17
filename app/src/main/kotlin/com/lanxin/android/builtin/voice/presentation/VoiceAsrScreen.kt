@@ -17,6 +17,7 @@
 package com.lanxin.android.builtin.voice.presentation
 
 import android.Manifest
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -50,7 +51,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -59,6 +62,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lanxin.android.builtin.voice.domain.AsrEngineState
 import com.lanxin.android.builtin.voice.domain.MicPermissionState
+import com.lanxin.android.presentation.common.PathPickerField
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -73,6 +77,17 @@ fun VoiceAsrScreen(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
         viewModel.onPermissionResult(granted = granted, permanentlyDenied = !granted)
+    }
+
+    val asrTreePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        uri?.toString()?.let(viewModel::importModelFromTree)
+    }
+
+    var modelDraft by remember { mutableStateOf(state.modelPath) }
+    LaunchedEffect(state.modelPath) {
+        modelDraft = state.modelPath
     }
 
     LaunchedEffect(state.snackbarMessage) {
@@ -106,7 +121,7 @@ fun VoiceAsrScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            if (state.isBusy) {
+            if (state.isBusy || state.pathImportBusy) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
 
@@ -176,18 +191,18 @@ fun VoiceAsrScreen(
                 )
             }
 
-            OutlinedTextField(
-                value = state.modelPath,
-                onValueChange = viewModel::setModelPath,
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("模型路径") },
-                supportingText = {
-                    Text(
-                        "绝对路径或 stub://demo；推荐小模型目录；大文件勿提交 git。" +
-                            "完整一键下载见「桌宠 / 语音陪伴」设置页。"
-                    )
-                },
-                singleLine = true
+            PathPickerField(
+                label = "ASR 模型目录",
+                path = state.modelPath,
+                helperText = "优先在「桌宠 / 语音陪伴」一键下载；此处可自定义选择文件夹。" +
+                    "也可高级手填 stub://demo。大文件勿提交 git。",
+                pickButtonText = "选择目录",
+                onPick = { asrTreePicker.launch(null) },
+                onClear = { viewModel.setModelPath("") },
+                manualDraft = modelDraft,
+                onManualDraftChange = { modelDraft = it },
+                onManualSave = viewModel::setModelPath,
+                enabled = !state.pathImportBusy && !state.isBusy
             )
 
             OutlinedTextField(
