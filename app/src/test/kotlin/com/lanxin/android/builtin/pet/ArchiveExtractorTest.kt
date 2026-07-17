@@ -109,4 +109,27 @@ class ArchiveExtractorTest {
         }
         assertFalse(File(dest.parentFile, "evil2.txt").exists())
     }
+
+    @Test
+    fun extractZip_rejectsAbsolutePathEntry() {
+        val zip = tmp.newFile("abs.zip")
+        ZipOutputStream(FileOutputStream(zip)).use { zos ->
+            zos.putNextEntry(ZipEntry("/tmp/evil-abs.txt"))
+            zos.write("pwn".toByteArray())
+            zos.closeEntry()
+        }
+        val dest = tmp.newFolder("out-abs")
+        try {
+            ArchiveExtractor.extract(zip, dest)
+            org.junit.Assert.fail("expected absolute entry rejection")
+        } catch (e: SecurityException) {
+            assertTrue(
+                e.message!!.contains("outside") || e.message!!.contains("evil"),
+            )
+        }
+        // Absolute entry must not land under dest as a nested "tmp/..." either
+        assertFalse(File(dest, "tmp/evil-abs.txt").exists())
+        assertFalse(File("/tmp/evil-abs.txt").exists() && File("/tmp/evil-abs.txt").length() > 0
+            && File("/tmp/evil-abs.txt").readText() == "pwn")
+    }
 }
