@@ -39,7 +39,7 @@ Phase 6 主线：**M1 ✅** 骨架 · **M2a ✅** 路径就绪 · **M2b ✅** Li
 
 ## Debug 资源（走开源）
 
-**推荐：设置 → 桌宠 → 一键下载**（`DebugAssetDownloader` → `filesDir/debug-assets/`，可选国内镜像）。
+**推荐：设置 → 桌宠 → 一键下载**（`DebugAssetDownloader` → 用户可访问的 `LanXin/`，可选国内镜像）。
 
 可选开发者脚本：
 

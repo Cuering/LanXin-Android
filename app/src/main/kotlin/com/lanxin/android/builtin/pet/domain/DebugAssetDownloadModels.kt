@@ -19,7 +19,7 @@ package com.lanxin.android.builtin.pet.domain
 /**
  * App 内 Debug 资源下载：分项、镜像源、进度与结果（纯模型，可单测）。
  *
- * 下载落盘 [DebugOpenSourcePaths.ROOT_DIR]（`filesDir/debug-assets/`）。
+ * 下载落盘 [DebugOpenSourcePaths.ROOT_DIR]（用户可访问的 `LanXin/`，见 [DebugAssetStorage]）。
  * **禁止**把 ASR/TTS 权重 commit 进 git；**禁止**在 AstrBot 服务器当下载盘。
  */
 enum class DebugAssetKind {
@@ -54,11 +54,11 @@ object DebugAssetLicense {
             "许可：$LIVE2D_SAMPLE_TERMS_URL"
 
     const val ASR_TTS_HINT =
-        "ASR/TTS 使用 sherpa-onnx 开源模型（Apache-2.0）。大文件仅存本机 filesDir，不进 git。"
+        "ASR/TTS 使用 sherpa-onnx 开源模型（Apache-2.0）。大文件仅存本机 LanXin/，不进 git。"
 }
 
 /**
- * 单资源目录项：官方 URL 列表（按顺序尝试）+ 解压目标相对 [filesDir]。
+ * 单资源目录项：官方 URL 列表（按顺序尝试）+ 解压目标相对下载 baseDir。
  */
 data class DebugAssetSpec(
     val kind: DebugAssetKind,

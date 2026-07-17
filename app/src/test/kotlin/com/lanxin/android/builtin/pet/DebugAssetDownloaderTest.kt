@@ -75,7 +75,7 @@ class DebugAssetDownloaderTest {
 
     @Test
     fun asr_preseededDir_isReadyWithoutNetwork() = runTest {
-        val filesDir = tmp.newFolder("files")
+        val baseDir = tmp.newFolder("base")
         val zipBytes = buildZipArchive(
             mapOf(
                 "sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23/encoder.onnx" to
@@ -84,7 +84,7 @@ class DebugAssetDownloaderTest {
                     "a\n".toByteArray()
             )
         )
-        val extractDir = File(filesDir, "debug-assets/asr")
+        val extractDir = File(baseDir, "LanXin/asr")
         extractDir.mkdirs()
         val zipFile = File(tmp.newFolder("arc"), "model.zip")
         zipFile.writeBytes(zipBytes)
@@ -103,13 +103,13 @@ class DebugAssetDownloaderTest {
                 ByteArrayInputStream(ByteArray(0))
         }
         val downloader = DebugAssetDownloader(transport)
-        assertTrue(downloader.isReady(filesDir, DebugAssetKind.ASR))
-        assertTrue(downloader.readyPath(filesDir, DebugAssetKind.ASR).contains("zipformer"))
+        assertTrue(downloader.isReady(baseDir, DebugAssetKind.ASR))
+        assertTrue(downloader.readyPath(baseDir, DebugAssetKind.ASR).contains("zipformer"))
     }
 
     @Test
     fun download_live2d_withMockTransport_writesModel3() = runTest {
-        val filesDir = tmp.newFolder("files")
+        val baseDir = tmp.newFolder("base")
         val transport = object : AssetDownloadTransport {
             override suspend fun downloadToFile(
                 url: String,
@@ -131,7 +131,7 @@ class DebugAssetDownloaderTest {
         }
         val downloader = DebugAssetDownloader(transport)
         val events = downloader.download(
-            filesDir,
+            baseDir,
             DebugAssetKind.LIVE2D,
             DebugAssetMirror.OFFICIAL
         ).toList()
@@ -140,13 +140,14 @@ class DebugAssetDownloaderTest {
         val completed = events.filterIsInstance<DebugAssetDownloadEvent.Completed>().single()
         assertEquals(DebugAssetKind.LIVE2D, completed.kind)
         assertTrue(File(completed.readyPath).isFile)
-        assertTrue(downloader.isReady(filesDir, DebugAssetKind.LIVE2D))
-        assertTrue(File(filesDir, DebugOpenSourcePaths.LIVE2D_MAO_MODEL3_REL).isFile)
+        assertTrue(downloader.isReady(baseDir, DebugAssetKind.LIVE2D))
+        assertTrue(File(baseDir, DebugOpenSourcePaths.LIVE2D_MAO_MODEL3_REL).isFile)
+        assertTrue(completed.readyPath.contains("LanXin"))
     }
 
     @Test
     fun download_mirrorFallback_whenFirstFails() = runTest {
-        val filesDir = tmp.newFolder("files")
+        val baseDir = tmp.newFolder("base")
         var calls = 0
         val transport = object : AssetDownloadTransport {
             override suspend fun downloadToFile(
@@ -173,7 +174,7 @@ class DebugAssetDownloaderTest {
         }
         val downloader = DebugAssetDownloader(transport)
         val events = downloader.download(
-            filesDir,
+            baseDir,
             DebugAssetKind.LIVE2D,
             DebugAssetMirror.MIRROR_GHPROXY
         ).toList()
@@ -183,7 +184,7 @@ class DebugAssetDownloaderTest {
 
     @Test
     fun download_failed_emitsFailedShortMessage() = runTest {
-        val filesDir = tmp.newFolder("files")
+        val baseDir = tmp.newFolder("base")
         val transport = object : AssetDownloadTransport {
             override suspend fun downloadToFile(
                 url: String,
@@ -198,7 +199,7 @@ class DebugAssetDownloaderTest {
         }
         val downloader = DebugAssetDownloader(transport)
         val events = downloader.download(
-            filesDir,
+            baseDir,
             DebugAssetKind.LIVE2D,
             DebugAssetMirror.OFFICIAL
         ).toList()
@@ -208,6 +209,7 @@ class DebugAssetDownloaderTest {
         assertTrue(failed.message.length <= 120)
         // Flow 应正常结束，不抛 exception transparency / 二次失败
         assertEquals(DebugAssetKind.LIVE2D, failed.kind)
+        assertEquals(1, events.filterIsInstance<DebugAssetDownloadEvent.Failed>().size)
         assertTrue(events.first() is DebugAssetDownloadEvent.Started)
         assertTrue(events.last() is DebugAssetDownloadEvent.Failed)
     }
@@ -215,7 +217,7 @@ class DebugAssetDownloaderTest {
     @Test
     fun download_failureAfterProgress_emitsFailedWithoutTransparencyCrash() = runTest {
         // 复现用户崩溃：先 Progress emit，随后 transport 抛错；catch 不得再 emit
-        val filesDir = tmp.newFolder("files")
+        val baseDir = tmp.newFolder("base")
         var progressCalls = 0
         val transport = object : AssetDownloadTransport {
             override suspend fun downloadToFile(
@@ -233,7 +235,7 @@ class DebugAssetDownloaderTest {
         }
         val downloader = DebugAssetDownloader(transport)
         val events = downloader.download(
-            filesDir,
+            baseDir,
             DebugAssetKind.LIVE2D,
             DebugAssetMirror.OFFICIAL
         ).toList()
@@ -251,7 +253,7 @@ class DebugAssetDownloaderTest {
 
     @Test
     fun download_cancelled_emitsCancelledWithoutRethrow() = runTest {
-        val filesDir = tmp.newFolder("files")
+        val baseDir = tmp.newFolder("base")
         val transport = object : AssetDownloadTransport {
             override suspend fun downloadToFile(
                 url: String,
@@ -267,7 +269,7 @@ class DebugAssetDownloaderTest {
         }
         val downloader = DebugAssetDownloader(transport)
         val events = downloader.download(
-            filesDir,
+            baseDir,
             DebugAssetKind.LIVE2D,
             DebugAssetMirror.OFFICIAL
         ).toList()
@@ -285,6 +287,29 @@ class DebugAssetDownloaderTest {
         val long = RuntimeException("x".repeat(200))
         val s = DebugAssetDownloader.shortError(long)
         assertTrue(s.length <= 120)
+    }
+
+    @Test
+    fun rootDir_isLanXinUserVisible() {
+        assertEquals("LanXin", DebugOpenSourcePaths.ROOT_DIR)
+        assertTrue(DebugOpenSourcePaths.LIVE2D_MAO_MODEL3_REL.startsWith("LanXin/"))
+        assertTrue(DebugOpenSourcePaths.ASR_ZIPFORMER_14M_REL.startsWith("LanXin/"))
+        assertTrue(DebugOpenSourcePaths.TTS_MATCHA_BAKER_REL.startsWith("LanXin/"))
+    }
+
+    @Test
+    fun live2dFileUrls_areSingleFileNotDirectory() {
+        val url = DebugAssetCatalog.live2dFileUrl("Mao.model3.json")
+        assertTrue(url.endsWith("/Mao.model3.json"))
+        assertFalse(url.endsWith("/Mao"))
+        assertFalse(url.contains("cdn.jsdelivr.net/gh/Live2D/CubismWebSamples@develop/Samples/Resources/Mao\""))
+        // 固定 commit 或 raw 单文件，避免 jsDelivr 目录 404
+        assertTrue(
+            url.contains("raw.githubusercontent.com") ||
+                url.contains("cdn.jsdelivr.net/gh/") ||
+                url.contains("fastly.jsdelivr.net/gh/")
+        )
+        assertTrue(url.contains("Mao.model3.json"))
     }
 
     private fun buildZipArchive(entries: Map<String, ByteArray>): ByteArray {

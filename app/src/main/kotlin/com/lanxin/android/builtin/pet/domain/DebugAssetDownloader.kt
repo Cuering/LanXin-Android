@@ -31,12 +31,16 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /**
- * App 内一键下载 Debug 开源资源到 [filesDir]/debug-assets/。
+ * App 内一键下载 Debug 开源资源到 [baseDir]/[DebugOpenSourcePaths.ROOT_DIR]/
+ * （即用户可访问的 `LanXin/`，由 [DebugAssetStorage] 解析 base）。
  *
  * - Live2D：多文件 raw（CubismWebSamples Mao）
  * - ASR / TTS：sherpa-onnx release 归档解压
  * - 镜像：用户首选 + 失败回退官方
  * - 大文件**不进 git**；**禁止** AstrBot 服务器当下载盘
+ *
+ * Flow 异常透明：终端事件（Completed/Failed/Cancelled）在 catch **外** emit，
+ * 避免 `Flow exception transparency is violated`。
  *
  * 写 DataStore 路径由 ViewModel 在 [DebugAssetDownloadEvent.Completed] 后处理。
  */
@@ -55,8 +59,8 @@ class DebugAssetDownloader @Inject constructor(
         activeJob = null
     }
 
-    fun isReady(filesDir: File, kind: DebugAssetKind): Boolean {
-        val path = readyPath(filesDir, kind)
+    fun isReady(baseDir: File, kind: DebugAssetKind): Boolean {
+        val path = readyPath(baseDir, kind)
         if (path.isBlank()) return false
         return when (kind) {
             DebugAssetKind.LIVE2D -> File(path).isFile && File(path).length() > 0L
@@ -65,18 +69,18 @@ class DebugAssetDownloader @Inject constructor(
         }
     }
 
-    fun readyPath(filesDir: File, kind: DebugAssetKind): String {
+    fun readyPath(baseDir: File, kind: DebugAssetKind): String {
         return when (kind) {
             DebugAssetKind.LIVE2D -> {
-                val f = DebugOpenSourcePaths.live2dModelFile(filesDir)
+                val f = DebugOpenSourcePaths.live2dModelFile(baseDir)
                 if (f.isFile) f.absolutePath else ""
             }
             DebugAssetKind.ASR -> {
-                val d = DebugOpenSourcePaths.asrModelDir(filesDir)
+                val d = DebugOpenSourcePaths.asrModelDir(baseDir)
                 if (DebugOpenSourcePaths.isModelDirReady(d)) d.absolutePath else ""
             }
             DebugAssetKind.TTS -> {
-                val d = DebugOpenSourcePaths.ttsModelDir(filesDir)
+                val d = DebugOpenSourcePaths.ttsModelDir(baseDir)
                 if (DebugOpenSourcePaths.isModelDirReady(d)) d.absolutePath else ""
             }
         }
@@ -85,32 +89,31 @@ class DebugAssetDownloader @Inject constructor(
     /**
      * 下载并安装 [kind]；进度以 [DebugAssetDownloadEvent] 流式上报。
      *
-     * 终端事件（Completed / Failed / Cancelled）一律在 try/catch **之外** emit，
-     * 避免违反 Flow exception transparency（catch 内禁止 emit）。
+     * @param baseDir 下载 base（其下创建 `LanXin/…`），见 [DebugAssetStorage.resolve]
      */
     fun download(
-        filesDir: File,
+        baseDir: File,
         kind: DebugAssetKind,
         preferredMirror: DebugAssetMirror
     ): Flow<DebugAssetDownloadEvent> = flow {
         emit(DebugAssetDownloadEvent.Started)
         val job = currentCoroutineContext()[Job]
         activeJob = job
-        // 记录终端结果，catch 内不 emit（Flow exception transparency）
+        // 终端事件在 catch 外 emit，遵守 Flow exception transparency
         var terminal: DebugAssetDownloadEvent? = null
         try {
             mutex.withLock {
                 val usedMirror = when (kind) {
-                    DebugAssetKind.LIVE2D -> installLive2d(filesDir, preferredMirror) { event ->
+                    DebugAssetKind.LIVE2D -> installLive2d(baseDir, preferredMirror) { event ->
                         emit(event)
                     }
                     DebugAssetKind.ASR, DebugAssetKind.TTS ->
-                        installArchive(filesDir, kind, preferredMirror) { event ->
+                        installArchive(baseDir, kind, preferredMirror) { event ->
                             emit(event)
                         }
                 }
-                val path = readyPath(filesDir, kind)
-                terminal = if (path.isBlank() || !isReady(filesDir, kind)) {
+                val path = readyPath(baseDir, kind)
+                terminal = if (path.isBlank() || !isReady(baseDir, kind)) {
                     DebugAssetDownloadEvent.Failed(
                         kind = kind,
                         message = "下载完成但校验失败（缺少关键文件）"
@@ -124,8 +127,8 @@ class DebugAssetDownloader @Inject constructor(
                 }
             }
         } catch (_: CancellationException) {
-            // 不 rethrow：UI collect 正常收 Cancelled；不在 catch 内 emit
             terminal = DebugAssetDownloadEvent.Cancelled
+            // 不向下游抛取消，便于 UI collect 正常结束
         } catch (t: Throwable) {
             terminal = DebugAssetDownloadEvent.Failed(
                 kind = kind,
@@ -134,17 +137,16 @@ class DebugAssetDownloader @Inject constructor(
         } finally {
             if (activeJob === job) activeJob = null
         }
-        // 正常路径 emit 终端事件（在 catch 块外）
         terminal?.let { emit(it) }
     }.flowOn(Dispatchers.IO)
 
     private suspend fun installLive2d(
-        filesDir: File,
+        baseDir: File,
         preferred: DebugAssetMirror,
         emit: suspend (DebugAssetDownloadEvent) -> Unit
     ): DebugAssetMirror {
-        val root = File(filesDir, DebugAssetCatalog.live2d.extractDirRel)
-        val staging = File(filesDir, "${DebugOpenSourcePaths.ROOT_DIR}/.tmp/live2d-mao-staging")
+        val root = File(baseDir, DebugAssetCatalog.live2d.extractDirRel)
+        val staging = File(baseDir, "${DebugOpenSourcePaths.ROOT_DIR}/.tmp/live2d-mao-staging")
         if (staging.exists()) staging.deleteRecursively()
         staging.mkdirs()
 
@@ -206,15 +208,15 @@ class DebugAssetDownloader @Inject constructor(
     }
 
     private suspend fun installArchive(
-        filesDir: File,
+        baseDir: File,
         kind: DebugAssetKind,
         preferred: DebugAssetMirror,
         emit: suspend (DebugAssetDownloadEvent) -> Unit
     ): DebugAssetMirror {
         val spec = DebugAssetCatalog.spec(kind)
-        val tmp = File(filesDir, "${DebugOpenSourcePaths.ROOT_DIR}/.tmp")
+        val tmp = File(baseDir, "${DebugOpenSourcePaths.ROOT_DIR}/.tmp")
         tmp.mkdirs()
-        val extractRoot = File(filesDir, spec.extractDirRel)
+        val extractRoot = File(baseDir, spec.extractDirRel)
         extractRoot.mkdirs()
 
         var lastError: Throwable? = null

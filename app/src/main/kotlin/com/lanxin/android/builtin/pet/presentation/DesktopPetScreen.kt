@@ -174,7 +174,7 @@ fun DesktopPetScreen(
         ) {
             Text(
                 "M2b 打磨：Live2D 壳 + 会话表情/口型联动。默认关，不偷偷录音/截屏。" +
-                    "语音资源可在本页一键下载到本机 filesDir（不进 git）。",
+                    "语音资源可在本页一键下载到本机 LanXin/ 目录（不进 git）。",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -263,7 +263,20 @@ fun DesktopPetScreen(
                         )
                     }
                     // —— App 内一键下载 ——
-                    Text("一键下载（本机 filesDir）", fontWeight = FontWeight.Medium)
+                    Text("一键下载（本机 LanXin 目录）", fontWeight = FontWeight.Medium)
+                    if (state.downloadRootPath.isNotBlank()) {
+                        Text(
+                            buildString {
+                                append("保存位置：")
+                                append(state.downloadRootPath)
+                                if (state.downloadRootFallback) {
+                                    append("（公共目录不可写，已回退）")
+                                }
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     Text(
                         state.live2dLicenseHint,
                         style = MaterialTheme.typography.bodySmall,
@@ -377,7 +390,7 @@ fun DesktopPetScreen(
 
                     if (state.isDebugBuild) {
                         Text(
-                            "Debug：filesDir/debug-assets 存在则自动选用开源包；" +
+                            "Debug：LanXin/ 或历史 debug-assets 存在则自动选用开源包；" +
                                 "妹居 so/moc3 仅本机旁路，禁止入库。",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant

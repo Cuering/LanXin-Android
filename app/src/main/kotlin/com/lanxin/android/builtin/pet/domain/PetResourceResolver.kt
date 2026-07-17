@@ -21,7 +21,7 @@ import com.lanxin.android.builtin.voice.domain.TtsConfig
 import java.io.File
 
 /**
- * 将 DataStore 配置 + 仓内 Live2D Sample +（可选）debug `debug-assets` / 妹居旁路
+ * 将 DataStore 配置 + 仓内 Live2D Sample +（可选）`LanXin/` 开源包 / 妹居旁路
  * 解析为运行时路径。
  *
  * VoiceSession / PetOverlay **只读**解析结果，不写死商业文件名。
@@ -43,8 +43,9 @@ object PetResourceResolver {
     }
 
     /**
-     * @param filesDir Context.filesDir
-     * @param isDebug debuggable；false 时不自动选用 debug-assets / meiju-ref（ASR/TTS）。
+     * @param filesDir Context.filesDir（内置 Sample / 妹居旁路）
+     * @param openSourceBaseDir 开源包 base（[DebugAssetStorage] 解析结果），默认 [filesDir]
+     * @param isDebug debuggable；false 时不自动选用 LanXin 开源包 / meiju-ref（ASR/TTS）。
      *   Live2D 仍可回落到仓内官方 Sample。
      */
     fun resolve(
@@ -52,7 +53,8 @@ object PetResourceResolver {
         pet: PetConfig,
         tts: TtsConfig,
         asr: AsrConfig,
-        isDebug: Boolean
+        isDebug: Boolean,
+        openSourceBaseDir: File = filesDir
     ): ResolvedPaths {
         val live2dConfigured = pet.live2dModelPath
         val ttsDirConfigured = tts.modelDir.ifBlank { tts.modelPath }
@@ -64,10 +66,15 @@ object PetResourceResolver {
             filesDir = filesDir,
             configured = live2dConfigured,
             preferBuiltinLogical = true,
-            allowMeijuRef = isDebug
+            allowMeijuRef = isDebug,
+            openSourceBaseDir = openSourceBaseDir
         )
         val ttsDir = if (isDebug) {
-            MeijuDebugPaths.resolveTtsModelDirIfPresent(filesDir, ttsDirConfigured)
+            MeijuDebugPaths.resolveTtsModelDirIfPresent(
+                filesDir,
+                ttsDirConfigured,
+                openSourceBaseDir = openSourceBaseDir
+            )
         } else {
             ttsDirConfigured.trim()
         }
@@ -77,7 +84,11 @@ object PetResourceResolver {
             ttsRefConfigured.trim()
         }
         val asrPath = if (isDebug) {
-            MeijuDebugPaths.resolveAsrIfPresent(filesDir, asrConfigured)
+            MeijuDebugPaths.resolveAsrIfPresent(
+                filesDir,
+                asrConfigured,
+                openSourceBaseDir = openSourceBaseDir
+            )
         } else {
             asrConfigured.trim()
         }

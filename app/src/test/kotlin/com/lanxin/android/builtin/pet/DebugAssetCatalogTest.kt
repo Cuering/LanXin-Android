@@ -58,5 +58,12 @@ class DebugAssetCatalogTest {
     fun fetchHint_mentionsInAppDownload() {
         assertTrue(DebugOpenSourcePaths.FETCH_SCRIPT_HINT.contains("一键下载"))
         assertTrue(DebugOpenSourcePaths.FETCH_SCRIPT_HINT.contains("AstrBot"))
+        assertTrue(DebugOpenSourcePaths.FETCH_SCRIPT_HINT.contains("LanXin"))
+    }
+
+    @Test
+    fun rootDir_isUserVisibleLanXin() {
+        assertEquals("LanXin", DebugOpenSourcePaths.ROOT_DIR)
+        assertEquals("debug-assets", DebugOpenSourcePaths.LEGACY_ROOT_DIR)
     }
 }

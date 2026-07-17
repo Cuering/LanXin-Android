@@ -31,6 +31,7 @@ import com.lanxin.android.builtin.pet.domain.DebugAssetItemUi
 import com.lanxin.android.builtin.pet.domain.DebugAssetKind
 import com.lanxin.android.builtin.pet.domain.DebugAssetLicense
 import com.lanxin.android.builtin.pet.domain.DebugAssetMirror
+import com.lanxin.android.builtin.pet.domain.DebugAssetStorage
 import com.lanxin.android.builtin.pet.domain.DebugOpenSourcePaths
 import com.lanxin.android.builtin.pet.domain.Live2dDisplayController
 import com.lanxin.android.builtin.pet.domain.PetExpressionController
@@ -112,7 +113,10 @@ data class DesktopPetUiState(
     /** Live2D / ASR / TTS 分项下载 UI。 */
     val downloadItems: List<DebugAssetItemUi> = emptyList(),
     val downloadBusy: Boolean = false,
-    val live2dLicenseHint: String = DebugAssetLicense.LIVE2D_HINT
+    val live2dLicenseHint: String = DebugAssetLicense.LIVE2D_HINT,
+    /** 实际落盘根（LanXin）绝对路径，下载成功后展示给用户。 */
+    val downloadRootPath: String = "",
+    val downloadRootFallback: Boolean = false
 )
 
 @HiltViewModel
@@ -178,6 +182,7 @@ class DesktopPetViewModel @Inject constructor(
             val app = getApplication<Application>()
             // 仓内 Mao → filesDir，设置页与悬浮层共用
             BuiltInLive2dAssets.ensureInstalled(app)
+            val storageRoot = DebugAssetStorage.resolve(app)
             val config = petSettings.getConfig()
             val tts = ttsSettings.getConfig()
             val asr = asrSettings.getConfig()
@@ -187,7 +192,8 @@ class DesktopPetViewModel @Inject constructor(
                 pet = config,
                 tts = tts,
                 asr = asr,
-                isDebug = isDebugBuild
+                isDebug = isDebugBuild,
+                openSourceBaseDir = storageRoot.baseDir
             )
             val live2dCheck = PetPathReadiness.check(
                 PetPathReadiness.Kind.LIVE2D,
@@ -258,7 +264,9 @@ class DesktopPetViewModel @Inject constructor(
                     localLlmHint = DebugOpenSourcePaths.LOCAL_LLM_DEFAULT_HINT,
                     fetchScriptHint = DebugOpenSourcePaths.FETCH_SCRIPT_HINT,
                     isDebugBuild = isDebugBuild,
-                    downloadItems = buildDownloadItems(app.filesDir),
+                    downloadItems = buildDownloadItems(storageRoot.baseDir),
+                    downloadRootPath = storageRoot.displayPath,
+                    downloadRootFallback = storageRoot.usedFallback,
                     phase = snap.phase,
                     asrText = snap.asrText,
                     replyText = snap.replyText,
@@ -494,9 +502,10 @@ class DesktopPetViewModel @Inject constructor(
         }
         val app = getApplication<Application>()
         val mirror = _uiState.value.preferredMirror
+        val storageRoot = DebugAssetStorage.resolve(app)
         downloadJob?.cancel()
         downloadJob = viewModelScope.launch {
-            assetDownloader.download(app.filesDir, kind, mirror).collect { event ->
+            assetDownloader.download(storageRoot.baseDir, kind, mirror).collect { event ->
                 when (event) {
                     DebugAssetDownloadEvent.Started -> {
                         patchDownloadItem(kind) {
@@ -507,7 +516,13 @@ class DesktopPetViewModel @Inject constructor(
                                 lastError = null
                             )
                         }
-                        _uiState.update { it.copy(downloadBusy = true) }
+                        _uiState.update {
+                            it.copy(
+                                downloadBusy = true,
+                                downloadRootPath = storageRoot.displayPath,
+                                downloadRootFallback = storageRoot.usedFallback
+                            )
+                        }
                     }
                     is DebugAssetDownloadEvent.Progress -> {
                         val label = when (event.phase) {
@@ -538,10 +553,19 @@ class DesktopPetViewModel @Inject constructor(
                                 lastError = null
                             )
                         }
+                        val where = event.readyPath
+                        val fallbackNote = if (storageRoot.usedFallback) {
+                            "（公共目录不可写，已回退）"
+                        } else {
+                            ""
+                        }
                         _uiState.update {
                             it.copy(
                                 downloadBusy = false,
-                                snackbarMessage = "${kind.name} 下载完成"
+                                downloadRootPath = storageRoot.displayPath,
+                                downloadRootFallback = storageRoot.usedFallback,
+                                snackbarMessage =
+                                    "${kind.name} 已保存到 $where$fallbackNote"
                             )
                         }
                         refresh()
@@ -622,12 +646,12 @@ class DesktopPetViewModel @Inject constructor(
         }
     }
 
-    private fun buildDownloadItems(filesDir: java.io.File): List<DebugAssetItemUi> {
+    private fun buildDownloadItems(baseDir: java.io.File): List<DebugAssetItemUi> {
         val prev = _uiState.value.downloadItems.associateBy { it.kind }
         return DebugAssetKind.entries.map { kind ->
             val spec = DebugAssetCatalog.spec(kind)
-            val ready = assetDownloader.isReady(filesDir, kind)
-            val path = assetDownloader.readyPath(filesDir, kind)
+            val ready = assetDownloader.isReady(baseDir, kind)
+            val path = assetDownloader.readyPath(baseDir, kind)
             val old = prev[kind]
             DebugAssetItemUi(
                 kind = kind,

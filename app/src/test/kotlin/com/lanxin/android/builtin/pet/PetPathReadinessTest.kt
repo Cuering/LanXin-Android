@@ -54,7 +54,7 @@ class PetPathReadinessTest {
         assertFalse(c.ready)
         assertTrue(
             c.detail.contains("一键下载") || c.detail.contains("fetch-debug-assets") ||
-                c.detail.contains("debug-assets")
+                c.detail.contains("LanXin") || c.detail.contains("debug-assets")
         )
     }
 
@@ -222,9 +222,9 @@ class PetPathReadinessTest {
             asr = AsrConfig(),
             isDebug = false
         )
-        // Live2D：debug-assets 仍可被 resolveLive2d 命中（用户可能 adb push），
-        // 但无 files 时回落 logical；此处 debug-assets 有文件 → 开源包路径
-        // 注意：priority 是 builtin installed → debug-assets → logical
+        // Live2D：LanXin 开源包仍可被 resolveLive2d 命中（用户可能 adb push），
+        // 但无 files 时回落 logical；此处 LanXin 有文件 → 开源包路径
+        // 注意：priority 是 builtin installed → LanXin → logical
         assertEquals(mao.absolutePath, resolved.live2dModelPath)
         assertEquals("", resolved.asrModelPath)
         assertEquals(MeijuDebugPaths.ResourceSource.PLACEHOLDER, resolved.asrSource)
