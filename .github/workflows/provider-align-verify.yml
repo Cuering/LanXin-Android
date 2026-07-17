@@ -100,9 +100,8 @@ jobs:
           grep -E -n "PROBE_USER_PROMPT|PROBE_EXPECTED_TOKEN|ping-lx-1|filterModelIds|resolveProbeTargets" \
             app/src/main/kotlin/com/lanxin/android/data/network/OpenAiModelProbeSupport.kt
           # Probe user prompt must embed neutral token and must not be a greeting
-          PROBE_LINE=$(awk '/PROBE_USER_PROMPT/{flag=1} flag{print; if (/\"$/) exit}' \
-            app/src/main/kotlin/com/lanxin/android/data/network/OpenAiModelProbeSupport.kt | tr '
-' ' ')
+          PROBE_LINE=$(awk '/PROBE_USER_PROMPT/{flag=1} flag{printf "%s ", $0; if (/\"$/) exit}' \
+            app/src/main/kotlin/com/lanxin/android/data/network/OpenAiModelProbeSupport.kt)
           echo "PROBE_LINE=$PROBE_LINE"
           echo "$PROBE_LINE" | grep -q 'ping-lx-1'
           ! echo "$PROBE_LINE" | grep -E -i '\b(hello|你好|hi|hey)\b'
