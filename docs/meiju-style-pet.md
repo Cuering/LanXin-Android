@@ -34,7 +34,8 @@ IDLE → LISTENING → THINKING → SPEAKING → IDLE
 | **M1** | 悬浮层 + WebView 占位 + Bridge + VoiceSession + stub TTS | ✅ main `#48` |
 | **M2a** | 真资源路径闭环 + 设置「已就绪/缺失」+ fetch 脚本文案 + 本地脑 1.5B 键说明 | ✅ main `#49` |
 | **M2b** | Live2D 真显示（WebView 渲染壳 + model3/纹理，失败降级） | ✅ main `#57` |
-| **M2b 打磨** | 会话相位→表情/口型 + 缺资源引导 + 悬浮生命周期 | ✅ 本分支 |
+| **M2b 打磨** | 会话相位→表情/口型 + 缺资源引导 + 悬浮生命周期 | ✅ main `#63` |
+| **仓内 Live2D Mao** | 官方 Sample 进 assets，release 默认可开箱 | ✅ 本分支 |
 | **M2c** | sherpa ASR/TTS 可 load 文件则 READY（无 so 仍 stub） | 后续 |
 | **M3** | 真 TTS + 口型 | 后续 |
 | **M4** | 自有/授权 Live2D | 后续 |
@@ -45,24 +46,31 @@ IDLE → LISTENING → THINKING → SPEAKING → IDLE
 ### 3.1 路径就绪
 
 - `PetPathReadiness`：Live2D 文件 / ASR·TTS 非空目录 / `stub://` → **已就绪**
-- 空或无效 → **未就绪 / 路径无效**，明细指向 `scripts/fetch-debug-assets.sh`
-- Debug 自动解析优先级：用户配置 → `filesDir/debug-assets/**`（开源）→ `meiju-ref/**`（仅本机）
+- Live2D 仓内 Sample（逻辑路径 / 已安装）→ **已就绪（内置示例）**
+- ASR/TTS 空或无效 → **未就绪 / 路径无效**，明细指向 `scripts/fetch-debug-assets.sh`
+- Live2D 解析优先级：
+  1. 用户配置 `live2d_model_path`
+  2. 仓内官方 Sample（`BuiltInLive2dAssets` / `filesDir/builtin-live2d/Mao/`）
+  3. `filesDir/debug-assets/**`（脚本旁路）
+  4. `meiju-ref/**`（仅本机 debug）
 
 ### 3.2 设置页
 
 - 展示 Live2D / ASR / TTS 来源标签 + 就绪短标签
-- 缺失时按钮文案说明跑 **GitHub 仓库脚本**（**不在 App / AstrBot 服务器下载**）
+- Live2D 默认开箱（仓内 Mao）；ASR/TTS 缺失时说明跑 **开发者机 GitHub 仓库脚本**
+- **本阶段不含** App 内一键下载按钮（下一刀）
 - 预留 `local_inference_model_path` 与 **Qwen2.5-1.5B** 说明（链 `docs/local-inference.md`）
 
 ### 3.3 脚本
 
 | 脚本 | 说明 |
 |------|------|
-| `scripts/fetch-debug-assets.sh` | M2 推荐入口（封装 `download-debug-assets.sh`） |
-| `scripts/download-debug-assets.sh` | 一键 Live2D + ASR + TTS |
-| 分项 `download-debug-live2d/asr/tts.sh` | 同上 |
+| `scripts/vendor-live2d-mao.sh` | 将官方 CubismWebSamples Mao 同步到 `app/src/main/assets/pet/live2d/Mao/` |
+| `scripts/fetch-debug-assets.sh` | ASR/TTS（可选 Live2D 覆盖）入口 |
+| `scripts/download-debug-assets.sh` | 同上完整下载 |
+| 分项 `download-debug-live2d/asr/tts.sh` | 分项 |
 
-**硬性**：下载只在开发者机器或按需 CI；禁止 AstrBot 服务器 `/data/download` 当交付。
+**硬性**：ASR/TTS 下载只在开发者机器；禁止 AstrBot 服务器 `/data/download` 当交付；禁止 App 内下载进本 PR。
 
 ## 4. 妹居 2.2.2 → 兰心 映射
 
@@ -101,7 +109,8 @@ builtin/voice/        ASR + TtsEngine / StubTtsEngine
 
 - **禁止**妹居 so / moc3 / mnn / wav / 商业人设 **提交 git**
 - **禁止**在 AstrBot 服务器 curl 模型当交付
-- Debug 走开源：Live2D Mao + sherpa ASR/TTS → `docs/debug-assets.md`
+- Live2D 官方 Sample Mao **仓内** `assets/pet/live2d/Mao/` → `docs/live2d-mao-sample.md`
+- ASR/TTS 走开源脚本 → `docs/debug-assets.md`（大包不进仓）
 
 ## 8. 单测
 
@@ -109,7 +118,8 @@ builtin/voice/        ASR + TtsEngine / StubTtsEngine
 ./gradlew :app:testDebugUnitTest \
   --tests "com.lanxin.android.builtin.pet.*" \
   --tests "com.lanxin.android.builtin.voice.StubTtsEngineTest"
-# 含 Live2dDisplayControllerTest / PetExpressionControllerTest
+# 含 BuiltInLive2dAssetsTest / Live2dDisplayControllerTest /
+# PetPathReadinessTest / PetExpressionControllerTest
 ```
 
 ## 9. M2b 交付
@@ -123,7 +133,7 @@ builtin/voice/        ASR + TtsEngine / StubTtsEngine
 
 ### 9.2 设置与 M2a 一致
 
-- 仍用 `live2d_model_path` + `PetPathReadiness` + fetch 脚本引导
+- `live2d_model_path` 可空 → 内置 Mao；`PetPathReadiness` 标「已就绪（内置示例）」；ASR/TTS 仍靠脚本
 - 换路径不改 VoiceSession 状态机
 
 ### 9.3 非目标（M2b）

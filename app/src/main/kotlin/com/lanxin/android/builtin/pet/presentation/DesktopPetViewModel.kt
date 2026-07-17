@@ -23,6 +23,7 @@ import androidx.lifecycle.viewModelScope
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceSettings
 import com.lanxin.android.builtin.pet.data.FloatingPetService
 import com.lanxin.android.builtin.pet.data.OverlayPermissionHelper
+import com.lanxin.android.builtin.pet.domain.BuiltInLive2dAssets
 import com.lanxin.android.builtin.pet.domain.DebugOpenSourcePaths
 import com.lanxin.android.builtin.pet.domain.Live2dDisplayController
 import com.lanxin.android.builtin.pet.domain.PetExpressionController
@@ -62,7 +63,7 @@ data class DesktopPetUiState(
     val ttsModelDirResolved: String = "",
     val ttsReferenceResolved: String = "",
     val asrModelPathResolved: String = "",
-    /** 设置页标注：当前：自定义 / Debug 开源包 / 妹居参考 / 占位。 */
+    /** 设置页标注：当前：自定义 / 内置示例 / Debug 开源包 / 妹居参考 / 占位。 */
     val live2dSourceLabel: String = "当前：占位 / 未配置",
     val ttsSourceLabel: String = "当前：占位 / 未配置",
     val asrSourceLabel: String = "当前：占位 / 未配置",
@@ -144,6 +145,8 @@ class DesktopPetViewModel @Inject constructor(
     fun refresh() {
         viewModelScope.launch {
             val app = getApplication<Application>()
+            // 仓内 Mao → filesDir，设置页与悬浮层共用
+            BuiltInLive2dAssets.ensureInstalled(app)
             val config = petSettings.getConfig()
             val tts = ttsSettings.getConfig()
             val asr = asrSettings.getConfig()

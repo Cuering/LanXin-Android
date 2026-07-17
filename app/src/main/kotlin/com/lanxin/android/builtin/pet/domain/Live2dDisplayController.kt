@@ -25,7 +25,7 @@ import java.io.File
  * - model3 可读且结构合理 → [Live2dDisplayMode.LIVE2D_SHELL]（WebView 渲染壳）
  * - 配置了路径但无效 / 解析失败 → [Live2dDisplayMode.FALLBACK]
  *
- * 不打包 Cubism SDK / moc3；真机纹理由 WebView 读 filesDir。
+ * 官方 Sample Mao 已进 APK assets；运行时拷到 filesDir 后 WebView 用 file://。
  * 完整 Cubism Core 渲染属后续增强，本阶段保证「有路径就进壳，失败降级」。
  */
 object Live2dDisplayController {
@@ -79,6 +79,17 @@ object Live2dDisplayController {
                 modelDirFileUrl = "",
                 reason = "live2d_stub",
                 shortLabel = "占位（stub）"
+            )
+        }
+        // 仓内 Sample 逻辑路径：WebView 可用 android_asset；ensure 后走绝对路径
+        if (BuiltInLive2dAssets.pathLooksBuiltin(trimmed) && !File(trimmed).isFile) {
+            return Decision(
+                mode = Live2dDisplayMode.LIVE2D_SHELL,
+                model3Path = trimmed,
+                model3FileUrl = "file:///android_asset/${BuiltInLive2dAssets.MODEL3_ASSET}",
+                modelDirFileUrl = "file:///android_asset/${BuiltInLive2dAssets.ASSET_ROOT}/",
+                reason = "live2d_builtin_asset",
+                shortLabel = "Live2D 壳（内置）"
             )
         }
 

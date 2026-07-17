@@ -3,7 +3,7 @@ name: Phase6 Pet Voice Session Verify
 
 on:
   push:
-    branches: [main, 'feat/phase6*', 'feat/m2b*']  # includes feat/m2b-pet-expression-polish
+    branches: [main, 'feat/phase6*', 'feat/m2b*', 'feat/vendor-live2d*']
     paths:
       - 'app/src/main/kotlin/com/lanxin/android/builtin/pet/**'
       - 'app/src/main/kotlin/com/lanxin/android/builtin/voice/**'
@@ -12,8 +12,10 @@ on:
       - 'app/src/main/assets/pet/**'
       - 'docs/meiju-style-pet.md'
       - 'docs/debug-assets.md'
+      - 'docs/live2d-mao-sample.md'
       - 'scripts/fetch-debug-assets.sh'
       - 'scripts/download-debug-assets.sh'
+      - 'scripts/vendor-live2d-mao.sh'
       - 'builtin/pet/**'
       - 'ARCHITECTURE.md'
       - '.github/workflows/phase6-pet-voice-session-verify.yml'
@@ -27,8 +29,10 @@ on:
       - 'app/src/main/assets/pet/**'
       - 'docs/meiju-style-pet.md'
       - 'docs/debug-assets.md'
+      - 'docs/live2d-mao-sample.md'
       - 'scripts/fetch-debug-assets.sh'
       - 'scripts/download-debug-assets.sh'
+      - 'scripts/vendor-live2d-mao.sh'
       - 'builtin/pet/**'
       - 'ARCHITECTURE.md'
       - '.github/workflows/phase6-pet-voice-session-verify.yml'
@@ -84,17 +88,27 @@ jobs:
         run: |
           test -f docs/meiju-style-pet.md
           test -f docs/debug-assets.md
+          test -f docs/live2d-mao-sample.md
           test -f scripts/fetch-debug-assets.sh
           test -f scripts/download-debug-assets.sh
+          test -f scripts/vendor-live2d-mao.sh
           test -f builtin/pet/README.md
           test -f debug-assets/README.md
           test -f app/src/main/assets/pet/desktop-pet.html
+          # 仓内官方 Live2D Sample Mao（开箱）
+          test -f app/src/main/assets/pet/live2d/Mao/Mao.model3.json
+          test -f app/src/main/assets/pet/live2d/Mao/Mao.moc3
+          test -f app/src/main/assets/pet/live2d/Mao/NOTICE.txt
+          test -f app/src/main/assets/pet/live2d/Mao/Mao.2048/texture_00.png
+          test -d app/src/main/assets/pet/live2d/Mao/motions
+          test -d app/src/main/assets/pet/live2d/Mao/expressions
           test -f app/src/main/kotlin/com/lanxin/android/builtin/pet/domain/VoiceSessionStateMachine.kt
           test -f app/src/main/kotlin/com/lanxin/android/builtin/pet/domain/VoiceSessionCoordinator.kt
           test -f app/src/main/kotlin/com/lanxin/android/builtin/pet/domain/PetBridgeProtocol.kt
           test -f app/src/main/kotlin/com/lanxin/android/builtin/pet/domain/PetPathReadiness.kt
           test -f app/src/main/kotlin/com/lanxin/android/builtin/pet/domain/DebugOpenSourcePaths.kt
           test -f app/src/main/kotlin/com/lanxin/android/builtin/pet/domain/Live2dDisplayController.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/pet/domain/BuiltInLive2dAssets.kt
           test -f app/src/main/kotlin/com/lanxin/android/builtin/pet/data/FloatingPetService.kt
           test -f app/src/main/kotlin/com/lanxin/android/builtin/pet/data/DesktopPetBridge.kt
           test -f app/src/main/kotlin/com/lanxin/android/builtin/pet/data/AndroidVoiceBridge.kt
@@ -105,6 +119,7 @@ jobs:
           test -f app/src/test/kotlin/com/lanxin/android/builtin/pet/VoiceSessionCoordinatorTest.kt
           test -f app/src/test/kotlin/com/lanxin/android/builtin/pet/PetPathReadinessTest.kt
           test -f app/src/test/kotlin/com/lanxin/android/builtin/pet/Live2dDisplayControllerTest.kt
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/pet/BuiltInLive2dAssetsTest.kt
           test -f app/src/main/kotlin/com/lanxin/android/builtin/pet/domain/PetExpressionController.kt
           test -f app/src/test/kotlin/com/lanxin/android/builtin/pet/PetExpressionControllerTest.kt
           grep -E -n "SYSTEM_ALERT_WINDOW|FloatingPetService" app/src/main/AndroidManifest.xml
@@ -112,7 +127,8 @@ jobs:
             app/src/main/kotlin/com/lanxin/android/presentation/common/Route.kt \
             app/src/main/kotlin/com/lanxin/android/presentation/common/NavigationGraph.kt
           grep -E -n "桌宠|VoiceSession|妹居|M2a|M2b|Live2D" ARCHITECTURE.md docs/meiju-style-pet.md
-          grep -E -n "fetch-debug-assets|已就绪|local_inference_model_path" docs/debug-assets.md docs/meiju-style-pet.md
+          grep -E -n "fetch-debug-assets|已就绪|local_inference_model_path|内置示例|builtin-live2d" \
+            docs/debug-assets.md docs/meiju-style-pet.md docs/live2d-mao-sample.md
           grep -E -n "IDLE|LISTENING|THINKING|SPEAKING|LOAD_LIVE2D|LIVE2D_STATUS|SET_EXPRESSION" \
             app/src/main/kotlin/com/lanxin/android/builtin/pet/domain/VoiceSessionModels.kt
           grep -E -n "LOAD_LIVE2D|LIVE2D_SHELL|onLive2dModelPath|live2d-shell|SET_EXPRESSION|mouth" \
@@ -120,8 +136,10 @@ jobs:
           grep -E -n "PetExpressionController|SET_EXPRESSION|mouthOpen" \
             app/src/main/kotlin/com/lanxin/android/builtin/pet/domain/PetBridgeProtocol.kt \
             app/src/main/kotlin/com/lanxin/android/builtin/pet/data/FloatingPetService.kt
-          grep -E -n "Live2dDisplayController|LOAD_LIVE2D" \
+          grep -E -n "Live2dDisplayController|LOAD_LIVE2D|BuiltInLive2dAssets|ensureInstalled" \
             app/src/main/kotlin/com/lanxin/android/builtin/pet/data/FloatingPetService.kt
+          grep -E -n "LOGICAL_PATH|ASSET_ROOT|builtin-live2d|Sample Data Terms" \
+            app/src/main/kotlin/com/lanxin/android/builtin/pet/domain/BuiltInLive2dAssets.kt
           # 红线：仓库内不应出现妹居商业资源 / 大权重
           ! grep -R -n "棕发1.moc3\|meju_flow.mnn\|sister_android.json" \
             app/src/main docs builtin 2>/dev/null || true

@@ -21,7 +21,8 @@ import com.lanxin.android.builtin.voice.domain.TtsConfig
 import java.io.File
 
 /**
- * 将 DataStore 配置 +（可选）debug 开源 `debug-assets` / 妹居旁路解析为运行时路径。
+ * 将 DataStore 配置 + 仓内 Live2D Sample +（可选）debug `debug-assets` / 妹居旁路
+ * 解析为运行时路径。
  *
  * VoiceSession / PetOverlay **只读**解析结果，不写死商业文件名。
  */
@@ -43,7 +44,8 @@ object PetResourceResolver {
 
     /**
      * @param filesDir Context.filesDir
-     * @param isDebug debuggable；false 时绝不自动选用 debug-assets / meiju-ref
+     * @param isDebug debuggable；false 时不自动选用 debug-assets / meiju-ref（ASR/TTS）。
+     *   Live2D 仍可回落到仓内官方 Sample。
      */
     fun resolve(
         filesDir: File,
@@ -57,11 +59,13 @@ object PetResourceResolver {
         val ttsRefConfigured = tts.referenceAudio
         val asrConfigured = asr.modelPath
 
-        val live2d = if (isDebug) {
-            MeijuDebugPaths.resolveLive2dIfPresent(filesDir, live2dConfigured)
-        } else {
-            live2dConfigured.trim()
-        }
+        // Live2D：内置 Sample 对 release/debug 均可用；妹居仅 debug
+        val live2d = MeijuDebugPaths.resolveLive2dIfPresent(
+            filesDir = filesDir,
+            configured = live2dConfigured,
+            preferBuiltinLogical = true,
+            allowMeijuRef = isDebug
+        )
         val ttsDir = if (isDebug) {
             MeijuDebugPaths.resolveTtsModelDirIfPresent(filesDir, ttsDirConfigured)
         } else {
