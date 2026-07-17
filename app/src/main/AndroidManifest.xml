@@ -111,6 +111,12 @@
                 android:value="desktop_pet_overlay" />
         </service>
 
+        <!-- 机器人 / Claw 动态插件常驻（默认不启动；需设置总开关 + 常驻开关） -->
+        <service
+            android:name=".plugin.claw.data.ClawResidentService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
         <!-- 使用 Application 实现的 Configuration.Provider，禁用默认 WorkManager 初始化 -->
         <provider
             android:name="androidx.startup.InitializationProvider"

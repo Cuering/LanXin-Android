@@ -79,7 +79,8 @@ fun SettingScreen(
     onNavigateToDesktopPet: () -> Unit = {},
     onNavigateToSystemTools: () -> Unit = {},
     onNavigateToWebSearch: () -> Unit = {},
-    onNavigateToDeviceSensing: () -> Unit = {}
+    onNavigateToDeviceSensing: () -> Unit = {},
+    onNavigateToClawHost: () -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
     val scrollBehavior = pinnedExitUntilCollapsedScrollBehavior(
@@ -254,6 +255,14 @@ fun SettingScreen(
                 title = "设备感知",
                 description = "默认关；system_info（型号/网络/电量）；开后 Agent 可见",
                 onItemClick = onNavigateToDeviceSensing,
+                showTrailingIcon = true,
+                showLeadingIcon = false
+            )
+
+            SettingItem(
+                title = "机器人 / Claw 宿主",
+                description = "默认关；动态机器人插件 PlatformHost + 可选前台常驻",
+                onItemClick = onNavigateToClawHost,
                 showTrailingIcon = true,
                 showLeadingIcon = false
             )

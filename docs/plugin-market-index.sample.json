@@ -34,6 +34,17 @@
       "min_app_version": "0.7.5",
       "checksum": "",
       "size": 0
+    },
+    {
+      "id": "example.claw.bot",
+      "name": "Claw Bot Sample",
+      "version": "0.1.0",
+      "description": "示例机器人动态插件（sample，无真实 APK；需开启 Claw 宿主常驻）",
+      "author": "LanXin",
+      "download_url": "https://example.invalid/plugins/claw-bot-0.1.0.apk",
+      "min_app_version": "0.7.6",
+      "checksum": "",
+      "size": 0
     }
   ]
 }

@@ -61,6 +61,8 @@ app/         壳应用（Compose UI 入口）
 | [docs/meiju-style-pet.md](./docs/meiju-style-pet.md) | 妹居风格架构对照（资源不入库） |
 | [docs/system-tools.md](./docs/system-tools.md) | Phase 7 系统能力（日历/闹钟/笔记/文件） |
 | [builtin/systemtools/README.md](./builtin/systemtools/README.md) | 系统能力模块 |
+| [docs/dynamic-plugins.md](./docs/dynamic-plugins.md) | 动态插件加载 / 管理 / 市场 / 签名 |
+| [docs/claw-host.md](./docs/claw-host.md) | 机器人 / Claw 常驻宿主 |
 
 ### Debug 语音 / Live2D 资源
 
