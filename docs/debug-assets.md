@@ -153,10 +153,9 @@ adb push debug-assets/ /sdcard/Android/data/<pkg>/files/debug-assets/
 
 ## 5. CI
 
-- 无模型：pet / ASR / TTS **stub 单测**绿（含 `Live2dDisplayControllerTest`）
-- M2b **不**在 CI 下载 Live2D 大资源；用临时 model3 fixture 单测
-- 检查：`docs/debug-assets.md`、`scripts/fetch-debug-assets.sh`、`download-debug-*.sh`、`debug-assets/README.md`
-- **不**在 CI 下载数百 MB 模型
+- pet / ASR / TTS **stub 单测**绿（含 `BuiltInLive2dAssetsTest` / `Live2dDisplayControllerTest` / `PetPathReadinessTest`）
+- **不**在 CI 下载 ASR/TTS 大包；Live2D 用仓内 Mao 存在性检查 + 临时 fixture
+- 检查：`app/src/main/assets/pet/live2d/Mao/Mao.model3.json`、`docs/live2d-mao-sample.md`、`scripts/vendor-live2d-mao.sh`、`docs/debug-assets.md`、`fetch-debug-assets.sh`
 
 ---
 

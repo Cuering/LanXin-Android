@@ -118,7 +118,8 @@ builtin/voice/        ASR + TtsEngine / StubTtsEngine
 ./gradlew :app:testDebugUnitTest \
   --tests "com.lanxin.android.builtin.pet.*" \
   --tests "com.lanxin.android.builtin.voice.StubTtsEngineTest"
-# 含 Live2dDisplayControllerTest / PetExpressionControllerTest
+# 含 BuiltInLive2dAssetsTest / Live2dDisplayControllerTest /
+# PetPathReadinessTest / PetExpressionControllerTest
 ```
 
 ## 9. M2b 交付
