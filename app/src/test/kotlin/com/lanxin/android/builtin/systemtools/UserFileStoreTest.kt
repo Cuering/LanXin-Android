@@ -65,7 +65,9 @@ class UserFileStoreTest {
         assertEquals(listOf("a.md", "b.txt", "c.json"), sortUserFiles(files, UserFileSort.NAME).map { it.name })
         assertEquals("a.md", sortUserFiles(files, UserFileSort.DATE_DESC).first().name)
         assertEquals("c.json", sortUserFiles(files, UserFileSort.DATE_ASC).first().name)
-        assertEquals("c.json", sortUserFiles(files, UserFileSort.SIZE).first().name)
+        // SIZE == size_desc：大文件优先
+        assertEquals("a.md", sortUserFiles(files, UserFileSort.SIZE).first().name)
+        assertEquals("c.json", sortUserFiles(files, UserFileSort.SIZE).last().name)
         assertEquals("application/json", sortUserFiles(files, UserFileSort.TYPE).first().mimeType)
         assertEquals(UserFileSort.NAME, parseUserFileSort("name"))
         assertEquals(UserFileSort.DATE_DESC, parseUserFileSort(null))
