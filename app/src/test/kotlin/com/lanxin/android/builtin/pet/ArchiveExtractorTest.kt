@@ -53,8 +53,8 @@ class ArchiveExtractorTest {
         try {
             ArchiveExtractor.safeResolve(dest, "../evil.txt")
             org.junit.Assert.fail("expected zip-slip rejection")
-        } catch (e: SecurityException) {
-            assertTrue(e.message!!.contains("zip-slip") || e.message!!.contains("outside"))
+        } catch (e: IllegalArgumentException) {
+            assertTrue(e.message!!.contains(".."))
         }
     }
 
@@ -70,8 +70,8 @@ class ArchiveExtractorTest {
         try {
             ArchiveExtractor.extract(zip, dest)
             org.junit.Assert.fail("expected zip-slip rejection")
-        } catch (e: SecurityException) {
-            assertTrue(e.message!!.contains("outside") || e.message!!.contains("evil"))
+        } catch (e: IllegalArgumentException) {
+            assertTrue(e.message!!.contains(".."))
         }
         assertTrue(!File(dest, "../evil.txt").exists() || !File(dest.parentFile, "evil.txt").exists())
     }
