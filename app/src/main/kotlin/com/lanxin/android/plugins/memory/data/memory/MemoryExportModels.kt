@@ -35,13 +35,22 @@ data class MemoryExportItem(
 data class MemoryImportResult(
     val imported: Int,
     val skipped: Int,
-    val total: Int
+    val total: Int,
+    /** 导入后成功重建向量索引条数；未触发 reindex 时为 0 */
+    val reindexed: Int = 0
 ) {
     val message: String
-        get() = if (skipped > 0) {
-            "导入完成：新增 $imported 条，跳过 $skipped 条"
-        } else {
-            "导入完成：共 $imported 条"
+        get() {
+            val base = if (skipped > 0) {
+                "导入完成：新增 $imported 条，跳过 $skipped 条"
+            } else {
+                "导入完成：共 $imported 条"
+            }
+            return if (reindexed > 0) {
+                "$base（已重建索引 $reindexed 条）"
+            } else {
+                base
+            }
         }
 }
 

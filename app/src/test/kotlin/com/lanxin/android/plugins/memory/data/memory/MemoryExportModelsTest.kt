@@ -49,6 +49,9 @@ class MemoryExportModelsTest {
 
         val noSkip = MemoryImportResult(imported = 5, skipped = 0, total = 5)
         assertEquals("导入完成：共 5 条", noSkip.message)
+
+        val reindexed = MemoryImportResult(imported = 3, skipped = 1, total = 4, reindexed = 3)
+        assertEquals("导入完成：新增 3 条，跳过 1 条（已重建索引 3 条）", reindexed.message)
     }
 
     @Test

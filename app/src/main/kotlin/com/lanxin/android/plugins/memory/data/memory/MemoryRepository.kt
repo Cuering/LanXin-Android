@@ -3,6 +3,8 @@ package com.lanxin.android.plugins.memory.data.memory
 import android.content.Context
 import android.net.Uri
 import com.lanxin.android.plugins.memory.domain.memory.ImportStrategy
+import com.lanxin.android.plugins.memory.domain.memory.MemoryIndexRebuilder
+import com.lanxin.android.plugins.memory.domain.memory.NoOpMemoryIndexRebuilder
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -19,8 +21,12 @@ import org.json.JSONObject
 
 @Singleton
 class MemoryRepository @Inject constructor(
-    private val dao: MemoryDao
+    private val dao: MemoryDao,
+    private val indexRebuilder: MemoryIndexRebuilder
 ) {
+    /** Worker / 单测便捷构造：无向量管道时跳过 reindex。 */
+    constructor(dao: MemoryDao) : this(dao, NoOpMemoryIndexRebuilder)
+
     private val json = Json {
         ignoreUnknownKeys = true
         encodeDefaults = true
@@ -311,18 +317,25 @@ class MemoryRepository @Inject constructor(
 
         val items = payload.memories
         if (items.isEmpty()) {
-            return MemoryImportResult(imported = 0, skipped = 0, total = 0)
+            return MemoryImportResult(imported = 0, skipped = 0, total = 0, reindexed = 0)
         }
 
         var imported = 0
         var skipped = 0
+        val inserted = mutableListOf<MemoryEntity>()
 
         when (strategy) {
             ImportStrategy.REPLACE -> {
                 dao.deleteAll()
+                // 清空旧向量，避免 externalId 漂移后的幽灵命中
+                runCatching { indexRebuilder.clearMemorySources() }
                 items.forEach { item ->
-                    dao.insertMemory(item.toEntity(preserveId = false))
+                    val entity = item.toEntity(preserveId = false)
+                    val newId = dao.insertMemory(entity)
                     imported++
+                    if (newId > 0L) {
+                        inserted += entity.copy(id = newId)
+                    }
                 }
             }
 
@@ -333,8 +346,12 @@ class MemoryRepository @Inject constructor(
                         skipped++
                     } else {
                         val preserveId = item.id > 0 && item.id !in existingIds
-                        dao.insertMemory(item.toEntity(preserveId = preserveId))
+                        val entity = item.toEntity(preserveId = preserveId)
+                        val newId = dao.insertMemory(entity)
                         imported++
+                        if (newId > 0L) {
+                            inserted += entity.copy(id = newId)
+                        }
                     }
                 }
             }
@@ -349,18 +366,52 @@ class MemoryRepository @Inject constructor(
                     if (dao.existsByContentAndType(content, item.type)) {
                         skipped++
                     } else {
-                        dao.insertMemory(item.toEntity(preserveId = false))
+                        val entity = item.toEntity(preserveId = false)
+                        val newId = dao.insertMemory(entity)
                         imported++
+                        if (newId > 0L) {
+                            inserted += entity.copy(id = newId)
+                        }
                     }
                 }
             }
         }
 
+        val reindexed = if (inserted.isNotEmpty()) {
+            runCatching { indexRebuilder.reindex(inserted) }.getOrDefault(0)
+        } else {
+            0
+        }
+
         return MemoryImportResult(
             imported = imported,
             skipped = skipped,
-            total = items.size
+            total = items.size,
+            reindexed = reindexed
         )
+    }
+
+    /**
+     * 导出为 JSON 文本（工具 / MCP 用，不落盘）。
+     */
+    suspend fun exportToJsonText(typeFilter: String? = null): String = withContext(Dispatchers.IO) {
+        val items = loadExportItems(typeFilter)
+        val payload = MemoryExportPayload(
+            version = 1,
+            exportedAt = System.currentTimeMillis(),
+            memories = items
+        )
+        json.encodeToString(MemoryExportPayload.serializer(), payload)
+    }
+
+    /**
+     * 从 JSON 文本导入（工具 / MCP 用）。
+     */
+    suspend fun importFromJsonTextPublic(
+        text: String,
+        strategy: ImportStrategy
+    ): MemoryImportResult = withContext(Dispatchers.IO) {
+        importFromJsonText(text, strategy)
     }
 
     private suspend fun loadExportItems(typeFilter: String?): List<MemoryExportItem> {
