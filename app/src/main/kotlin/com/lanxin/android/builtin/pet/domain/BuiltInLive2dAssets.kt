@@ -24,7 +24,7 @@ import java.io.FileOutputStream
 /**
  * 仓内官方 Live2D Sample **Niziiro Mao**（CubismWebSamples）。
  *
- * - APK assets：`pet/live2d/Mao/**`
+ * - APK assets：`pet/live2d/Mao/` 下全部文件
  * - 运行时：首次拷到 [Context.getFilesDir]/`builtin-live2d/Mao/`，供 WebView `file://` 读
  * - 许可：https://www.live2d.com/en/learn/sample/model-terms
  *
