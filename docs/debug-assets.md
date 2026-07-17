@@ -1,6 +1,6 @@
 # Debug 资源方案：免费可爱 Live2D + 开源中文语音
 
-> 状态：**M1 已合 main** · **M2a 路径闭环 + 设置就绪**  
+> 状态：**M1** · **M2a 路径闭环** · **M2b 壳** · **M2b 打磨：表情/口型 + 降级引导**  
 > 相关：[`meiju-style-pet.md`](./meiju-style-pet.md) · [`voice-asr.md`](./voice-asr.md) · [`local-inference.md`](./local-inference.md)
 
 ## 0. 原则
@@ -154,6 +154,7 @@ adb push debug-assets/ /sdcard/Android/data/<pkg>/files/debug-assets/
 | **M1** | HTML 占位 + Stub；路径约定 |
 | **M2a** | 路径校验 + 设置就绪 + fetch 文案 |
 | **M2b** | Live2D 真显示（WebView 壳 + 降级）|
+| **M2b 打磨** | 会话表情/口型 + 设置引导；缺资源仍可占位演示 |
 | **M2c** | 能 load 模型文件则引擎 READY |
 | **M3/M4** | 真 TTS / 合规 Live2D |
 

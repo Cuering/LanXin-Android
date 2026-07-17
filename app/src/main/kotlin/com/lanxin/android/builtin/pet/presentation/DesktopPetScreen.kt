@@ -121,7 +121,7 @@ fun DesktopPetScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                "M2a：路径就绪闭环 + 设置体验。默认关，不偷偷录音/截屏；资源仅开发者机/脚本拉取。",
+                "M2b 打磨：Live2D 壳 + 会话表情/口型联动。默认关，不偷偷录音/截屏；资源仅开发者机/脚本拉取。",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -179,6 +179,19 @@ fun DesktopPetScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary
                     )
+                    Text(
+                        "表情：${state.expressionLabel}（${state.expressionName}）" +
+                            if (state.mouthAnimating) " · 口型动画" else "",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    if (state.resourceGuide.isNotBlank()) {
+                        Text(
+                            state.resourceGuide,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     Text(
                         "ASR：${state.asrSourceLabel} · ${state.asrReadyLabel}" +
                             if (state.asrReady) " ✓" else "",
@@ -287,6 +300,11 @@ fun DesktopPetScreen(
                     )
                     Text(
                         "M2b：路径就绪时悬浮层进入 Live2D 渲染壳；失败自动降级占位。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        "打磨：听→想→说 驱动表情/口型；缺资源仍可占位演示，停止桌宠会复位会话并销毁 WebView。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

@@ -1,9 +1,9 @@
-# Phase 6 桌宠：M1 状态机 + M2a 路径就绪 + M2b Live2D 壳（无模型下载）
+# Phase 6 桌宠：M1 + M2a + M2b 壳 + 表情/口型打磨（无模型下载）
 name: Phase6 Pet Voice Session Verify
 
 on:
   push:
-    branches: [main, 'feat/phase6*', 'feat/m2b*']
+    branches: [main, 'feat/phase6*', 'feat/m2b*']  # includes feat/m2b-pet-expression-polish
     paths:
       - 'app/src/main/kotlin/com/lanxin/android/builtin/pet/**'
       - 'app/src/main/kotlin/com/lanxin/android/builtin/voice/**'
@@ -105,16 +105,21 @@ jobs:
           test -f app/src/test/kotlin/com/lanxin/android/builtin/pet/VoiceSessionCoordinatorTest.kt
           test -f app/src/test/kotlin/com/lanxin/android/builtin/pet/PetPathReadinessTest.kt
           test -f app/src/test/kotlin/com/lanxin/android/builtin/pet/Live2dDisplayControllerTest.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/pet/domain/PetExpressionController.kt
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/pet/PetExpressionControllerTest.kt
           grep -E -n "SYSTEM_ALERT_WINDOW|FloatingPetService" app/src/main/AndroidManifest.xml
           grep -E -n "DESKTOP_PET|DesktopPetScreen" \
             app/src/main/kotlin/com/lanxin/android/presentation/common/Route.kt \
             app/src/main/kotlin/com/lanxin/android/presentation/common/NavigationGraph.kt
           grep -E -n "桌宠|VoiceSession|妹居|M2a|M2b|Live2D" ARCHITECTURE.md docs/meiju-style-pet.md
           grep -E -n "fetch-debug-assets|已就绪|local_inference_model_path" docs/debug-assets.md docs/meiju-style-pet.md
-          grep -E -n "IDLE|LISTENING|THINKING|SPEAKING|LOAD_LIVE2D|LIVE2D_STATUS" \
+          grep -E -n "IDLE|LISTENING|THINKING|SPEAKING|LOAD_LIVE2D|LIVE2D_STATUS|SET_EXPRESSION" \
             app/src/main/kotlin/com/lanxin/android/builtin/pet/domain/VoiceSessionModels.kt
-          grep -E -n "LOAD_LIVE2D|LIVE2D_SHELL|onLive2dModelPath|live2d-shell" \
+          grep -E -n "LOAD_LIVE2D|LIVE2D_SHELL|onLive2dModelPath|live2d-shell|SET_EXPRESSION|mouth" \
             app/src/main/assets/pet/desktop-pet.html
+          grep -E -n "PetExpressionController|SET_EXPRESSION|mouthOpen" \
+            app/src/main/kotlin/com/lanxin/android/builtin/pet/domain/PetBridgeProtocol.kt \
+            app/src/main/kotlin/com/lanxin/android/builtin/pet/data/FloatingPetService.kt
           grep -E -n "Live2dDisplayController|LOAD_LIVE2D" \
             app/src/main/kotlin/com/lanxin/android/builtin/pet/data/FloatingPetService.kt
           # 红线：仓库内不应出现妹居商业资源 / 大权重

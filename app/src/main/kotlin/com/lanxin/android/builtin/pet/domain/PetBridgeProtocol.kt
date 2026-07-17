@@ -47,6 +47,13 @@ object PetBridgeProtocol {
     const val KEY_LIVE2D_MODE = "live2dMode"
     const val KEY_LIVE2D_REASON = "live2dReason"
 
+    /** M2b 打磨：表情 / 口型 */
+    const val KEY_EXPRESSION = "expression"
+    const val KEY_MOUTH_OPEN = "mouthOpen"
+    const val KEY_MOUTH_ANIM = "mouthAnimating"
+    const val KEY_EXPRESSION_LABEL = "expressionLabel"
+    const val KEY_EXPRESSION_EMOJI = "expressionEmoji"
+
     fun encode(message: PetBridgeMessage): String {
         val lines = mutableListOf<String>()
         lines += "$KEY_COMMAND=${message.command.name}"
@@ -75,7 +82,13 @@ object PetBridgeProtocol {
         return PetBridgeMessage(command = command, payload = payload, timestampMs = ts)
     }
 
-    fun sessionStateMessage(snapshot: VoiceSessionSnapshot, timestampMs: Long = System.currentTimeMillis()): PetBridgeMessage {
+    fun sessionStateMessage(
+        snapshot: VoiceSessionSnapshot,
+        timestampMs: Long = System.currentTimeMillis(),
+        displayMode: Live2dDisplayController.Live2dDisplayMode =
+            Live2dDisplayController.Live2dDisplayMode.PLACEHOLDER
+    ): PetBridgeMessage {
+        val pose = PetExpressionController.poseFor(snapshot.phase, displayMode)
         return PetBridgeMessage(
             command = PetBridgeCommand.SESSION_STATE,
             payload = mapOf(
@@ -84,7 +97,12 @@ object PetBridgeProtocol {
                 KEY_REPLY to snapshot.replyText,
                 KEY_SUBTITLE to snapshot.subtitle,
                 KEY_ERROR to (snapshot.lastError.orEmpty()),
-                KEY_ROUND to snapshot.roundId.toString()
+                KEY_ROUND to snapshot.roundId.toString(),
+                KEY_EXPRESSION to pose.expression.name,
+                KEY_MOUTH_OPEN to PetExpressionController.mouthOpenWire(pose.mouthOpen),
+                KEY_MOUTH_ANIM to pose.mouthAnimating.toString(),
+                KEY_EXPRESSION_LABEL to pose.shortLabel,
+                KEY_EXPRESSION_EMOJI to pose.emoji
             ),
             timestampMs = timestampMs
         )
@@ -135,6 +153,26 @@ object PetBridgeProtocol {
             payload = mapOf(
                 KEY_LIVE2D_MODE to mode,
                 KEY_LIVE2D_REASON to reason
+            ),
+            timestampMs = timestampMs
+        )
+    }
+
+    /** Native → Web：单独推送表情/口型（也可随 SESSION_STATE 一并带上）。 */
+    fun setExpressionMessage(
+        pose: PetExpressionController.Pose,
+        phase: VoiceSessionPhase,
+        timestampMs: Long = System.currentTimeMillis()
+    ): PetBridgeMessage {
+        return PetBridgeMessage(
+            command = PetBridgeCommand.SET_EXPRESSION,
+            payload = mapOf(
+                KEY_PHASE to phase.name,
+                KEY_EXPRESSION to pose.expression.name,
+                KEY_MOUTH_OPEN to PetExpressionController.mouthOpenWire(pose.mouthOpen),
+                KEY_MOUTH_ANIM to pose.mouthAnimating.toString(),
+                KEY_EXPRESSION_LABEL to pose.shortLabel,
+                KEY_EXPRESSION_EMOJI to pose.emoji
             ),
             timestampMs = timestampMs
         )

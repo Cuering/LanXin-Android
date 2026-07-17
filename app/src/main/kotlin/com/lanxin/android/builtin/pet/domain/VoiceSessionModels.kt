@@ -133,6 +133,9 @@ enum class PetBridgeCommand {
     /** Web → Native：Live2D 显示模式回传。 */
     LIVE2D_STATUS,
 
+    /** Native → Web：表情 / 口型姿态（M2b 打磨，随会话相位）。 */
+    SET_EXPRESSION,
+
     /** WebView 请求开始语音会话。 */
     START_VOICE,
 

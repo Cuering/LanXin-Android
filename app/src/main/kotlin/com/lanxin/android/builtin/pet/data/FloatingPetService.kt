@@ -37,6 +37,7 @@ import com.lanxin.android.builtin.pet.domain.Live2dDisplayController
 import com.lanxin.android.builtin.pet.domain.MeijuDebugPaths
 import com.lanxin.android.builtin.pet.domain.PetBridgeCommand
 import com.lanxin.android.builtin.pet.domain.PetBridgeMessage
+import com.lanxin.android.builtin.pet.domain.PetExpressionController
 import com.lanxin.android.builtin.pet.domain.PetSettings
 import com.lanxin.android.builtin.pet.domain.VoiceSessionCoordinator
 import com.lanxin.android.presentation.ui.main.MainActivity
@@ -44,8 +45,10 @@ import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 /**
@@ -68,6 +71,7 @@ class FloatingPetService : Service() {
     private var webView: WebView? = null
     private var desktopBridge: DesktopPetBridge? = null
     private var voiceBridge: AndroidVoiceBridge? = null
+    private var sessionCollectJob: Job? = null
 
     /** 最近一次 Live2D 显示决策（供设置页/调试观察）。 */
     @Volatile
@@ -88,6 +92,12 @@ class FloatingPetService : Service() {
             return
         }
         attachOverlay()
+        // 会话相位变化 → 推表情/口型（生命周期内 collect，onDestroy cancel）
+        sessionCollectJob = scope.launch {
+            sessionCoordinator.snapshot.collectLatest {
+                pushSessionToWeb()
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -110,7 +120,13 @@ class FloatingPetService : Service() {
     }
 
     override fun onDestroy() {
+        sessionCollectJob?.cancel()
+        sessionCollectJob = null
         detachOverlay()
+        // 独立短生命周期复位，避免主线程 runBlocking / 已 cancel 的 scope
+        CoroutineScope(Dispatchers.Default).launch {
+            runCatching { sessionCoordinator.reset() }
+        }
         scope.cancel()
         super.onDestroy()
     }
@@ -179,16 +195,26 @@ class FloatingPetService : Service() {
     }
 
     private fun detachOverlay() {
+        // 先通知 Web 停动画，再拆视图，降低泄漏与后台 rAF 开销
+        runCatching {
+            webView?.evaluateJavascript(
+                "window.__lanxinPetTeardown && window.__lanxinPetTeardown();",
+                null
+            )
+        }
         try {
             webView?.let { windowManager?.removeView(it) }
         } catch (_: Exception) {
             // ignore
         }
+        webView?.stopLoading()
         webView?.destroy()
         webView = null
         windowManager = null
         desktopBridge = null
         voiceBridge = null
+        lastLive2dDecision = null
+        lastLive2dWebMode = ""
         scope.launch { petSettings.setOverlayRunning(false) }
     }
 
@@ -255,8 +281,13 @@ class FloatingPetService : Service() {
 
     private fun pushSessionToWeb() {
         val snap = sessionCoordinator.current()
-        val encoded = desktopBridge?.encodeSession(snap) ?: return
+        val mode = lastLive2dDecision?.mode
+            ?: Live2dDisplayController.Live2dDisplayMode.PLACEHOLDER
+        val encoded = desktopBridge?.encodeSession(snap, displayMode = mode) ?: return
         pushRawToWeb(encoded)
+        // 显式 SET_EXPRESSION，便于 Web 侧只订阅读表情通道
+        val pose = PetExpressionController.poseFor(snap.phase, mode)
+        desktopBridge?.encodeExpression(pose, snap.phase)?.let { pushRawToWeb(it) }
         val bubble = snap.subtitle.ifBlank { snap.replyText }
         if (bubble.isNotBlank()) {
             desktopBridge?.encodeBubble(bubble)?.let { pushRawToWeb(it) }

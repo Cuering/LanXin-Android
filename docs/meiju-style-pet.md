@@ -1,7 +1,7 @@
 # 妹居风格桌宠 + 语音会话（Phase 6 主线）
 
-> 分支：`feat/m2b-live2d-display`（M2b）  
-> 状态：**M1 ✅**（#48）· **M2a ✅**（#49）· **M2b ✅ Live2D 真显示壳**  
+> 分支：`feat/m2b-pet-expression-polish`（M2b 打磨）  
+> 状态：**M1 ✅**（#48）· **M2a ✅**（#49）· **M2b ✅**（#57）· **M2b 打磨 ✅ 表情/口型 + 降级引导**  
 > 参考包（**仅本机分析，禁止入库**）：`/AstrBot/data/workspaces/妹居2.2.2版本.apk`
 
 ## 1. 产品主线
@@ -33,7 +33,8 @@ IDLE → LISTENING → THINKING → SPEAKING → IDLE
 |------|------|------|
 | **M1** | 悬浮层 + WebView 占位 + Bridge + VoiceSession + stub TTS | ✅ main `#48` |
 | **M2a** | 真资源路径闭环 + 设置「已就绪/缺失」+ fetch 脚本文案 + 本地脑 1.5B 键说明 | ✅ main `#49` |
-| **M2b** | Live2D 真显示（WebView 渲染壳 + model3/纹理，失败降级） | ✅ 本分支 |
+| **M2b** | Live2D 真显示（WebView 渲染壳 + model3/纹理，失败降级） | ✅ main `#57` |
+| **M2b 打磨** | 会话相位→表情/口型 + 缺资源引导 + 悬浮生命周期 | ✅ 本分支 |
 | **M2c** | sherpa ASR/TTS 可 load 文件则 READY（无 so 仍 stub） | 后续 |
 | **M3** | 真 TTS + 口型 | 后续 |
 | **M4** | 自有/授权 Live2D | 后续 |
@@ -108,7 +109,7 @@ builtin/voice/        ASR + TtsEngine / StubTtsEngine
 ./gradlew :app:testDebugUnitTest \
   --tests "com.lanxin.android.builtin.pet.*" \
   --tests "com.lanxin.android.builtin.voice.StubTtsEngineTest"
-# 含 Live2dDisplayControllerTest
+# 含 Live2dDisplayControllerTest / PetExpressionControllerTest
 ```
 
 ## 9. M2b 交付
@@ -132,3 +133,22 @@ builtin/voice/        ASR + TtsEngine / StubTtsEngine
 - 重做 VoiceSession
 - CI 下载大模型
 - auto-merge / force-push main
+
+## 10. M2b 打磨交付
+
+### 10.1 表情 / 口型闭环
+
+- `PetExpressionController`：`VoiceSessionPhase` → `Expression` + `mouthOpen` / `mouthAnimating`
+- Bridge：`SET_EXPRESSION`；`SESSION_STATE` 同步携带 expression 字段
+- `desktop-pet.html`：占位嘴型 CSS 动画 + Live2D 壳 canvas 嘴型；SPEAKING 时开合
+- 设置页展示当前「表情：…」与缺资源引导（仍可占位演示听→想→说）
+
+### 10.2 生命周期
+
+- `FloatingPetService` collect 会话快照推表情；`onDestroy` 复位会话、`__lanxinPetTeardown` 停 rAF、destroy WebView
+
+### 10.3 非目标
+
+- Cubism Core 真表情参数 / 音素级口型（M3）
+- 下大模型、妹居资源入库
+- 重做 VoiceSession / Chat
