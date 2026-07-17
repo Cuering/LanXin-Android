@@ -38,6 +38,8 @@ app/         壳应用（Compose UI 入口）
 
 - Min SDK 31 / Target SDK 37
 - Kotlin + Jetpack Compose + Hilt + Room + Ktor
+- Wrapper 默认使用 [官方 Gradle 分发](https://services.gradle.org/distributions/)，便于 GitHub Actions 稳定拉取；`setup-java` / `setup-gradle` 会缓存 wrapper dists
+- 国内本机若官方源较慢，可在 `~/.gradle/init.gradle` 自行配置镜像（例如腾讯云），勿改仓库内 `gradle-wrapper.properties`
 
 ## 模块文档
 
