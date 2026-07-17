@@ -33,6 +33,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.core.app.NotificationCompat
 import com.lanxin.android.R
+import com.lanxin.android.builtin.pet.domain.BuiltInLive2dAssets
 import com.lanxin.android.builtin.pet.domain.Live2dDisplayController
 import com.lanxin.android.builtin.pet.domain.MeijuDebugPaths
 import com.lanxin.android.builtin.pet.domain.PetBridgeCommand
@@ -249,17 +250,26 @@ class FloatingPetService : Service() {
     }
 
     private fun pushLive2dPathToWeb() {
-        // M2b：路径决策 + LOAD_LIVE2D；换模型不改 VoiceSession 状态机。资源不在 git。
-        // 与设置页一致：PetResourceResolver 解析配置 / debug-assets 旁路。
+        // M2b：内置 Sample ensure → 路径决策 + LOAD_LIVE2D；换模型不改 VoiceSession。
         scope.launch {
             val pet = petSettings.getConfig()
             val filesDir = applicationContext.filesDir
             val isDebug = (applicationContext.applicationInfo.flags and
                 android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
-            val path = if (isDebug) {
-                MeijuDebugPaths.resolveLive2dIfPresent(filesDir, pet.live2dModelPath)
-            } else {
-                pet.live2dModelPath.trim()
+            val installed = BuiltInLive2dAssets.ensureInstalled(applicationContext)
+            val path = MeijuDebugPaths.resolveLive2dIfPresent(
+                filesDir = filesDir,
+                configured = pet.live2dModelPath,
+                preferBuiltinLogical = true,
+                allowMeijuRef = isDebug
+            ).let { resolved ->
+                when {
+                    resolved.isNotBlank() &&
+                        !resolved.startsWith("asset://") &&
+                        java.io.File(resolved).isFile -> resolved
+                    !installed.isNullOrBlank() -> installed
+                    else -> resolved
+                }
             }
             val decision = Live2dDisplayController.decide(path)
             lastLive2dDecision = decision

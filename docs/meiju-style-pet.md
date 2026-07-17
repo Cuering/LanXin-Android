@@ -101,7 +101,8 @@ builtin/voice/        ASR + TtsEngine / StubTtsEngine
 
 - **禁止**妹居 so / moc3 / mnn / wav / 商业人设 **提交 git**
 - **禁止**在 AstrBot 服务器 curl 模型当交付
-- Debug 走开源：Live2D Mao + sherpa ASR/TTS → `docs/debug-assets.md`
+- Live2D 官方 Sample Mao **仓内** `assets/pet/live2d/Mao/` → `docs/live2d-mao-sample.md`
+- ASR/TTS 走开源脚本 → `docs/debug-assets.md`（大包不进仓）
 
 ## 8. 单测
 
@@ -123,7 +124,7 @@ builtin/voice/        ASR + TtsEngine / StubTtsEngine
 
 ### 9.2 设置与 M2a 一致
 
-- 仍用 `live2d_model_path` + `PetPathReadiness` + fetch 脚本引导
+- `live2d_model_path` 可空 → 内置 Mao；`PetPathReadiness` 标「已就绪（内置示例）」；ASR/TTS 仍靠脚本
 - 换路径不改 VoiceSession 状态机
 
 ### 9.3 非目标（M2b）

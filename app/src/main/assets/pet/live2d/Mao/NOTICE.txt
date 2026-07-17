@@ -1,0 +1,17 @@
+Niziiro Mao — Live2D Official Sample
+====================================
+
+Source: Live2D CubismWebSamples
+  https://github.com/Live2D/CubismWebSamples/tree/develop/Samples/Resources/Mao
+
+Product page:
+  https://www.live2d.com/en/learn/sample/niziiro-mao
+
+License — Live2D Sample Data Terms (Free Material License):
+  https://www.live2d.com/en/learn/sample/model-terms
+
+This tree is the official sample only. Do not replace with commercial /
+Meiju / third-party models. Commercial Live2D content must not be committed.
+
+Vendored for LanXin Android desktop pet out-of-box debug & polish.
+Re-sync: bash scripts/vendor-live2d-mao.sh

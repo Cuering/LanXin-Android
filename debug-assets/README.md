@@ -2,9 +2,10 @@
 
 本目录存放 **Debug 用** Live2D / ASR / TTS 模型。
 
-- **禁止** commit 真实 `.onnx` / `.moc3` / so / 妹居商业资源
+- **禁止** commit 真实 `.onnx` / 妹居商业资源 / ASR·TTS 大包
 - **禁止**把本目录当 AstrBot 服务器缓存交付
-- 在**开发者机器**拉取：
+- Live2D 官方 Sample **已进** `app/src/main/assets/pet/live2d/Mao/`；本目录仅作脚本旁路 / 覆盖
+- 在**开发者机器**拉取 ASR/TTS（可选 Live2D 覆盖）：
 
 ```bash
 bash scripts/fetch-debug-assets.sh

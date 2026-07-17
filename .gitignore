@@ -50,8 +50,11 @@ libs/sherpa-onnx/**
 # Desktop pet commercial / large assets (never commit Meiju dumps)
 **/models/tts/**
 **/models/live2d/**
+# Live2D weights: ban by default; whitelist official Sample Mao only
 *.moc3
 *.model3.json
+!app/src/main/assets/pet/live2d/
+!app/src/main/assets/pet/live2d/**
 # optional local APK analysis only
 *妹居*.apk
 meiju_apk_extract/**

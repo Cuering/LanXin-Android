@@ -7,26 +7,35 @@
 
 | 原则 | 说明 |
 |------|------|
-| 默认走开源 | Live2D 官方 Sample + sherpa-onnx ASR/TTS |
-| 大文件不进 git | 脚本拉到 `debug-assets/`（已 gitignore） |
-| **下载位置** | **仅开发者机器**，或按需的 GitHub Actions；**禁止** AstrBot 服务器缓存模型当交付 |
-| CI 无模型仍绿 | stub / 占位 HTML；可选检查脚本与文档存在 |
+| 默认走开源 | **Live2D 仓内官方 Sample Mao** + sherpa-onnx ASR/TTS（脚本） |
+| Live2D 进仓 | `app/src/main/assets/pet/live2d/Mao/`（~4MB，白名单）见 [`live2d-mao-sample.md`](./live2d-mao-sample.md) |
+| ASR/TTS 大文件不进 git | 脚本拉到 `debug-assets/`（已 gitignore） |
+| **下载位置** | **仅开发者机器** / 后续 App 内；**禁止** AstrBot 服务器缓存模型当交付 |
+| CI 无 ASR/TTS 仍绿 | stub / 占位 HTML；Live2D 单测不依赖真机 assets 拷贝 |
 | 妹居仅 fallback | **禁止**上传妹居 so / moc3 / mnn / wav / 商业人设到 GitHub |
-| 分发合规 | App 发布时用户自备合规 Live2D；Debug 可脚本拉官方 sample |
+| 分发合规 | Live2D Sample Terms；ASR/TTS Apache-2.0 |
 
-一键（推荐 M2 入口）：
+### Live2D（优先仓内）
+
+开箱使用仓内 Mao，**无需**再跑下载脚本。自定义覆盖可选：
+
+```bash
+bash scripts/download-debug-live2d.sh   # 可选：覆盖到 debug-assets
+bash scripts/vendor-live2d-mao.sh       # 从上游重同步仓内 assets
+```
+
+### ASR / TTS（脚本）
 
 ```bash
 bash scripts/fetch-debug-assets.sh
 # 等价：
 bash scripts/download-debug-assets.sh
 # 分项：
-bash scripts/download-debug-live2d.sh
 bash scripts/download-debug-asr.sh
 bash scripts/download-debug-tts.sh
 ```
 
-设置页缺失时文案指向上述脚本（**App 内不执行下载**）。
+设置页 ASR/TTS 缺失时文案指向上述脚本（本 PR **不**含 App 内下载）。
 
 ---
 
@@ -39,9 +48,9 @@ bash scripts/download-debug-tts.sh
 | **1** | **Niziiro Mao** | [CubismWebSamples Mao](https://github.com/Live2D/CubismWebSamples/tree/develop/Samples/Resources/Mao) | [Sample Terms](https://www.live2d.com/en/learn/sample/model-terms) |
 | 2 | Haru | 同上仓库 | 同上 |
 
-| Key | Debug 默认相对路径 |
-|-----|-------------------|
-| `live2d_model_path` | `debug-assets/live2d/Mao/Mao.model3.json` |
+| Key | 默认 |
+|-----|------|
+| `live2d_model_path` | **可空** → 仓内 Sample（`BuiltInLive2dAssets`）；可选覆盖 `debug-assets/live2d/Mao/...` |
 
 ### B. ASR（sherpa-onnx）
 
@@ -95,9 +104,11 @@ LanXin-Android/
 │   ├── asr/<sherpa-...>/
 │   └── tts/<matcha-or-melo>/
 ├── app/src/main/assets/pet/
-│   └── desktop-pet.html          # 占位（无 moc3）
+│   ├── desktop-pet.html
+│   └── live2d/Mao/               # 官方 Sample（可 commit）
 ├── scripts/
-│   ├── fetch-debug-assets.sh     # M2 推荐入口
+│   ├── vendor-live2d-mao.sh      # 重同步仓内 Mao
+│   ├── fetch-debug-assets.sh     # ASR/TTS / 可选 Live2D 覆盖
 │   ├── download-debug-assets.sh
 │   ├── download-debug-live2d.sh
 │   ├── download-debug-asr.sh
@@ -119,7 +130,8 @@ adb push debug-assets/ /sdcard/Android/data/<pkg>/files/debug-assets/
 | 状态 | 条件 | UI |
 |------|------|-----|
 | **已就绪** | 路径存在（文件或非空目录）；或 `stub://` | 绿色/✓ 短标签 |
-| **未就绪** | 空路径 | 引导 `fetch-debug-assets.sh` |
+| **已就绪（内置示例）** | Live2D 仓内 Sample 逻辑路径或已安装 | 绿色/✓ |
+| **未就绪** | ASR/TTS 空路径等 | 引导 `fetch-debug-assets.sh` |
 | **路径无效** | 配置了但文件不存在 | 提示检查路径 |
 
 引擎 so 未接入时仍可标「路径已就绪（待引擎）」——不阻塞路径闭环。
@@ -131,9 +143,10 @@ adb push debug-assets/ /sdcard/Android/data/<pkg>/files/debug-assets/
 | 做法 | 推荐 |
 |------|------|
 | 主仓 commit 数百 MB 模型 | ❌ |
-| 脚本 + gitignore | ✅ |
-| GitHub Release 附件镜像 | ✅ 可选 |
+| 官方 Sample Mao 进 assets（白名单） | ✅ |
+| 脚本 + gitignore（ASR/TTS） | ✅ |
 | 妹居资源进仓 | ❌ |
+| ASR/TTS/本地脑权重进仓 | ❌ |
 | AstrBot 服务器下载当交付 | ❌ |
 
 ---

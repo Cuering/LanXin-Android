@@ -21,8 +21,8 @@ import java.io.File
 /**
  * 桌宠 / 语音资源路径安装与就绪校验（纯逻辑，可单测）。
  *
- * - **已就绪**：路径指向存在的文件/非空目录（引擎 so 另议，M2a 只闭环路径）
- * - **缺失**：空路径或无效 → 引导 `scripts/fetch-debug-assets.sh`
+ * - **已就绪**：路径指向存在的文件/非空目录；或 Live2D 仓内 Sample 逻辑路径
+ * - **缺失**：空路径或无效 → 引导脚本 / 自备资源（Live2D 通常已内置）
  */
 object PetPathReadiness {
 
@@ -66,6 +66,17 @@ object PetPathReadiness {
                 detail = "stub 路径：$trimmed"
             )
         }
+        if (kind == Kind.LIVE2D && BuiltInLive2dAssets.pathLooksBuiltin(trimmed) &&
+            !File(trimmed).isFile
+        ) {
+            return Check(
+                kind = kind,
+                path = trimmed,
+                ready = true,
+                label = "已就绪（内置示例）",
+                detail = BuiltInLive2dAssets.LICENSE_HINT
+            )
+        }
         val f = File(trimmed)
         val ready = when (kind) {
             Kind.LIVE2D -> f.isFile
@@ -73,13 +84,18 @@ object PetPathReadiness {
                 (f.isDirectory && (f.listFiles()?.isNotEmpty() == true)) || f.isFile
         }
         return if (ready) {
+            val builtinFile = kind == Kind.LIVE2D && BuiltInLive2dAssets.pathLooksBuiltin(trimmed)
             Check(
                 kind = kind,
                 path = trimmed,
                 ready = true,
-                label = "已就绪",
+                label = if (builtinFile) "已就绪（内置示例）" else "已就绪",
                 detail = when (kind) {
-                    Kind.LIVE2D -> "Live2D model3 文件存在（M2b 渲染壳可加载）"
+                    Kind.LIVE2D -> if (builtinFile) {
+                        BuiltInLive2dAssets.LICENSE_HINT
+                    } else {
+                        "Live2D model3 文件存在（M2b 渲染壳可加载）"
+                    }
                     Kind.ASR -> "ASR 模型路径存在（待 sherpa 引擎 / so）"
                     Kind.TTS -> "TTS 模型路径存在（待引擎 / so）"
                     Kind.LOCAL_LLM -> "本地模型路径存在（待 MNN 引擎）"
@@ -97,7 +113,10 @@ object PetPathReadiness {
     }
 
     fun missingHint(kind: Kind): String = when (kind) {
-        Kind.LIVE2D, Kind.ASR, Kind.TTS -> DebugOpenSourcePaths.FETCH_SCRIPT_HINT
+        Kind.LIVE2D ->
+            "Live2D：默认使用仓内官方 Sample Mao；若仍未就绪请检查 APK assets " +
+                "pet/live2d/Mao/。可选 bash scripts/fetch-debug-assets.sh 覆盖自定义模型。"
+        Kind.ASR, Kind.TTS -> DebugOpenSourcePaths.FETCH_SCRIPT_HINT
         Kind.LOCAL_LLM -> DebugOpenSourcePaths.LOCAL_LLM_DEFAULT_HINT
     }
 
