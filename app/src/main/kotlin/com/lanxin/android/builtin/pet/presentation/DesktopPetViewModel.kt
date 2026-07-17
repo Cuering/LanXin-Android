@@ -399,10 +399,10 @@ class DesktopPetViewModel @Inject constructor(
         }
         viewModelScope.launch {
             _uiState.update { it.copy(pathImportBusy = true) }
-            val result = try {
+            val result: Result<*> = try {
                 block()
             } catch (e: Exception) {
-                Result.failure(e)
+                Result.failure<Any>(e)
             }
             _uiState.update {
                 it.copy(
