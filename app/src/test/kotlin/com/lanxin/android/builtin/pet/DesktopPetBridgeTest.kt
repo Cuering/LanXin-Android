@@ -51,6 +51,23 @@ class DesktopPetBridgeTest {
     }
 
     @Test
+    fun `encodeLoadLive2d writes outbound`() {
+        val bridge = DesktopPetBridge {}
+        val decision = com.lanxin.android.builtin.pet.domain.Live2dDisplayController.Decision(
+            mode = com.lanxin.android.builtin.pet.domain.Live2dDisplayController.Live2dDisplayMode.LIVE2D_SHELL,
+            model3Path = "/tmp/Mao.model3.json",
+            model3FileUrl = "file:///tmp/Mao.model3.json",
+            modelDirFileUrl = "file:///tmp",
+            reason = "live2d_shell_ready",
+            shortLabel = "Live2D 壳"
+        )
+        val out = bridge.encodeLoadLive2d(decision)
+        assertTrue(out.contains("command=LOAD_LIVE2D"))
+        assertTrue(out.contains("live2dMode=LIVE2D_SHELL"))
+        assertEquals(out, bridge.lastOutbound)
+    }
+
+    @Test
     fun `AndroidVoiceBridge snapshot json and commands`() {
         var snap = VoiceSessionSnapshot(
             phase = VoiceSessionPhase.LISTENING,

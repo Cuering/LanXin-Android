@@ -33,6 +33,8 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.core.app.NotificationCompat
 import com.lanxin.android.R
+import com.lanxin.android.builtin.pet.domain.Live2dDisplayController
+import com.lanxin.android.builtin.pet.domain.MeijuDebugPaths
 import com.lanxin.android.builtin.pet.domain.PetBridgeCommand
 import com.lanxin.android.builtin.pet.domain.PetBridgeMessage
 import com.lanxin.android.builtin.pet.domain.PetSettings
@@ -66,6 +68,15 @@ class FloatingPetService : Service() {
     private var webView: WebView? = null
     private var desktopBridge: DesktopPetBridge? = null
     private var voiceBridge: AndroidVoiceBridge? = null
+
+    /** 最近一次 Live2D 显示决策（供设置页/调试观察）。 */
+    @Volatile
+    var lastLive2dDecision: Live2dDisplayController.Decision? = null
+        private set
+
+    @Volatile
+    var lastLive2dWebMode: String = ""
+        private set
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -202,6 +213,9 @@ class FloatingPetService : Service() {
             PetBridgeCommand.PING -> {
                 // no-op
             }
+            PetBridgeCommand.LIVE2D_STATUS -> {
+                lastLive2dWebMode = msg.payload["live2dMode"].orEmpty()
+            }
             else -> {
                 // SESSION_STATE 等由 native 主动推
             }
@@ -209,31 +223,33 @@ class FloatingPetService : Service() {
     }
 
     private fun pushLive2dPathToWeb() {
-        // 只推配置路径；换模型不改状态机。资源不在 git。
+        // M2b：路径决策 + LOAD_LIVE2D；换模型不改 VoiceSession 状态机。资源不在 git。
+        // 与设置页一致：PetResourceResolver 解析配置 / debug-assets 旁路。
         scope.launch {
             val pet = petSettings.getConfig()
-            val path = run {
-                val filesDir = applicationContext.filesDir
-                val configured = pet.live2dModelPath
-                if (configured.isNotBlank()) {
-                    configured
-                } else if (
-                    (applicationContext.applicationInfo.flags and
-                        android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
-                ) {
-                    com.lanxin.android.builtin.pet.domain.MeijuDebugPaths
-                        .resolveLive2dIfPresent(filesDir, "")
-                } else {
-                    ""
-                }
+            val filesDir = applicationContext.filesDir
+            val isDebug = (applicationContext.applicationInfo.flags and
+                android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+            val path = if (isDebug) {
+                MeijuDebugPaths.resolveLive2dIfPresent(filesDir, pet.live2dModelPath)
+            } else {
+                pet.live2dModelPath.trim()
             }
-            val escaped = path
+            val decision = Live2dDisplayController.decide(path)
+            lastLive2dDecision = decision
+
+            // 兼容旧钩子
+            val escapedPath = path
                 .replace("\\", "\\\\")
                 .replace("'", "\\'")
             webView?.evaluateJavascript(
-                "window.onLive2dModelPath && window.onLive2dModelPath('$escaped');",
+                "window.onLive2dModelPath && window.onLive2dModelPath('$escapedPath');",
                 null
             )
+
+            // M2b 结构化推送
+            val encoded = desktopBridge?.encodeLoadLive2d(decision) ?: return@launch
+            pushRawToWeb(encoded)
         }
     }
 

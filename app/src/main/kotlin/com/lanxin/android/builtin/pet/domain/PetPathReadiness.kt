@@ -79,7 +79,7 @@ object PetPathReadiness {
                 ready = true,
                 label = "已就绪",
                 detail = when (kind) {
-                    Kind.LIVE2D -> "Live2D model3 文件存在（待渲染引擎）"
+                    Kind.LIVE2D -> "Live2D model3 文件存在（M2b 渲染壳可加载）"
                     Kind.ASR -> "ASR 模型路径存在（待 sherpa 引擎 / so）"
                     Kind.TTS -> "TTS 模型路径存在（待引擎 / so）"
                     Kind.LOCAL_LLM -> "本地模型路径存在（待 MNN 引擎）"

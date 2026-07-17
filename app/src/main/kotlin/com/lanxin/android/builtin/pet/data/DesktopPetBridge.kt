@@ -95,6 +95,13 @@ class DesktopPetBridge(
         return lastOutbound
     }
 
+    /** Native → Web：编码 Live2D 加载决策。 */
+    fun encodeLoadLive2d(decision: com.lanxin.android.builtin.pet.domain.Live2dDisplayController.Decision): String {
+        val msg = PetBridgeProtocol.loadLive2dMessage(decision)
+        lastOutbound = PetBridgeProtocol.encode(msg)
+        return lastOutbound
+    }
+
     companion object {
         const val JS_NAME = "DesktopPetBridge"
     }

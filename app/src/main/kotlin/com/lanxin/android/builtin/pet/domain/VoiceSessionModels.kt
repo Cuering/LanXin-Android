@@ -127,6 +127,12 @@ enum class PetBridgeCommand {
     /** 设置角色状态（听/想/说/闲）。 */
     SET_PET_STATE,
 
+    /** Native → Web：加载 Live2D model3（M2b）。 */
+    LOAD_LIVE2D,
+
+    /** Web → Native：Live2D 显示模式回传。 */
+    LIVE2D_STATUS,
+
     /** WebView 请求开始语音会话。 */
     START_VOICE,
 

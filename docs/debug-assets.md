@@ -140,7 +140,8 @@ adb push debug-assets/ /sdcard/Android/data/<pkg>/files/debug-assets/
 
 ## 5. CI
 
-- 无模型：pet / ASR / TTS **stub 单测**绿
+- 无模型：pet / ASR / TTS **stub 单测**绿（含 `Live2dDisplayControllerTest`）
+- M2b **不**在 CI 下载 Live2D 大资源；用临时 model3 fixture 单测
 - 检查：`docs/debug-assets.md`、`scripts/fetch-debug-assets.sh`、`download-debug-*.sh`、`debug-assets/README.md`
 - **不**在 CI 下载数百 MB 模型
 
@@ -152,7 +153,7 @@ adb push debug-assets/ /sdcard/Android/data/<pkg>/files/debug-assets/
 |------|----------|
 | **M1** | HTML 占位 + Stub；路径约定 |
 | **M2a** | 路径校验 + 设置就绪 + fetch 文案 |
-| **M2b** | Live2D 真显示 |
+| **M2b** | Live2D 真显示（WebView 壳 + 降级）|
 | **M2c** | 能 load 模型文件则引擎 READY |
 | **M3/M4** | 真 TTS / 合规 Live2D |
 
