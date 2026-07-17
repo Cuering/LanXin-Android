@@ -34,6 +34,7 @@ object PathImportHelper {
         TTS_DIR("tts"),
         TTS_REF("tts-ref"),
         LOCAL_LLM("local-llm"),
+
         /** 知识库文件夹导入暂存（可选；当前以 Document 树直接读为主）。 */
         KNOWLEDGE("knowledge")
     }
