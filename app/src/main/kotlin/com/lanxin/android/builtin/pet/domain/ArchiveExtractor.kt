@@ -46,10 +46,12 @@ object ArchiveExtractor {
     }
 
     private fun extractZip(archive: File, destDir: File) {
+        val root = destDir.canonicalFile
         ZipInputStream(BufferedInputStream(FileInputStream(archive))).use { zis ->
             while (true) {
                 val entry = zis.nextEntry ?: break
-                val outFile = safeResolve(destDir, entry.name)
+                // codeql[java/zipslip] — validate before use
+                val outFile = safeResolve(root, entry.name)
                 if (entry.isDirectory) {
                     outFile.mkdirs()
                 } else {
@@ -72,11 +74,13 @@ object ArchiveExtractor {
     }
 
     private fun extractTar(input: java.io.InputStream, destDir: File) {
+        val root = destDir.canonicalFile
         TarArchiveInputStream(input).use { tis ->
             while (true) {
                 val entry = tis.nextEntry ?: break
                 if (!tis.canReadEntryData(entry)) continue
-                val outFile = safeResolve(destDir, entry.name)
+                // codeql[java/zipslip] — validate before use
+                val outFile = safeResolve(root, entry.name)
                 if (entry.isDirectory) {
                     outFile.mkdirs()
                 } else {
@@ -88,13 +92,19 @@ object ArchiveExtractor {
     }
 
     /**
-     * 解析归档条目相对路径；拒绝跳出 [destDir]（zip-slip）。
+     * 解析归档条目相对路径到目标目录；拒绝跳出 [root]（zip-slip 防护）。
+     *
+     * @param root 已 canonical（由调用方计算一次即可）
+     * @param entryName 归档内相对路径
+     * @throws IllegalStateException 若路径尝试跳出 root
      */
-    fun safeResolve(destDir: File, entryName: String): File {
-        val dest = File(destDir, entryName).canonicalFile
-        val root = destDir.canonicalFile
-        if (!dest.path.startsWith(root.path + File.separator) && dest != root) {
-            throw IllegalStateException("非法归档路径（zip-slip）: $entryName")
+    fun safeResolve(root: File, entryName: String): File {
+        // 用 canonical 解析所有 .. 和符号链接
+        val dest = File(root, entryName).canonicalFile
+        val rootPath = root.canonicalPath
+        val destPath = dest.canonicalPath
+        require(destPath.startsWith(rootPath + File.separator) || destPath == rootPath) {
+            "非法归档路径（zip-slip）: $entryName -> $destPath"
         }
         return dest
     }
