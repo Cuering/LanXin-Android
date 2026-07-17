@@ -23,25 +23,38 @@ package com.lanxin.android.builtin.pet.domain
  * **禁止**把 ASR/TTS 权重 commit 进 git；**禁止**在 AstrBot 服务器当下载盘。
  */
 enum class DebugAssetKind {
-    /** 可选：覆盖/备用官方 Sample（仓内 Mao 已内置）。 */
+    /** 可选：覆盖/备用官方 Sample（仓内 Mao 已内置，默认无需下载）。 */
     LIVE2D,
 
     /** sherpa-onnx 中文 ASR 小模型。 */
     ASR,
 
     /** sherpa-onnx 中文 TTS（matcha-baker 优先）。 */
-    TTS
+    TTS,
+
+    /**
+     * 本地脑轻量档：Qwen2.5-1.5B-Instruct MNN 4bit 量化。
+     * 源：ModelScope `MNN/Qwen2.5-1.5B-Instruct-MNN` → HF `taobao-mnn/...`。
+     * 仅运行时文件（llm.mnn / weight / tokenizer 等），不下 transformers 原权重。
+     */
+    LOCAL_LLM
 }
 
 /**
- * 下载源：官方优先可选手动镜像；失败时 downloader 会按回退顺序尝试。
+ * 下载源偏好。
+ *
+ * 默认 [MIRROR_CDN]：Live2D → jsDelivr；ASR/TTS → HF / hf-mirror 目录文件。
+ * 官方 GitHub raw/releases 仅作回退。旧 CDN 已弃用。
  */
 enum class DebugAssetMirror {
-    /** 官方 GitHub releases / raw。 */
-    OFFICIAL,
+    /**
+     * 可达 CDN：jsDelivr（Live2D）+ HuggingFace / hf-mirror（ASR/TTS）。
+     * 失败自动回退 [OFFICIAL]。
+     */
+    MIRROR_CDN,
 
-    /** 国内常见 ghproxy 前缀镜像（失败回退 OFFICIAL）。 */
-    MIRROR_GHPROXY
+    /** 官方 GitHub releases / raw（多数网络下仅作回退）。 */
+    OFFICIAL
 }
 
 /** UI / 许可短文案。 */
@@ -50,11 +63,17 @@ object DebugAssetLicense {
         "https://www.live2d.com/en/learn/sample/model-terms"
 
     const val LIVE2D_HINT =
-        "Live2D 官方 Sample 受 Sample Data Terms 约束，仅学习/SDK 集成测试。" +
+        "Live2D 默认内置官方 Sample Mao（无需下载）。在线更新受 Sample Data Terms 约束。" +
             "许可：$LIVE2D_SAMPLE_TERMS_URL"
 
     const val ASR_TTS_HINT =
-        "ASR/TTS 使用 sherpa-onnx 开源模型（Apache-2.0）。大文件仅存本机 LanXin/，不进 git。"
+        "ASR/TTS 使用 sherpa-onnx 开源模型（Apache-2.0）。大文件仅存本机 LanXin/，不进 git。" +
+            "优先 HF/hf-mirror，GitHub 回退。"
+
+    const val LOCAL_LLM_HINT =
+        "本地脑：Qwen2.5-1.5B-Instruct MNN 4bit（~880MB）。" +
+            "优先 ModelScope（国内），回退 hf-mirror / HuggingFace taobao-mnn。" +
+            "仅下运行时文件，不进 git。落盘 LanXin/models/local-llm/light/。"
 }
 
 /**
@@ -70,6 +89,14 @@ data class DebugAssetSpec(
     val licenseHint: String
 )
 
+/** 单次下载候选（绝对 URL + 源标签）。 */
+data class DebugAssetUrlCandidate(
+    val url: String,
+    val mirror: DebugAssetMirror,
+    /** 短标签，如 jsdelivr / hf-mirror / github-release */
+    val label: String
+)
+
 /** 进度事件。 */
 sealed class DebugAssetDownloadEvent {
     data object Started : DebugAssetDownloadEvent()
@@ -79,18 +106,21 @@ sealed class DebugAssetDownloadEvent {
         val totalBytes: Long,
         val percent: Int,
         val mirror: DebugAssetMirror,
-        val phase: String = "downloading"
+        val phase: String = "downloading",
+        val sourceLabel: String = mirror.name
     ) : DebugAssetDownloadEvent()
 
     data class Completed(
         val kind: DebugAssetKind,
         val readyPath: String,
-        val mirror: DebugAssetMirror
+        val mirror: DebugAssetMirror,
+        val sourceLabel: String = mirror.name
     ) : DebugAssetDownloadEvent()
 
     data class Failed(
         val kind: DebugAssetKind,
-        val message: String
+        val message: String,
+        val attemptedSources: List<String> = emptyList()
     ) : DebugAssetDownloadEvent()
 
     data object Cancelled : DebugAssetDownloadEvent()

@@ -141,6 +141,18 @@
     }
     button:active { transform: scale(.96); }
     button.danger { background: rgba(180, 30, 50, .85); }
+    /* 全屏陪伴页放大（悬浮小窗仍走窄尺寸） */
+    @media (min-width: 280px) and (min-height: 420px) {
+      #root { justify-content: center; padding-bottom: 12px; }
+      #stage { width: min(72vw, 320px); height: min(78vw, 360px); }
+      #avatar { width: 86%; height: 88%; }
+      #live2d-shell { width: 100%; height: 100%; }
+      #bubble { font-size: 15px; max-width: 86%; }
+      #controls { display: none; }
+    }
+    @media (max-width: 200px), (max-height: 280px) {
+      #controls { display: flex; }
+    }
   </style>
 </head>
 <body>

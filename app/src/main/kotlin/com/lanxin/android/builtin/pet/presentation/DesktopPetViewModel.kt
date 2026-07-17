@@ -109,11 +109,13 @@ data class DesktopPetUiState(
     val fetchScriptHint: String = DebugOpenSourcePaths.FETCH_SCRIPT_HINT,
     val isDebugBuild: Boolean = false,
     /** App 内下载：镜像偏好。 */
-    val preferredMirror: DebugAssetMirror = DebugAssetMirror.MIRROR_GHPROXY,
+    val preferredMirror: DebugAssetMirror = DebugAssetMirror.MIRROR_CDN,
     /** Live2D / ASR / TTS 分项下载 UI。 */
     val downloadItems: List<DebugAssetItemUi> = emptyList(),
     val downloadBusy: Boolean = false,
     val live2dLicenseHint: String = DebugAssetLicense.LIVE2D_HINT,
+    /** 内置优先说明（设置页下载区）。 */
+    val live2dBuiltinHint: String = DebugAssetCatalog.LIVE2D_BUILTIN_PRIMARY_HINT,
     /** 实际落盘根（LanXin）绝对路径，下载成功后展示给用户。 */
     val downloadRootPath: String = "",
     val downloadRootFallback: Boolean = false
@@ -484,6 +486,57 @@ class DesktopPetViewModel @Inject constructor(
         }
     }
 
+    /** 全屏陪伴页：确保总开关打开（不强制悬浮权限）。 */
+    fun ensureEnabledForCompanion() {
+        viewModelScope.launch {
+            if (!petSettings.getConfig().enabled) {
+                petSettings.setEnabled(true)
+                refresh()
+            }
+        }
+    }
+
+    /**
+     * 全屏陪伴：用户底部输入框文本 → 听→想→说。
+     * TTS 未就绪时仍展示字幕，不阻断 Live2D。
+     */
+    fun runTextRound(text: String) {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return
+        viewModelScope.launch {
+            if (!petSettings.getConfig().enabled) {
+                petSettings.setEnabled(true)
+            }
+            _uiState.update { it.copy(isBusy = true) }
+            if (!ttsEngine.isReady) {
+                runCatching {
+                    ttsSettings.setEnabled(true)
+                    ttsEngine.load(ttsSettings.getConfig())
+                }
+            }
+            val result = sessionCoordinator.runRound(
+                com.lanxin.android.builtin.pet.domain.VoiceSessionInput(
+                    asrText = trimmed,
+                    isStub = true,
+                    source = "companion"
+                )
+            )
+            _uiState.update {
+                it.copy(
+                    isBusy = false,
+                    snackbarMessage = result.error?.let { e ->
+                        if (e.startsWith("tts_failed")) {
+                            "TTS 暂不可用，已显示文字回复"
+                        } else {
+                            "失败：$e"
+                        }
+                    }
+                )
+            }
+            refresh()
+        }
+    }
+
     /** 脚本说明（可选路径）；主路径为 App 内下载。 */
     fun showFetchAssetsHint() {
         _uiState.update {
@@ -525,6 +578,7 @@ class DesktopPetViewModel @Inject constructor(
                         }
                     }
                     is DebugAssetDownloadEvent.Progress -> {
+                        val src = event.sourceLabel.ifBlank { event.mirror.name }
                         val label = when (event.phase) {
                             "extracting" -> "解压中…"
                             "live2d-files" -> "拉取文件 ${event.percent}%"
@@ -537,19 +591,20 @@ class DesktopPetViewModel @Inject constructor(
                             it.copy(
                                 downloading = true,
                                 percent = event.percent,
-                                statusText = "$label（${event.mirror.name}）"
+                                statusText = "$label（$src）"
                             )
                         }
                     }
                     is DebugAssetDownloadEvent.Completed -> {
                         onDownloadCompleted(kind, event.readyPath)
+                        val src = event.sourceLabel.ifBlank { event.mirror.name }
                         patchDownloadItem(kind) {
                             it.copy(
                                 downloading = false,
                                 ready = true,
                                 readyPath = event.readyPath,
                                 percent = 100,
-                                statusText = "已就绪",
+                                statusText = "已就绪 · $src",
                                 lastError = null
                             )
                         }
@@ -565,24 +620,40 @@ class DesktopPetViewModel @Inject constructor(
                                 downloadRootPath = storageRoot.displayPath,
                                 downloadRootFallback = storageRoot.usedFallback,
                                 snackbarMessage =
-                                    "${kind.name} 已保存到 $where$fallbackNote"
+                                    "${kind.name} 已保存到 $where（源：$src）$fallbackNote"
                             )
                         }
                         refresh()
                     }
                     is DebugAssetDownloadEvent.Failed -> {
+                        val tried = if (event.attemptedSources.isNotEmpty()) {
+                            " 已尝试：${event.attemptedSources.joinToString(" → ")}"
+                        } else {
+                            ""
+                        }
+                        val full = event.message + tried
+                        val status = if (kind == DebugAssetKind.LIVE2D) {
+                            "更新失败（内置仍可用）"
+                        } else {
+                            "失败"
+                        }
+                        val snack = if (kind == DebugAssetKind.LIVE2D) {
+                            "Live2D 在线更新失败（内置 Mao 仍可用）：$full"
+                        } else {
+                            "${kind.name} 失败：$full"
+                        }
                         patchDownloadItem(kind) {
                             it.copy(
                                 downloading = false,
                                 percent = -1,
-                                statusText = "失败",
-                                lastError = event.message
+                                statusText = status,
+                                lastError = full
                             )
                         }
                         _uiState.update {
                             it.copy(
                                 downloadBusy = false,
-                                snackbarMessage = "${kind.name} 失败：${event.message}"
+                                snackbarMessage = snack
                             )
                         }
                     }
@@ -630,6 +701,7 @@ class DesktopPetViewModel @Inject constructor(
             DebugAssetKind.LIVE2D -> petSettings.setLive2dModelPath(readyPath)
             DebugAssetKind.ASR -> asrSettings.setModelPath(readyPath)
             DebugAssetKind.TTS -> ttsSettings.setModelDir(readyPath)
+            DebugAssetKind.LOCAL_LLM -> localInferenceSettings.setModelPath(readyPath)
         }
     }
 

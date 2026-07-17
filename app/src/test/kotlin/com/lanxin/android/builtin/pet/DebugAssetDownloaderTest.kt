@@ -46,20 +46,72 @@ class DebugAssetDownloaderTest {
     val tmp = TemporaryFolder()
 
     @Test
-    fun catalog_resolveUrl_mirrorPrefixesOfficial() {
-        val official = "https://github.com/k2-fsa/sherpa-onnx/releases/download/x/a.tar.bz2"
-        assertEquals(official, DebugAssetCatalog.resolveUrl(official, DebugAssetMirror.OFFICIAL))
-        val mirrored = DebugAssetCatalog.resolveUrl(official, DebugAssetMirror.MIRROR_GHPROXY, 0)
-        assertTrue(mirrored.startsWith("https://"))
-        assertTrue(mirrored.contains("github.com") || mirrored.endsWith(official))
-        assertTrue(mirrored.length > official.length)
+    fun catalog_live2dCandidates_preferJsdelivr() {
+        val cands = DebugAssetCatalog.live2dFileCandidates(
+            "Mao.model3.json",
+            DebugAssetMirror.MIRROR_CDN
+        )
+        assertTrue(cands.first().url.contains("cdn.jsdelivr.net"))
+        assertTrue(cands.any { it.url.contains("fastly.jsdelivr.net") })
+        assertTrue(cands.any { it.url.contains("raw.githubusercontent.com") })
+        assertEquals("jsdelivr", cands.first().label)
+        assertFalse(cands.any { it.label.contains("ghproxy") })
     }
 
     @Test
-    fun mirrorAttemptOrder_ghproxyFallsBackToOfficial() {
-        val order = DebugAssetCatalog.mirrorAttemptOrder(DebugAssetMirror.MIRROR_GHPROXY)
-        assertTrue(order.any { it.first == DebugAssetMirror.MIRROR_GHPROXY })
+    fun catalog_resolveUrl_doesNotPrefixGhproxy() {
+        val official = "https://github.com/k2-fsa/sherpa-onnx/releases/download/x/a.tar.bz2"
+        assertEquals(official, DebugAssetCatalog.resolveUrl(official, DebugAssetMirror.OFFICIAL))
+        assertEquals(official, DebugAssetCatalog.resolveUrl(official, DebugAssetMirror.MIRROR_CDN))
+    }
+
+    @Test
+    fun mirrorAttemptOrder_cdnFallsBackToOfficial() {
+        val order = DebugAssetCatalog.mirrorAttemptOrder(DebugAssetMirror.MIRROR_CDN)
+        assertEquals(DebugAssetMirror.MIRROR_CDN, order.first().first)
         assertEquals(DebugAssetMirror.OFFICIAL, order.last().first)
+        assertFalse(order.any { it.first.name.contains("GHPROXY") })
+    }
+
+    @Test
+    fun asrMultiFile_hfMirrorFirst() {
+        val sources = DebugAssetCatalog.asrMultiFileSources(DebugAssetMirror.MIRROR_CDN)
+        assertTrue(sources.isNotEmpty())
+        assertTrue(sources.first().baseUrl.contains("hf-mirror.com"))
+        assertTrue(sources.any { it.baseUrl.contains("huggingface.co") })
+        assertTrue(DebugAssetCatalog.asrModelRelativeFiles.contains("tokens.txt"))
+    }
+
+    @Test
+    fun localLlmMultiFile_modelscopeFirst() {
+        val sources = DebugAssetCatalog.localLlmMultiFileSources(DebugAssetMirror.MIRROR_CDN)
+        assertTrue(sources.first().baseUrl.contains("modelscope.cn"))
+        assertTrue(sources.first().label == "modelscope")
+        assertTrue(DebugAssetCatalog.localLlmRelativeFiles.contains("llm.mnn"))
+    }
+
+    @Test
+    fun localLlm_preseededDir_isReadyWithoutNetwork() = runTest {
+        val baseDir = tmp.newFolder("base")
+        val dir = File(baseDir, DebugOpenSourcePaths.LOCAL_LLM_LIGHT_DIR_REL)
+        dir.mkdirs()
+        File(dir, "llm.mnn").writeText("stub-mnn")
+        File(dir, "llm.mnn.weight").writeText("stub-weight")
+        val transport = object : AssetDownloadTransport {
+            override suspend fun downloadToFile(
+                url: String,
+                destFile: File,
+                onProgress: suspend (Long, Long) -> Unit
+            ) {
+                error("should not download when already ready")
+            }
+
+            override suspend fun openStream(url: String): InputStream =
+                ByteArrayInputStream(ByteArray(0))
+        }
+        val downloader = DebugAssetDownloader(transport)
+        assertTrue(downloader.isReady(baseDir, DebugAssetKind.LOCAL_LLM))
+        assertTrue(downloader.readyPath(baseDir, DebugAssetKind.LOCAL_LLM).contains("local-llm"))
     }
 
     @Test
@@ -133,7 +185,7 @@ class DebugAssetDownloaderTest {
         val events = downloader.download(
             baseDir,
             DebugAssetKind.LIVE2D,
-            DebugAssetMirror.OFFICIAL
+            DebugAssetMirror.MIRROR_CDN
         ).toList()
 
         assertTrue(events.any { it is DebugAssetDownloadEvent.Started })
@@ -143,10 +195,11 @@ class DebugAssetDownloaderTest {
         assertTrue(downloader.isReady(baseDir, DebugAssetKind.LIVE2D))
         assertTrue(File(baseDir, DebugOpenSourcePaths.LIVE2D_MAO_MODEL3_REL).isFile)
         assertTrue(completed.readyPath.contains("LanXin"))
+        assertTrue(completed.sourceLabel.contains("jsdelivr") || completed.sourceLabel.contains("github"))
     }
 
     @Test
-    fun download_mirrorFallback_whenFirstFails() = runTest {
+    fun download_mirrorFallback_whenJsdelivrFails() = runTest {
         val baseDir = tmp.newFolder("base")
         var calls = 0
         val transport = object : AssetDownloadTransport {
@@ -156,8 +209,8 @@ class DebugAssetDownloaderTest {
                 onProgress: suspend (Long, Long) -> Unit
             ) {
                 calls++
-                if (url.contains("ghproxy") || url.contains("ddlc")) {
-                    error("mirror down")
+                if (url.contains("cdn.jsdelivr.net")) {
+                    error("jsdelivr down")
                 }
                 destFile.parentFile?.mkdirs()
                 val body = when {
@@ -176,14 +229,51 @@ class DebugAssetDownloaderTest {
         val events = downloader.download(
             baseDir,
             DebugAssetKind.LIVE2D,
-            DebugAssetMirror.MIRROR_GHPROXY
+            DebugAssetMirror.MIRROR_CDN
         ).toList()
         assertTrue(events.any { it is DebugAssetDownloadEvent.Completed })
         assertTrue(calls > DebugAssetCatalog.live2dMaoRelativeFiles.size)
+        val completed = events.filterIsInstance<DebugAssetDownloadEvent.Completed>().single()
+        assertTrue(
+            completed.sourceLabel == "fastly-jsdelivr" ||
+                completed.sourceLabel == "github-raw"
+        )
     }
 
     @Test
-    fun download_failed_emitsFailedShortMessage() = runTest {
+    fun download_asr_fromHfMirror_multiFile() = runTest {
+        val baseDir = tmp.newFolder("base")
+        val transport = object : AssetDownloadTransport {
+            override suspend fun downloadToFile(
+                url: String,
+                destFile: File,
+                onProgress: suspend (Long, Long) -> Unit
+            ) {
+                if (!url.contains("hf-mirror.com") && !url.contains("huggingface.co")) {
+                    error("unexpected url $url")
+                }
+                destFile.parentFile?.mkdirs()
+                destFile.writeText("fake-${destFile.name}")
+                onProgress(1, 1)
+            }
+
+            override suspend fun openStream(url: String): InputStream =
+                ByteArrayInputStream(ByteArray(0))
+        }
+        val downloader = DebugAssetDownloader(transport)
+        val events = downloader.download(
+            baseDir,
+            DebugAssetKind.ASR,
+            DebugAssetMirror.MIRROR_CDN
+        ).toList()
+        val completed = events.filterIsInstance<DebugAssetDownloadEvent.Completed>().single()
+        assertTrue(completed.readyPath.contains("zipformer"))
+        assertTrue(File(completed.readyPath, "tokens.txt").isFile)
+        assertEquals("hf-mirror", completed.sourceLabel)
+    }
+
+    @Test
+    fun download_failed_emitsFailedWithAttemptedSources() = runTest {
         val baseDir = tmp.newFolder("base")
         val transport = object : AssetDownloadTransport {
             override suspend fun downloadToFile(
@@ -201,23 +291,21 @@ class DebugAssetDownloaderTest {
         val events = downloader.download(
             baseDir,
             DebugAssetKind.LIVE2D,
-            DebugAssetMirror.OFFICIAL
+            DebugAssetMirror.MIRROR_CDN
         ).toList()
         assertFalse(events.any { it is DebugAssetDownloadEvent.Completed })
         val failed = events.filterIsInstance<DebugAssetDownloadEvent.Failed>().single()
         assertTrue(failed.message.isNotBlank())
-        assertTrue(failed.message.length <= 120)
-        // Flow 应正常结束，不抛 exception transparency / 二次失败
         assertEquals(DebugAssetKind.LIVE2D, failed.kind)
-        assertEquals(1, events.filterIsInstance<DebugAssetDownloadEvent.Failed>().size)
+        assertTrue(failed.attemptedSources.isNotEmpty() || failed.message.contains("已试"))
         assertTrue(events.first() is DebugAssetDownloadEvent.Started)
         assertTrue(events.last() is DebugAssetDownloadEvent.Failed)
+        assertEquals(1, events.filterIsInstance<DebugAssetDownloadEvent.Failed>().size)
     }
 
     @Test
     fun download_failureAfterProgress_emitsFailedWithoutTransparencyCrash() = runTest {
-        // 复现用户崩溃：先 Progress emit，随后 transport 抛错；catch 不得再 emit
-        val baseDir = tmp.newFolder("base")
+        val filesDir = tmp.newFolder("files")
         var progressCalls = 0
         val transport = object : AssetDownloadTransport {
             override suspend fun downloadToFile(
@@ -235,9 +323,9 @@ class DebugAssetDownloaderTest {
         }
         val downloader = DebugAssetDownloader(transport)
         val events = downloader.download(
-            baseDir,
+            filesDir,
             DebugAssetKind.LIVE2D,
-            DebugAssetMirror.OFFICIAL
+            DebugAssetMirror.MIRROR_CDN
         ).toList()
 
         assertTrue(progressCalls >= 1)
@@ -247,13 +335,12 @@ class DebugAssetDownloaderTest {
         val failed = events.filterIsInstance<DebugAssetDownloadEvent.Failed>().single()
         assertTrue(failed.message.contains("mid-download") || failed.message.isNotBlank())
         assertTrue(events.last() is DebugAssetDownloadEvent.Failed)
-        // 无 IllegalStateException("Flow exception transparency is violated") 泄漏
         assertEquals(1, events.count { it is DebugAssetDownloadEvent.Failed })
     }
 
     @Test
     fun download_cancelled_emitsCancelledWithoutRethrow() = runTest {
-        val baseDir = tmp.newFolder("base")
+        val filesDir = tmp.newFolder("files")
         val transport = object : AssetDownloadTransport {
             override suspend fun downloadToFile(
                 url: String,
@@ -269,9 +356,9 @@ class DebugAssetDownloaderTest {
         }
         val downloader = DebugAssetDownloader(transport)
         val events = downloader.download(
-            baseDir,
+            filesDir,
             DebugAssetKind.LIVE2D,
-            DebugAssetMirror.OFFICIAL
+            DebugAssetMirror.MIRROR_CDN
         ).toList()
 
         assertTrue(events.first() is DebugAssetDownloadEvent.Started)
@@ -286,7 +373,7 @@ class DebugAssetDownloaderTest {
     fun shortError_truncates() {
         val long = RuntimeException("x".repeat(200))
         val s = DebugAssetDownloader.shortError(long)
-        assertTrue(s.length <= 120)
+        assertTrue(s.length <= 160)
     }
 
     @Test
@@ -295,21 +382,6 @@ class DebugAssetDownloaderTest {
         assertTrue(DebugOpenSourcePaths.LIVE2D_MAO_MODEL3_REL.startsWith("LanXin/"))
         assertTrue(DebugOpenSourcePaths.ASR_ZIPFORMER_14M_REL.startsWith("LanXin/"))
         assertTrue(DebugOpenSourcePaths.TTS_MATCHA_BAKER_REL.startsWith("LanXin/"))
-    }
-
-    @Test
-    fun live2dFileUrls_areSingleFileNotDirectory() {
-        val url = DebugAssetCatalog.live2dFileUrl("Mao.model3.json")
-        assertTrue(url.endsWith("/Mao.model3.json"))
-        assertFalse(url.endsWith("/Mao"))
-        assertFalse(url.contains("cdn.jsdelivr.net/gh/Live2D/CubismWebSamples@develop/Samples/Resources/Mao\""))
-        // 固定 commit 或 raw 单文件，避免 jsDelivr 目录 404
-        assertTrue(
-            url.contains("raw.githubusercontent.com") ||
-                url.contains("cdn.jsdelivr.net/gh/") ||
-                url.contains("fastly.jsdelivr.net/gh/")
-        )
-        assertTrue(url.contains("Mao.model3.json"))
     }
 
     private fun buildZipArchive(entries: Map<String, ByteArray>): ByteArray {

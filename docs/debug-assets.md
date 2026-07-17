@@ -1,6 +1,6 @@
 # Debug 资源方案：免费可爱 Live2D + 开源中文语音
 
-> 状态：**M1** · **M2a 路径闭环** · **M2b 壳** · **M2b 打磨** · **App 内一键下载 + 国内镜像**  
+> 状态：**M1** · **M2a 路径闭环** · **M2b 壳** · **M2b 打磨** · **App 内一键下载 + 可达 CDN**  
 > 相关：[`meiju-style-pet.md`](./meiju-style-pet.md) · [`voice-asr.md`](./voice-asr.md) · [`local-inference.md`](./local-inference.md) · [`live2d-mao-sample.md`](./live2d-mao-sample.md)
 
 ## 0. 原则
@@ -10,7 +10,7 @@
 | 默认走开源 | **Live2D 仓内官方 Sample Mao** + sherpa-onnx ASR/TTS |
 | Live2D 进仓 | `app/src/main/assets/pet/live2d/Mao/`（~4MB，白名单）见 [`live2d-mao-sample.md`](./live2d-mao-sample.md) |
 | **主路径：App 内下载** | 设置页「一键下载」→ 用户可访问的 `LanXin/`（公共存储优先；失败回退 `Android/data/.../files/LanXin/`） |
-| 国内镜像 | 官方 GitHub / ghproxy 类镜像；失败自动回退 |
+| 下载源 | **jsDelivr / HF / hf-mirror 优先**；官方 GitHub raw/releases 仅回退（旧 ghproxy 已弃用） |
 | ASR/TTS 大文件不进 git | 仅本机 `LanXin/`；**禁止** commit 权重 |
 | **禁止** | AstrBot 服务器缓存模型当交付；妹居商业资源入库 |
 | 脚本可选 | `fetch-debug-assets.sh` + adb push 为开发者备用 |
@@ -21,12 +21,23 @@
 
 桌宠设置页（`DesktopPetScreen`）：
 
-1. 选择镜像：**国内镜像**（默认）或 **官方**
-2. 分项按钮：下载 Live2D（可选覆盖）/ ASR / TTS
-3. 进度条、取消、失败短文案
-4. 成功写回：`live2d_model_path` / `offline_asr_model_path` / `tts_model_dir`
+1. 选择源：**CDN（推荐）** 或 **官方源**
+2. 分项按钮：Live2D（可选覆盖）/ ASR / TTS / 本地脑（MNN 1.5B）
+3. 进度条、取消、失败短文案（含真实尝试过的源）
+4. 成功写回：`live2d_model_path` / `offline_asr_model_path` / `tts_model_dir` / `local_inference_model_path`，并展示绝对路径 + 成功源
 5. Live2D 仓内 Mao 仍为默认兜底；下载可覆盖到 `LanXin/live2d/Mao/`
-6. 本地脑：**不**提供一键下载；仅「自备路径」文案（见 [`local-inference.md`](./local-inference.md)）
+6. 本地脑：一键下载到 `LanXin/models/local-llm/light/`（~880MB，请 Wi‑Fi）；也可自备路径导入
+
+### 下载源优先级
+
+| 资源 | 优先 | 备选 | 回退 |
+|------|------|------|------|
+| Live2D Mao | `cdn.jsdelivr.net/gh/Live2D/CubismWebSamples@develop/...` | `fastly.jsdelivr.net/...` | `raw.githubusercontent.com/...` |
+| ASR zipformer-14M | `https://hf-mirror.com/csukuangfj/sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23` 目录文件 | `https://huggingface.co/csukuangfj/...` 同仓 | GitHub release `*.tar.bz2`（最后回退） |
+| TTS matcha-baker | `https://hf-mirror.com/csukuangfj/matcha-icefall-zh-baker` 目录文件 | `https://huggingface.co/csukuangfj/matcha-icefall-zh-baker` | GitHub release `matcha-icefall-zh-baker.tar.bz2`（最后回退） |
+| 本地脑 Qwen2.5-1.5B MNN | ModelScope `MNN/Qwen2.5-1.5B-Instruct-MNN` | `hf-mirror.com/taobao-mnn/...` | HuggingFace `taobao-mnn/Qwen2.5-1.5B-Instruct-MNN` |
+
+> 说明：HF 模型仓多为目录而非单 tar；App / 脚本按必要文件列表用 `…/resolve/main/<file>` 直链下载到 `LanXin/asr|tts/<model-dir>/`。旧 ghproxy 与「仅 GitHub tar.bz2」主路径已弃用。Live2D 默认 APK 内置，在线源非硬依赖。
 
 ### 落盘路径（用户可访问）
 
@@ -34,7 +45,7 @@
 |:------:|------|------|
 | **1** | `{外部存储}/LanXin/` | 如 `/storage/emulated/0/LanXin/`；文件管理器易见 |
 | 2 | `Android/data/com.lanxin.android/files/LanXin/` | 公共目录不可写时回退（`getExternalFilesDir`） |
-| 子目录 | `live2d/Mao/` · `asr/…` · `tts/…` | 相对 `LanXin/` |
+| 子目录 | `live2d/Mao/` · `asr/…` · `tts/…` · `models/local-llm/light/` | 相对 `LanXin/` |
 | 兼容 | 历史 `filesDir/debug-assets/` | 仍可被路径解析识别 |
 
 成功下载后 UI 展示「已保存到 <绝对路径>」。
@@ -110,14 +121,15 @@ bash scripts/download-debug-tts.sh
 | `tts_model_dir` | `LanXin/tts/<解压目录名>` |
 | `tts_enabled` | **默认 false** |
 
-### D. 本地脑（路径预留，不强制下载）
+### D. 本地脑（App 内一键下载 + 路径导入）
 
 | Key | 说明 |
 |-----|------|
-| `local_inference_model_path` | 默认选型 **Qwen2.5-1.5B-Instruct**（MNN 量化，用户自备） |
-| 放置建议 | `{filesDir}/models/local-llm/light/` |
+| `local_inference_model_path` | 默认选型 **Qwen2.5-1.5B-Instruct**（MNN 量化） |
+| 一键下载落盘 | `LanXin/models/local-llm/light/`（含 `llm.mnn` / `llm.mnn.weight` / tokenizer 等） |
+| 源序 | ModelScope → hf-mirror → HuggingFace |
 
-本阶段**不在 App 内一键下载**本地脑权重。详见 [`local-inference.md`](./local-inference.md)。
+详见 [`local-inference.md`](./local-inference.md)。
 
 ### E. 妹居（仅文档 fallback）
 

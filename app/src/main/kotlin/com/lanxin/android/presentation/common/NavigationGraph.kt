@@ -36,6 +36,7 @@ import com.lanxin.android.presentation.ui.setting.LicenseScreen
 import com.lanxin.android.presentation.ui.setting.PlatformSettingScreen
 import com.lanxin.android.presentation.ui.setting.SettingScreen
 import com.lanxin.android.builtin.localinference.presentation.LocalInferenceScreen
+import com.lanxin.android.builtin.pet.presentation.CompanionScreen
 import com.lanxin.android.builtin.pet.presentation.DesktopPetScreen
 import com.lanxin.android.builtin.systemtools.presentation.SystemToolsScreen
 import com.lanxin.android.builtin.platform.presentation.DeviceSensingScreen
@@ -78,6 +79,7 @@ fun SetupNavGraph(navController: NavHostController) {
         localInferenceScreenNavigation(navController)
         offlineAsrScreenNavigation(navController)
         desktopPetScreenNavigation(navController)
+        companionScreenNavigation(navController)
         systemToolsScreenNavigation(navController)
         webSearchScreenNavigation(navController)
         deviceSensingScreenNavigation(navController)
@@ -121,7 +123,17 @@ fun NavGraphBuilder.offlineAsrScreenNavigation(navController: NavHostController)
 fun NavGraphBuilder.desktopPetScreenNavigation(navController: NavHostController) {
     composable(Route.DESKTOP_PET) {
         DesktopPetScreen(
-            onBackAction = { navController.navigateUp() }
+            onBackAction = { navController.navigateUp() },
+            onOpenCompanion = { navController.navigate(Route.COMPANION) }
+        )
+    }
+}
+
+fun NavGraphBuilder.companionScreenNavigation(navController: NavHostController) {
+    composable(Route.COMPANION) {
+        CompanionScreen(
+            onBackAction = { navController.navigateUp() },
+            onOpenSettings = { navController.navigate(Route.DESKTOP_PET) }
         )
     }
 }
@@ -395,6 +407,9 @@ fun NavGraphBuilder.homeScreenNavigation(navController: NavHostController) {
         HomeScreen(
             settingOnClick = { navController.navigate(Route.SETTING_ROUTE) { launchSingleTop = true } },
             memoryOnClick = { navController.navigate(Route.MEMORY_LIST) { launchSingleTop = true } },
+            companionOnClick = {
+                navController.navigate(Route.COMPANION) { launchSingleTop = true }
+            },
             onExistingChatClick = { chatRoom ->
                 val enabledPlatformString = chatRoom.enabledPlatform.joinToString(",")
                 navController.navigate(

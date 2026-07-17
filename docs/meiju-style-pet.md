@@ -58,7 +58,7 @@ IDLE → LISTENING → THINKING → SPEAKING → IDLE
 
 - 展示 Live2D / ASR / TTS 来源标签 + 就绪短标签
 - **App 内一键下载**（推荐）：Live2D Mao / ASR zipformer-14M / TTS matcha-baker
-  - 镜像：官方 + 国内 ghproxy 类（可配置，失败回退官方）
+  - 镜像：jsDelivr / HF / hf-mirror 优先，官方 GitHub 回退（旧 ghproxy 已弃用）
   - 进度、可取消、失败短文案；落盘 `LanXin/**` 后写配置键
   - Live2D 仓内 Mao 仍默认就绪；下载可作更新/覆盖
 - 本地脑：仅说明自备路径，**不**提供 App 内下载

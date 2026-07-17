@@ -228,7 +228,7 @@ fun SettingScreen(
 
             SettingItem(
                 title = "桌宠 / 语音陪伴",
-                description = "默认关；悬浮窗 + 听想说会话；stub 演示不塞 Chat 输入框",
+                description = "全屏陪伴 + 悬浮窗；内置 Live2D；ASR/TTS 可一键下载到 LanXin/",
                 onItemClick = onNavigateToDesktopPet,
                 showTrailingIcon = true,
                 showLeadingIcon = false

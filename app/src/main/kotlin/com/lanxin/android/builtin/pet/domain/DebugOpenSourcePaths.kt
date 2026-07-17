@@ -54,6 +54,15 @@ object DebugOpenSourcePaths {
     /** TTS 推荐目录名（脚本解压后）。 */
     const val TTS_MATCHA_BAKER_REL = "$ROOT_DIR/tts/matcha-icefall-zh-baker"
 
+    /**
+     * 本地脑轻量档目录（相对下载 baseDir）。
+     * App 一键下载落盘：`LanXin/models/local-llm/light/`。
+     */
+    const val LOCAL_LLM_LIGHT_DIR_REL = "$ROOT_DIR/models/local-llm/light"
+
+    /** 本地脑就绪判定关键文件。 */
+    const val LOCAL_LLM_READY_FILE = "llm.mnn"
+
     /** 设置页缺失时的一键说明（App 内下载优先；脚本可选）。 */
     const val FETCH_SCRIPT_HINT =
         "资源缺失：请在设置页使用「一键下载」拉取到本机 LanXin/ 目录；" +
@@ -63,8 +72,8 @@ object DebugOpenSourcePaths {
     /** 本地脑默认选型说明（路径键见 LocalInferencePreferences）。 */
     const val LOCAL_LLM_DEFAULT_HINT =
         "默认本地脑：Qwen2.5-1.5B-Instruct（MNN 量化）。" +
-            "配置键 local_inference_model_path；放置 {filesDir}/models/local-llm/light/。" +
-            "本阶段可不下载权重。详见 docs/local-inference.md。"
+            "配置键 local_inference_model_path；一键下载落盘 LanXin/models/local-llm/light/。" +
+            "优先 ModelScope，回退 hf-mirror / HuggingFace。详见 docs/local-inference.md。"
 
     fun live2dModelFile(baseDir: File): File {
         val primary = File(baseDir, LIVE2D_MAO_MODEL3_REL)
@@ -104,10 +113,60 @@ object DebugOpenSourcePaths {
         return matcha
     }
 
+    fun localLlmModelDir(baseDir: File): File {
+        val primary = File(baseDir, LOCAL_LLM_LIGHT_DIR_REL)
+        if (isLocalLlmDirReady(primary)) return primary
+        // 兼容历史 / 文档建议的 filesDir 布局
+        val legacyCandidates = listOf(
+            File(baseDir, "models/local-llm/light"),
+            File(baseDir, "$LEGACY_ROOT_DIR/models/local-llm/light")
+        )
+        for (c in legacyCandidates) {
+            if (isLocalLlmDirReady(c)) return c
+        }
+        return primary
+    }
+
+    /** 本地脑就绪：目录含 llm.mnn（权重可同目录 llm.mnn.weight）。 */
+    fun isLocalLlmDirReady(dir: File): Boolean {
+        if (!dir.isDirectory) return false
+        val mnn = File(dir, LOCAL_LLM_READY_FILE)
+        return mnn.isFile && mnn.length() > 0L
+    }
+
+    /**
+     * ready：目录非空，且含关键 onnx + tokens（或至少一个 .onnx / .onnx.int8）。
+     * 兼容 HF 逐文件布局与 GitHub 解压布局。
+     */
     fun isModelDirReady(dir: File): Boolean {
         if (!dir.isDirectory) return false
         val children = dir.listFiles() ?: return false
-        return children.isNotEmpty()
+        if (children.isEmpty()) return false
+        val names = children.map { it.name.lowercase() }.toSet()
+        val hasTokens = names.any { it == "tokens.txt" || it.endsWith("tokens.txt") }
+        val hasOnnx = children.any { f ->
+            f.isFile && (
+                f.name.endsWith(".onnx", ignoreCase = true) ||
+                    f.name.endsWith(".int8.onnx", ignoreCase = true)
+                )
+        }
+        // 严格：有 onnx；tokens 优先有，没有时仍允许（部分 TTS 布局）
+        if (hasOnnx && hasTokens) return true
+        if (hasOnnx) return true
+        // 极宽松：非空子目录（历史兼容）
+        return children.any { it.isFile && it.length() > 0L }
+    }
+
+    /** ASR 更严：至少 tokens + encoder/decoder/joiner 之一。 */
+    fun isAsrDirReady(dir: File): Boolean {
+        if (!dir.isDirectory) return false
+        val files = dir.listFiles()?.filter { it.isFile } ?: return false
+        if (files.isEmpty()) return false
+        val names = files.map { it.name.lowercase() }
+        val hasTokens = names.any { it == "tokens.txt" }
+        val hasEncoder = names.any { it.contains("encoder") && it.endsWith(".onnx") }
+        val hasAnyOnnx = names.any { it.endsWith(".onnx") }
+        return hasTokens && (hasEncoder || hasAnyOnnx)
     }
 
     fun pathLooksOpenSource(resolved: String): Boolean {

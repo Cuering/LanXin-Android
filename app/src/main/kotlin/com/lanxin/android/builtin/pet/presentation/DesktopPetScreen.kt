@@ -72,6 +72,7 @@ import com.lanxin.android.presentation.common.PathPickerField
 @Composable
 fun DesktopPetScreen(
     onBackAction: () -> Unit,
+    onOpenCompanion: () -> Unit = {},
     viewModel: DesktopPetViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -159,6 +160,11 @@ fun DesktopPetScreen(
                             contentDescription = "返回"
                         )
                     }
+                },
+                actions = {
+                    TextButton(onClick = onOpenCompanion) {
+                        Text("全屏陪伴")
+                    }
                 }
             )
         },
@@ -178,6 +184,13 @@ fun DesktopPetScreen(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+
+            Button(
+                onClick = onOpenCompanion,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("打开全屏陪伴（Live2D + 输入框）")
+            }
 
             if (state.isBusy || state.pathImportBusy || state.downloadBusy) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
@@ -264,6 +277,11 @@ fun DesktopPetScreen(
                     }
                     // —— App 内一键下载 ——
                     Text("一键下载（本机 LanXin 目录）", fontWeight = FontWeight.Medium)
+                    Text(
+                        state.live2dBuiltinHint,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                     if (state.downloadRootPath.isNotBlank()) {
                         Text(
                             buildString {
@@ -288,22 +306,25 @@ fun DesktopPetScreen(
                     ) {
                         Text("镜像", style = MaterialTheme.typography.bodySmall)
                         FilterChip(
-                            selected = state.preferredMirror == DebugAssetMirror.MIRROR_GHPROXY,
+                            selected = state.preferredMirror == DebugAssetMirror.MIRROR_CDN,
                             onClick = {
-                                viewModel.setPreferredMirror(DebugAssetMirror.MIRROR_GHPROXY)
+                                viewModel.setPreferredMirror(DebugAssetMirror.MIRROR_CDN)
                             },
-                            label = { Text("国内镜像") }
+                            label = { Text("CDN（推荐）") }
                         )
                         FilterChip(
                             selected = state.preferredMirror == DebugAssetMirror.OFFICIAL,
                             onClick = {
                                 viewModel.setPreferredMirror(DebugAssetMirror.OFFICIAL)
                             },
-                            label = { Text("官方") }
+                            label = { Text("官方源") }
                         )
                     }
                     Text(
-                        "国内镜像失败会自动回退官方 GitHub。ASR/TTS 较大，请连 Wi‑Fi。",
+                        "源序：Live2D=jsDelivr→fastly→GitHub raw（内置优先）；" +
+                            "ASR/TTS=hf-mirror→huggingface→GitHub release；" +
+                            "本地脑=ModelScope→hf-mirror→HF。" +
+                            "落盘 LanXin/…。大文件请连 Wi‑Fi。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.secondary
                     )
@@ -523,7 +544,8 @@ fun DesktopPetScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        "本地脑权重大，App 内不提供一键下载；请自备模型并用选择器导入。",
+                        "也可在上方「一键下载」拉取 Qwen2.5-1.5B MNN（~880MB，优先魔搭）；" +
+                            "或自备模型用选择器导入。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.secondary
                     )

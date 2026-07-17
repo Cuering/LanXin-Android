@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # 下载 Debug 用 sherpa-onnx 中文 ASR 小模型到 debug-assets/asr/
+# 优先 HuggingFace 镜像逐文件下载（用户实测可用），回退 GitHub tar.bz2。
+#
 # 用法:
 #   bash scripts/download-debug-asr.sh
 #   ASR_VARIANT=paraformer-small bash scripts/download-debug-asr.sh
@@ -10,11 +12,24 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_DIR="${OUT_DIR:-$ROOT/debug-assets/asr}"
 TMP_DIR="${TMP_DIR:-$ROOT/debug-assets/.tmp}"
 ASR_VARIANT="${ASR_VARIANT:-zipformer-zh-14M}"
+
+# 用户实测：hf-mirror 可打开 model card 与 Files
+HF_REPO="csukuangfj/sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23"
+HF_MIRROR_BASE="https://hf-mirror.com/${HF_REPO}/resolve/main"
+HF_OFFICIAL_BASE="https://huggingface.co/${HF_REPO}/resolve/main"
 RELEASE_BASE="https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models"
+
+# 运行必需（跳过训练脚本 / test_wavs）
+ASR_FILES=(
+  "encoder-epoch-99-avg-1.int8.onnx"
+  "decoder-epoch-99-avg-1.int8.onnx"
+  "joiner-epoch-99-avg-1.int8.onnx"
+  "tokens.txt"
+)
 
 mkdir -p "$OUT_DIR" "$TMP_DIR"
 
-pick_url() {
+github_archive_url() {
   case "$ASR_VARIANT" in
     zipformer-zh-14M|default|light)
       echo "${RELEASE_BASE}/sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23.tar.bz2"
@@ -33,41 +48,85 @@ pick_url() {
   esac
 }
 
-URL="$(pick_url)"
+download_file() {
+  local url="$1"
+  local dest="$2"
+  curl -fSL --retry 3 --retry-delay 2 -o "$dest" "$url"
+}
+
+download_hf_files() {
+  local base="$1"
+  local target="$2"
+  mkdir -p "$target"
+  local f
+  for f in "${ASR_FILES[@]}"; do
+    echo "  ← $base/$f"
+    download_file "$base/$f" "$target/$f"
+  done
+}
+
+is_ready() {
+  local d="$1"
+  [[ -d "$d" ]] || return 1
+  [[ -f "$d/tokens.txt" ]] || return 1
+  # 至少一个 onnx
+  find "$d" -maxdepth 1 -type f \( -name '*.onnx' \) | head -1 | grep -q .
+}
+
+URL="$(github_archive_url)"
 ARCHIVE_NAME="$(basename "$URL")"
-# strip .tar.bz2
 DIR_NAME="${ARCHIVE_NAME%.tar.bz2}"
 TARGET="$OUT_DIR/$DIR_NAME"
 
 echo "==> Debug ASR"
 echo "    variant : $ASR_VARIANT"
-echo "    url     : $URL"
 echo "    target  : $TARGET"
+echo "    strategy: hf-mirror → huggingface → github tar.bz2"
 
 if [[ "${SKIP_DOWNLOAD:-0}" == "1" ]]; then
   echo "SKIP_DOWNLOAD=1，跳过实际下载。"
 else
-  if [[ -d "$TARGET" ]] && find "$TARGET" -type f | head -1 | grep -q .; then
-    echo "已存在内容，跳过下载: $TARGET"
+  if is_ready "$TARGET"; then
+    echo "已存在关键文件，跳过下载: $TARGET"
   else
-    ARCHIVE="$TMP_DIR/$ARCHIVE_NAME"
-    echo "下载中…"
-    curl -fSL --retry 3 --retry-delay 2 -o "$ARCHIVE" "$URL"
-    echo "解压到 $OUT_DIR …"
-    tar -xjf "$ARCHIVE" -C "$OUT_DIR"
-    # 部分包解压后目录名与 archive 一致；若多一层则保持现状
-    if [[ ! -d "$TARGET" ]]; then
-      # 尝试定位刚解压的唯一目录
-      echo "提示: 解压目录名可能与包名不同，请 ls $OUT_DIR"
+    ok=0
+    if [[ "$ASR_VARIANT" == "zipformer-zh-14M" || "$ASR_VARIANT" == "default" || "$ASR_VARIANT" == "light" ]]; then
+      echo "尝试 hf-mirror 逐文件…"
+      if download_hf_files "$HF_MIRROR_BASE" "$TARGET"; then
+        if is_ready "$TARGET"; then
+          ok=1
+          echo "hf-mirror 完成"
+        fi
+      else
+        rm -rf "$TARGET"
+        echo "hf-mirror 失败，尝试 huggingface.co…"
+        if download_hf_files "$HF_OFFICIAL_BASE" "$TARGET"; then
+          if is_ready "$TARGET"; then
+            ok=1
+            echo "huggingface.co 完成"
+          fi
+        else
+          rm -rf "$TARGET"
+        fi
+      fi
     fi
-    rm -f "$ARCHIVE"
+
+    if [[ "$ok" != "1" ]]; then
+      echo "回退 GitHub 归档: $URL"
+      ARCHIVE="$TMP_DIR/$ARCHIVE_NAME"
+      download_file "$URL" "$ARCHIVE"
+      echo "解压到 $OUT_DIR …"
+      tar -xjf "$ARCHIVE" -C "$OUT_DIR"
+      rm -f "$ARCHIVE"
+      if [[ ! -d "$TARGET" ]]; then
+        echo "提示: 解压目录名可能与包名不同，请 ls $OUT_DIR"
+      fi
+    fi
   fi
 fi
 
-# 解析实际目录
 RESOLVED="$TARGET"
 if [[ ! -d "$RESOLVED" ]]; then
-  # 取 OUT_DIR 下最新目录
   RESOLVED="$(find "$OUT_DIR" -mindepth 1 -maxdepth 1 -type d ! -name '.*' | head -1 || true)"
 fi
 
@@ -78,6 +137,5 @@ echo "offline_asr_enabled    = true   # 产品默认仍为 false；仅 debug 自
 echo "offline_asr_language   = zh"
 echo "offline_asr_sample_rate_hz = 16000"
 echo
-echo "文档: docs/debug-assets.md"
-echo "索引: https://k2-fsa.github.io/sherpa/onnx/pretrained_models/index.html"
-echo "✅ ASR debug 资源步骤完成"
+echo "App 内落盘等价路径: LanXin/asr/sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23"
+echo
