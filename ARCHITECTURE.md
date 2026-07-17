@@ -876,7 +876,7 @@ Phase 4（基础夯实）   Phase 5（平台扩展）     Phase 6（端侧智能
 | 笔记（应用内 + 导出/分享） | **Phase 7.3** | 无统一系统笔记 API |
 | 非系统文件管理（SAF） | **Phase 7.4** | 用户授权目录，禁止系统分区 |
 | 对话/桌宠调用系统工具（**与桌宠一体**） | **Phase 7.5** | 同一 VoiceSession / ToolRegistry + 确认门闸 |
-| OpenAI 兼容模型列表 / 提供商配置对齐 | **提供商对齐 P0** | `OpenAiModelListClient` + 设置页拉取；见 `docs/provider-alignment.md` |
+| OpenAI 兼容模型列表 / 提供商配置对齐 | **提供商对齐 P0+P1** | 自动拉取 + 选模型 UX + 中性 token 测速（`ping-lx-1`）；见 `docs/provider-alignment.md` |
 | 联网搜索 web_search 配置门闸 | **WebSearch 配置** | DataStore + WebSearchGate + 设置页；默认关；见 `docs/websearch.md` |
 | 设备感知 system_info 配置门闸 | **Device Sensing** | DataStore + DeviceSensingGate + 设置页；默认关；见 `docs/device-sensing.md` |
 
