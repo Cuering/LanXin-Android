@@ -31,6 +31,7 @@ import com.lanxin.android.plugins.memory.data.memory.MemoryEntity
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -155,18 +156,39 @@ class KnowledgeViewModel @Inject constructor(
             _snackbarMessage.value = "未选择文件"
             return
         }
+        startImport(importService.importDocument(uri), singleFileLabel = true)
+    }
+
+    /** SAF 选择知识库文件夹（OpenDocumentTree），批量导入支持的文档。 */
+    fun importFromTree(uri: Uri?) {
+        if (uri == null) {
+            _snackbarMessage.value = "未选择文件夹"
+            return
+        }
+        startImport(importService.importFolder(uri), singleFileLabel = false)
+    }
+
+    private fun startImport(
+        flow: Flow<ImportProgress>,
+        singleFileLabel: Boolean
+    ) {
         if (_progress.value.isRunning) {
             _snackbarMessage.value = "正在导入中，请稍候"
             return
         }
         importJob?.cancel()
         importJob = viewModelScope.launch {
-            importService.importDocument(uri).collect { p ->
+            flow.collect { p ->
                 _progress.value = p
                 if (p.phase == ImportPhase.DONE) {
-                    _vectorCount.value = runCatching { vectorStore.count() }.getOrDefault(p.storeCount)
-                    _snackbarMessage.value =
+                    _vectorCount.value =
+                        runCatching { vectorStore.count() }.getOrDefault(p.storeCount)
+                    _snackbarMessage.value = if (singleFileLabel && !p.batchMode) {
                         "导入完成：${p.successCount} 段，耗时 ${formatMs(p.elapsedMs)}"
+                    } else {
+                        "文件夹导入完成：${p.batchSuccess} 个文件 · ${p.successCount} 段 · " +
+                            formatMs(p.elapsedMs)
+                    }
                 } else if (p.phase == ImportPhase.FAILED) {
                     _snackbarMessage.value = "导入失败：${p.message}"
                 }
