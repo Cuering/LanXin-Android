@@ -1,0 +1,106 @@
+# 设备感知配置 + 门闸 + system_info 边界
+name: Device Sensing Verify
+
+on:
+  push:
+    branches: [main, 'feat/device-sensing*']
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/platform/**'
+      - 'app/src/test/kotlin/com/lanxin/android/builtin/platform/**'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/setting/SettingScreen.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/common/Route.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/common/NavigationGraph.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/ChatViewModel.kt'
+      - 'docs/device-sensing.md'
+      - 'builtin/platform/**'
+      - 'ARCHITECTURE.md'
+      - '.github/workflows/device-sensing-verify.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/platform/**'
+      - 'app/src/test/kotlin/com/lanxin/android/builtin/platform/**'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/setting/SettingScreen.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/common/Route.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/common/NavigationGraph.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/ChatViewModel.kt'
+      - 'docs/device-sensing.md'
+      - 'builtin/platform/**'
+      - 'ARCHITECTURE.md'
+      - '.github/workflows/device-sensing-verify.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: device-sensing-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: Device Sensing unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: gradle
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup local.properties and debug keystore
+        run: |
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+          rm -f debug-keystore.jks
+          keytool -genkeypair -v -keystore debug-keystore.jks -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Create assets model dir (models gitignored)
+        run: |
+          mkdir -p app/src/main/assets/models/gte-small
+          touch app/src/main/assets/models/gte-small/.gitkeep
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run platform unit tests (incl. DeviceSensingGate)
+        run: |
+          ./gradlew :app:testDebugUnitTest \
+            --tests "com.lanxin.android.builtin.platform.*" \
+            --no-daemon --stacktrace
+
+      - name: Surfaces and docs present
+        run: |
+          test -f docs/device-sensing.md
+          test -f builtin/platform/README.md
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/platform/domain/DeviceSensingConfig.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/platform/domain/DeviceSensingSettings.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/platform/domain/DeviceSensingGate.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/platform/data/DeviceSensingPreferences.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/platform/tools/SystemInfoTool.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/platform/presentation/DeviceSensingScreen.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/platform/presentation/DeviceSensingViewModel.kt
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/platform/DeviceSensingGateTest.kt
+          grep -E -n "DeviceSensingGate|filterTools|denyIfDisabled" \
+            app/src/main/kotlin/com/lanxin/android/builtin/platform/domain/DeviceSensingGate.kt
+          grep -E -n "deviceSensingSettings|DeviceSensingGate" \
+            app/src/main/kotlin/com/lanxin/android/builtin/platform/PlatformPlugin.kt
+          grep -E -n "DeviceSensingGate.filterTools|deviceSensingSettings" \
+            app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/ChatViewModel.kt
+          grep -E -n "DEVICE_SENSING|DeviceSensingScreen|onNavigateToDeviceSensing" \
+            app/src/main/kotlin/com/lanxin/android/presentation/common/Route.kt \
+            app/src/main/kotlin/com/lanxin/android/presentation/common/NavigationGraph.kt \
+            app/src/main/kotlin/com/lanxin/android/presentation/ui/setting/SettingScreen.kt
+          grep -E -n "bindDeviceSensingSettings|DeviceSensingPreferences" \
+            app/src/main/kotlin/com/lanxin/android/builtin/platform/di/PlatformModule.kt
+          # ChatRouter / needsTools must remain intact
+          grep -E -n "need_tools_cloud|object ChatRouter" \
+            app/src/main/kotlin/com/lanxin/android/builtin/localinference/domain/ChatRouter.kt
+          grep -E -n "设备感知|DeviceSensing|system_info" \
+            docs/device-sensing.md ARCHITECTURE.md
