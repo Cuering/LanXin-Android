@@ -50,9 +50,9 @@ class SystemToolsPlugin @Inject constructor(
 
     override val id = "lanxin.systemtools"
     override val name = "系统能力"
-    override val version = "0.4.0"
+    override val version = "0.5.0"
     override val description =
-        "日历/闹钟/笔记/用户文件 SAF（Phase 7.4，默认关，写/删需确认）"
+        "日历/闹钟/笔记/用户文件 + DeviceToolBridge 对话/桌宠一体（Phase 7.5，默认关，写/删需确认）"
 
     private val gate = DeviceToolGate { settings.getConfig() }
 

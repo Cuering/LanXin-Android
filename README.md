@@ -12,7 +12,7 @@
 - 数据统计：对话轮数、token 估算、按日活跃度（`builtin/statistics`）
 - 定时任务：周期/一次性 BASIC 回调与 ACTIVE_AGENT 提醒（`builtin/scheduler`）
 - 手机平台工具：剪贴板 / 已安装应用 / 系统信息（`builtin/platform`）
-- 系统能力：日历 / 闹钟 / 笔记 Room+SAF / 用户文件 SAF+imports（`builtin/systemtools`，默认关，Phase 7.4）
+- 系统能力：日历 / 闹钟 / 笔记 / 用户文件 + DeviceToolBridge 对话/桌宠一体（`builtin/systemtools`，默认关，Phase 7.5）
 - 自动更新 / 版本回退 + 数据备份还原（`core/updater`）
 - 日志系统 + 日志查看插件（`core/log` + `plugins/logger`）
 - Skill 加载器（`app/skill`）

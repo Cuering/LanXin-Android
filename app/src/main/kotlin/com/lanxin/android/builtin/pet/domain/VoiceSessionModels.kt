@@ -57,6 +57,10 @@ data class VoiceSessionInput(
 
 /**
  * 一轮会话结果。
+ *
+ * @property toolName Phase 7.5：本轮若经 [com.lanxin.android.builtin.systemtools.domain.DeviceToolBridge]
+ *   命中工具则为工具 id，否则 null
+ * @property toolOutcome 对应 Gate 后结果（类型擦除为 Any? 避免 pet 模型硬依赖 sealed 细节时可扩展）
  */
 data class VoiceSessionResult(
     val asrText: String,
@@ -65,7 +69,9 @@ data class VoiceSessionResult(
     val phase: VoiceSessionPhase,
     val isStub: Boolean = false,
     val durationMs: Long = 0L,
-    val error: String? = null
+    val error: String? = null,
+    val toolName: String? = null,
+    val toolOutcome: com.lanxin.android.builtin.systemtools.domain.DeviceToolOutcome? = null
 )
 
 /**
