@@ -316,11 +316,38 @@
     <string name="previous_revision" translatable="false">Previous revision</string>
     <string name="next_revision" translatable="false">Next revision</string>
     <string name="fetch_remote_models">Fetch models from API</string>
-    <string name="fetch_remote_models_hint">Load model list via OpenAI-compatible /models</string>
+    <string name="fetch_remote_models_hint">Load model list via OpenAI-compatible /models (auto on open)</string>
     <string name="fetch_remote_models_loading">Loading models…</string>
     <string name="fetch_remote_models_error">Failed: %1$s</string>
-    <string name="fetch_remote_models_count">%1$d models available — tap to select</string>
+    <string name="fetch_remote_models_count">%1$d models available — tap to select, check to probe</string>
     <string name="current_model_selected">Currently selected</string>
     <string name="tap_to_select_model">Tap to use this model</string>
-    <string name="remote_models_truncated">…and %1$d more (type name manually if needed)</string>
+    <string name="remote_models_truncated">…and %1$d more</string>
+    <string name="remote_models_use_filter">Use the search box to narrow the list</string>
+    <string name="remote_models_filter_label">Filter models</string>
+    <string name="remote_models_filter_hint">Type part of a model id</string>
+    <string name="remote_models_filter_empty">No models match the filter</string>
+    <string name="probe_models_title">Probe selected models</string>
+    <string name="probe_models_hint">Short completion check (max %1$d models). Uses neutral token, not a greeting.</string>
+    <string name="probe_models_running">Probing…</string>
+    <string name="probe_models_done">Probe done: %1$d/%2$d ok</string>
+    <string name="probe_models_error">Probe: %1$s</string>
+    <string name="probe_result_ok">OK · %1$d ms total</string>
+    <string name="probe_result_fail">Fail · %1$d ms · %2$s</string>
+    <string name="probe_result_ok_short">%1$d ms</string>
+    <string name="probe_result_fail_short">fail %1$d ms</string>
+    <string name="probe_error_no_targets">Select a model or set current model first</string>
+    <string name="probe_error_empty_model">Model id is empty</string>
+    <string name="probe_error_empty_completion">Empty completion</string>
+    <string name="probe_error_unexpected">Unexpected completion</string>
+    <string name="model_list_error_empty_url">API URL is empty</string>
+    <string name="model_list_error_unsupported">This provider type does not support /models</string>
+    <string name="model_list_error_401">Unauthorized (check API key)</string>
+    <string name="model_list_error_403">Forbidden</string>
+    <string name="model_list_error_404">Not found (check API URL)</string>
+    <string name="model_list_error_429">Rate limited</string>
+    <string name="model_list_error_5xx">Server error</string>
+    <string name="model_list_error_no_models">No models returned</string>
+    <string name="model_list_error_empty_body">Empty response body</string>
+    <string name="model_list_error_network">Network error (URL / connectivity)</string>
 </resources>
