@@ -1,0 +1,118 @@
+# 机器人 / Claw 动态插件宿主：门闸 + PlatformHost + 设置入口
+name: Claw Host Verify
+
+on:
+  push:
+    branches: [main, 'feat/claw*']
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/plugin/claw/**'
+      - 'app/src/test/kotlin/com/lanxin/android/plugin/claw/**'
+      - 'app/src/main/kotlin/com/lanxin/android/plugin/di/PluginModule.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/LanXinApp.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/setting/SettingScreen.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/common/Route.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/common/NavigationGraph.kt'
+      - 'app/src/main/AndroidManifest.xml'
+      - 'docs/claw-host.md'
+      - 'docs/dynamic-plugins.md'
+      - 'ARCHITECTURE.md'
+      - '.github/workflows/claw-host-verify.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/plugin/claw/**'
+      - 'app/src/test/kotlin/com/lanxin/android/plugin/claw/**'
+      - 'app/src/main/kotlin/com/lanxin/android/plugin/di/PluginModule.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/LanXinApp.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/setting/SettingScreen.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/common/Route.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/common/NavigationGraph.kt'
+      - 'app/src/main/AndroidManifest.xml'
+      - 'docs/claw-host.md'
+      - 'docs/dynamic-plugins.md'
+      - 'ARCHITECTURE.md'
+      - '.github/workflows/claw-host-verify.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: claw-host-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: Claw host unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: gradle
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup local.properties and debug keystore
+        run: |
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+          rm -f debug-keystore.jks
+          keytool -genkeypair -v -keystore debug-keystore.jks -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Create assets model dir (models gitignored)
+        run: |
+          mkdir -p app/src/main/assets/models/gte-small
+          touch app/src/main/assets/models/gte-small/.gitkeep
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run claw host unit tests
+        run: |
+          ./gradlew :app:testDebugUnitTest \
+            --tests "com.lanxin.android.plugin.claw.*" \
+            --no-daemon --stacktrace
+
+      - name: Surfaces and docs present
+        run: |
+          test -f docs/claw-host.md
+          test -f docs/dynamic-plugins.md
+          test -f app/src/main/kotlin/com/lanxin/android/plugin/claw/domain/ClawHostConfig.kt
+          test -f app/src/main/kotlin/com/lanxin/android/plugin/claw/domain/ClawHostSettings.kt
+          test -f app/src/main/kotlin/com/lanxin/android/plugin/claw/domain/ClawHostGate.kt
+          test -f app/src/main/kotlin/com/lanxin/android/plugin/claw/domain/PlatformHost.kt
+          test -f app/src/main/kotlin/com/lanxin/android/plugin/claw/data/ClawHostPreferences.kt
+          test -f app/src/main/kotlin/com/lanxin/android/plugin/claw/data/DefaultPlatformHost.kt
+          test -f app/src/main/kotlin/com/lanxin/android/plugin/claw/data/ClawResidentController.kt
+          test -f app/src/main/kotlin/com/lanxin/android/plugin/claw/data/ClawResidentService.kt
+          test -f app/src/main/kotlin/com/lanxin/android/plugin/claw/presentation/ClawHostScreen.kt
+          test -f app/src/main/kotlin/com/lanxin/android/plugin/claw/presentation/ClawHostViewModel.kt
+          test -f app/src/test/kotlin/com/lanxin/android/plugin/claw/ClawHostGateTest.kt
+          test -f app/src/test/kotlin/com/lanxin/android/plugin/claw/DefaultPlatformHostTest.kt
+          grep -E -n "ClawHostGate|shouldRunResident|isHostCapabilityOpen" \
+            app/src/main/kotlin/com/lanxin/android/plugin/claw/domain/ClawHostGate.kt
+          grep -E -n "PlatformHost|ResidentCapablePlugin|NoOpPlatformHost" \
+            app/src/main/kotlin/com/lanxin/android/plugin/claw/domain/PlatformHost.kt
+          grep -E -n "bindClawHostSettings|bindPlatformHost" \
+            app/src/main/kotlin/com/lanxin/android/plugin/di/PluginModule.kt
+          grep -E -n "clawResidentController|syncFromSettings" \
+            app/src/main/kotlin/com/lanxin/android/presentation/LanXinApp.kt
+          grep -E -n "CLAW_HOST|ClawHostScreen|onNavigateToClawHost|clawHostScreenNavigation" \
+            app/src/main/kotlin/com/lanxin/android/presentation/common/Route.kt \
+            app/src/main/kotlin/com/lanxin/android/presentation/common/NavigationGraph.kt \
+            app/src/main/kotlin/com/lanxin/android/presentation/ui/setting/SettingScreen.kt
+          grep -E -n "ClawResidentService" app/src/main/AndroidManifest.xml
+          grep -E -n "claw_host|Claw|PlatformHost" docs/claw-host.md ARCHITECTURE.md
+          # 安全默认：配置默认 enabled=false
+          grep -E -n "enabled: Boolean = false" \
+            app/src/main/kotlin/com/lanxin/android/plugin/claw/domain/ClawHostConfig.kt
+          # 动态插件链路仍在
+          grep -E -n "discoverAndLoadDynamicPlugins" \
+            app/src/main/kotlin/com/lanxin/android/presentation/LanXinApp.kt \
+            app/src/main/kotlin/com/lanxin/android/plugin/PluginManager.kt

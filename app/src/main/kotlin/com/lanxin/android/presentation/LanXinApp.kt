@@ -8,6 +8,7 @@ import com.lanxin.android.builtin.scheduler.di.SchedulerPluginRegistration
 import com.lanxin.android.builtin.statistics.di.StatisticsPluginRegistration
 import com.lanxin.android.core.log.LogManager
 import com.lanxin.android.plugin.PluginManager
+import com.lanxin.android.plugin.claw.data.ClawResidentController
 import com.lanxin.android.plugins.chat.di.ChatPluginRegistration
 import com.lanxin.android.plugins.logger.di.LoggerPluginRegistration
 import com.lanxin.android.plugins.memory.di.MemoryPluginRegistration
@@ -57,6 +58,9 @@ class LanXinApp : Application(), Configuration.Provider {
     @Inject
     lateinit var unifiedInboxPluginRegistration: UnifiedInboxPluginRegistration
 
+    @Inject
+    lateinit var clawResidentController: ClawResidentController
+
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     override fun onCreate() {
@@ -67,6 +71,7 @@ class LanXinApp : Application(), Configuration.Provider {
 
         // 插件已通过 DI @Provides 注册到 PluginManager
         // 异步：加载编译期插件 + 扫描 filesDir/plugin-packages 动态插件
+        // 再按 Claw 配置同步常驻（默认关，不拉服务）
         appScope.launch {
             pluginManager.loadAll()
             val dynamic = pluginManager.discoverAndLoadDynamicPlugins()
@@ -77,6 +82,10 @@ class LanXinApp : Application(), Configuration.Provider {
             }
             dynamic.failures.forEach { f ->
                 log.warning("动态插件加载失败 id=${f.pluginId}: ${f.reason}")
+            }
+            val resident = clawResidentController.syncFromSettings()
+            if (resident) {
+                log.info("Claw 常驻宿主已按配置启动")
             }
         }
     }

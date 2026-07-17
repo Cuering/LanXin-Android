@@ -1,8 +1,8 @@
 # 动态插件加载设计（Phase 5.3–5.6）
 
-> 状态：5.3 加载 ✅；5.4 管理 UI ✅；5.5 插件市场 ✅；5.6 签名验证 ✅  
-> 范围：从 `filesDir` 发现 / 解析 / 加载 `.apk` 插件包 + 管理界面 + 远程市场索引安装 + 签名策略  
-> 非目标：证书链在线吊销、商店账号体系
+> 状态：5.3 加载 ✅；5.4 管理 UI ✅；5.5 插件市场 ✅；5.6 签名验证 ✅；**Claw 宿主常驻 MVP ✅**  
+> 范围：从 `filesDir` 发现 / 解析 / 加载 `.apk` 插件包 + 管理界面 + 远程市场索引安装 + 签名策略 + 可选机器人常驻宿主  
+> 非目标：证书链在线吊销、商店账号体系、具体 IM 协议
 
 ---
 
@@ -175,6 +175,9 @@ fun interface PluginSignatureVerifier {
 | 5.4 | 管理 UI：列表 / 启用 / 停用 / 卸载 | ✅ |
 | 5.5 | 市场：GitHub 索引下载到 `plugin-packages/` | ✅ |
 | 5.6 | 签名策略 + 证书白名单 + UI 状态 | ✅ |
+| Claw | 常驻宿主 + PlatformHost 扩展点（默认关） | ✅ MVP |
+
+机器人 / Claw 常驻宿主详见 **`docs/claw-host.md`**（设置总开关 + `ClawResidentService` + `PlatformHost`；不替代签名/市场管线）。
 
 ---
 
@@ -222,5 +225,5 @@ fun interface PluginSignatureVerifier {
 
 | 字段 | 值 |
 |------|-----|
-| design_version | 4 |
-| phase | 5.6 |
+| design_version | 5 |
+| phase | 5.6 + claw-host |

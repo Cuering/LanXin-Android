@@ -41,6 +41,7 @@ import com.lanxin.android.builtin.systemtools.presentation.SystemToolsScreen
 import com.lanxin.android.builtin.platform.presentation.DeviceSensingScreen
 import com.lanxin.android.builtin.platform.presentation.WebSearchScreen
 import com.lanxin.android.builtin.voice.presentation.VoiceAsrScreen
+import com.lanxin.android.plugin.claw.presentation.ClawHostScreen
 import com.lanxin.android.presentation.ui.setting.SettingViewModelV2
 import com.lanxin.android.presentation.ui.setup.SetupCompleteScreen
 import com.lanxin.android.presentation.ui.setup.SetupPlatformListScreen
@@ -80,6 +81,7 @@ fun SetupNavGraph(navController: NavHostController) {
         systemToolsScreenNavigation(navController)
         webSearchScreenNavigation(navController)
         deviceSensingScreenNavigation(navController)
+        clawHostScreenNavigation(navController)
     }
 }
 
@@ -145,6 +147,16 @@ fun NavGraphBuilder.deviceSensingScreenNavigation(navController: NavHostControll
     composable(Route.DEVICE_SENSING) {
         DeviceSensingScreen(
             onBackAction = { navController.navigateUp() }
+        )
+    }
+}
+
+fun NavGraphBuilder.clawHostScreenNavigation(navController: NavHostController) {
+    composable(Route.CLAW_HOST) {
+        ClawHostScreen(
+            onBackAction = { navController.navigateUp() },
+            onNavigateToPluginManager = { navController.navigate(Route.PLUGIN_MANAGER) },
+            onNavigateToPluginMarket = { navController.navigate(Route.PLUGIN_MARKET) }
         )
     }
 }
@@ -464,7 +476,8 @@ fun NavGraphBuilder.settingNavigation(navController: NavHostController) {
                 onNavigateToDesktopPet = { navController.navigate(Route.DESKTOP_PET) },
                 onNavigateToSystemTools = { navController.navigate(Route.SYSTEM_TOOLS) },
                 onNavigateToWebSearch = { navController.navigate(Route.WEB_SEARCH) },
-                onNavigateToDeviceSensing = { navController.navigate(Route.DEVICE_SENSING) }
+                onNavigateToDeviceSensing = { navController.navigate(Route.DEVICE_SENSING) },
+                onNavigateToClawHost = { navController.navigate(Route.CLAW_HOST) }
             )
         }
         composable(Route.ADD_PLATFORM) {
