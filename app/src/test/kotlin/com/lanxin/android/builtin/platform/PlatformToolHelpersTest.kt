@@ -16,6 +16,7 @@
 
 package com.lanxin.android.builtin.platform
 
+import com.lanxin.android.builtin.platform.domain.DeviceSensingConfig
 import com.lanxin.android.builtin.platform.domain.WebSearchConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -33,7 +34,7 @@ class PlatformToolHelpersTest {
             "clipboard_get",
             "clipboard_set",
             "app_install_check",
-            "system_info",
+            DeviceSensingConfig.TOOL_NAME,
             "file_read",
             "file_write",
             "file_list",
@@ -42,7 +43,7 @@ class PlatformToolHelpersTest {
         )
         assertEquals(9, expected.size)
         assertTrue(expected.contains("clipboard_get"))
-        assertTrue(expected.contains("system_info"))
+        assertTrue(expected.contains(DeviceSensingConfig.TOOL_NAME))
         assertTrue(expected.contains(WebSearchConfig.TOOL_NAME))
     }
 
@@ -59,5 +60,6 @@ class PlatformToolHelpersTest {
     fun `plugin metadata constants`() {
         assertEquals("lanxin.platform", "lanxin.platform")
         assertEquals(WebSearchConfig.TOOL_NAME, "web_search")
+        assertEquals(DeviceSensingConfig.TOOL_NAME, "system_info")
     }
 }
