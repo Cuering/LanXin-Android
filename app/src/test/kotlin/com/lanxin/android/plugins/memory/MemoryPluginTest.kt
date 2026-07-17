@@ -74,6 +74,61 @@ class MemoryPluginTest {
         assertTrue(result["payload"]?.jsonPrimitive?.contentOrNull.orEmpty().contains("# LanXin Memory Export"))
     }
 
+
+    @Test
+    fun `memory_export filters by status`() = runBlocking {
+        val plugin = memoryPlugin()
+        val tools = registerTools(plugin)
+
+        val result = tools.getValue("memory_export").handler(
+            buildJsonObject {
+                put("format", "json")
+                put("status_filter", "archived")
+            }
+        )
+
+        assertEquals("archived", result["status_filter"]?.jsonPrimitive?.contentOrNull)
+        val payload = result["payload"]?.jsonPrimitive?.contentOrNull.orEmpty()
+        assertTrue(payload.contains("已归档偏好"))
+        assertTrue(!payload.contains("喜欢草莓"))
+        assertTrue(!payload.contains("普通聊天"))
+        assertTrue(!payload.contains("过期日常"))
+    }
+
+    @Test
+    fun `memory_export filters by date range`() = runBlocking {
+        val plugin = memoryPlugin()
+        val tools = registerTools(plugin)
+
+        // epoch ms bounds: exclude expired (1.6e12), keep 1.7e12 cluster
+        val result = tools.getValue("memory_export").handler(
+            buildJsonObject {
+                put("format", "markdown")
+                put("created_after", "1650000000000")
+                put("created_before", "1800000000000")
+            }
+        )
+
+        val payload = result["payload"]?.jsonPrimitive?.contentOrNull.orEmpty()
+        assertTrue(payload.contains("喜欢草莓"))
+        assertTrue(payload.contains("普通聊天"))
+        assertTrue(payload.contains("已归档偏好"))
+        assertTrue(!payload.contains("过期日常"))
+        assertTrue(result["filter"]?.jsonPrimitive?.contentOrNull.orEmpty().contains("after="))
+    }
+
+    @Test
+    fun `memory_export rejects invalid created_after`() = runBlocking {
+        val plugin = memoryPlugin()
+        val tools = registerTools(plugin)
+        val result = tools.getValue("memory_export").handler(
+            buildJsonObject {
+                put("created_after", "not-a-day")
+            }
+        )
+        assertTrue(result["error"]?.jsonPrimitive?.contentOrNull.orEmpty().contains("created_after"))
+    }
+
     private fun memoryPlugin(): MemoryPlugin {
         val dao = FakeMemoryDao()
         val repository = MemoryRepository(dao)
@@ -119,6 +174,24 @@ private class FakeMemoryDao : MemoryDao {
             createdAt = 1_700_000_100_000L,
             status = "active",
             lifecycle = "normal"
+        ),
+        MemoryEntity(
+            id = 3,
+            content = "已归档偏好",
+            type = MemoryType.PREFERENCE,
+            importance = 5f,
+            createdAt = 1_700_000_200_000L,
+            status = "archived",
+            lifecycle = "permanent"
+        ),
+        MemoryEntity(
+            id = 4,
+            content = "过期日常",
+            type = MemoryType.DAILY,
+            importance = 2f,
+            createdAt = 1_600_000_000_000L,
+            status = "expired",
+            lifecycle = "ephemeral"
         )
     )
 

@@ -248,8 +248,13 @@ class MemoryRepository @Inject constructor(
     suspend fun exportToJsonSuspend(
         context: Context,
         typeFilter: String?
+    ): File = exportToJsonSuspend(context, MemoryExportFilter.typeOnly(typeFilter))
+
+    suspend fun exportToJsonSuspend(
+        context: Context,
+        filter: MemoryExportFilter
     ): File = withContext(Dispatchers.IO) {
-        val items = loadExportItems(typeFilter)
+        val items = loadExportItems(filter)
         val payload = MemoryExportPayload(
             version = 1,
             exportedAt = System.currentTimeMillis(),
@@ -265,13 +270,19 @@ class MemoryRepository @Inject constructor(
     suspend fun exportToMarkdownSuspend(
         context: Context,
         typeFilter: String?
+    ): File = exportToMarkdownSuspend(context, MemoryExportFilter.typeOnly(typeFilter))
+
+    suspend fun exportToMarkdownSuspend(
+        context: Context,
+        filter: MemoryExportFilter
     ): File = withContext(Dispatchers.IO) {
         val exportedAt = System.currentTimeMillis()
-        val items = loadExportItems(typeFilter = null)
+        // MarkdownExporter 自己再应用 filter（header 需要完整 describe）
+        val items = loadExportItems(MemoryExportFilter())
         val markdown = MemoryMarkdownExporter.build(
             memories = items,
             exportedAt = exportedAt,
-            typeFilter = typeFilter
+            filter = filter
         )
         writeCacheFile(context, "md", markdown)
     }
@@ -280,9 +291,15 @@ class MemoryRepository @Inject constructor(
         context: Context,
         format: MemoryExportFormat,
         typeFilter: String? = null
+    ): File = exportSuspend(context, format, MemoryExportFilter.typeOnly(typeFilter))
+
+    suspend fun exportSuspend(
+        context: Context,
+        format: MemoryExportFormat,
+        filter: MemoryExportFilter
     ): File = when (format) {
-        MemoryExportFormat.JSON -> exportToJsonSuspend(context, typeFilter)
-        MemoryExportFormat.MARKDOWN -> exportToMarkdownSuspend(context, typeFilter)
+        MemoryExportFormat.JSON -> exportToJsonSuspend(context, filter)
+        MemoryExportFormat.MARKDOWN -> exportToMarkdownSuspend(context, filter)
     }
 
     suspend fun importFromJson(
@@ -394,8 +411,14 @@ class MemoryRepository @Inject constructor(
     /**
      * 导出为 JSON 文本（工具 / MCP 用，不落盘）。
      */
-    suspend fun exportToJsonText(typeFilter: String? = null): String = withContext(Dispatchers.IO) {
-        val items = loadExportItems(typeFilter)
+    suspend fun exportToJsonText(typeFilter: String? = null): String =
+        exportToJsonText(MemoryExportFilter.typeOnly(typeFilter))
+
+    /**
+     * 导出为 JSON 文本（支持 type / status / 日期过滤）。
+     */
+    suspend fun exportToJsonText(filter: MemoryExportFilter): String = withContext(Dispatchers.IO) {
+        val items = loadExportItems(filter)
         val payload = MemoryExportPayload(
             version = 1,
             exportedAt = System.currentTimeMillis(),
@@ -403,6 +426,20 @@ class MemoryRepository @Inject constructor(
         )
         json.encodeToString(MemoryExportPayload.serializer(), payload)
     }
+
+    /**
+     * 导出为 Markdown 文本（工具 / MCP 用，不落盘）。
+     */
+    suspend fun exportToMarkdownText(filter: MemoryExportFilter = MemoryExportFilter()): String =
+        withContext(Dispatchers.IO) {
+            val exportedAt = System.currentTimeMillis()
+            val items = loadExportItems(MemoryExportFilter())
+            MemoryMarkdownExporter.build(
+                memories = items,
+                exportedAt = exportedAt,
+                filter = filter
+            )
+        }
 
     /**
      * 从 JSON 文本导入（工具 / MCP 用）。
@@ -414,10 +451,12 @@ class MemoryRepository @Inject constructor(
         importFromJsonText(text, strategy)
     }
 
-    private suspend fun loadExportItems(typeFilter: String?): List<MemoryExportItem> {
+    private suspend fun loadExportItems(typeFilter: String?): List<MemoryExportItem> =
+        loadExportItems(MemoryExportFilter.typeOnly(typeFilter))
+
+    private suspend fun loadExportItems(filter: MemoryExportFilter): List<MemoryExportItem> {
         val all = dao.getAllMemoriesOnce().map { it.toExportItem() }
-        if (typeFilter.isNullOrBlank()) return all
-        return all.filter { MemoryMarkdownExporter.matchesTypeFilter(it, typeFilter) }
+        return MemoryMarkdownExporter.applyFilter(all, filter)
     }
 
     private fun writeCacheFile(context: Context, extension: String, text: String): File {

@@ -9,6 +9,7 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lanxin.android.plugins.memory.data.memory.MemoryEntity
+import com.lanxin.android.plugins.memory.data.memory.MemoryExportFilter
 import com.lanxin.android.plugins.memory.data.memory.MemoryExportFormat
 import com.lanxin.android.plugins.memory.data.memory.MemoryImportResult
 import com.lanxin.android.plugins.memory.data.memory.MemoryRepository
@@ -73,6 +74,10 @@ class MemoryViewModel @Inject constructor(
     /** 待 SAF 写入的导出格式；null 表示尚未选择。 */
     private val _pendingExportFormat = MutableStateFlow<MemoryExportFormat?>(null)
     val pendingExportFormat: StateFlow<MemoryExportFormat?> = _pendingExportFormat.asStateFlow()
+
+    /** 导出时 status 过滤；null = 全部状态（默认不过滤，与「导出全部」语义一致）。 */
+    private val _exportStatusFilter = MutableStateFlow<String?>(null)
+    val exportStatusFilter: StateFlow<String?> = _exportStatusFilter.asStateFlow()
 
     private val _pendingImportUri = MutableStateFlow<Uri?>(null)
 
@@ -239,7 +244,8 @@ class MemoryViewModel @Inject constructor(
         viewModelScope.launch {
             _isExporting.update { true }
             try {
-                val file = memoryRepository.exportSuspend(context, format, typeFilter)
+                val filter = buildExportFilter(typeFilter)
+                val file = memoryRepository.exportSuspend(context, format, filter)
                 withContext(Dispatchers.Main) {
                     shareExportFile(context, file, format)
                 }
@@ -262,8 +268,8 @@ class MemoryViewModel @Inject constructor(
     }
 
     /**
-     * P4：导出到 SAF Uri，支持格式与 type 过滤。
-     * 过滤默认使用当前列表选中的 type（null = 全部）。
+     * P4：导出到 SAF Uri，支持格式与 type / status 过滤。
+     * type 默认使用当前列表选中类型（null = 全部）；status 取 exportStatusFilter。
      */
     fun exportMemoriesToUri(
         context: Context,
@@ -275,7 +281,8 @@ class MemoryViewModel @Inject constructor(
         viewModelScope.launch {
             _isExporting.update { true }
             try {
-                val file = memoryRepository.exportSuspend(context, format, typeFilter)
+                val filter = buildExportFilter(typeFilter)
+                val file = memoryRepository.exportSuspend(context, format, filter)
                 withContext(Dispatchers.IO) {
                     context.contentResolver.openOutputStream(uri)?.use { out ->
                         file.inputStream().use { input -> input.copyTo(out) }
@@ -285,8 +292,7 @@ class MemoryViewModel @Inject constructor(
                     MemoryExportFormat.JSON -> "JSON"
                     MemoryExportFormat.MARKDOWN -> "Markdown"
                 }
-                val filterHint = if (typeFilter.isNullOrBlank()) "全部" else typeFilter
-                _snackbarMessage.update { "记忆已导出（$label · $filterHint）" }
+                _snackbarMessage.update { "记忆已导出（$label · ${filter.describe()}）" }
             } catch (e: Exception) {
                 Log.e(TAG, "exportMemoriesToUri failed", e)
                 _snackbarMessage.update { "导出失败: ${e.message ?: "未知错误"}" }
@@ -296,6 +302,19 @@ class MemoryViewModel @Inject constructor(
             }
         }
     }
+
+    /** 导出对话框 / 菜单：设置 status 过滤（null = 全部）。 */
+    fun setExportStatusFilter(status: String?) {
+        _exportStatusFilter.update {
+            status?.trim()?.takeIf { it.isNotEmpty() }
+        }
+    }
+
+    private fun buildExportFilter(typeFilter: String?): MemoryExportFilter =
+        MemoryExportFilter(
+            typeFilter = typeFilter,
+            statusFilter = _exportStatusFilter.value
+        )
 
     /**
      * 用户通过 SAF 选中文件后，先弹出策略选择。

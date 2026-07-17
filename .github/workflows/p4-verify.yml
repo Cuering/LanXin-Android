@@ -75,6 +75,7 @@ jobs:
           ./gradlew :app:testDebugUnitTest \
             --tests "com.lanxin.android.plugins.memory.data.memory.*" \
             --tests "com.lanxin.android.plugins.memory.domain.memory.MemoryIndexRebuilderTest" \
+            --tests "com.lanxin.android.plugins.memory.MemoryPluginTest" \
             --no-daemon --stacktrace 2>&1 | tee /tmp/test.log
           echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
           cp -r app/build/test-results/testDebugUnitTest/ /tmp/test-artifacts/ 2>/dev/null || true

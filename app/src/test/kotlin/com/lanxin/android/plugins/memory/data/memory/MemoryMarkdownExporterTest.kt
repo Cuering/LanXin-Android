@@ -191,4 +191,112 @@ class MemoryMarkdownExporterTest {
         assertTrue(md.contains("type: preference"))
         assertTrue(md.contains("lifecycle: permanent"))
     }
+
+    @Test
+    fun `status filter keeps only matching status`() {
+        val items = listOf(
+            sampleItems[0].copy(status = "active"),
+            sampleItems[1].copy(status = "archived"),
+            sampleItems[2].copy(status = "expired"),
+            sampleItems[3].copy(status = "active")
+        )
+        val filter = MemoryExportFilter(statusFilter = "active")
+        val md = MemoryMarkdownExporter.build(
+            memories = items,
+            exportedAt = 1_700_100_000_000L,
+            filter = filter
+        )
+        assertTrue(md.contains("- filter: status=active"))
+        assertTrue(md.contains("- total: 2"))
+        assertTrue(md.contains("**永久偏好：喜欢草莓**"))
+        assertTrue(md.contains("**与同事的关系备注**"))
+        assertFalse(md.contains("**普通对话记忆**"))
+        assertFalse(md.contains("**自动抽取：用户在上海**"))
+    }
+
+    @Test
+    fun `status filter supports multi value OR`() {
+        val items = listOf(
+            sampleItems[0].copy(status = "active"),
+            sampleItems[1].copy(status = "archived"),
+            sampleItems[2].copy(status = "expired")
+        )
+        val kept = MemoryMarkdownExporter.applyFilter(
+            items,
+            MemoryExportFilter(statusFilter = "active,expired")
+        )
+        assertEquals(2, kept.size)
+        assertTrue(kept.any { it.content.contains("草莓") })
+        assertTrue(kept.any { it.content.contains("上海") })
+    }
+
+    @Test
+    fun `date range filter is inclusive on both ends`() {
+        val day = "2023-11-14"
+        val after = MemoryExportFilter.parseDayStart(day)!!
+        val before = MemoryExportFilter.parseDayEnd(day)!!
+        // 2023-11-14 12:00 UTC-ish local: use midpoint of the day range
+        val mid = after + 12L * 60L * 60L * 1000L
+        val items = listOf(
+            sampleItems[0].copy(content = "before", createdAt = after - 1),
+            sampleItems[1].copy(content = "start", createdAt = after),
+            sampleItems[2].copy(content = "mid", createdAt = mid),
+            sampleItems[3].copy(content = "end", createdAt = before),
+            sampleItems[0].copy(id = 99, content = "after", createdAt = before + 1)
+        )
+        val kept = MemoryMarkdownExporter.applyFilter(
+            items,
+            MemoryExportFilter(createdAfterMs = after, createdBeforeMs = before)
+        )
+        assertEquals(listOf("start", "mid", "end"), kept.map { it.content })
+    }
+
+    @Test
+    fun `combined type status and date filters`() {
+        val after = 1_700_000_050_000L
+        val items = listOf(
+            sampleItems[0].copy(status = "active", createdAt = after + 1), // preference active in range
+            sampleItems[1].copy(status = "active", createdAt = after + 1), // chat active in range
+            sampleItems[0].copy(id = 10, status = "archived", createdAt = after + 1),
+            sampleItems[0].copy(id = 11, status = "active", createdAt = after - 10)
+        )
+        val kept = MemoryMarkdownExporter.applyFilter(
+            items,
+            MemoryExportFilter(
+                typeFilter = MemoryType.PREFERENCE,
+                statusFilter = "active",
+                createdAfterMs = after
+            )
+        )
+        assertEquals(1, kept.size)
+        assertEquals(1L, kept[0].id)
+    }
+
+    @Test
+    fun `parseDayStart and parseDayEnd reject garbage`() {
+        assertEquals(null, MemoryExportFilter.parseDayStart(null))
+        assertEquals(null, MemoryExportFilter.parseDayStart(""))
+        assertEquals(null, MemoryExportFilter.parseDayStart("not-a-date"))
+        assertEquals(null, MemoryExportFilter.parseDayEnd("2023-13-40"))
+        val start = MemoryExportFilter.parseDayStart("2024-01-02")!!
+        val end = MemoryExportFilter.parseDayEnd("2024-01-02")!!
+        assertTrue(end > start)
+        assertEquals(24L * 60L * 60L * 1000L - 1L, end - start)
+    }
+
+    @Test
+    fun `filter describe lists non empty parts`() {
+        assertEquals("all", MemoryExportFilter().describe())
+        val d = MemoryExportFilter(
+            typeFilter = "chat",
+            statusFilter = "active",
+            createdAfterMs = MemoryExportFilter.parseDayStart("2024-05-01"),
+            createdBeforeMs = MemoryExportFilter.parseDayEnd("2024-05-31")
+        ).describe()
+        assertTrue(d.contains("type=chat"))
+        assertTrue(d.contains("status=active"))
+        assertTrue(d.contains("after=2024-05-01"))
+        assertTrue(d.contains("before=2024-05-31"))
+    }
 }
+

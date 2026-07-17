@@ -3,8 +3,8 @@ package com.lanxin.android.plugins.memory
 import com.lanxin.android.plugin.LanXinPlugin
 import com.lanxin.android.plugin.PluginContext
 import com.lanxin.android.plugin.ToolDef
+import com.lanxin.android.plugins.memory.data.memory.MemoryExportFilter
 import com.lanxin.android.plugins.memory.data.memory.MemoryExportFormat
-import com.lanxin.android.plugins.memory.data.memory.MemoryMarkdownExporter
 import com.lanxin.android.plugins.memory.data.memory.MemoryRepository
 import com.lanxin.android.plugins.memory.data.memory.MemoryType
 import com.lanxin.android.plugins.memory.domain.memory.ImportStrategy
@@ -16,6 +16,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.floatOrNull
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 
 @Singleton
@@ -129,11 +130,11 @@ class MemoryPlugin @Inject constructor(
             )
         )
 
-        // P4：全量导出（JSON / Markdown 文本，可选 type 过滤）
+        // P4：全量导出（JSON / Markdown 文本，可选 type / status / 日期过滤）
         context.registerTool(
             ToolDef(
                 name = "memory_export",
-                description = "导出本地记忆为 JSON 或 Markdown 文本（可按 type 过滤）。不含向量，导入后会自动重建索引",
+                description = "导出本地记忆为 JSON 或 Markdown 文本（可按 type / status / 创建日期过滤）。不含向量，导入后会自动重建索引",
                 parameters = buildJsonObject {
                     put("type", "object")
                     put("properties", buildJsonObject {
@@ -148,11 +149,66 @@ class MemoryPlugin @Inject constructor(
                                 "可选类型过滤：preference/factual/daily/chat/insight/instruction/relationship/auto_knowledge/permanent/memory 等；空=全部"
                             )
                         })
+                        put("status_filter", buildJsonObject {
+                            put("type", "string")
+                            put(
+                                "description",
+                                "可选状态过滤：active / archived / expired；支持逗号多值如 active,archived；空=全部"
+                            )
+                        })
+                        put("created_after", buildJsonObject {
+                            put("type", "string")
+                            put(
+                                "description",
+                                "可选：仅导出 createdAt >= 该日 00:00（YYYY-MM-DD）；也可传 epoch 毫秒字符串"
+                            )
+                        })
+                        put("created_before", buildJsonObject {
+                            put("type", "string")
+                            put(
+                                "description",
+                                "可选：仅导出 createdAt <= 该日 23:59:59.999（YYYY-MM-DD）；也可传 epoch 毫秒字符串"
+                            )
+                        })
                     })
                 },
                 handler = { args ->
                     val typeFilter = args["type_filter"]?.jsonPrimitive?.contentOrNull?.trim()
                         ?.takeIf { it.isNotEmpty() }
+                    val statusFilter = args["status_filter"]?.jsonPrimitive?.contentOrNull?.trim()
+                        ?.takeIf { it.isNotEmpty() }
+                    val createdAfter = parseBoundary(
+                        args["created_after"]?.jsonPrimitive,
+                        endOfDay = false
+                    )
+                    val createdBefore = parseBoundary(
+                        args["created_before"]?.jsonPrimitive,
+                        endOfDay = true
+                    )
+                    if (args["created_after"]?.jsonPrimitive?.contentOrNull
+                            ?.trim()
+                            ?.isNotEmpty() == true &&
+                        createdAfter == null
+                    ) {
+                        return@ToolDef buildJsonObject {
+                            put("error", "created_after 无效，请用 YYYY-MM-DD 或 epoch 毫秒")
+                        }
+                    }
+                    if (args["created_before"]?.jsonPrimitive?.contentOrNull
+                            ?.trim()
+                            ?.isNotEmpty() == true &&
+                        createdBefore == null
+                    ) {
+                        return@ToolDef buildJsonObject {
+                            put("error", "created_before 无效，请用 YYYY-MM-DD 或 epoch 毫秒")
+                        }
+                    }
+                    val filter = MemoryExportFilter(
+                        typeFilter = typeFilter,
+                        statusFilter = statusFilter,
+                        createdAfterMs = createdAfter,
+                        createdBeforeMs = createdBefore
+                    )
                     val format = when (
                         args["format"]?.jsonPrimitive?.contentOrNull?.trim()?.lowercase()
                     ) {
@@ -160,26 +216,15 @@ class MemoryPlugin @Inject constructor(
                         else -> MemoryExportFormat.JSON
                     }
                     val payload = when (format) {
-                        MemoryExportFormat.JSON -> memoryRepository.exportToJsonText(typeFilter)
-                        MemoryExportFormat.MARKDOWN -> {
-                            val jsonText = memoryRepository.exportToJsonText(typeFilter = null)
-                            val exportPayload = kotlinx.serialization.json.Json {
-                                ignoreUnknownKeys = true
-                            }.decodeFromString(
-                                com.lanxin.android.plugins.memory.data.memory.MemoryExportPayload.serializer(),
-                                jsonText
-                            )
-                            MemoryMarkdownExporter.build(
-                                memories = exportPayload.memories,
-                                exportedAt = exportPayload.exportedAt,
-                                typeFilter = typeFilter
-                            )
-                        }
+                        MemoryExportFormat.JSON -> memoryRepository.exportToJsonText(filter)
+                        MemoryExportFormat.MARKDOWN -> memoryRepository.exportToMarkdownText(filter)
                     }
                     buildJsonObject {
                         put("ok", true)
                         put("format", format.name.lowercase())
                         put("type_filter", typeFilter ?: "all")
+                        put("status_filter", statusFilter ?: "all")
+                        put("filter", filter.describe())
                         put("payload", payload)
                     }
                 }
@@ -248,5 +293,26 @@ class MemoryPlugin @Inject constructor(
                 }
             )
         )
+    }
+
+    /**
+     * 解析日期边界：
+     * - 纯数字 → epoch 毫秒
+     * - YYYY-MM-DD → 当天起/止（endOfDay=true 取 23:59:59.999）
+     */
+    private fun parseBoundary(
+        primitive: kotlinx.serialization.json.JsonPrimitive?,
+        endOfDay: Boolean
+    ): Long? {
+        if (primitive == null) return null
+        primitive.longOrNull?.let { return it }
+        val raw = primitive.contentOrNull?.trim().orEmpty()
+        if (raw.isEmpty()) return null
+        raw.toLongOrNull()?.let { return it }
+        return if (endOfDay) {
+            MemoryExportFilter.parseDayEnd(raw)
+        } else {
+            MemoryExportFilter.parseDayStart(raw)
+        }
     }
 }
