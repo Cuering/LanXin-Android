@@ -77,4 +77,7 @@ object Route {
 
     /** 系统能力：日历 / 闹钟 / 笔记 / 用户文件（Phase 7） */
     const val SYSTEM_TOOLS = "system_tools"
+
+    /** 联网搜索（WebSearch / web_search 配置） */
+    const val WEB_SEARCH = "web_search_settings"
 }

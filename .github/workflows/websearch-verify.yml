@@ -1,0 +1,105 @@
+# 联网搜索配置 + 门闸 + lite 解析
+name: WebSearch Verify
+
+on:
+  push:
+    branches: [main, 'feat/websearch*']
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/platform/**'
+      - 'app/src/test/kotlin/com/lanxin/android/builtin/platform/**'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/setting/SettingScreen.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/common/Route.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/common/NavigationGraph.kt'
+      - 'docs/websearch.md'
+      - 'builtin/platform/**'
+      - 'ARCHITECTURE.md'
+      - '.github/workflows/websearch-verify.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/platform/**'
+      - 'app/src/test/kotlin/com/lanxin/android/builtin/platform/**'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/setting/SettingScreen.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/common/Route.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/common/NavigationGraph.kt'
+      - 'docs/websearch.md'
+      - 'builtin/platform/**'
+      - 'ARCHITECTURE.md'
+      - '.github/workflows/websearch-verify.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: websearch-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: WebSearch unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: gradle
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup local.properties and debug keystore
+        run: |
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+          rm -f debug-keystore.jks
+          keytool -genkeypair -v -keystore debug-keystore.jks -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Create assets model dir (models gitignored)
+        run: |
+          mkdir -p app/src/main/assets/models/gte-small
+          touch app/src/main/assets/models/gte-small/.gitkeep
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run WebSearch / platform unit tests
+        run: |
+          ./gradlew :app:testDebugUnitTest \
+            --tests "com.lanxin.android.builtin.platform.*" \
+            --no-daemon --stacktrace
+
+      - name: Surfaces and docs present
+        run: |
+          test -f docs/websearch.md
+          test -f builtin/platform/README.md
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/platform/domain/WebSearchConfig.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/platform/domain/WebSearchSettings.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/platform/domain/WebSearchGate.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/platform/data/WebSearchPreferences.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/platform/tools/WebSearchTool.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/platform/presentation/WebSearchScreen.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/platform/presentation/WebSearchViewModel.kt
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/platform/WebSearchGateTest.kt
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/platform/WebSearchLiteHtmlTest.kt
+          grep -E -n "WebSearchGate|filterTools|denyIfDisabled" \
+            app/src/main/kotlin/com/lanxin/android/builtin/platform/domain/WebSearchGate.kt
+          grep -E -n "webSearchSettings|WebSearchGate" \
+            app/src/main/kotlin/com/lanxin/android/builtin/platform/PlatformPlugin.kt
+          grep -E -n "WebSearchGate.filterTools|webSearchSettings" \
+            app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/ChatViewModel.kt
+          grep -E -n "WEB_SEARCH|WebSearchScreen|onNavigateToWebSearch" \
+            app/src/main/kotlin/com/lanxin/android/presentation/common/Route.kt \
+            app/src/main/kotlin/com/lanxin/android/presentation/common/NavigationGraph.kt \
+            app/src/main/kotlin/com/lanxin/android/presentation/ui/setting/SettingScreen.kt
+          grep -E -n "bindWebSearchSettings|WebSearchPreferences" \
+            app/src/main/kotlin/com/lanxin/android/builtin/platform/di/PlatformModule.kt
+          # ChatRouter / needsTools must remain intact
+          grep -E -n "need_tools_cloud|object ChatRouter" \
+            app/src/main/kotlin/com/lanxin/android/builtin/localinference/domain/ChatRouter.kt
+          grep -E -n "联网搜索|WebSearch|web_search" \
+            docs/websearch.md ARCHITECTURE.md

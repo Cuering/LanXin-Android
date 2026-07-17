@@ -16,6 +16,9 @@
 
 package com.lanxin.android.builtin.platform
 
+import com.lanxin.android.builtin.platform.domain.WebSearchConfig
+import com.lanxin.android.builtin.platform.domain.WebSearchGate
+import com.lanxin.android.builtin.platform.domain.WebSearchSettings
 import com.lanxin.android.builtin.platform.tools.AppInstallCheckTool
 import com.lanxin.android.builtin.platform.tools.AppIntentTool
 import com.lanxin.android.builtin.platform.tools.ClipboardTool
@@ -43,7 +46,7 @@ import kotlinx.serialization.json.put
  * - app_install_check
  * - system_info
  * - file_read / file_write / file_list
- * - web_search
+ * - web_search（受 [WebSearchSettings] 门闸；默认关）
  * - app_intent
  *
  * 仅封装适合在 Android 端执行的能力。
@@ -55,14 +58,15 @@ class PlatformPlugin @Inject constructor(
     private val systemInfoTool: SystemInfoTool,
     private val fileOpsTool: FileOpsTool,
     private val webSearchTool: WebSearchTool,
-    private val appIntentTool: AppIntentTool
+    private val appIntentTool: AppIntentTool,
+    private val webSearchSettings: WebSearchSettings
 ) : LanXinPlugin {
 
     override val id = "lanxin.platform"
     override val name = "手机平台工具"
-    override val version = "1.1.0"
+    override val version = "1.2.0"
     override val description =
-        "Android 专属能力：剪贴板、已安装应用、系统信息、本地文件、网页搜索、Intent 唤起"
+        "Android 专属能力：剪贴板、已安装应用、系统信息、本地文件、联网搜索（默认关）、Intent 唤起"
 
     override suspend fun onLoad(context: PluginContext) {
         context.registerTool(
@@ -271,18 +275,18 @@ class PlatformPlugin @Inject constructor(
 
         context.registerTool(
             ToolDef(
-                name = "web_search",
-                description = "HTTP 搜索（DuckDuckGo Instant Answer + lite HTML 回退），返回标题/链接/摘要",
+                name = WebSearchConfig.TOOL_NAME,
+                description = "HTTP 搜索（DuckDuckGo Instant Answer + lite HTML 回退），返回标题/链接/摘要；需在设置中开启联网搜索",
                 parameters = buildJsonObject {
                     put("type", "object")
                     put(
                         "properties",
                         buildJsonObject {
                             put("query", stringProp("搜索关键词"))
-                            put("limit", intProp("最多结果条数，默认 8，上限 20"))
+                            put("limit", intProp("最多结果条数，默认取设置，上限 20"))
                             put(
                                 "region",
-                                stringProp("区域代码，默认 wt-wt（全球），如 cn-zh / us-en")
+                                stringProp("区域代码，默认取设置（如 wt-wt / cn-zh / us-en）")
                             )
                         }
                     )
@@ -290,11 +294,13 @@ class PlatformPlugin @Inject constructor(
                 },
                 handler = { args ->
                     runCatching {
+                        val config = webSearchSettings.getConfig()
+                        WebSearchGate.denyIfDisabled(config)?.let { return@runCatching it }
                         val query = args.string("query") ?: error("query 必填")
                         webSearchTool.search(
                             query = query,
-                            limit = args.int("limit") ?: 8,
-                            region = args.string("region") ?: "wt-wt"
+                            limit = args.int("limit") ?: config.clampedLimit(),
+                            region = args.string("region") ?: config.normalizedRegion()
                         )
                     }.toToolResult()
                 }

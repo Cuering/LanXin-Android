@@ -77,7 +77,8 @@ fun SettingScreen(
     onNavigateToLocalInference: () -> Unit = {},
     onNavigateToOfflineAsr: () -> Unit = {},
     onNavigateToDesktopPet: () -> Unit = {},
-    onNavigateToSystemTools: () -> Unit = {}
+    onNavigateToSystemTools: () -> Unit = {},
+    onNavigateToWebSearch: () -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
     val scrollBehavior = pinnedExitUntilCollapsedScrollBehavior(
@@ -236,6 +237,14 @@ fun SettingScreen(
                 title = "系统能力",
                 description = "默认关；日历 / 闹钟 Intent / 笔记 / 用户文件；写操作需确认",
                 onItemClick = onNavigateToSystemTools,
+                showTrailingIcon = true,
+                showLeadingIcon = false
+            )
+
+            SettingItem(
+                title = "联网搜索",
+                description = "默认关；web_search（DuckDuckGo）；开后 Agent 可见",
+                onItemClick = onNavigateToWebSearch,
                 showTrailingIcon = true,
                 showLeadingIcon = false
             )

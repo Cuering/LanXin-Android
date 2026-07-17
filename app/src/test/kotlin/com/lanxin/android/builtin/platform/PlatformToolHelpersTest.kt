@@ -16,6 +16,7 @@
 
 package com.lanxin.android.builtin.platform
 
+import com.lanxin.android.builtin.platform.domain.WebSearchConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -32,11 +33,17 @@ class PlatformToolHelpersTest {
             "clipboard_get",
             "clipboard_set",
             "app_install_check",
-            "system_info"
+            "system_info",
+            "file_read",
+            "file_write",
+            "file_list",
+            WebSearchConfig.TOOL_NAME,
+            "app_intent"
         )
-        assertEquals(4, expected.size)
+        assertEquals(9, expected.size)
         assertTrue(expected.contains("clipboard_get"))
         assertTrue(expected.contains("system_info"))
+        assertTrue(expected.contains(WebSearchConfig.TOOL_NAME))
     }
 
     @Test
@@ -51,6 +58,6 @@ class PlatformToolHelpersTest {
     @Test
     fun `plugin metadata constants`() {
         assertEquals("lanxin.platform", "lanxin.platform")
-        assertEquals("1.0.0", "1.0.0")
+        assertEquals(WebSearchConfig.TOOL_NAME, "web_search")
     }
 }

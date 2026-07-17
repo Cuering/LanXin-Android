@@ -38,6 +38,7 @@ import com.lanxin.android.presentation.ui.setting.SettingScreen
 import com.lanxin.android.builtin.localinference.presentation.LocalInferenceScreen
 import com.lanxin.android.builtin.pet.presentation.DesktopPetScreen
 import com.lanxin.android.builtin.systemtools.presentation.SystemToolsScreen
+import com.lanxin.android.builtin.platform.presentation.WebSearchScreen
 import com.lanxin.android.builtin.voice.presentation.VoiceAsrScreen
 import com.lanxin.android.presentation.ui.setting.SettingViewModelV2
 import com.lanxin.android.presentation.ui.setup.SetupCompleteScreen
@@ -76,6 +77,7 @@ fun SetupNavGraph(navController: NavHostController) {
         offlineAsrScreenNavigation(navController)
         desktopPetScreenNavigation(navController)
         systemToolsScreenNavigation(navController)
+        webSearchScreenNavigation(navController)
     }
 }
 
@@ -124,6 +126,14 @@ fun NavGraphBuilder.desktopPetScreenNavigation(navController: NavHostController)
 fun NavGraphBuilder.systemToolsScreenNavigation(navController: NavHostController) {
     composable(Route.SYSTEM_TOOLS) {
         SystemToolsScreen(
+            onBackAction = { navController.navigateUp() }
+        )
+    }
+}
+
+fun NavGraphBuilder.webSearchScreenNavigation(navController: NavHostController) {
+    composable(Route.WEB_SEARCH) {
+        WebSearchScreen(
             onBackAction = { navController.navigateUp() }
         )
     }
@@ -442,7 +452,8 @@ fun NavGraphBuilder.settingNavigation(navController: NavHostController) {
                 onNavigateToLocalInference = { navController.navigate(Route.LOCAL_INFERENCE) },
                 onNavigateToOfflineAsr = { navController.navigate(Route.OFFLINE_ASR) },
                 onNavigateToDesktopPet = { navController.navigate(Route.DESKTOP_PET) },
-                onNavigateToSystemTools = { navController.navigate(Route.SYSTEM_TOOLS) }
+                onNavigateToSystemTools = { navController.navigate(Route.SYSTEM_TOOLS) },
+                onNavigateToWebSearch = { navController.navigate(Route.WEB_SEARCH) }
             )
         }
         composable(Route.ADD_PLATFORM) {
