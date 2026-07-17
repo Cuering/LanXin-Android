@@ -16,6 +16,9 @@
 
 package com.lanxin.android.builtin.pet.presentation
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -38,7 +41,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -64,6 +66,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lanxin.android.builtin.pet.domain.DebugAssetKind
 import com.lanxin.android.builtin.pet.domain.DebugAssetMirror
+import com.lanxin.android.presentation.common.PathPickerField
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -76,8 +79,41 @@ fun DesktopPetScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
 
     var live2dDraft by remember { mutableStateOf("") }
+    var asrDraft by remember { mutableStateOf("") }
     var ttsDirDraft by remember { mutableStateOf("") }
     var ttsRefDraft by remember { mutableStateOf("") }
+    var localLlmDraft by remember { mutableStateOf("") }
+
+    val live2dFilePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        uri?.toString()?.let(viewModel::importLive2dFromDocument)
+    }
+    val live2dTreePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        uri?.toString()?.let(viewModel::importLive2dFromTree)
+    }
+    val asrTreePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        uri?.toString()?.let(viewModel::importAsrFromTree)
+    }
+    val ttsTreePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        uri?.toString()?.let(viewModel::importTtsDirFromTree)
+    }
+    val ttsRefPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        uri?.toString()?.let(viewModel::importTtsReferenceFromDocument)
+    }
+    val localLlmPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        uri?.toString()?.let(viewModel::importLocalLlmFromDocument)
+    }
 
     DisposableEffect(lifecycleOwner) {
         val obs = LifecycleEventObserver { _, event ->
@@ -90,7 +126,19 @@ fun DesktopPetScreen(
     }
 
     LaunchedEffect(state.live2dModelPathConfigured) {
-        if (live2dDraft.isEmpty()) live2dDraft = state.live2dModelPathConfigured
+        live2dDraft = state.live2dModelPathConfigured
+    }
+    LaunchedEffect(state.asrModelPathConfigured) {
+        asrDraft = state.asrModelPathConfigured
+    }
+    LaunchedEffect(state.ttsModelDirConfigured) {
+        ttsDirDraft = state.ttsModelDirConfigured
+    }
+    LaunchedEffect(state.ttsReferenceConfigured) {
+        ttsRefDraft = state.ttsReferenceConfigured
+    }
+    LaunchedEffect(state.localLlmPathConfigured) {
+        localLlmDraft = state.localLlmPathConfigured
     }
 
     LaunchedEffect(state.snackbarMessage) {
@@ -131,7 +179,7 @@ fun DesktopPetScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            if (state.isBusy) {
+            if (state.isBusy || state.pathImportBusy || state.downloadBusy) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
 
@@ -342,64 +390,100 @@ fun DesktopPetScreen(
                         )
                     }
 
-                    var advancedOpen by remember { mutableStateOf(false) }
-                    TextButton(onClick = { advancedOpen = !advancedOpen }) {
-                        Text(if (advancedOpen) "收起高级：手填路径" else "高级：手填路径")
-                    }
-                    if (advancedOpen) {
-                        OutlinedTextField(
-                            value = live2dDraft,
-                            onValueChange = { live2dDraft = it },
-                            modifier = Modifier.fillMaxWidth(),
-                            label = { Text("live2d_model_path") },
-                            placeholder = { Text("model3.json 绝对路径") },
-                            supportingText = {
-                                Text(
-                                    "生效：" +
-                                        state.live2dModelPathResolved.ifBlank { "（空 → 占位）" },
-                                    style = MaterialTheme.typography.bodySmall
+                    Text(
+                        "自定义路径（高级）",
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        "普通用户优先用上方「内置 / 一键下载」。选择器会把文件导入 App 私有目录，" +
+                            "无需手敲绝对路径。清除后回到内置 / 下载路径解析。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    PathPickerField(
+                        label = "Live2D 模型（*.model3.json）",
+                        path = state.live2dModelPathConfigured,
+                        readyLabel = "就绪：${state.live2dReadyLabel} · 生效：${
+                            state.live2dModelPathResolved.ifBlank { "（空 → 占位/内置）" }
+                        }",
+                        ready = state.live2dReady,
+                        helperText = "可选文件或整包文件夹；文件夹会自动定位 model3.json。",
+                        pickButtonText = "选 model3.json",
+                        onPick = {
+                            live2dFilePicker.launch(arrayOf("application/json", "*/*"))
+                        },
+                        secondaryPickText = "选文件夹",
+                        onSecondaryPick = { live2dTreePicker.launch(null) },
+                        onClear = { viewModel.setLive2dModelPath("") },
+                        manualDraft = live2dDraft,
+                        onManualDraftChange = { live2dDraft = it },
+                        onManualSave = viewModel::setLive2dModelPath,
+                        enabled = !state.pathImportBusy
+                    )
+
+                    PathPickerField(
+                        label = "ASR 模型目录",
+                        path = state.asrModelPathConfigured,
+                        readyLabel = "就绪：${state.asrReadyLabel} · 生效：${
+                            state.asrModelPathResolved.ifBlank { "（空）" }
+                        }",
+                        ready = state.asrReady,
+                        helperText = "选择含模型文件的文件夹；也可在「离线语音识别」页配置。",
+                        pickButtonText = "选择目录",
+                        onPick = { asrTreePicker.launch(null) },
+                        onClear = { viewModel.setAsrModelPath("") },
+                        manualDraft = asrDraft,
+                        onManualDraftChange = { asrDraft = it },
+                        onManualSave = viewModel::setAsrModelPath,
+                        enabled = !state.pathImportBusy
+                    )
+
+                    PathPickerField(
+                        label = "TTS 模型目录",
+                        path = state.ttsModelDirConfigured,
+                        readyLabel = "就绪：${state.ttsReadyLabel} · 生效：${
+                            state.ttsModelDirResolved.ifBlank { "（空）" }
+                        }",
+                        ready = state.ttsReady,
+                        helperText = "选择 TTS 模型所在文件夹。",
+                        pickButtonText = "选择目录",
+                        onPick = { ttsTreePicker.launch(null) },
+                        onClear = { viewModel.setTtsModelDir("") },
+                        manualDraft = ttsDirDraft,
+                        onManualDraftChange = { ttsDirDraft = it },
+                        onManualSave = viewModel::setTtsModelDir,
+                        enabled = !state.pathImportBusy
+                    )
+
+                    PathPickerField(
+                        label = "TTS 参考音频",
+                        path = state.ttsReferenceConfigured,
+                        readyLabel = "生效：${
+                            state.ttsReferenceResolved.ifBlank { "（空）" }
+                        }",
+                        helperText = "常见音频：wav / mp3 / m4a / ogg 等。",
+                        pickButtonText = "选择音频",
+                        onPick = {
+                            ttsRefPicker.launch(
+                                arrayOf(
+                                    "audio/*",
+                                    "audio/wav",
+                                    "audio/x-wav",
+                                    "audio/mpeg",
+                                    "audio/mp4",
+                                    "audio/ogg",
+                                    "*/*"
                                 )
-                            },
-                            singleLine = true
-                        )
-                        OutlinedTextField(
-                            value = ttsDirDraft,
-                            onValueChange = { ttsDirDraft = it },
-                            modifier = Modifier.fillMaxWidth(),
-                            label = { Text("tts_model_dir") },
-                            placeholder = { Text("TTS 模型目录") },
-                            supportingText = {
-                                Text(
-                                    "生效：" + state.ttsModelDirResolved.ifBlank { "（空）" },
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            },
-                            singleLine = true
-                        )
-                        OutlinedTextField(
-                            value = ttsRefDraft,
-                            onValueChange = { ttsRefDraft = it },
-                            modifier = Modifier.fillMaxWidth(),
-                            label = { Text("tts_reference_audio") },
-                            placeholder = { Text("参考音 .wav") },
-                            supportingText = {
-                                Text(
-                                    "生效：" + state.ttsReferenceResolved.ifBlank { "（空）" },
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            },
-                            singleLine = true
-                        )
-                        OutlinedButton(
-                            onClick = {
-                                viewModel.setLive2dModelPath(live2dDraft)
-                                viewModel.setTtsModelDir(ttsDirDraft)
-                                viewModel.setTtsReferenceAudio(ttsRefDraft)
-                            }
-                        ) {
-                            Text("保存路径")
-                        }
-                    }
+                            )
+                        },
+                        onClear = { viewModel.setTtsReferenceAudio("") },
+                        manualDraft = ttsRefDraft,
+                        onManualDraftChange = { ttsRefDraft = it },
+                        onManualSave = viewModel::setTtsReferenceAudio,
+                        enabled = !state.pathImportBusy
+                    )
+
                     Text(
                         "换 Live2D / TTS / ASR 只改设置项，不改 VoiceSession 状态机。" +
                             "仓内已内置 Mao；下载侧重 ASR/TTS 或备用 Live2D。",
@@ -421,19 +505,36 @@ fun DesktopPetScreen(
                         style = MaterialTheme.typography.bodySmall
                     )
                     Text(
-                        "当前配置：" +
-                            state.localLlmPathConfigured.ifBlank { "（空）" },
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                    Text(
                         state.localLlmHint,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        "本地脑权重大，App 内不提供一键下载；请自备模型并配置路径。",
+                        "本地脑权重大，App 内不提供一键下载；请自备模型并用选择器导入。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.secondary
+                    )
+                    PathPickerField(
+                        label = "本地推理模型路径",
+                        path = state.localLlmPathConfigured,
+                        readyLabel = "状态：${state.localLlmReadyLabel}",
+                        ready = state.localLlmPathConfigured.isNotBlank() &&
+                            state.localLlmReadyLabel.contains("就绪"),
+                        helperText = "选择模型文件（如 .gguf / .mnn / 目录打包文件）；大文件勿提交 git。",
+                        pickButtonText = "选择文件",
+                        onPick = {
+                            localLlmPicker.launch(
+                                arrayOf(
+                                    "application/octet-stream",
+                                    "*/*"
+                                )
+                            )
+                        },
+                        onClear = { viewModel.setLocalLlmModelPath("") },
+                        manualDraft = localLlmDraft,
+                        onManualDraftChange = { localLlmDraft = it },
+                        onManualSave = viewModel::setLocalLlmModelPath,
+                        enabled = !state.pathImportBusy
                     )
                 }
             }

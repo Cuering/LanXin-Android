@@ -16,6 +16,9 @@
 
 package com.lanxin.android.builtin.localinference.presentation
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -47,7 +50,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -55,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lanxin.android.builtin.localinference.domain.LocalEngineState
+import com.lanxin.android.presentation.common.PathPickerField
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,6 +70,17 @@ fun LocalInferenceScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    val modelPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        uri?.toString()?.let(viewModel::importModelFromDocument)
+    }
+
+    var modelDraft by remember { mutableStateOf(state.modelPath) }
+    LaunchedEffect(state.modelPath) {
+        modelDraft = state.modelPath
+    }
 
     LaunchedEffect(state.snackbarMessage) {
         state.snackbarMessage?.let {
@@ -96,7 +113,7 @@ fun LocalInferenceScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            if (state.isBusy) {
+            if (state.isBusy || state.pathImportBusy) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
 
@@ -187,15 +204,20 @@ fun LocalInferenceScreen(
                 )
             }
 
-            OutlinedTextField(
-                value = state.modelPath,
-                onValueChange = viewModel::setModelPath,
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("模型路径") },
-                supportingText = {
-                    Text("绝对路径或 stub://demo；轻量 0.5B/1.5B / 标准 7B Q4；大文件勿提交 git")
+            PathPickerField(
+                label = "本地推理模型路径",
+                path = state.modelPath,
+                helperText = "点选模型文件（导入 App 私有目录）。" +
+                    "轻量 0.5B/1.5B / 标准 7B Q4；也可高级手填 stub://demo。大文件勿提交 git。",
+                pickButtonText = "选择文件",
+                onPick = {
+                    modelPicker.launch(arrayOf("application/octet-stream", "*/*"))
                 },
-                singleLine = true
+                onClear = { viewModel.setModelPath("") },
+                manualDraft = modelDraft,
+                onManualDraftChange = { modelDraft = it },
+                onManualSave = viewModel::setModelPath,
+                enabled = !state.pathImportBusy && !state.isBusy
             )
 
             OutlinedTextField(
