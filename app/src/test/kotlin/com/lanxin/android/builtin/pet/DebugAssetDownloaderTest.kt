@@ -30,6 +30,7 @@ import java.io.File
 import java.io.InputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -205,6 +206,78 @@ class DebugAssetDownloaderTest {
         val failed = events.filterIsInstance<DebugAssetDownloadEvent.Failed>().single()
         assertTrue(failed.message.isNotBlank())
         assertTrue(failed.message.length <= 120)
+        // Flow 应正常结束，不抛 exception transparency / 二次失败
+        assertEquals(DebugAssetKind.LIVE2D, failed.kind)
+        assertTrue(events.first() is DebugAssetDownloadEvent.Started)
+        assertTrue(events.last() is DebugAssetDownloadEvent.Failed)
+    }
+
+    @Test
+    fun download_failureAfterProgress_emitsFailedWithoutTransparencyCrash() = runTest {
+        // 复现用户崩溃：先 Progress emit，随后 transport 抛错；catch 不得再 emit
+        val filesDir = tmp.newFolder("files")
+        var progressCalls = 0
+        val transport = object : AssetDownloadTransport {
+            override suspend fun downloadToFile(
+                url: String,
+                destFile: File,
+                onProgress: suspend (Long, Long) -> Unit
+            ) {
+                progressCalls++
+                onProgress(1L, 100L)
+                error("mid-download failure after progress")
+            }
+
+            override suspend fun openStream(url: String): InputStream =
+                ByteArrayInputStream(ByteArray(0))
+        }
+        val downloader = DebugAssetDownloader(transport)
+        val events = downloader.download(
+            filesDir,
+            DebugAssetKind.LIVE2D,
+            DebugAssetMirror.OFFICIAL
+        ).toList()
+
+        assertTrue(progressCalls >= 1)
+        assertTrue(events.any { it is DebugAssetDownloadEvent.Started })
+        assertTrue(events.any { it is DebugAssetDownloadEvent.Progress })
+        assertFalse(events.any { it is DebugAssetDownloadEvent.Completed })
+        val failed = events.filterIsInstance<DebugAssetDownloadEvent.Failed>().single()
+        assertTrue(failed.message.contains("mid-download") || failed.message.isNotBlank())
+        assertTrue(events.last() is DebugAssetDownloadEvent.Failed)
+        // 无 IllegalStateException("Flow exception transparency is violated") 泄漏
+        assertEquals(1, events.count { it is DebugAssetDownloadEvent.Failed })
+    }
+
+    @Test
+    fun download_cancelled_emitsCancelledWithoutRethrow() = runTest {
+        val filesDir = tmp.newFolder("files")
+        val transport = object : AssetDownloadTransport {
+            override suspend fun downloadToFile(
+                url: String,
+                destFile: File,
+                onProgress: suspend (Long, Long) -> Unit
+            ) {
+                onProgress(1L, 10L)
+                throw CancellationException("user cancel")
+            }
+
+            override suspend fun openStream(url: String): InputStream =
+                ByteArrayInputStream(ByteArray(0))
+        }
+        val downloader = DebugAssetDownloader(transport)
+        val events = downloader.download(
+            filesDir,
+            DebugAssetKind.LIVE2D,
+            DebugAssetMirror.OFFICIAL
+        ).toList()
+
+        assertTrue(events.first() is DebugAssetDownloadEvent.Started)
+        assertTrue(events.any { it is DebugAssetDownloadEvent.Progress })
+        assertTrue(events.any { it is DebugAssetDownloadEvent.Cancelled })
+        assertFalse(events.any { it is DebugAssetDownloadEvent.Failed })
+        assertFalse(events.any { it is DebugAssetDownloadEvent.Completed })
+        assertEquals(DebugAssetDownloadEvent.Cancelled, events.last())
     }
 
     @Test
