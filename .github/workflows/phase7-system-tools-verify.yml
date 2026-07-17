@@ -13,6 +13,7 @@ on:
       - feat/phase7-system-tools-skeleton
       - feat/phase7.2-calendar-alarm
       - feat/phase7.3-notes
+      - feat/phase7.4-file-manager
 
 concurrency:
   group: phase7-${{ github.head_ref || github.ref_name }}
@@ -62,6 +63,19 @@ jobs:
           grep -q 'NotesStore' app/src/main/kotlin/com/lanxin/android/builtin/systemtools/data/StubDeviceTools.kt || { echo 'note tools must use NotesStore'; exit 1; }
           grep -q '7.3' docs/system-tools.md || { echo 'docs must mention 7.3'; exit 1; }
           grep -q 'Room' docs/system-tools.md || { echo 'docs must mention Room for notes'; exit 1; }
+          # Phase 7.4 user files surfaces
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/systemtools/domain/UserFileStore.kt || { echo 'Missing UserFileStore'; exit 1; }
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/systemtools/data/files/AndroidUserFileIoGateway.kt || { echo 'Missing AndroidUserFileIoGateway'; exit 1; }
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/systemtools/data/files/InMemoryUserFileCatalog.kt || { echo 'Missing InMemoryUserFileCatalog'; exit 1; }
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/systemtools/data/files/UserFileDeviceTools.kt || { echo 'Missing UserFileDeviceTools'; exit 1; }
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/systemtools/UserFileStoreTest.kt || { echo 'Missing UserFileStoreTest'; exit 1; }
+          grep -q 'FILE_PICK' app/src/main/kotlin/com/lanxin/android/builtin/systemtools/domain/DeviceTool.kt || { echo 'Missing FILE_PICK id'; exit 1; }
+          grep -q 'FILE_DELETE' app/src/main/kotlin/com/lanxin/android/builtin/systemtools/domain/DeviceTool.kt || { echo 'Missing FILE_DELETE id'; exit 1; }
+          grep -q 'UserFileCatalog' app/src/main/kotlin/com/lanxin/android/builtin/systemtools/di/SystemToolsModule.kt || { echo 'DI must bind UserFileCatalog'; exit 1; }
+          grep -q '7.4' docs/system-tools.md || { echo 'docs must mention 7.4'; exit 1; }
+          grep -q 'file_pick' docs/system-tools.md || { echo 'docs must mention file_pick'; exit 1; }
+          grep -q 'DocumentsContract' app/src/main/kotlin/com/lanxin/android/builtin/systemtools/data/files/AndroidUserFileIoGateway.kt || { echo 'must use DocumentsContract for delete'; exit 1; }
+          grep -q 'takePersistableUriPermission' app/src/main/kotlin/com/lanxin/android/builtin/systemtools/data/files/AndroidUserFileIoGateway.kt || { echo 'must takePersistable'; exit 1; }
 
       - name: Surface check - no model curl
         run: |

@@ -63,6 +63,7 @@ object DeviceToolIds {
     const val FILE_READ_TEXT = "file_read_text"
     const val FILE_WRITE = "file_write"
     const val FILE_SHARE = "file_share"
+    const val FILE_DELETE = "file_delete"
 
     val ALL: Set<String> = setOf(
         CALENDAR_LIST_UPCOMING,
@@ -80,10 +81,11 @@ object DeviceToolIds {
         FILE_LIST,
         FILE_READ_TEXT,
         FILE_WRITE,
-        FILE_SHARE
+        FILE_SHARE,
+        FILE_DELETE
     )
 
-    /** Phase 7.1+ 已接线工具（含 7.2 日历/闹钟、7.3 笔记）。 */
+    /** Phase 7.1+ 已接线工具（含 7.2 日历/闹钟、7.3 笔记、7.4 用户文件）。 */
     val M1_STUB_READY: Set<String> = setOf(
         ALARM_SET,
         ALARM_SHOW,
@@ -95,7 +97,13 @@ object DeviceToolIds {
         NOTE_UPDATE,
         NOTE_DELETE,
         NOTE_EXPORT,
-        NOTE_IMPORT
+        NOTE_IMPORT,
+        FILE_PICK,
+        FILE_LIST,
+        FILE_READ_TEXT,
+        FILE_WRITE,
+        FILE_SHARE,
+        FILE_DELETE
     )
 
     /** 7.3 笔记工具集合。 */
@@ -107,5 +115,15 @@ object DeviceToolIds {
         NOTE_DELETE,
         NOTE_EXPORT,
         NOTE_IMPORT
+    )
+
+    /** 7.4 用户文件工具集合。 */
+    val FILES_READY: Set<String> = setOf(
+        FILE_PICK,
+        FILE_LIST,
+        FILE_READ_TEXT,
+        FILE_WRITE,
+        FILE_SHARE,
+        FILE_DELETE
     )
 }

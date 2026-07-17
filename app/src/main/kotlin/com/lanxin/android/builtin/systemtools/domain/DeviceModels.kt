@@ -122,8 +122,14 @@ data class NoteEntry(
 data class UserFileEntry(
     val uriOrPath: String,
     val name: String,
-    val isDirectory: Boolean,
-    val sizeBytes: Long? = null
+    val isDirectory: Boolean = false,
+    val sizeBytes: Long? = null,
+    /** 目录内稳定 id（应用内登记用）；缺省时可用 uriOrPath */
+    val id: String = uriOrPath,
+    val mimeType: String? = null,
+    val modifiedAtEpochMs: Long = 0L,
+    /** saf | app_private */
+    val source: String = "saf"
 )
 
 /** 设备工具执行结果（JSON 友好）。 */

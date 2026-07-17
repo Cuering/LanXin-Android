@@ -38,7 +38,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
 /**
- * Phase 7 系统能力插件：日历 / 闹钟 / 笔记（用户文件 M2）。
+ * Phase 7 系统能力插件：日历 / 闹钟 / 笔记 / 用户文件。
  *
  * 与 ChatRouter needsTools、桌宠 VoiceSession tool 钩子共用 [DeviceTool] 契约。
  */
@@ -50,9 +50,9 @@ class SystemToolsPlugin @Inject constructor(
 
     override val id = "lanxin.systemtools"
     override val name = "系统能力"
-    override val version = "0.3.0"
+    override val version = "0.4.0"
     override val description =
-        "日历/闹钟/应用内笔记 CRUD+SAF（Phase 7.3，默认关，写/删需确认）"
+        "日历/闹钟/笔记/用户文件 SAF（Phase 7.4，默认关，写/删需确认）"
 
     private val gate = DeviceToolGate { settings.getConfig() }
 
@@ -176,6 +176,75 @@ class SystemToolsPlugin @Inject constructor(
                 put("json_text", stringProp("直接传入 JSON 文本（可与 uri 二选一）"))
                 put("strategy", stringProp("merge（默认）| replace"))
                 put("confirmed", boolProp("用户已确认"))
+            }
+        )
+        register(
+            context,
+            name = DeviceToolIds.FILE_PICK,
+            description = "登记 SAF 选取文件；import=true 时复制到应用 imports（需 confirmed）",
+            properties = buildJsonObject {
+                put("uri", stringProp("OpenDocument 选中的 content Uri"))
+                put("name", stringProp("显示名（可选）"))
+                put("import", boolProp("是否复制到应用目录，默认 true"))
+                put("confirmed", boolProp("用户已确认"))
+            },
+            required = listOf("uri")
+        )
+        register(
+            context,
+            name = DeviceToolIds.FILE_LIST,
+            description = "列出用户文件（imports + 已登记 SAF）；sort=date|name|type|size",
+            properties = buildJsonObject {
+                put("sort", stringProp("date（默认）| name | type | size | date_asc"))
+                put("limit", intProp("最多条数，默认 100"))
+                put("source", stringProp("过滤：saf | app_private（可选）"))
+            }
+        )
+        register(
+            context,
+            name = DeviceToolIds.FILE_READ_TEXT,
+            description = "读取用户文件文本（uri / id / path）",
+            properties = buildJsonObject {
+                put("uri", stringProp("content Uri"))
+                put("id", stringProp("目录 id"))
+                put("path", stringProp("应用私有绝对路径"))
+                put("max_chars", intProp("最大字符数，默认 50000"))
+            }
+        )
+        register(
+            context,
+            name = DeviceToolIds.FILE_WRITE,
+            description = "写入用户文件：mode=app 应用目录（默认）| mode=saf 写 uri（需 confirmed）",
+            properties = buildJsonObject {
+                put("text", stringProp("文本内容"))
+                put("name", stringProp("mode=app 时文件名"))
+                put("uri", stringProp("mode=saf 时 content Uri"))
+                put("mode", stringProp("app（默认）| saf"))
+                put("mime", stringProp("MIME，默认 text/plain"))
+                put("confirmed", boolProp("用户已确认"))
+            },
+            required = listOf("text")
+        )
+        register(
+            context,
+            name = DeviceToolIds.FILE_SHARE,
+            description = "分享用户文件（uri/id/path）或纯文本 text",
+            properties = buildJsonObject {
+                put("uri", stringProp("content Uri"))
+                put("id", stringProp("目录 id"))
+                put("path", stringProp("应用私有路径"))
+                put("text", stringProp("纯文本分享（与 uri 二选一）"))
+                put("mime", stringProp("MIME"))
+            }
+        )
+        register(
+            context,
+            name = DeviceToolIds.FILE_DELETE,
+            description = "删除应用 imports 文件或目录登记（高危，需 confirmed）",
+            properties = buildJsonObject {
+                put("id", stringProp("目录 id"))
+                put("path", stringProp("应用私有路径"))
+                put("confirmed", boolProp("用户已明确批准删除"))
             }
         )
     }

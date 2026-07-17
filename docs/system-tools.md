@@ -1,6 +1,6 @@
 # Phase 7 — System Tools / Device Skills
 
-> 状态：**7.1 骨架 ✅** · **7.2 闹钟 Intent + 日历读/写 ✅** · **7.3 笔记 Room + SAF 🚧**（`feat/phase7.3-notes`）  
+> 状态：**7.1 骨架 ✅** · **7.2 闹钟 Intent + 日历读/写 ✅** · **7.3 笔记 Room + SAF ✅** · **7.4 用户文件 SAF 🚧**（`feat/phase7.4-file-manager`）  
 > 模块：`builtin/systemtools` + `app/.../builtin/systemtools/*`  
 > 产品线：**桌宠 + 操控手机 = 陪伴操控一体**（与 Phase 6 VoiceSession 同一会话，非旁路 App）  
 > 与 ChatRouter `needsTools`、桌宠 VoiceSession、MCP 共用统一 `DeviceTool` 契约。
@@ -14,7 +14,7 @@
 | **Calendar** | 读即将到来的事件 / 写简单事件 | 读：`CalendarContract.Instances`（`READ_CALENDAR`）；写：**优先 INSERT Intent**（`Events.CONTENT_URI`），`mode=stub` 内存 |
 | **Alarm** | 设置精确闹钟 / Intent 设系统闹钟 / 打开闹钟列表 | **默认** `AlarmManager.setAlarmClock`；`mode=intent` → **`startActivity(SET_ALARM)`**；`alarm_show` → **`startActivity(SHOW_ALARMS)`** |
 | **Notes** | CRUD / 导出 / 导入 | Android **无统一系统笔记 API** → **Room 私有库** + SAF `CREATE_DOCUMENT` / `OpenDocument` / 分享 Intent |
-| **User File** | 列表 / 读文本 / 写 / 分享 / 删 | **仅用户可访问文件**：SAF + MediaStore + `getExternalFilesDir`；禁止 root / 改 `/system` |
+| **User File** | 列表 / 读文本 / 写 / 分享 / 删 | **仅用户可访问文件**：SAF + 应用 `imports` 目录；禁止 root / 改 `/system` |
 
 ### 一体工作流（听 → 想 → 办 → 说）
 
@@ -50,6 +50,8 @@ AlarmClockGateway ──► AndroidAlarmSetter (setAlarmClock) | Fake
 SystemToolsIntentLauncher ──► AndroidSystemToolsIntentLauncher (startActivity)
 NotesStore ──► RoomNotesStore | StubNotesStore
 NotesSafGateway ──► AndroidNotesSafGateway (SAF write/read + share)
+UserFileCatalog ──► InMemoryUserFileCatalog
+UserFileIoGateway ──► AndroidUserFileIoGateway (SAF + imports)
 
 SystemToolsPlugin (LanXinPlugin)
     └── registerTool → MCP / Chat tool_call
@@ -68,7 +70,8 @@ app/src/main/kotlin/com/lanxin/android/builtin/systemtools/
 │   ├── CalendarIntentBuilder.kt
 │   ├── AlarmClockGateway.kt
 │   ├── CalendarGateway.kt
-│   ├── NotesStore.kt              # NotesStore + NotesCodec + NotesSafGateway
+│   ├── NotesStore.kt
+│   ├── UserFileStore.kt          # Catalog + IoGateway + sort/mime helpers
 │   ├── SystemToolsIntentLauncher.kt
 │   ├── SystemToolsPermissionStatus.kt
 │   └── SystemToolsSettings.kt
@@ -78,27 +81,31 @@ app/src/main/kotlin/com/lanxin/android/builtin/systemtools/
 │   ├── AndroidSystemToolsIntentLauncher.kt
 │   ├── AndroidSystemToolsPermissionChecker.kt
 │   ├── StubCalendarGateway.kt
-│   ├── StubNotesStore.kt          # 内存 NotesStore（单测）
+│   ├── StubNotesStore.kt
 │   ├── StubDeviceTools.kt
 │   ├── SystemToolsPreferences.kt
-│   └── notes/
-│       ├── NoteEntity.kt
-│       ├── NoteDao.kt
-│       ├── NotesDatabase.kt
-│       ├── RoomNotesStore.kt
-│       └── AndroidNotesSafGateway.kt
+│   ├── notes/
+│   │   ├── NoteEntity.kt
+│   │   ├── NoteDao.kt
+│   │   ├── NotesDatabase.kt
+│   │   ├── RoomNotesStore.kt
+│   │   └── AndroidNotesSafGateway.kt
+│   └── files/
+│       ├── InMemoryUserFileCatalog.kt
+│       ├── AndroidUserFileIoGateway.kt
+│       └── UserFileDeviceTools.kt   # file_pick/list/read/write/share/delete
 ├── receiver/
 │   └── SystemToolsAlarmReceiver.kt
 ├── di/
 │   └── SystemToolsModule.kt
 └── presentation/
-    ├── SystemToolsScreen.kt       # 设置 + 权限 + 笔记状态/SAF 导入导出
+    ├── SystemToolsScreen.kt
     └── SystemToolsViewModel.kt
 ```
 
 ## 3. 工具清单
 
-### 已实现（7.1 + 7.2 + 7.3）
+### 已实现（7.1 + 7.2 + 7.3 + 7.4）
 
 | 工具 | 副作用 | 确认 | 说明 |
 |------|--------|------|------|
@@ -113,15 +120,15 @@ app/src/main/kotlin/com/lanxin/android/builtin/systemtools/
 | `note_delete` | DELETE | **始终** | `EXPLICIT_APPROVE` |
 | `note_export` | WRITE | 是* | `mode=share|saf|preview`；`format=json|markdown` |
 | `note_import` | WRITE | 是* | `uri` 或 `json_text`；`strategy=merge|replace` |
+| `file_pick` | WRITE | 是* | 登记 SAF Uri；`import=true`（默认）复制到应用 `imports/` |
+| `file_list` | READ | 否 | 合并 imports + 目录登记；`sort=date|name|type|size` |
+| `file_read_text` | READ | 否 | 读文本（`max_chars` 默认 50000） |
+| `file_write` | WRITE | 是* | `mode=app` 写 imports；`mode=saf` 写 content Uri |
+| `file_share` | LAUNCH_INTENT | 否 | 分享 Uri 或纯文本 |
+| `file_delete` | DELETE | **始终** | imports 实体 / SAF `DocumentsContract.deleteDocument` + 目录登记；`EXPLICIT_APPROVE` |
 
 \* 当设置「写操作需确认」开启（默认）时，须 `confirmed=true`（经 `DeviceToolGate`）。  
 删除始终需 `confirmed=true`。
-
-### 规划（后续）
-
-| 工具 | 阶段 | 说明 |
-|------|------|------|
-| `file_*` | 7.4 | SAF 用户目录 |
 
 ## 4. 里程碑
 
@@ -129,22 +136,21 @@ app/src/main/kotlin/com/lanxin/android/builtin/systemtools/
 |------|------|------|
 | **7.1 骨架** | DeviceTool + 门闸 + Stub + 设置 | ✅ |
 | **7.2 闹钟 + 日历** | Intent 真启动 + setAlarmClock；日历 Instances + INSERT Intent + 确认流 + 权限引导 | ✅ |
-| **7.3 笔记** | Room CRUD + SAF 导出/导入 + 设置状态 | 🚧 本 PR |
-| **7.4 文件** | SAF | 🔜 |
+| **7.3 笔记** | Room CRUD + SAF 导出/导入 + 设置状态 | ✅ |
+| **7.4 文件** | SAF 选取/导入 + imports 列表/读/写/分享/删 | 🚧 |
 | **7.5 一体接入** | ChatRouter + VoiceSession tool 钩子 | 🔜 |
 | **7.6 打磨** | UX / 审计 | 🔜 |
 
-### 7.3 交付清单
+### 7.4 交付清单
 
-- [x] `NotesStore` 接口 + `RoomNotesStore`（`lanxin_system_notes.db`）
-- [x] `StubNotesStore` 实现同一接口（单测）
-- [x] `note_create` / `list` / `append` / `update` / `delete`
-- [x] `note_export`（share / SAF uri / preview）+ `note_import`（uri / json_text）
-- [x] `NotesCodec` JSON/Markdown 编解码（无 Android 依赖）
-- [x] `AndroidNotesSafGateway` + 设置页 CreateDocument / OpenDocument
-- [x] 设置页笔记能力状态（开关 + 条数 + 导入导出按钮）
-- [x] 单测：CRUD / Codec / Gate 确认 / 导入导出 Fake SAF
-- [x] 文档 + CI surface check（7.3 路径）
+- [x] `UserFileCatalog` + `InMemoryUserFileCatalog`
+- [x] `UserFileIoGateway` + `AndroidUserFileIoGateway`（SAF + imports，禁系统路径）
+- [x] `takePersistableUriPermission` + `DocumentsContract.deleteDocument`
+- [x] `file_pick` / `list` / `read_text` / `write` / `share` / `delete`
+- [x] 排序：`date` / `name` / `type` / `size`（纯函数可单测）
+- [x] 设置页：OpenDocument 导入、CreateDocument 写文本、最近文件列表/分享
+- [x] 单测：`UserFileStoreTest` + Gate 确认 / Registry
+- [x] 文档 + CI surface check（7.4 路径）
 
 ## 5. 权限表
 
@@ -156,7 +162,7 @@ app/src/main/kotlin/com/lanxin/android/builtin/systemtools/
 | 写日历 | **Intent INSERT**（默认） | 7.2 | 不申请 WRITE_CALENDAR |
 | 笔记 | 应用私有 Room | 7.3 | 无额外权限 |
 | 笔记 SAF | CreateDocument / OpenDocument | 7.3 | 用户显式选文件 |
-| 用户文件 | SAF | 未实现 | 7.4 |
+| 用户文件 | SAF + 应用 imports | 7.4 | 用户显式选文件；无 MANAGE_EXTERNAL_STORAGE |
 
 ## 6. 隐私与安全
 
@@ -165,6 +171,7 @@ app/src/main/kotlin/com/lanxin/android/builtin/systemtools/
 3. **禁止**：root、改系统分区、无障碍乱点、静默扫敏感路径。
 4. **不下模型**。
 5. **笔记不落公有存储**，仅 Room + 用户主动 SAF。
+6. **用户文件**：仅 SAF 用户授权 Uri + 应用 `getExternalFilesDir/imports`；写/删经 Gate；`file_delete` 对 content Uri 走 `DocumentsContract.deleteDocument`，对 imports 走本地删；不申请 `MANAGE_EXTERNAL_STORAGE`。
 
 ## 7. 配置键（DataStore）
 
@@ -188,11 +195,13 @@ app/src/main/kotlin/com/lanxin/android/builtin/systemtools/
 - `DeviceToolGateTest`（开关 + 确认流）
 - `DeviceToolIdsTest` / `SystemToolsConfigTest`
 - `NotesStoreTest`（CRUD / Codec / Gate / export-import）
+- `UserFileStoreTest`（排序 / catalog / pick-write-list-read-delete / Gate）
 
 ## 9. 明确不做（本 PR）
 
-- 用户文件 SAF 通用管理（7.4）
 - VoiceSession 一体接入（7.5）
 - WRITE_CALENDAR ContentProvider 直写
 - 厂商笔记 App 私有协议
 - 服务器下载 / auto-merge
+- MANAGE_EXTERNAL_STORAGE 全盘扫描
+- DocumentTree 持久树递归（可后续增强）

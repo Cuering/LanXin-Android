@@ -93,6 +93,24 @@ fun SystemToolsScreen(
             viewModel.importNotesFromUri(it.toString(), NotesImportStrategy.MERGE)
         }
     }
+    val userFilePickLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let { viewModel.importUserFileFromUri(it.toString()) }
+    }
+    val userFileCreateLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/plain")
+    ) { uri ->
+        uri?.let {
+            val stamp = LocalDateTime.now()
+                .format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))
+            viewModel.exportUserTextToUri(
+                it.toString(),
+                text = "兰心用户文件导出 $stamp\n",
+                mime = "text/plain"
+            )
+        }
+    }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -146,7 +164,7 @@ fun SystemToolsScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "Phase 7.3 · 日历 + 闹钟 + 笔记",
+                        text = "Phase 7.4 · 日历 + 闹钟 + 笔记 + 用户文件",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -154,14 +172,15 @@ fun SystemToolsScreen(
                     Text(
                         text = "日历：Instances 读 + INSERT Intent 写。" +
                             "闹钟：setAlarmClock / Intent。" +
-                            "笔记：Room 持久化 CRUD + SAF 导出/导入。" +
+                            "笔记：Room 持久化 CRUD + SAF。" +
+                            "用户文件：SAF 选取/导入 + imports 列表/分享。" +
                             "默认全关；写/删需 confirmed。",
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "隐私：笔记仅存应用私有库；SAF 由用户显式选文件；" +
-                            "不修改系统分区、不在服务器下模型。",
+                        text = "隐私：笔记/imports 仅应用私有；SAF 由用户显式选文件；" +
+                            "禁止系统分区与全盘扫描；不在服务器下模型。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -239,7 +258,7 @@ fun SystemToolsScreen(
             )
             SwitchRow(
                 title = "用户文件",
-                description = "SAF / MediaStore（7.4）；非系统分区",
+                description = "SAF 选取导入 + 应用 imports 列表/读/写/分享（非系统分区）",
                 checked = config.userFileEnabled,
                 onCheckedChange = viewModel::setUserFile,
                 enabled = config.masterEnabled
@@ -317,6 +336,87 @@ fun SystemToolsScreen(
                             modifier = Modifier.weight(1f)
                         ) {
                             Text("分享")
+                        }
+                    }
+                }
+            }
+
+            // 用户文件能力状态 + SAF
+            Card {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "用户文件能力状态",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = state.userFileStatusLabel,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        text = "工具：file_pick / list / read_text / write / share / delete",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Button(
+                            onClick = {
+                                userFilePickLauncher.launch(arrayOf("*/*"))
+                            },
+                            enabled = config.masterEnabled && config.userFileEnabled,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("导入文件")
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                val stamp = LocalDateTime.now()
+                                    .format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))
+                                userFileCreateLauncher.launch("lanxin_file_$stamp.txt")
+                            },
+                            enabled = config.masterEnabled && config.userFileEnabled,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("创建文本")
+                        }
+                    }
+                    if (state.userFilePreview.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "最近文件",
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        state.userFilePreview.forEach { entry ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = entry.name,
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                    Text(
+                                        text = "${entry.source} · ${entry.sizeBytes ?: 0} B",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                OutlinedButton(
+                                    onClick = { viewModel.shareUserFile(entry) }
+                                ) {
+                                    Text("分享")
+                                }
+                            }
                         }
                     }
                 }

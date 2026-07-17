@@ -23,6 +23,8 @@ import com.lanxin.android.builtin.systemtools.data.AndroidCalendarReader
 import com.lanxin.android.builtin.systemtools.data.AndroidSystemToolsIntentLauncher
 import com.lanxin.android.builtin.systemtools.data.AndroidSystemToolsPermissionChecker
 import com.lanxin.android.builtin.systemtools.data.SystemToolsPreferences
+import com.lanxin.android.builtin.systemtools.data.files.AndroidUserFileIoGateway
+import com.lanxin.android.builtin.systemtools.data.files.InMemoryUserFileCatalog
 import com.lanxin.android.builtin.systemtools.data.notes.AndroidNotesSafGateway
 import com.lanxin.android.builtin.systemtools.data.notes.NoteDao
 import com.lanxin.android.builtin.systemtools.data.notes.NotesDatabase
@@ -34,6 +36,8 @@ import com.lanxin.android.builtin.systemtools.domain.NotesStore
 import com.lanxin.android.builtin.systemtools.domain.SystemToolsIntentLauncher
 import com.lanxin.android.builtin.systemtools.domain.SystemToolsPermissionChecker
 import com.lanxin.android.builtin.systemtools.domain.SystemToolsSettings
+import com.lanxin.android.builtin.systemtools.domain.UserFileCatalog
+import com.lanxin.android.builtin.systemtools.domain.UserFileIoGateway
 import com.lanxin.android.plugin.PluginManager
 import dagger.Binds
 import dagger.Module
@@ -83,6 +87,14 @@ abstract class SystemToolsModule {
     @Binds
     @Singleton
     abstract fun bindNotesSafGateway(impl: AndroidNotesSafGateway): NotesSafGateway
+
+    @Binds
+    @Singleton
+    abstract fun bindUserFileCatalog(impl: InMemoryUserFileCatalog): UserFileCatalog
+
+    @Binds
+    @Singleton
+    abstract fun bindUserFileIoGateway(impl: AndroidUserFileIoGateway): UserFileIoGateway
 }
 
 /**
