@@ -47,16 +47,20 @@ object ArchiveExtractor {
 
     private fun extractZip(archive: File, destDir: File) {
         val root = destDir.canonicalFile
+        val rootPath = root.canonicalPath
         ZipInputStream(BufferedInputStream(FileInputStream(archive))).use { zis ->
             while (true) {
                 val entry = zis.nextEntry ?: break
-                // codeql[java/zipslip] — validate before use
-                val outFile = safeResolve(root, entry.name)
+                val target = File(root, entry.name).canonicalFile
+                val targetPath = target.canonicalPath
+                require(targetPath.startsWith(rootPath + File.separator) || targetPath == rootPath) {
+                    "Zip-slip: ${entry.name} -> $targetPath"
+                }
                 if (entry.isDirectory) {
-                    outFile.mkdirs()
+                    target.mkdirs()
                 } else {
-                    outFile.parentFile?.mkdirs()
-                    FileOutputStream(outFile).use { out -> zis.copyTo(out) }
+                    target.parentFile?.mkdirs()
+                    FileOutputStream(target).use { out -> zis.copyTo(out) }
                 }
                 zis.closeEntry()
             }
@@ -75,17 +79,21 @@ object ArchiveExtractor {
 
     private fun extractTar(input: java.io.InputStream, destDir: File) {
         val root = destDir.canonicalFile
+        val rootPath = root.canonicalPath
         TarArchiveInputStream(input).use { tis ->
             while (true) {
                 val entry = tis.nextEntry ?: break
                 if (!tis.canReadEntryData(entry)) continue
-                // codeql[java/zipslip] — validate before use
-                val outFile = safeResolve(root, entry.name)
+                val target = File(root, entry.name).canonicalFile
+                val targetPath = target.canonicalPath
+                require(targetPath.startsWith(rootPath + File.separator) || targetPath == rootPath) {
+                    "Tar-slip: ${entry.name} -> $targetPath"
+                }
                 if (entry.isDirectory) {
-                    outFile.mkdirs()
+                    target.mkdirs()
                 } else {
-                    outFile.parentFile?.mkdirs()
-                    FileOutputStream(outFile).use { out -> tis.copyTo(out) }
+                    target.parentFile?.mkdirs()
+                    FileOutputStream(target).use { out -> tis.copyTo(out) }
                 }
             }
         }
