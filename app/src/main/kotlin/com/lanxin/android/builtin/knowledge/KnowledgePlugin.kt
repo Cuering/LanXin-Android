@@ -17,6 +17,7 @@
 package com.lanxin.android.builtin.knowledge
 
 import com.lanxin.android.builtin.knowledge.domain.EmbeddingService
+import com.lanxin.android.builtin.knowledge.domain.MarkdownChunker
 import com.lanxin.android.builtin.knowledge.domain.TextChunker
 import com.lanxin.android.builtin.knowledge.domain.VectorPipeline
 import com.lanxin.android.builtin.knowledge.domain.VectorSource
@@ -49,7 +50,8 @@ class KnowledgePlugin @Inject constructor(
     private val embeddingService: EmbeddingService,
     private val vectorStore: VectorStore,
     private val pipeline: VectorPipeline,
-    private val textChunker: TextChunker
+    private val textChunker: TextChunker,
+    private val markdownChunker: MarkdownChunker
 ) : LanXinPlugin {
 
     override val id = "lanxin.knowledge"
@@ -251,15 +253,20 @@ class KnowledgePlugin @Inject constructor(
         context.registerTool(
             ToolDef(
                 name = "kb_chunk",
-                description = "预览文本滑动窗口分段（默认 512/50），不入库",
+                description = "预览 text/markdown 分段结果（默认 512/50），不入库；markdown 返回 heading 元数据",
                 parameters = buildJsonObject {
                     put("type", "object")
                     put(
                         "properties",
                         buildJsonObject {
                             put("text", stringProp("待分段文本"))
+                            put("format", stringProp("分段格式：text(默认) / markdown"))
                             put("window", intProp("窗口 token，默认 512"))
                             put("overlap", intProp("重叠 token，默认 50"))
+                            put(
+                                "include_heading_context",
+                                boolProp("markdown 模式是否把标题路径注入 chunk 文本，默认 true")
+                            )
                         }
                     )
                     put("required", buildJsonArray { add(JsonPrimitive("text")) })
@@ -267,33 +274,72 @@ class KnowledgePlugin @Inject constructor(
                 handler = { args ->
                     runCatching {
                         val text = args.string("text") ?: error("text 缺失")
+                        val format = (args.string("format") ?: "text").lowercase()
                         val window = args.int("window") ?: TextChunker.DEFAULT_WINDOW
                         val overlap = args.int("overlap") ?: TextChunker.DEFAULT_OVERLAP
-                        val chunks = textChunker.chunk(text, window, overlap)
-                        buildJsonObject {
-                            put("ok", true)
-                            put("count", chunks.size)
-                            put("window", window)
-                            put("overlap", overlap)
-                            put(
-                                "chunks",
-                                buildJsonArray {
-                                    chunks.take(20).forEach { c ->
-                                        add(
-                                            buildJsonObject {
-                                                put("index", c.index)
-                                                put("start", c.startOffset)
-                                                put("end", c.endOffset)
-                                                put(
-                                                    "preview",
-                                                    c.text.take(120)
+                        val includeHeadingContext = args.bool("include_heading_context") ?: true
+                        when (format) {
+                            "text" -> {
+                                val chunks = textChunker.chunk(text, window, overlap)
+                                buildJsonObject {
+                                    put("ok", true)
+                                    put("format", "text")
+                                    put("count", chunks.size)
+                                    put("window", window)
+                                    put("overlap", overlap)
+                                    put(
+                                        "chunks",
+                                        buildJsonArray {
+                                            chunks.take(20).forEach { c ->
+                                                add(
+                                                    buildJsonObject {
+                                                        put("index", c.index)
+                                                        put("start", c.startOffset)
+                                                        put("end", c.endOffset)
+                                                        put("preview", c.text.take(120))
+                                                        put("length", c.text.length)
+                                                    }
                                                 )
-                                                put("length", c.text.length)
                                             }
-                                        )
-                                    }
+                                        }
+                                    )
                                 }
-                            )
+                            }
+                            "markdown", "md" -> {
+                                val chunks = markdownChunker.chunk(
+                                    text = text,
+                                    windowTokens = window,
+                                    overlapTokens = overlap,
+                                    includeHeadingContext = includeHeadingContext
+                                )
+                                buildJsonObject {
+                                    put("ok", true)
+                                    put("format", "markdown")
+                                    put("count", chunks.size)
+                                    put("window", window)
+                                    put("overlap", overlap)
+                                    put("include_heading_context", includeHeadingContext)
+                                    put(
+                                        "chunks",
+                                        buildJsonArray {
+                                            chunks.take(20).forEach { c ->
+                                                add(
+                                                    buildJsonObject {
+                                                        put("index", c.index)
+                                                        put("start", c.startOffset)
+                                                        put("end", c.endOffset)
+                                                        put("preview", c.text.take(120))
+                                                        put("length", c.text.length)
+                                                        c.heading?.let { put("heading", it) }
+                                                        put("heading_path", c.headingPath)
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                            else -> error("unsupported format: $format")
                         }
                     }.toToolResult()
                 }
@@ -321,6 +367,9 @@ class KnowledgePlugin @Inject constructor(
     private fun kotlinx.serialization.json.JsonObject.long(key: String): Long? =
         this[key]?.jsonPrimitive?.contentOrNull?.toLongOrNull()
 
+    private fun kotlinx.serialization.json.JsonObject.bool(key: String): Boolean? =
+        this[key]?.jsonPrimitive?.contentOrNull?.toBooleanStrictOrNull()
+
     private fun stringProp(desc: String) = buildJsonObject {
         put("type", "string")
         put("description", desc)
@@ -328,6 +377,11 @@ class KnowledgePlugin @Inject constructor(
 
     private fun intProp(desc: String) = buildJsonObject {
         put("type", "integer")
+        put("description", desc)
+    }
+
+    private fun boolProp(desc: String) = buildJsonObject {
+        put("type", "boolean")
         put("description", desc)
     }
 }
