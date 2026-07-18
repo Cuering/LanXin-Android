@@ -512,20 +512,59 @@ class DebugAssetDownloader @Inject constructor(
                 val msg = t.message.orEmpty()
                 return if (msg.length <= 220) msg else msg.take(217) + "…"
             }
+            // 优先用 transport 已分类的 message（Connect/Socket/DNS/Bad timeout config…）
+            val top = t.message?.takeIf { it.isNotBlank() }
+            if (top != null && isClassifiedErrorMessage(top)) {
+                return if (top.length <= 160) top else top.take(157) + "…"
+            }
             val root = generateSequence(t) { it.cause }.last()
+            // 配置错误绝不压成 Timeout（Ktor 3.5 requestTimeout=0 坑）
+            if (root is IllegalArgumentException) {
+                val m = root.message.orEmpty()
+                if (m.contains("positive timeout", ignoreCase = true) ||
+                    m.contains("Only positive", ignoreCase = true)
+                ) {
+                    return "Bad timeout config"
+                }
+            }
             val raw = root.message?.takeIf { it.isNotBlank() } ?: root.javaClass.simpleName
             // 去掉冗长 URL 路径，保留关键超时文案
             val compact = compactTimeoutMessage(raw)
             return if (compact.length <= 160) compact else compact.take(157) + "…"
         }
 
+        /** transport.enrichError / classifyError 产出的前缀。 */
+        private fun isClassifiedErrorMessage(msg: String): Boolean {
+            val head = msg.substringBefore('·').substringBefore('@').trim().lowercase()
+            return head.startsWith("connect timeout") ||
+                head.startsWith("socket timeout") ||
+                head.startsWith("request timeout") ||
+                head.startsWith("dns failed") ||
+                head.startsWith("connect refused") ||
+                head.startsWith("connect failed") ||
+                head.startsWith("no route") ||
+                head.startsWith("network unreachable") ||
+                head.startsWith("connection reset") ||
+                head.startsWith("socket error") ||
+                head.startsWith("bad timeout config") ||
+                head.startsWith("config error") ||
+                head.startsWith("下载失败 http") ||
+                head.startsWith("http ")
+        }
+
         /**
-         * 压缩 Ktor/CIO timeout 文案：
+         * 压缩 timeout 文案：
          * `Connect timeout has expired [url=https://…/config.json, connect_timeout=unknown ms]`
          * → `Connect timeout (config.json)`
+         *
+         * **禁止**把 `Only positive timeout values are allowed` 压成 Timeout。
          */
         fun compactTimeoutMessage(raw: String): String {
             val lower = raw.lowercase()
+            // 配置错误优先：勿误标 Timeout
+            if (lower.contains("positive timeout") || lower.contains("only positive timeout")) {
+                return "Bad timeout config"
+            }
             if (!lower.contains("timeout")) return raw
             val file = Regex("""/([^/\s?]+)\s*[,)]""")
                 .findAll(raw)
@@ -535,6 +574,7 @@ class DebugAssetDownloader @Inject constructor(
                 lower.contains("connect timeout") -> "Connect timeout"
                 lower.contains("socket timeout") -> "Socket timeout"
                 lower.contains("request timeout") -> "Request timeout"
+                lower.contains("read timed out") -> "Socket timeout"
                 else -> "Timeout"
             }
             return if (file != null) "$kind ($file)" else kind
@@ -580,7 +620,7 @@ class DebugAssetDownloader @Inject constructor(
                     val msg = "$base。${DebugAssetCatalog.LOCAL_LLM_DOWNLOAD_FAIL_HINT}"
                     if (msg.length <= 280) msg else msg.take(277) + "…"
                 }
-                else -> if (base.length <= 200) base else base.take(197) + "…"
+                else -> if (base.length <= 240) base else base.take(237) + "…"
             }
         }
     }

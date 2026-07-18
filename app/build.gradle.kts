@@ -369,6 +369,7 @@ dependencies {
     implementation(libs.ktor.content.negotiation)
     implementation(libs.ktor.core)
     implementation(libs.ktor.client.cio)
+    implementation(libs.ktor.client.okhttp)
     implementation(libs.ktor.logging)
     implementation(libs.ktor.serialization)
 

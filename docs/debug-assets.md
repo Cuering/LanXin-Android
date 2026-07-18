@@ -59,7 +59,7 @@
 | Catalog / 镜像 | `DebugAssetCatalog` · `DebugAssetMirror` |
 | 下载 | `DebugAssetDownloader` + `AssetDownloadTransport` |
 | 落盘根 | `DebugAssetStorage`（公共 `LanXin/` → externalFiles 回退） |
-| 传输 | `KtorAssetDownloadTransport`（独立 CIO；connect 60s / socket 5min / request=`HttpTimeoutConfig.INFINITE_TIMEOUT_MS`，**禁止** `0`） |
+| 传输 | `KtorAssetDownloadTransport`（OkHttp + IPv4 优先；connect 90s / socket 5min / request=`HttpTimeoutConfig.INFINITE_TIMEOUT_MS`，**禁止** `0`） |
 | 解压 | `ArchiveExtractor`（zip / tar.bz2 / tar.gz，防 zip-slip） |
 | DI | `PetModule` binds transport |
 
@@ -129,7 +129,7 @@ bash scripts/download-debug-tts.sh
 | `local_inference_model_path` | 默认选型 **Qwen2.5-1.5B-Instruct**（MNN 量化） |
 | 一键下载落盘 | `LanXin/models/local-llm/light/`（含 `llm.mnn` / `llm.mnn.weight` / tokenizer 等） |
 | 源序 | ModelScope（含 www）→ hf-mirror → HuggingFace |
-| 下载超时 | 独立 `KtorAssetDownloadTransport`：connect 60s / socket 5min / request=`INFINITE_TIMEOUT_MS`（**禁止** `0`，Ktor 3.5 会直接抛） |
+| 下载超时 | 独立 `KtorAssetDownloadTransport`（OkHttp）：connect 90s / socket 5min / request=`INFINITE_TIMEOUT_MS`（**禁止** `0`，Ktor 3.5 会直接抛并被误标 Timeout） |
 | 可恢复 | `*.part` + HTTP `Range` 续传；超时/断连自动重试（最多 3 次）；多文件跳过已下完项 |
 | 失败提示 | 各源错误聚合；可 Wi‑Fi 重试或电脑放到 `LanXin/models/local-llm/light/` |
 
