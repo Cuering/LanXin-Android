@@ -493,6 +493,145 @@ class DebugAssetDownloaderTest {
     }
 
     @Test
+    fun localLlm_resume_skipsAlreadyDownloadedFiles() = runTest {
+        val baseDir = tmp.newFolder("base-llm-resume")
+        val staging = File(baseDir, "LanXin/.tmp/mf-modelscope-staging")
+        // 预置部分已下完的小文件（模拟断点后续传）
+        for (rel in listOf("config.json", "configuration.json", "llm_config.json")) {
+            val f = File(staging, rel)
+            f.parentFile?.mkdirs()
+            f.writeText("pre-$rel")
+        }
+        val transport = object : AssetDownloadTransport {
+            val downloaded = mutableListOf<String>()
+            override suspend fun downloadToFile(
+                url: String,
+                destFile: File,
+                onProgress: suspend (Long, Long) -> Unit
+            ) {
+                downloaded += destFile.name
+                destFile.parentFile?.mkdirs()
+                destFile.writeText("new-${destFile.name}")
+                onProgress(1, 1)
+            }
+
+            override suspend fun openStream(url: String): InputStream =
+                ByteArrayInputStream(ByteArray(0))
+        }
+        val downloader = DebugAssetDownloader(transport)
+        val events = downloader.download(
+            baseDir,
+            DebugAssetKind.LOCAL_LLM,
+            DebugAssetMirror.MIRROR_CDN
+        ).toList()
+        val completed = events.filterIsInstance<DebugAssetDownloadEvent.Completed>().single()
+        assertEquals(DebugAssetKind.LOCAL_LLM, completed.kind)
+        assertTrue(downloader.isReady(baseDir, DebugAssetKind.LOCAL_LLM))
+        // 已预置的三个文件不应再请求
+        assertFalse(transport.downloaded.contains("config.json"))
+        assertFalse(transport.downloaded.contains("configuration.json"))
+        assertFalse(transport.downloaded.contains("llm_config.json"))
+        assertTrue(transport.downloaded.contains("llm.mnn"))
+        assertTrue(transport.downloaded.contains("llm.mnn.weight"))
+        assertTrue(
+            events.any {
+                it is DebugAssetDownloadEvent.Progress && it.phase == "resuming"
+            }
+        )
+    }
+
+    @Test
+    fun compactTimeoutMessage_stripsUrlKeepsFile() {
+        val raw =
+            "Connect timeout has expired " +
+                "[url=https://huggingface.co/taobao-mnn/Qwen2.5-1.5B-Instruct-MNN/resolve/main/config.json, " +
+                "connect_timeout=unknown ms]"
+        val c = DebugAssetDownloader.compactTimeoutMessage(raw)
+        assertTrue(c.contains("Connect timeout"))
+        assertTrue(c.contains("config.json"))
+        assertFalse(c.contains("huggingface.co"))
+    }
+
+    @Test
+    fun formatSourceErrors_keepsEachSource() {
+        val s = DebugAssetDownloader.formatSourceErrors(
+            listOf(
+                "modelscope" to "Connect timeout (config.json)",
+                "hf-mirror" to "HTTP 403",
+                "huggingface" to "Connect timeout (config.json)"
+            )
+        )
+        assertTrue(s.contains("modelscope:"))
+        assertTrue(s.contains("hf-mirror:"))
+        assertTrue(s.contains("huggingface:"))
+        assertTrue(s.contains("HTTP 403"))
+    }
+
+    @Test
+    fun failMessage_localLlm_includesManualPathHint() {
+        val msg = DebugAssetDownloader.failMessage(
+            DebugAssetKind.LOCAL_LLM,
+            "modelscope:Connect timeout; huggingface:Connect timeout",
+            listOf("modelscope", "huggingface")
+        )
+        assertTrue(msg.contains("modelscope"))
+        assertTrue(msg.contains("LanXin/models/local-llm/light"))
+        assertTrue(msg.contains("Wi") || msg.contains("Wi‑Fi") || msg.contains("重试"))
+        // 已含源:错误时不重复「已试」
+        assertFalse(msg.contains("已试:modelscope"))
+    }
+
+    @Test
+    fun localLlm_allSourcesFail_aggregatesPerSourceErrors() = runTest {
+        val baseDir = tmp.newFolder("base-llm-fail")
+        val transport = object : AssetDownloadTransport {
+            override suspend fun downloadToFile(
+                url: String,
+                destFile: File,
+                onProgress: suspend (Long, Long) -> Unit
+            ) {
+                when {
+                    url.contains("modelscope.cn") && !url.contains("www.") ->
+                        error("Connect timeout has expired [url=$url, connect_timeout=unknown ms]")
+                    url.contains("www.modelscope.cn") ->
+                        error("Connect timeout has expired [url=$url]")
+                    url.contains("hf-mirror.com") ->
+                        error("下载失败 HTTP 403")
+                    url.contains("huggingface.co") ->
+                        error("Connect timeout has expired [url=$url, connect_timeout=unknown ms]")
+                    else -> error("unexpected $url")
+                }
+            }
+
+            override suspend fun openStream(url: String): InputStream =
+                ByteArrayInputStream(ByteArray(0))
+        }
+        val downloader = DebugAssetDownloader(transport)
+        val events = downloader.download(
+            baseDir,
+            DebugAssetKind.LOCAL_LLM,
+            DebugAssetMirror.MIRROR_CDN
+        ).toList()
+
+        assertTrue(events.first() is DebugAssetDownloadEvent.Started)
+        val failed = events.filterIsInstance<DebugAssetDownloadEvent.Failed>().single()
+        assertEquals(DebugAssetKind.LOCAL_LLM, failed.kind)
+        // 每源错误均保留，不只最后一个 HF
+        assertTrue(failed.message.contains("modelscope"))
+        assertTrue(
+            failed.message.contains("hf-mirror") ||
+                failed.attemptedSources.contains("hf-mirror")
+        )
+        assertTrue(
+            failed.message.contains("huggingface") ||
+                failed.attemptedSources.contains("huggingface")
+        )
+        assertTrue(failed.message.contains("LanXin/models/local-llm/light"))
+        assertTrue(failed.attemptedSources.size >= 3)
+        assertTrue(events.last() is DebugAssetDownloadEvent.Failed)
+    }
+
+    @Test
     fun rootDir_isLanXinUserVisible() {
         assertEquals("LanXin", DebugOpenSourcePaths.ROOT_DIR)
         assertTrue(DebugOpenSourcePaths.LIVE2D_MAO_MODEL3_REL.startsWith("LanXin/"))

@@ -164,10 +164,15 @@ class DebugAssetDownloader @Inject constructor(
         val label: String
     )
 
+    /**
+     * 多源全部失败：携带每个源各自的错误摘要，避免 UI 只显示最后一个 HF timeout。
+     */
     private class MultiSourceFailure(
-        cause: Throwable,
-        val attempted: List<String>
-    ) : Exception(cause.message, cause)
+        val errorsBySource: List<Pair<String, String>>,
+        cause: Throwable?
+    ) : Exception(formatSourceErrors(errorsBySource), cause) {
+        val attempted: List<String> get() = errorsBySource.map { it.first }
+    }
 
     private suspend fun installLive2d(
         baseDir: File,
@@ -242,7 +247,7 @@ class DebugAssetDownloader @Inject constructor(
         preferred: DebugAssetMirror,
         emit: suspend (DebugAssetDownloadEvent) -> Unit
     ): UsedSource {
-        val attempted = mutableListOf<String>()
+        val errorsBySource = mutableListOf<Pair<String, String>>()
         var lastError: Throwable? = null
         val multi = DebugAssetCatalog.localLlmMultiFileSources(preferred)
         for (source in multi) {
@@ -258,13 +263,11 @@ class DebugAssetDownloader @Inject constructor(
                 throw ce
             } catch (t: Throwable) {
                 lastError = t
-                attempted += source.label
+                errorsBySource += source.label to shortError(t)
+                // 保留 staging/.part：用户重试同源可续传；各源目录按 label 隔离
             }
         }
-        throw MultiSourceFailure(
-            lastError ?: IllegalStateException("本地脑下载失败"),
-            attempted
-        )
+        throw MultiSourceFailure(errorsBySource, lastError)
     }
 
     private suspend fun installAsrOrTts(
@@ -273,7 +276,7 @@ class DebugAssetDownloader @Inject constructor(
         preferred: DebugAssetMirror,
         emit: suspend (DebugAssetDownloadEvent) -> Unit
     ): UsedSource {
-        val attempted = mutableListOf<String>()
+        val errorsBySource = mutableListOf<Pair<String, String>>()
         var lastError: Throwable? = null
 
         val multi = when (kind) {
@@ -290,7 +293,7 @@ class DebugAssetDownloader @Inject constructor(
                 throw ce
             } catch (t: Throwable) {
                 lastError = t
-                attempted += source.label
+                errorsBySource += source.label to shortError(t)
             }
         }
 
@@ -305,16 +308,19 @@ class DebugAssetDownloader @Inject constructor(
                 throw ce
             } catch (t: Throwable) {
                 lastError = t
-                attempted += candidate.label
+                errorsBySource += candidate.label to shortError(t)
             }
         }
 
-        throw MultiSourceFailure(
-            lastError ?: IllegalStateException("下载失败"),
-            attempted
-        )
+        throw MultiSourceFailure(errorsBySource, lastError)
     }
 
+    /**
+     * 多文件安装：可恢复。
+     * - 已完整落盘的文件跳过；
+     * - 失败保留 staging 与 `*.part`（transport Range 续传）；
+     * - 成功后迁入目标目录并清理 staging。
+     */
     private suspend fun installMultiFileSource(
         baseDir: File,
         source: DebugAssetCatalog.MultiFileSource,
@@ -324,16 +330,37 @@ class DebugAssetDownloader @Inject constructor(
             baseDir,
             "${DebugOpenSourcePaths.ROOT_DIR}/.tmp/mf-${source.label}-staging"
         )
-        if (staging.exists()) staging.deleteRecursively()
         staging.mkdirs()
 
         val files = source.relativeFiles
         var done = 0
+        // 统计已就绪文件，进度起点不为 0
+        for (rel in files) {
+            val existing = File(staging, rel)
+            if (existing.isFile && existing.length() > 0L) done++
+        }
+        val alreadyDone = done
+        done = 0
         for (rel in files) {
             currentCoroutineContext().ensureActive()
-            val url = "${source.baseUrl.trimEnd('/')}/$rel"
             val dest = File(staging, rel)
             dest.parentFile?.mkdirs()
+            if (dest.isFile && dest.length() > 0L) {
+                done++
+                val overall = (done * 100) / files.size
+                emit(
+                    DebugAssetDownloadEvent.Progress(
+                        downloadedBytes = done.toLong(),
+                        totalBytes = files.size.toLong(),
+                        percent = overall.coerceIn(0, 90),
+                        mirror = source.mirror,
+                        phase = if (alreadyDone > 0) "resuming" else "downloading",
+                        sourceLabel = source.label
+                    )
+                )
+                continue
+            }
+            val url = "${source.baseUrl.trimEnd('/')}/$rel"
             transport.downloadToFile(url, dest) { downloaded, total ->
                 val filePct = if (total > 0) {
                     ((downloaded * 100) / total).toInt().coerceIn(0, 100)
@@ -372,6 +399,9 @@ class DebugAssetDownloader @Inject constructor(
         val target = File(baseDir, source.modelDirRel)
         if (target.exists()) target.deleteRecursively()
         target.parentFile?.mkdirs()
+        // 迁入前去掉残留 .part
+        staging.walkTopDown().filter { it.isFile && it.name.endsWith(".part") }
+            .forEach { runCatching { it.delete() } }
         if (!staging.renameTo(target)) {
             staging.copyRecursively(target, overwrite = true)
             staging.deleteRecursively()
@@ -402,7 +432,7 @@ class DebugAssetDownloader @Inject constructor(
             .substringBefore('?')
         val archive = File(tmp, archiveName)
         try {
-            if (archive.exists()) archive.delete()
+            // 保留 .part / 已下字节，由 transport Range 续传
             transport.downloadToFile(candidate.url, archive) { downloaded, total ->
                 val pct = if (total > 0) {
                     ((downloaded * 85) / total).toInt().coerceIn(0, 85)
@@ -452,7 +482,7 @@ class DebugAssetDownloader @Inject constructor(
         ) -> Unit
     ): UsedSource {
         var lastError: Throwable? = null
-        val attempted = mutableListOf<String>()
+        val errorsBySource = mutableListOf<Pair<String, String>>()
         for (candidate in candidates) {
             currentCoroutineContext().ensureActive()
             try {
@@ -468,21 +498,61 @@ class DebugAssetDownloader @Inject constructor(
                 throw ce
             } catch (t: Throwable) {
                 lastError = t
-                attempted += candidate.label
+                errorsBySource += candidate.label to shortError(t)
                 destFile.delete()
             }
         }
-        throw MultiSourceFailure(
-            lastError ?: IllegalStateException("所有镜像均失败"),
-            attempted
-        )
+        throw MultiSourceFailure(errorsBySource, lastError)
     }
 
     companion object {
         fun shortError(t: Throwable): String {
+            // MultiSourceFailure 已聚合，直接用其 message
+            if (t is MultiSourceFailure) {
+                val msg = t.message.orEmpty()
+                return if (msg.length <= 220) msg else msg.take(217) + "…"
+            }
             val root = generateSequence(t) { it.cause }.last()
             val raw = root.message?.takeIf { it.isNotBlank() } ?: root.javaClass.simpleName
-            return if (raw.length <= 160) raw else raw.take(157) + "…"
+            // 去掉冗长 URL 路径，保留关键超时文案
+            val compact = compactTimeoutMessage(raw)
+            return if (compact.length <= 160) compact else compact.take(157) + "…"
+        }
+
+        /**
+         * 压缩 Ktor/CIO timeout 文案：
+         * `Connect timeout has expired [url=https://…/config.json, connect_timeout=unknown ms]`
+         * → `Connect timeout (config.json)`
+         */
+        fun compactTimeoutMessage(raw: String): String {
+            val lower = raw.lowercase()
+            if (!lower.contains("timeout")) return raw
+            val file = Regex("""/([^/\s?]+)\s*[,)]""")
+                .findAll(raw)
+                .map { it.groupValues[1] }
+                .lastOrNull()
+            val kind = when {
+                lower.contains("connect timeout") -> "Connect timeout"
+                lower.contains("socket timeout") -> "Socket timeout"
+                lower.contains("request timeout") -> "Request timeout"
+                else -> "Timeout"
+            }
+            return if (file != null) "$kind ($file)" else kind
+        }
+
+        /**
+         * 格式化「源:错误」列表，供 MultiSourceFailure / UI 展示。
+         * 例：`modelscope:Connect timeout; hf-mirror:HTTP 403; huggingface:Connect timeout`
+         */
+        fun formatSourceErrors(errorsBySource: List<Pair<String, String>>): String {
+            if (errorsBySource.isEmpty()) return "所有镜像均失败"
+            return errorsBySource
+                .distinctBy { it.first }
+                .take(6)
+                .joinToString("; ") { (label, err) ->
+                    val short = err.take(48).let { if (err.length > 48) "$it…" else it }
+                    "$label:$short"
+                }
         }
 
         fun failMessage(
@@ -490,16 +560,27 @@ class DebugAssetDownloader @Inject constructor(
             short: String,
             attempted: List<String>
         ): String {
-            val base = if (attempted.isEmpty()) short else {
-                val src = attempted.distinct().take(6).joinToString(",")
-                "$short（已试:$src）"
+            // short 若已含「源:错误」聚合则不再重复拼「已试」
+            val alreadyDetailed = short.contains(':') &&
+                attempted.any { short.contains(it) }
+            val base = when {
+                alreadyDetailed -> short
+                attempted.isEmpty() -> short
+                else -> {
+                    val src = attempted.distinct().take(6).joinToString(",")
+                    "$short（已试:$src）"
+                }
             }
             return when (kind) {
                 DebugAssetKind.LIVE2D -> {
                     val msg = "$base。${DebugAssetCatalog.LIVE2D_DOWNLOAD_FAIL_HINT}"
-                    if (msg.length <= 220) msg else msg.take(217) + "…"
+                    if (msg.length <= 240) msg else msg.take(237) + "…"
                 }
-                else -> if (base.length <= 180) base else base.take(177) + "…"
+                DebugAssetKind.LOCAL_LLM -> {
+                    val msg = "$base。${DebugAssetCatalog.LOCAL_LLM_DOWNLOAD_FAIL_HINT}"
+                    if (msg.length <= 280) msg else msg.take(277) + "…"
+                }
+                else -> if (base.length <= 200) base else base.take(197) + "…"
             }
         }
     }

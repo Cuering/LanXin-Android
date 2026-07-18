@@ -131,6 +131,8 @@ class DebugAssetCatalogTest {
         )
         assertTrue(sources.first().baseUrl.contains("modelscope.cn"))
         assertTrue(sources.first().label == "modelscope")
+        assertTrue(sources.any { it.label == "modelscope-www" })
+        assertTrue(sources.any { it.baseUrl.contains("www.modelscope.cn") })
         assertTrue(sources.any { it.baseUrl.contains("hf-mirror.com") })
         assertTrue(sources.any { it.baseUrl.contains("huggingface.co") })
         assertTrue(DebugAssetCatalog.localLlmRelativeFiles.contains("llm.mnn"))
@@ -141,6 +143,9 @@ class DebugAssetCatalogTest {
         )
         assertTrue(
             DebugAssetCatalog.localLlm.relativeReadyPath.contains("LanXin/models/local-llm")
+        )
+        assertTrue(
+            DebugAssetCatalog.LOCAL_LLM_DOWNLOAD_FAIL_HINT.contains("LanXin/models/local-llm/light")
         )
     }
 }

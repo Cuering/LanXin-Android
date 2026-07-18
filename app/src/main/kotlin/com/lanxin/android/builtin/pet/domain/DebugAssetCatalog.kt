@@ -272,6 +272,9 @@ object DebugAssetCatalog {
     /**
      * 本地脑多文件源：ModelScope（国内优先）→ hf-mirror → HuggingFace。
      * preferred=OFFICIAL 时 HF 先于 ModelScope。
+     *
+     * ModelScope 同时提供 `modelscope.cn` 与 `www.modelscope.cn` 候选，
+     * 部分运营商/DNS 对裸域建连慢或失败。
      */
     fun localLlmMultiFileSources(
         preferred: DebugAssetMirror = DebugAssetMirror.MIRROR_CDN
@@ -282,6 +285,13 @@ object DebugAssetCatalog {
             baseUrl = "https://modelscope.cn/models/$MS_LOCAL_LLM_REPO/resolve/master",
             mirror = DebugAssetMirror.MIRROR_CDN,
             label = "modelscope",
+            relativeFiles = files,
+            modelDirRel = modelDirRel
+        )
+        val modelscopeWww = MultiFileSource(
+            baseUrl = "https://www.modelscope.cn/models/$MS_LOCAL_LLM_REPO/resolve/master",
+            mirror = DebugAssetMirror.MIRROR_CDN,
+            label = "modelscope-www",
             relativeFiles = files,
             modelDirRel = modelDirRel
         )
@@ -300,9 +310,9 @@ object DebugAssetCatalog {
             modelDirRel = modelDirRel
         )
         return if (preferred == DebugAssetMirror.OFFICIAL) {
-            listOf(huggingface, hfMirror, modelscope)
+            listOf(huggingface, hfMirror, modelscope, modelscopeWww)
         } else {
-            listOf(modelscope, hfMirror, huggingface)
+            listOf(modelscope, modelscopeWww, hfMirror, huggingface)
         }
     }
 
@@ -360,4 +370,12 @@ object DebugAssetCatalog {
     const val LIVE2D_BUILTIN_PRIMARY_HINT =
         "Live2D 默认使用仓内官方 Sample Mao，开箱即用，无需联网下载。" +
             "下方「更新」仅覆盖到本机 LanXin/；失败不影响内置模型。"
+
+    /**
+     * 本地脑下载失败提示：Wi‑Fi 重试 + 电脑手动落盘路径。
+     * 手动路径：`LanXin/models/local-llm/light/`（config.json / llm.mnn / weight 等）。
+     */
+    const val LOCAL_LLM_DOWNLOAD_FAIL_HINT =
+        "可连 Wi‑Fi 重试；或电脑下载后放到 LanXin/models/local-llm/light/" +
+            "（config.json、llm_config.json、llm.mnn、llm.mnn.json、llm.mnn.weight、tokenizer 等）。"
 }
