@@ -729,7 +729,13 @@ class DesktopPetViewModel @Inject constructor(
                         refresh()
                     }
                     is DebugAssetDownloadEvent.Failed -> {
-                        val tried = if (event.attemptedSources.isNotEmpty()) {
+                        // message 已含各源错误时不再重复拼「已尝试」
+                        val alreadyDetailed = event.attemptedSources.any { src ->
+                            event.message.contains("$src:")
+                        }
+                        val tried = if (
+                            !alreadyDetailed && event.attemptedSources.isNotEmpty()
+                        ) {
                             " 已尝试：${event.attemptedSources.joinToString(" → ")}"
                         } else {
                             ""

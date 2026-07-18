@@ -17,8 +17,10 @@
 package com.lanxin.android.builtin.pet.data
 
 import com.lanxin.android.builtin.pet.domain.AssetDownloadTransport
-import com.lanxin.android.data.network.NetworkClient
 import io.ktor.client.HttpClient
+import io.ktor.client.engine.cio.CIO
+import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.plugins.timeout
 import io.ktor.client.request.header
 import io.ktor.client.request.prepareGet
 import io.ktor.client.statement.bodyAsChannel
@@ -38,14 +40,26 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
 /**
- * 基于 [NetworkClient] / Ktor 的 Debug 资源下载传输层。
+ * Debug 资源下载专用传输层。
+ *
+ * **不**复用 [com.lanxin.android.data.network.NetworkClient] 的默认短超时：
+ * 本地脑 ~880MB，弱网下 connect 需 30–60s，socket 空闲需更长，request 不设整包上限
+ *（靠进度回调 + 协程取消）。
  */
 @Singleton
-class KtorAssetDownloadTransport @Inject constructor(
-    private val networkClient: NetworkClient
-) : AssetDownloadTransport {
+class KtorAssetDownloadTransport @Inject constructor() : AssetDownloadTransport {
 
-    private val httpClient: HttpClient get() = networkClient()
+    private val httpClient: HttpClient by lazy {
+        HttpClient(CIO) {
+            expectSuccess = false
+            // followRedirects 默认 true，兼容 modelscope / hf 302
+            install(HttpTimeout) {
+                connectTimeoutMillis = CONNECT_TIMEOUT_MS
+                socketTimeoutMillis = SOCKET_TIMEOUT_MS
+                requestTimeoutMillis = REQUEST_TIMEOUT_MS
+            }
+        }
+    }
 
     override suspend fun downloadToFile(
         url: String,
@@ -57,37 +71,49 @@ class KtorAssetDownloadTransport @Inject constructor(
         val tmp = File(destFile.parentFile, destFile.name + ".part")
         if (tmp.exists()) tmp.delete()
 
-        httpClient.prepareGet(url) {
-            header(HttpHeaders.UserAgent, USER_AGENT)
-            header(HttpHeaders.Accept, "*/*")
-        }.execute { response ->
-            if (!response.status.isSuccess()) {
-                throw IllegalStateException(
-                    "下载失败 HTTP ${response.status.value}"
-                )
-            }
-            val total = response.contentLength() ?: -1L
-            val channel: ByteReadChannel = response.bodyAsChannel()
-            var downloaded = 0L
-            val buffer = ByteArray(DEFAULT_BUFFER)
-            FileOutputStream(tmp).use { out ->
-                while (!channel.isClosedForRead) {
-                    ensureActive()
-                    val read = channel.readAvailable(buffer, 0, buffer.size)
-                    if (read <= 0) break
-                    out.write(buffer, 0, read)
-                    downloaded += read
-                    onProgress(downloaded, total)
+        try {
+            httpClient.prepareGet(url) {
+                header(HttpHeaders.UserAgent, USER_AGENT)
+                header(HttpHeaders.Accept, "*/*")
+                // per-request 再写一遍，避免被其它插件覆盖
+                timeout {
+                    connectTimeoutMillis = CONNECT_TIMEOUT_MS
+                    socketTimeoutMillis = SOCKET_TIMEOUT_MS
+                    requestTimeoutMillis = REQUEST_TIMEOUT_MS
+                }
+            }.execute { response ->
+                if (!response.status.isSuccess()) {
+                    throw IllegalStateException(
+                        "下载失败 HTTP ${response.status.value}"
+                    )
+                }
+                val total = response.contentLength() ?: -1L
+                val channel: ByteReadChannel = response.bodyAsChannel()
+                var downloaded = 0L
+                val buffer = ByteArray(DEFAULT_BUFFER)
+                FileOutputStream(tmp).use { out ->
+                    while (!channel.isClosedForRead) {
+                        ensureActive()
+                        val read = channel.readAvailable(buffer, 0, buffer.size)
+                        if (read <= 0) break
+                        out.write(buffer, 0, read)
+                        downloaded += read
+                        onProgress(downloaded, total)
+                    }
                 }
             }
-        }
 
-        if (!tmp.renameTo(destFile)) {
-            tmp.copyTo(destFile, overwrite = true)
+            if (!tmp.renameTo(destFile)) {
+                tmp.copyTo(destFile, overwrite = true)
+                tmp.delete()
+            }
+            if (!destFile.isFile || destFile.length() <= 0L) {
+                throw IllegalStateException("下载文件为空")
+            }
+        } catch (t: Throwable) {
             tmp.delete()
-        }
-        if (!destFile.isFile || destFile.length() <= 0L) {
-            throw IllegalStateException("下载文件为空")
+            destFile.delete()
+            throw t
         }
     }
 
@@ -109,7 +135,19 @@ class KtorAssetDownloadTransport @Inject constructor(
     }
 
     companion object {
-        private const val DEFAULT_BUFFER = 16 * 1024
+        private const val DEFAULT_BUFFER = 64 * 1024
         private const val USER_AGENT = "LanXin-Android-DebugAssetDownloader"
+
+        /** 弱网 / 跨境建连：默认 API 超时过短会导致 modelscope/hf 全挂。 */
+        const val CONNECT_TIMEOUT_MS: Long = 60_000L
+
+        /**
+         * 读空闲超时（两次收包间隔）。大文件靠持续进度重置计时；
+         * 过短会在弱网卡顿时误杀，过长则挂死难发现。
+         */
+        const val SOCKET_TIMEOUT_MS: Long = 5 * 60_000L
+
+        /** 整请求不设上限（880MB 可达数十分钟）；用 socket 空闲 + 用户取消兜底。 */
+        const val REQUEST_TIMEOUT_MS: Long = HttpTimeout.INFINITE_TIMEOUT_MS
     }
 }
