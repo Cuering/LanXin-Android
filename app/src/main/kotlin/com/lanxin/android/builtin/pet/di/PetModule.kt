@@ -19,9 +19,11 @@ package com.lanxin.android.builtin.pet.di
 import com.lanxin.android.builtin.pet.data.KtorAssetDownloadTransport
 import com.lanxin.android.builtin.pet.data.PetPreferences
 import com.lanxin.android.builtin.pet.domain.AssetDownloadTransport
+import com.lanxin.android.builtin.pet.domain.OpenAiVisionExplainClient
 import com.lanxin.android.builtin.pet.domain.PetChatResponder
 import com.lanxin.android.builtin.pet.domain.PetSettings
 import com.lanxin.android.builtin.pet.domain.StubPetChatResponder
+import com.lanxin.android.builtin.pet.domain.VisionExplainClient
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -50,4 +52,8 @@ abstract class PetModule {
     abstract fun bindAssetDownloadTransport(
         impl: KtorAssetDownloadTransport
     ): AssetDownloadTransport
+
+    @Binds
+    @Singleton
+    abstract fun bindVisionExplainClient(impl: OpenAiVisionExplainClient): VisionExplainClient
 }

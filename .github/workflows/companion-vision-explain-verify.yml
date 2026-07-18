@@ -1,0 +1,90 @@
+# 全屏陪伴 · 视觉讲解 V1：Gate + 无 vision 不瞎编 + 默认关
+name: Companion Vision Explain Verify
+
+on:
+  push:
+    branches: [main, 'feat/companion-vision*']
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/pet/**'
+      - 'app/src/test/kotlin/com/lanxin/android/builtin/pet/**'
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/platform/domain/SceneSensingGate.kt'
+      - 'gradle/libs.versions.toml'
+      - 'app/build.gradle.kts'
+      - 'docs/companion-vision-explain.md'
+      - '.github/workflows/companion-vision-explain-verify.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/pet/**'
+      - 'app/src/test/kotlin/com/lanxin/android/builtin/pet/**'
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/platform/domain/SceneSensingGate.kt'
+      - 'gradle/libs.versions.toml'
+      - 'app/build.gradle.kts'
+      - 'docs/companion-vision-explain.md'
+      - '.github/workflows/companion-vision-explain-verify.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: companion-vision-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: Companion vision unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: gradle
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup local.properties and debug keystore
+        run: |
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+          rm -f debug-keystore.jks
+          keytool -genkeypair -v -keystore debug-keystore.jks -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Create assets model dir (models gitignored)
+        run: |
+          mkdir -p app/src/main/assets/models/gte-small
+          touch app/src/main/assets/models/gte-small/.gitkeep
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run companion vision unit tests
+        run: |
+          ./gradlew :app:testDebugUnitTest \
+            --tests "com.lanxin.android.builtin.pet.CompanionVisionSessionTest" \
+            --tests "com.lanxin.android.builtin.pet.VisionModelCapabilityTest" \
+            --tests "com.lanxin.android.builtin.platform.SceneSensingGateTest" \
+            --no-daemon --stacktrace
+
+      - name: Surfaces and docs present
+        run: |
+          test -f docs/companion-vision-explain.md
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/pet/domain/CompanionVisionSession.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/pet/domain/VisionModelCapability.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/pet/domain/OpenAiVisionExplainClient.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/pet/presentation/CompanionCameraPreview.kt
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/pet/CompanionVisionSessionTest.kt
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/pet/VisionModelCapabilityTest.kt
+          grep -E -n "visionLooking|看世界|VisionExplainClient" \
+            app/src/main/kotlin/com/lanxin/android/builtin/pet/presentation/CompanionScreen.kt
+          grep -E -n "bindVisionExplainClient|OpenAiVisionExplainClient" \
+            app/src/main/kotlin/com/lanxin/android/builtin/pet/di/PetModule.kt
+          grep -E -n "camera-core|androidx.camera" gradle/libs.versions.toml app/build.gradle.kts
+          grep -E -n "MSG_NO_VISION|不会假装" \
+            app/src/main/kotlin/com/lanxin/android/builtin/pet/domain/VisionModelCapability.kt
+          grep -E -n "V1 已实现|看世界|提问" docs/companion-vision-explain.md

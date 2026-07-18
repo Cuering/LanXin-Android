@@ -2,7 +2,8 @@
 
 > 状态：**配置 + 确认 Gate + 本地启发式 + 陪伴背景接线 ✅**（`feat/camera-scene-recognition`）  
 > 模块：`builtin/platform` · DataStore 键 `scene_sensing_*` · 设置路由 `Route.SCENE_SENSING`  
-> **不**改 mood 标签协议（#98）与关键词映射（#97）；**不**发明 Live2D exp/motion。
+> **不**改 mood 标签协议（#98）与关键词映射（#97）；**不**发明 Live2D exp/motion。  
+> **#99 仅为 Gate/权限底座。** 真·边看边讲见 **`docs/companion-vision-explain.md`**（全屏陪伴「看世界」）。
 
 ## 1. 目标
 
