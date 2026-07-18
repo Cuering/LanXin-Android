@@ -453,44 +453,98 @@
         }
       }
 
-      // 上次全屏布局高度，用于检测键盘弹起
+      // 布局锁：键盘/IME 绝不 re-layout；layout 只写 base，之后 tick 独占 scale
+      var __lastFullLayoutW = 0;
       var __lastFullLayoutH = 0;
+      var __layoutDone = false;
+      var __nativeModelW = 0;
+      var __nativeModelH = 0;
 
       function resizePixi() {
         if (!pixiApp) return;
         var sz = stageSize();
         try {
-          // 键盘弹起检测：高度骤缩（<85%）且宽度不变→跳过模型重布局
-          if (__lastFullLayoutH > 0 && sz.h < __lastFullLayoutH * 0.85) {
-            pixiApp.renderer.resize(sz.w, sz.h);
+          var prevW = __lastFullLayoutW;
+          var prevH = __lastFullLayoutH;
+          // 键盘弹起：高度下降 → 完全 skip layout / 不碰 base / 不改 scale
+          if (prevH > 0 && sz.h < prevH * 0.92) {
+            // 宽度几乎不变：连 renderer.resize 也跳过，避免 WebView IME 抖动
+            if (prevW > 0 && Math.abs(sz.w - prevW) < 2) {
+              return;
+            }
+            // 仅撑住画布高度，绝不 layoutLive2dModel
+            pixiApp.renderer.resize(sz.w, Math.max(sz.h, prevH));
             return;
           }
-          if (sz.h > __lastFullLayoutH) __lastFullLayoutH = sz.h;
-          pixiApp.renderer.resize(sz.w, sz.h);
-          layoutLive2dModel();
+          // 尺寸变化过小：不 resize、不 layout（防反馈环）
+          if (prevW > 0 && prevH > 0 &&
+              Math.abs(sz.w - prevW) < 4 && Math.abs(sz.h - prevH) < 4) {
+            return;
+          }
+          // 只向上记录「真全屏」尺寸，防止键盘收缩污染 base
+          if (sz.w > prevW) __lastFullLayoutW = sz.w;
+          if (sz.h > prevH) __lastFullLayoutH = sz.h;
+          if (__lastFullLayoutW <= 0) __lastFullLayoutW = sz.w;
+          if (__lastFullLayoutH <= 0) __lastFullLayoutH = sz.h;
+          pixiApp.renderer.resize(
+            __lastFullLayoutW > 0 ? __lastFullLayoutW : sz.w,
+            __lastFullLayoutH > 0 ? __lastFullLayoutH : sz.h
+          );
+          // 动画期间默认不 re-layout；仅首次或真正显著变大（旋转/分屏）才 force
+          if (!__layoutDone) {
+            layoutLive2dModel(true);
+          } else if (
+            (prevW > 0 && Math.abs(sz.w - prevW) > 48) ||
+            (prevH > 0 && sz.h > prevH * 1.12)
+          ) {
+            layoutLive2dModel(true);
+          }
         } catch (e) {}
       }
 
-      function layoutLive2dModel() {
+      /**
+       * 模型布局：只算/写 __baseScale + 初始 x/y。
+       * - 永远用未缩放原生尺寸（缓存 __nativeModelW/H），禁止用动画 scale 回写
+       * - layout 完成后 tick 独占 scale/x/y/rot；动画期间勿与 tick 交替写 scale
+       * - force=true：加载后一次 / 真·显著尺寸变化；否则 no-op
+       */
+      function layoutLive2dModel(force) {
         if (!live2dModel || !pixiApp) return;
+        if (__layoutDone && !force) return;
         try {
           var w = pixiApp.renderer.width / (pixiApp.renderer.resolution || 1);
           var h = pixiApp.renderer.height / (pixiApp.renderer.resolution || 1);
-          // 全屏桌宠构图：更大 scale，角色居中偏下
-          var bounds = live2dModel.getBounds ? live2dModel.getBounds(true) : null;
-          var mw = (bounds && bounds.width) || live2dModel.width || 1;
-          var mh = (bounds && bounds.height) || live2dModel.height || 1;
+          var mw = __nativeModelW;
+          var mh = __nativeModelH;
+          // 仅首次（无缓存）才 scale=1 测 bounds；已有原生尺寸绝不再 transient scale=1（防闪）
+          if (!(mw > 1 && mh > 1)) {
+            if (live2dModel.scale) live2dModel.scale.set(1, 1);
+            if (live2dModel.rotation != null) live2dModel.rotation = 0;
+            var bounds = live2dModel.getBounds ? live2dModel.getBounds(true) : null;
+            mw = (bounds && bounds.width) || live2dModel.width || 1;
+            mh = (bounds && bounds.height) || live2dModel.height || 1;
+            if (!isFinite(mw) || mw <= 0) mw = 1;
+            if (!isFinite(mh) || mh <= 0) mh = 1;
+            if (mw > 1 && mh > 1) {
+              __nativeModelW = mw;
+              __nativeModelH = mh;
+            }
+          }
           var scale = Math.min((w * 1.18) / mw, (h * 1.08) / mh);
           if (!isFinite(scale) || scale <= 0) scale = 0.22;
-          // 略放大，避免小窗感
           scale = scale * 1.05;
-          live2dModel.scale.set(scale);
-          live2dModel.anchor && live2dModel.anchor.set && live2dModel.anchor.set(0.5, 0.5);
-          live2dModel.x = w / 2;
-          live2dModel.y = h * 0.62;
+          // layout 只写 base，并立刻落到 scale；之后动画帧由 tick 独占
           live2dModel.__baseScale = scale;
-          live2dModel.__baseX = live2dModel.x;
-          live2dModel.__baseY = live2dModel.y;
+          live2dModel.__baseX = w / 2;
+          live2dModel.__baseY = h * 0.62;
+          if (live2dModel.scale) live2dModel.scale.set(scale, scale);
+          live2dModel.anchor && live2dModel.anchor.set && live2dModel.anchor.set(0.5, 0.5);
+          live2dModel.x = live2dModel.__baseX;
+          live2dModel.y = live2dModel.__baseY;
+          if (live2dModel.rotation != null) live2dModel.rotation = 0;
+          __layoutDone = true;
+          __lastFullLayoutW = w;
+          __lastFullLayoutH = h;
         } catch (e) {
           console.warn('[LanXin Pet] layout fail', e);
         }
@@ -512,9 +566,9 @@
         var target = Math.max(0, Math.min(1, musicBeat));
         // 强 EMA：更慢跟上尖峰
         musicBeatSmoothed = musicBeatSmoothed * 0.96 + target * 0.04;
-        // 限斜率：约 60fps 下从 0→1 至少 ~1.4s，视觉上柔和
+        // 限斜率：约 60fps 下从 0→1 至少 ~2.8s，视觉上更钝
         var delta = musicBeatSmoothed - musicBeatDisplay;
-        var maxStep = 0.012;
+        var maxStep = 0.006;
         if (delta > maxStep) delta = maxStep;
         if (delta < -maxStep) delta = -maxStep;
         musicBeatDisplay += delta;
@@ -523,49 +577,55 @@
         return musicBeatDisplay;
       }
 
-      /** 慢舞偏移：低频正弦 × 节拍包络；位移/旋转/缩放脉冲均小。 */
+      /**
+       * 慢舞偏移：低频正弦 × 弱节拍包络。
+       * 只动 x/y/rotation；scalePulse ≡ 0（音乐跟随禁止任何缩放）。
+       * 限幅：X≤1.5px Y≤1.0px rot≤0.01
+       */
       function softDanceOffset(beat) {
         var b = Math.max(0, Math.min(1, beat || 0));
-        // 极慢相位：~0.17Hz 主摆 + 更弱副摆
-        var p = dancePhase * 0.018;
-        var p2 = dancePhase * 0.011;
-        // 限幅：X≤2.8px Y≤2.0px rot≤0.018 rad scalePulse≤0.014
-        var swayX = (Math.sin(p) * 1.6 + Math.sin(p2) * 0.7) * (0.25 + b * 0.75);
-        var swayY = (Math.cos(p * 0.85) * 1.1 - Math.sin(p2 * 1.2) * 0.4) * (0.2 + b * 0.8)
-          - b * 0.9;
-        var rot = Math.sin(p * 0.75) * 0.006 + Math.sin(p2) * b * 0.01;
-        var scalePulse = Math.sin(p * 0.9) * 0.004 + b * 0.01;
-        // 二次限幅保险
-        if (swayX > 2.8) swayX = 2.8;
-        if (swayX < -2.8) swayX = -2.8;
-        if (swayY > 2.0) swayY = 2.0;
-        if (swayY < -2.0) swayY = -2.0;
-        if (rot > 0.018) rot = 0.018;
-        if (rot < -0.018) rot = -0.018;
-        if (scalePulse > 0.014) scalePulse = 0.014;
-        if (scalePulse < -0.006) scalePulse = -0.006;
+        // 极慢相位：~0.12Hz 主摆 + 更弱副摆
+        var p = dancePhase * 0.012;
+        var p2 = dancePhase * 0.007;
+        var swayX = (Math.sin(p) * 0.9 + Math.sin(p2) * 0.35) * (0.2 + b * 0.55);
+        var swayY = (Math.cos(p * 0.85) * 0.55 - Math.sin(p2 * 1.1) * 0.2) * (0.15 + b * 0.55)
+          - b * 0.35;
+        var rot = Math.sin(p * 0.7) * 0.004 + Math.sin(p2) * b * 0.004;
+        // scalePulse 必须恒 0：音乐轻舞禁止缩放，杜绝「放大↔正常」闪烁
+        var scalePulse = 0;
+        if (swayX > 1.5) swayX = 1.5;
+        if (swayX < -1.5) swayX = -1.5;
+        if (swayY > 1.0) swayY = 1.0;
+        if (swayY < -1.0) swayY = -1.0;
+        if (rot > 0.01) rot = 0.01;
+        if (rot < -0.01) rot = -0.01;
         return { x: swayX, y: swayY, rot: rot, scalePulse: scalePulse };
       }
 
       function tickCubismFrame() {
         if (!live2dModel) return;
         try {
-          // 静置：仅极轻呼吸；关跟随节奏：无附加晃动
+          // scale 恒定 = __baseScale；音乐跟随彻底禁止改 scale（scalePulse≡0，无 scale 呼吸）
+          // 只写 x/y/rotation；layout 只更新 base，不与 tick 交替抢 scale
           var beat = musicBeatEnabled ? musicBeatDisplay : 0;
-          var breath = Math.sin(breathT * 0.028) * 0.008;
-          var base = live2dModel.__baseScale || (live2dModel.scale && live2dModel.scale.x) || 1;
+          var base = live2dModel.__baseScale;
+          if (base == null || !isFinite(base) || base <= 0) {
+            base = 1;
+            live2dModel.__baseScale = base;
+          }
           var bx = live2dModel.__baseX != null ? live2dModel.__baseX : live2dModel.x;
           var by = live2dModel.__baseY != null ? live2dModel.__baseY : live2dModel.y;
-          var ox = 0, oy = Math.sin(breathT * 0.028) * 0.35, orot = Math.sin(breathT * 0.02) * 0.003;
-          var scaleMul = 1 + breath;
+          // 位移-only 轻呼吸（不改 scale）
+          var ox = 0, oy = Math.sin(breathT * 0.022) * 0.25, orot = Math.sin(breathT * 0.016) * 0.002;
           if (musicBeatEnabled && beat > 0.001) {
             var d = softDanceOffset(beat);
             ox = d.x;
-            oy = d.y + Math.sin(breathT * 0.028) * 0.25;
+            oy = d.y + Math.sin(breathT * 0.022) * 0.15;
             orot = d.rot;
-            scaleMul = 1 + breath + d.scalePulse;
+            // d.scalePulse 恒 0，禁止参与 scale
           }
-          if (live2dModel.scale) live2dModel.scale.set(base * scaleMul);
+          // 恒定 base：不乘 breath / scalePulse，杜绝放大↔正常闪烁
+          if (live2dModel.scale) live2dModel.scale.set(base, base);
           live2dModel.x = bx + ox;
           live2dModel.y = by + oy;
           live2dModel.rotation = orot;
@@ -617,19 +677,19 @@
       function drawShellFrame(ctx, w, h, phase, t, textures) {
         ctx.clearRect(0, 0, w, h);
         var ui = PHASE_UI[phase] || PHASE_UI.IDLE;
-        // 静置极轻呼吸；开跟随节奏时 softDanceOffset 慢舞
-        var breath = Math.sin(t * 0.028) * 0.01;
+        // 位移-only 轻舞；scale 恒 1（scalePulse≡0），杜绝缩放闪
         var beat = musicBeatEnabled ? musicBeatDisplay : 0;
-        var scale = 1 + breath;
+        var scale = 1;
         var swayX = 0;
-        var swayY = Math.sin(t * 0.028) * 0.4;
-        var rot = Math.sin(t * 0.02) * 0.004;
+        var swayY = Math.sin(t * 0.022) * 0.25;
+        var rot = Math.sin(t * 0.016) * 0.002;
         if (musicBeatEnabled && beat > 0.001) {
           var d = softDanceOffset(beat);
           swayX = d.x;
-          swayY = d.y + Math.sin(t * 0.028) * 0.25;
+          swayY = d.y + Math.sin(t * 0.022) * 0.15;
           rot = d.rot;
-          scale = 1 + breath + d.scalePulse;
+          // scalePulse ≡ 0，禁止缩放
+          scale = 1;
         }
         ctx.save();
         ctx.translate(w / 2 + swayX, h / 2 + 8 + swayY);
@@ -882,7 +942,11 @@
                 model.buttonMode = false;
               } catch (e1) {}
               app.stage.addChild(model);
-              layoutLive2dModel();
+              // 加载后只完整 layout 一次；之后禁止用动画 scale 回写 base
+              __layoutDone = false;
+              __nativeModelW = 0;
+              __nativeModelH = 0;
+              layoutLive2dModel(true);
               tryPlayIdleMotion();
               applyCubismExpression(lastExpression, mouthOpen, mouthAnimating);
               resolve(model);
@@ -1081,7 +1145,11 @@
         musicBeatSmoothed = 0;
         musicBeatDisplay = 0;
         dancePhase = 0;
+        __lastFullLayoutW = 0;
         __lastFullLayoutH = 0;
+        __layoutDone = false;
+        __nativeModelW = 0;
+        __nativeModelH = 0;
         if (mouthEl) mouthEl.classList.remove('anim');
         if (hideTimer) clearTimeout(hideTimer);
         hideBubble();

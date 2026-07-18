@@ -30,13 +30,13 @@ import kotlin.math.sqrt
 object MusicBeatAnalyzer {
 
     /** EMA 系数：更小更稳，避免 Visualizer 尖峰传导到 Live2D。 */
-    const val DEFAULT_SMOOTH = 0.14f
+    const val DEFAULT_SMOOTH = 0.08f
 
-    /** 增益：略降，包络更柔和。 */
-    const val DEFAULT_GAIN = 1.6f
+    /** 增益：再降，包络更钝。 */
+    const val DEFAULT_GAIN = 1.2f
 
     /** 每帧最大变化量（0..1），限斜率防抖。 */
-    const val MAX_LEVEL_STEP = 0.04f
+    const val MAX_LEVEL_STEP = 0.02f
 
     /**
      * @param waveform Visualizer captureWaveForm 输出（0..255 无符号字节，中心约 128）

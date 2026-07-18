@@ -576,10 +576,13 @@ private fun CompanionLive2dWebView(
         factory = { ctx ->
             val bridge = DesktopPetBridge { msg -> onBridgeCommand(msg) }
             WebView(ctx).apply {
+                // 固定 MATCH_PARENT：IME 只抬底栏 imePadding，不改 WebView 自身尺寸
                 layoutParams = ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT
                 )
+                isVerticalScrollBarEnabled = false
+                isHorizontalScrollBarEnabled = false
                 setBackgroundColor(0x00000000)
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
@@ -674,7 +677,7 @@ class CompanionViewModel @Inject constructor(
     @Volatile
     private var beatSwayEnabled: Boolean = true
 
-    /** WebView beat 推送限频：约 12Hz，避免每帧 evaluateJavascript 造成剧抖。 */
+    /** WebView beat 推送限频：≥150–200ms，避免 evaluateJavascript 抖 scale/layout。 */
     private var lastBeatPushMs: Long = 0L
     private var lastPushedBeatLevel: Float = -1f
 
@@ -689,11 +692,11 @@ class CompanionViewModel @Inject constructor(
                 lastBeatLevel = level
                 if (!beatSwayEnabled) return@CompanionMusicPlayer
                 val now = System.currentTimeMillis()
-                // 限频 ~12Hz；幅度变化极小则跳过
+                // 限频 ~5–6Hz（≥180ms）；幅度变化极小则跳过
                 val elapsed = now - lastBeatPushMs
                 val delta = kotlin.math.abs(level - lastPushedBeatLevel)
-                if (elapsed < 80L && delta < 0.03f) return@CompanionMusicPlayer
-                if (elapsed < 40L) return@CompanionMusicPlayer
+                if (elapsed < 180L) return@CompanionMusicPlayer
+                if (delta < 0.02f && elapsed < 320L) return@CompanionMusicPlayer
                 lastBeatPushMs = now
                 lastPushedBeatLevel = level
                 _uiState.update {

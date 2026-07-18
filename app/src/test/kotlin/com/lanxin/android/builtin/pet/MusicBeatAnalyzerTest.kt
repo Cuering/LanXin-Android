@@ -62,6 +62,14 @@ class MusicBeatAnalyzerTest {
     }
 
     @Test
+    fun `analyzer defaults are duller after soft-dance fix`() {
+        // 更钝：smooth↓ gain↓ MAX_STEP↓，避免 Visualizer 尖峰驱动位移
+        assertTrue(MusicBeatAnalyzer.DEFAULT_SMOOTH <= 0.1f)
+        assertTrue(MusicBeatAnalyzer.DEFAULT_GAIN <= 1.3f)
+        assertTrue(MusicBeatAnalyzer.MAX_LEVEL_STEP <= 0.025f)
+    }
+
+    @Test
     fun `fallbackPulse in range`() {
         val p = MusicBeatAnalyzer.fallbackPulse(250L, 0f)
         assertTrue(p in 0f..1f)
