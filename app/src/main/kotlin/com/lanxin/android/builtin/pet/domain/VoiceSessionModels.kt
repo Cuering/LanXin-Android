@@ -88,8 +88,8 @@ data class PetConfig(
     val overlayRunning: Boolean = false,
     val autoListen: Boolean = false,
     val live2dModelPath: String = "",
-    /** 背景音乐时 Live2D/壳是否跟随节拍轻晃。默认开。 */
-    val musicBeatSway: Boolean = true,
+    /** 背景音乐时 Live2D 是否用 Cubism 参数轻舞。默认关（真机开着曾不稳，需显式打开）。 */
+    val musicBeatSway: Boolean = false,
     /** 悬浮窗位置（px，Gravity.TOP|START）；未保存时 [OverlayPosition.UNSET]。 */
     val overlayPosition: OverlayPosition = OverlayPosition()
 )

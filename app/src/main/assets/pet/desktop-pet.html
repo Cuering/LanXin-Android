@@ -231,7 +231,8 @@
       var mouthOpen = 0;
       var mouthAnimating = false;
       var musicBeat = 0;
-      var musicBeatEnabled = true;
+      // 默认关：与 Native PetConfig.musicBeatSway=false 一致，避免未显式开启时参数律动干扰
+      var musicBeatEnabled = false;
       // 双级平滑 + 显示值限斜率，避免 Visualizer 尖峰导致剧抖
       var musicBeatSmoothed = 0;
       var musicBeatDisplay = 0;
@@ -584,11 +585,11 @@
           return musicBeatDisplay;
         }
         var target = Math.max(0, Math.min(1, musicBeat));
-        // 强 EMA：更慢跟上尖峰
-        musicBeatSmoothed = musicBeatSmoothed * 0.96 + target * 0.04;
-        // 限斜率：约 60fps 下从 0→1 至少 ~2.8s，视觉上更钝
+        // 更强 EMA：几乎不跟 Visualizer 尖峰
+        musicBeatSmoothed = musicBeatSmoothed * 0.985 + target * 0.015;
+        // 限斜率：约 60fps 下从 0→1 至少 ~5s
         var delta = musicBeatSmoothed - musicBeatDisplay;
-        var maxStep = 0.006;
+        var maxStep = 0.0035;
         if (delta > maxStep) delta = maxStep;
         if (delta < -maxStep) delta = -maxStep;
         musicBeatDisplay += delta;
@@ -605,31 +606,33 @@
        */
       function softDanceCubismParams(beat) {
         var b = Math.max(0, Math.min(1, beat || 0));
-        // 极慢相位：~0.12Hz 主摆 + 更弱副摆
-        var p = dancePhase * 0.012;
-        var p2 = dancePhase * 0.007;
-        var amp = 0.18 + b * 0.55;
+        // 极慢相位 + 更弱幅度：开跟随也只是轻侧身，不抢官方 motion
+        var p = dancePhase * 0.010;
+        var p2 = dancePhase * 0.006;
+        // 节拍只作极弱包络，避免 Visualizer 尖峰把人物甩大
+        var amp = 0.10 + b * 0.22;
         // 头部小幅侧身/点头/歪头
-        var angleX = (Math.sin(p) * 4.2 + Math.sin(p2) * 1.4) * amp;
-        var angleY = (Math.cos(p * 0.85) * 2.6 - Math.sin(p2 * 1.1) * 0.9) * amp;
-        var angleZ = (Math.sin(p * 0.7) * 2.0 + Math.sin(p2) * b * 1.2) * amp;
+        var angleX = (Math.sin(p) * 2.4 + Math.sin(p2) * 0.7) * amp;
+        var angleY = (Math.cos(p * 0.85) * 1.5 - Math.sin(p2 * 1.1) * 0.5) * amp;
+        var angleZ = (Math.sin(p * 0.7) * 1.1 + Math.sin(p2) * b * 0.5) * amp;
         // 身体更弱
-        var bodyX = (Math.sin(p * 0.9) * 1.8 + Math.sin(p2 * 0.8) * 0.6) * amp * 0.55;
-        var bodyY = (Math.cos(p * 0.65) * 1.0) * amp * 0.4;
-        // 慢呼吸：0.35~0.75，节拍略加重
-        var breath = 0.45 + Math.sin(breathT * 0.028) * 0.18 + b * 0.12;
+        var bodyX = (Math.sin(p * 0.9) * 1.0 + Math.sin(p2 * 0.8) * 0.35) * amp * 0.45;
+        var bodyY = (Math.cos(p * 0.65) * 0.55) * amp * 0.35;
+        // 慢呼吸：几乎不跟节拍
+        var breath = 0.45 + Math.sin(breathT * 0.022) * 0.12 + b * 0.04;
         // scalePulse 必须恒 0：音乐轻舞禁止缩放
         var scalePulse = 0;
-        if (angleX > 6) angleX = 6;
-        if (angleX < -6) angleX = -6;
-        if (angleY > 6) angleY = 6;
-        if (angleY < -6) angleY = -6;
-        if (angleZ > 4) angleZ = 4;
-        if (angleZ < -4) angleZ = -4;
-        if (bodyX > 3) bodyX = 3;
-        if (bodyX < -3) bodyX = -3;
-        if (bodyY > 3) bodyY = 3;
-        if (bodyY < -3) bodyY = -3;
+        // 硬限幅：AngleX/Y ≤ 3, AngleZ ≤ 2, Body ≤ 1.5
+        if (angleX > 3) angleX = 3;
+        if (angleX < -3) angleX = -3;
+        if (angleY > 3) angleY = 3;
+        if (angleY < -3) angleY = -3;
+        if (angleZ > 2) angleZ = 2;
+        if (angleZ < -2) angleZ = -2;
+        if (bodyX > 1.5) bodyX = 1.5;
+        if (bodyX < -1.5) bodyX = -1.5;
+        if (bodyY > 1.5) bodyY = 1.5;
+        if (bodyY < -1.5) bodyY = -1.5;
         if (breath < 0) breath = 0;
         if (breath > 1) breath = 1;
         return {
@@ -706,8 +709,8 @@
           tShL = Math.sin(dancePhase * 0.01) * 0.08 * (0.2 + beat * 0.5);
           tShR = -tShL * 0.7;
         }
-        // 强 EMA：停音乐平滑回中立，不跳变
-        var a = active ? 0.08 : 0.06;
+        // 更强 EMA：开时也慢跟，停/关平滑回中立
+        var a = active ? 0.05 : 0.04;
         danceAngleX += (target.angleX - danceAngleX) * a;
         danceAngleY += (target.angleY - danceAngleY) * a;
         danceAngleZ += (target.angleZ - danceAngleZ) * a;
