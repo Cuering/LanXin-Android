@@ -31,6 +31,8 @@ import java.io.InputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -334,8 +336,122 @@ class DebugAssetDownloaderTest {
         assertFalse(events.any { it is DebugAssetDownloadEvent.Completed })
         val failed = events.filterIsInstance<DebugAssetDownloadEvent.Failed>().single()
         assertTrue(failed.message.contains("mid-download") || failed.message.isNotBlank())
+        assertFalse(
+            "Failed 不得是 Flow exception transparency 文案",
+            failed.message.contains("exception transparency", ignoreCase = true) ||
+                failed.message.contains("Flow was collected", ignoreCase = true) ||
+                failed.message.contains("emission happened", ignoreCase = true)
+        )
         assertTrue(events.last() is DebugAssetDownloadEvent.Failed)
         assertEquals(1, events.count { it is DebugAssetDownloadEvent.Failed })
+    }
+
+    /**
+     * 真机复现：Ktor transport 在 withContext(IO) / Undispatched 里调 onProgress，
+     * cold flow 的 emit 会炸 Flow exception transparency。channelFlow+send 应安全。
+     */
+    @Test
+    fun download_progressFromWrongCoroutineContext_doesNotCrash() = runTest {
+        val baseDir = tmp.newFolder("base-wrong-ctx")
+        var progressCalls = 0
+        val transport = object : AssetDownloadTransport {
+            override suspend fun downloadToFile(
+                url: String,
+                destFile: File,
+                onProgress: suspend (Long, Long) -> Unit
+            ) {
+                // 模拟 Ktor：进度回调在「另一层」IO/Undispatched 上下文触发
+                withContext(Dispatchers.IO) {
+                    progressCalls++
+                    onProgress(50L, 100L)
+                    progressCalls++
+                    onProgress(100L, 100L)
+                }
+                destFile.parentFile?.mkdirs()
+                val body = when {
+                    url.endsWith("Mao.model3.json") -> """{"Version":3}"""
+                    url.endsWith("Mao.moc3") -> "moc3-bytes"
+                    else -> "x"
+                }
+                destFile.writeText(body)
+            }
+
+            override suspend fun openStream(url: String): InputStream =
+                ByteArrayInputStream(ByteArray(0))
+        }
+        val downloader = DebugAssetDownloader(transport)
+        val events = downloader.download(
+            baseDir,
+            DebugAssetKind.LIVE2D,
+            DebugAssetMirror.MIRROR_CDN
+        ).toList()
+
+        assertTrue(progressCalls >= 2)
+        assertTrue(events.any { it is DebugAssetDownloadEvent.Started })
+        assertTrue(events.any { it is DebugAssetDownloadEvent.Progress })
+        val completed = events.filterIsInstance<DebugAssetDownloadEvent.Completed>().single()
+        assertEquals(DebugAssetKind.LIVE2D, completed.kind)
+        assertTrue(File(completed.readyPath).isFile)
+        assertFalse(
+            events.any {
+                it is DebugAssetDownloadEvent.Failed &&
+                    (
+                        it.message.contains("exception transparency", ignoreCase = true) ||
+                            it.message.contains("Flow was collected", ignoreCase = true)
+                        )
+            }
+        )
+    }
+
+    @Test
+    fun download_asr_progressFromWrongContext_thenBusinessFailed() = runTest {
+        val baseDir = tmp.newFolder("base-asr-wrong-ctx")
+        var progressCalls = 0
+        val transport = object : AssetDownloadTransport {
+            override suspend fun downloadToFile(
+                url: String,
+                destFile: File,
+                onProgress: suspend (Long, Long) -> Unit
+            ) {
+                // 先从「错上下文」发 Progress，再抛业务错误（真机 github-release 路径）
+                withContext(Dispatchers.Default) {
+                    progressCalls++
+                    onProgress(10L, 100L)
+                }
+                error("network unreachable forever")
+            }
+
+            override suspend fun openStream(url: String): InputStream =
+                ByteArrayInputStream(ByteArray(0))
+        }
+        val downloader = DebugAssetDownloader(transport)
+        val events = downloader.download(
+            baseDir,
+            DebugAssetKind.ASR,
+            DebugAssetMirror.OFFICIAL
+        ).toList()
+
+        assertTrue(progressCalls >= 1)
+        assertTrue(events.first() is DebugAssetDownloadEvent.Started)
+        assertTrue(events.any { it is DebugAssetDownloadEvent.Progress })
+        assertFalse(events.any { it is DebugAssetDownloadEvent.Completed })
+        val failed = events.filterIsInstance<DebugAssetDownloadEvent.Failed>().single()
+        assertEquals(DebugAssetKind.ASR, failed.kind)
+        assertTrue(
+            "应是业务失败消息",
+            failed.message.contains("network") ||
+                failed.message.contains("unreachable") ||
+                failed.message.contains("已试") ||
+                failed.message.isNotBlank()
+        )
+        assertFalse(
+            "不得包装 Flow exception transparency",
+            failed.message.contains("exception transparency", ignoreCase = true) ||
+                failed.message.contains("Flow was collected", ignoreCase = true) ||
+                failed.message.contains("emission happened", ignoreCase = true) ||
+                failed.message.contains("Undispatched", ignoreCase = true)
+        )
+        assertTrue(events.last() is DebugAssetDownloadEvent.Failed)
     }
 
     @Test
