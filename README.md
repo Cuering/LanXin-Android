@@ -60,6 +60,7 @@ app/         壳应用（Compose UI 入口）
 | [builtin/pet/README.md](./builtin/pet/README.md) | 桌宠 / 语音陪伴（Phase 6） |
 | [docs/meiju-style-pet.md](./docs/meiju-style-pet.md) | 妹居风格架构对照（资源不入库） |
 | [docs/system-tools.md](./docs/system-tools.md) | Phase 7 系统能力（日历/闹钟/笔记/文件） |
+| [docs/scene-sensing.md](./docs/scene-sensing.md) | 摄像头场景识别（默认关 + 确认 Gate） |
 | [builtin/systemtools/README.md](./builtin/systemtools/README.md) | 系统能力模块 |
 | [docs/dynamic-plugins.md](./docs/dynamic-plugins.md) | 动态插件加载 / 管理 / 市场 / 签名 |
 | [docs/claw-host.md](./docs/claw-host.md) | 机器人 / Claw 常驻宿主 |

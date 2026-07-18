@@ -21,7 +21,8 @@ Phase 6 主线：**M1 ✅** 骨架 · **M2a ✅** 路径就绪 · **M2b ✅** Li
 - ✅ **P3**：Cubism Core 真 load moc3（见 `docs/live2d-cubism-render.md`）
 - ✅ **M2b 打磨**：`PetExpressionController` + `SET_EXPRESSION` + 口型动画 + 停止复位会话
 - ✅ **P3 Cubism 真渲染**：`assets/pet/lib/` + `LIVE2D_REAL`（失败降级壳）
-- 🔜 M4 合规自有 L2D · M5 场景
+- 🔜 M4 合规自有 L2D
+- ✅ M5 最小场景识别（设置 → 场景识别；`docs/scene-sensing.md`）
 
 ## 入口
 

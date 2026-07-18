@@ -40,6 +40,7 @@ import com.lanxin.android.builtin.pet.presentation.CompanionScreen
 import com.lanxin.android.builtin.pet.presentation.DesktopPetScreen
 import com.lanxin.android.builtin.systemtools.presentation.SystemToolsScreen
 import com.lanxin.android.builtin.platform.presentation.DeviceSensingScreen
+import com.lanxin.android.builtin.platform.presentation.SceneSensingScreen
 import com.lanxin.android.builtin.platform.presentation.WebSearchScreen
 import com.lanxin.android.builtin.voice.presentation.VoiceAsrScreen
 import com.lanxin.android.plugin.claw.presentation.ClawHostScreen
@@ -83,6 +84,7 @@ fun SetupNavGraph(navController: NavHostController) {
         systemToolsScreenNavigation(navController)
         webSearchScreenNavigation(navController)
         deviceSensingScreenNavigation(navController)
+        sceneSensingScreenNavigation(navController)
         clawHostScreenNavigation(navController)
     }
 }
@@ -158,6 +160,14 @@ fun NavGraphBuilder.webSearchScreenNavigation(navController: NavHostController) 
 fun NavGraphBuilder.deviceSensingScreenNavigation(navController: NavHostController) {
     composable(Route.DEVICE_SENSING) {
         DeviceSensingScreen(
+            onBackAction = { navController.navigateUp() }
+        )
+    }
+}
+
+fun NavGraphBuilder.sceneSensingScreenNavigation(navController: NavHostController) {
+    composable(Route.SCENE_SENSING) {
+        SceneSensingScreen(
             onBackAction = { navController.navigateUp() }
         )
     }
@@ -492,6 +502,7 @@ fun NavGraphBuilder.settingNavigation(navController: NavHostController) {
                 onNavigateToSystemTools = { navController.navigate(Route.SYSTEM_TOOLS) },
                 onNavigateToWebSearch = { navController.navigate(Route.WEB_SEARCH) },
                 onNavigateToDeviceSensing = { navController.navigate(Route.DEVICE_SENSING) },
+                onNavigateToSceneSensing = { navController.navigate(Route.SCENE_SENSING) },
                 onNavigateToClawHost = { navController.navigate(Route.CLAW_HOST) }
             )
         }

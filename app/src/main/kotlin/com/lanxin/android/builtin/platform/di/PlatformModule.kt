@@ -18,8 +18,10 @@ package com.lanxin.android.builtin.platform.di
 
 import com.lanxin.android.builtin.platform.PlatformPlugin
 import com.lanxin.android.builtin.platform.data.DeviceSensingPreferences
+import com.lanxin.android.builtin.platform.data.SceneSensingPreferences
 import com.lanxin.android.builtin.platform.data.WebSearchPreferences
 import com.lanxin.android.builtin.platform.domain.DeviceSensingSettings
+import com.lanxin.android.builtin.platform.domain.SceneSensingSettings
 import com.lanxin.android.builtin.platform.domain.WebSearchSettings
 import com.lanxin.android.plugin.PluginManager
 import dagger.Binds
@@ -35,6 +37,7 @@ import javax.inject.Singleton
  *
  * - WebSearchSettings → WebSearchPreferences（DataStore）
  * - DeviceSensingSettings → DeviceSensingPreferences（DataStore）
+ * - SceneSensingSettings → SceneSensingPreferences（DataStore）
  */
 @Module
 @DisableInstallInCheck
@@ -48,6 +51,10 @@ abstract class PlatformBindModule {
     @Binds
     @Singleton
     abstract fun bindDeviceSensingSettings(impl: DeviceSensingPreferences): DeviceSensingSettings
+
+    @Binds
+    @Singleton
+    abstract fun bindSceneSensingSettings(impl: SceneSensingPreferences): SceneSensingSettings
 }
 
 /**

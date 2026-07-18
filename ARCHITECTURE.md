@@ -30,6 +30,7 @@
 > - Phase 7.5：对话/桌宠一体接入 ✅（#56）——DeviceToolBridge chat/voice turn + VoiceSession 听→想→办→说
 > - 联网搜索（WebSearch）：配置门闸 + 设置页 + Agent 按开关启用 ✅（`feat/websearch-config`）——默认关；不改 ChatRouter needsTools
 > - 设备感知（system_info）：配置门闸 + 设置页 + Agent 按开关启用 ✅（`feat/device-sensing-gate`）——默认关；只读；不改 ChatRouter needsTools
+> - 场景识别（摄像头→陪伴背景/mood）：默认关 + 确认 Gate + 本地启发式 ✅（`feat/camera-scene-recognition`）——不偷拍；只映射现有资源
 > - 机器人 / Claw 宿主：动态插件常驻 + PlatformHost 扩展点 ✅（`feat/claw-host-dynamic-plugins`）——默认关；签名/市场沿用 5.3–5.6
 
 ---
@@ -120,6 +121,7 @@ LanXin-Android/
 | 提供商模型列表 | OpenAI 兼容走 `GET {apiUrl}/models`；Anthropic/Google/兰心仍手输 | 对齐 AstrBot；不改 ChatRouter / needsTools |
 | 联网搜索 web_search | 默认关；设置页开关；Gate 过滤工具列表 + 拒绝执行 | 外发查询需用户授权；有工具 ≠ needsTools 首轮强制云端 |
 | 设备感知 system_info | 默认关；设置页开关；Gate 过滤 + 拒绝执行；只读 | 设备/网络/电量上下文需用户授权；不含位置/通讯录 |
+| 场景识别 camera→scene | 默认关；首次确认 Gate；本地启发式→现有背景/mood | 不后台偷拍；不发明 Live2D；见 `docs/scene-sensing.md` |
 
 ---
 
@@ -615,7 +617,7 @@ app/.../plugins/unifiedinbox/
 | **6.5 / P1** | Sherpa-ONNX Offline TTS（真引擎进 APK） | 🔴 高 | 2d | ✅ P1；模型外置 LanXin/tts |
 | **6.6 / M1** | 桌宠悬浮窗 + VoiceSession 主线（听→想→说） | 🔴 高 | 4d | ✅ M1（#48） |
 | **6.6 / M2** | 路径就绪 + Live2D 真显 + 引擎可接 | 🔴 高 | 3d | ✅ M2a（#49）· ✅ M2b（#57）· ✅ 表情打磨（本 PR） |
-| **6.7 / M5** | 场景感知：UsageStats + 截屏 → 桌宠主动关怀 | 🔴 高 | 3d | 🔜 |
+| **6.7 / M5** | 场景识别：摄像头快照 + 确认 Gate → 现有背景/mood（UsageStats/截屏后续） | 🔴 高 | 3d | ✅ 最小（`docs/scene-sensing.md`） |
 
 **交付主线：** **桌宠语音会话**（妹居级：Live2D/占位 + 语音听/说 + 对话）；6.5 TTS / 6.6 Pet 合并进该主线叙述。见 `docs/meiju-style-pet.md`。
 
@@ -885,6 +887,7 @@ Phase 4（基础夯实）   Phase 5（平台扩展）     Phase 6（端侧智能
 | OpenAI 兼容模型列表 / 提供商配置对齐 | **提供商对齐 P0+P1** | 自动拉取 + 选模型 UX + 中性 token 测速（`ping-lx-1`）；见 `docs/provider-alignment.md` |
 | 联网搜索 web_search 配置门闸 | **WebSearch 配置** | DataStore + WebSearchGate + 设置页；默认关；见 `docs/websearch.md` |
 | 设备感知 system_info 配置门闸 | **Device Sensing** | DataStore + DeviceSensingGate + 设置页；默认关；见 `docs/device-sensing.md` |
+| 摄像头场景识别 | **Scene Sensing** | 默认关 + 确认 Gate + LocalSceneClassifier；见 `docs/scene-sensing.md` |
 
 ---
 

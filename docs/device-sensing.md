@@ -26,7 +26,8 @@
 | network | available / type / metered | 既有 ACCESS_NETWORK_STATE |
 | battery | percent / status / charging / temperature | 粘性广播，无额外权限 |
 
-**明确不含**：位置、通讯录、短信、麦克风、摄像头、无障碍、UsageStats、系统分区读写。
+**明确不含**：位置、通讯录、短信、麦克风、摄像头、无障碍、UsageStats、系统分区读写。  
+摄像头场景识别见独立能力 [`docs/scene-sensing.md`](./scene-sensing.md)（默认关 + 确认 Gate）。
 
 ## 3. 架构
 
@@ -76,6 +77,6 @@ app/src/main/kotlin/com/lanxin/android/builtin/platform/
 
 ## 6. 非目标（本 PR）
 
-- UsageStats / 截屏场景感知（桌宠 M5）
+- UsageStats / 截屏场景感知（桌宠 M5 扩展；摄像头最小场景见 `docs/scene-sensing.md`）
 - 精确定位、传感器流、后台持续采样
 - 本机全量 Gradle 编译（验证走 CI）
