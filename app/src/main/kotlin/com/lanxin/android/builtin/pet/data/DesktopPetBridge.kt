@@ -116,13 +116,6 @@ class DesktopPetBridge(
         return lastOutbound
     }
 
-    /** Native → Web：音乐节拍能量。 */
-    fun encodeMusicBeat(level01: Float, enabled: Boolean = true): String {
-        val msg = PetBridgeProtocol.setMusicBeatMessage(level01, enabled)
-        lastOutbound = PetBridgeProtocol.encode(msg)
-        return lastOutbound
-    }
-
     /** Native → Web：播放官方 motion（Idle / TapBody）。 */
     fun encodePlayMotion(group: String, index: Int? = null): String {
         val msg = PetBridgeProtocol.playMotionMessage(group, index)

@@ -66,7 +66,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -167,14 +166,12 @@ fun CompanionScreen(
         CompanionLive2dWebView(
             modifier = Modifier.fillMaxSize(),
             pushTicket = state.webPushTicket,
-            beatTicket = state.beatPushTicket,
             onWebReady = viewModel::onWebReady,
             onBridgeCommand = viewModel::onBridgeCommand,
             encodeSession = viewModel::encodeSessionRaw,
             encodeExpression = viewModel::encodeExpressionRaw,
             encodeBubble = viewModel::encodeBubbleRaw,
-            encodeLoadLive2d = viewModel::encodeLoadLive2dRaw,
-            encodeMusicBeat = viewModel::encodeMusicBeatRaw
+            encodeLoadLive2d = viewModel::encodeLoadLive2dRaw
         )
 
         // 顶栏：半透明浮在模型上，不挤占中间舞台
@@ -330,7 +327,6 @@ fun CompanionScreen(
                     onNext = viewModel::nextTrack,
                     onPick = { pickAudio.launch(arrayOf("audio/*")) },
                     onSelectTrack = viewModel::playTrackAt,
-                    onToggleBeatSway = viewModel::setMusicBeatSway,
                     onVolume = viewModel::setMusicVolume,
                     onRefresh = viewModel::refreshMusicPlaylist,
                     onClose = { musicPanelOpen = false }
@@ -408,7 +404,6 @@ private fun CompanionMusicPanel(
     onNext: () -> Unit,
     onPick: () -> Unit,
     onSelectTrack: (Int) -> Unit,
-    onToggleBeatSway: (Boolean) -> Unit,
     onVolume: (Float) -> Unit,
     onRefresh: () -> Unit,
     onClose: () -> Unit
@@ -501,21 +496,6 @@ private fun CompanionMusicPanel(
                 valueRange = 0f..1f,
                 modifier = Modifier.fillMaxWidth()
             )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "跟随节奏（Cubism 轻舞，默认关）",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFF5A2038),
-                    modifier = Modifier.weight(1f)
-                )
-                Switch(
-                    checked = state.musicBeatSway,
-                    onCheckedChange = onToggleBeatSway
-                )
-            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = onPick) { Text("导入音频") }
                 TextButton(onClick = onRefresh) { Text("扫描目录") }
@@ -548,14 +528,12 @@ private fun CompanionMusicPanel(
 private fun CompanionLive2dWebView(
     modifier: Modifier,
     pushTicket: Long,
-    beatTicket: Long,
     onWebReady: () -> Unit,
     onBridgeCommand: (PetBridgeMessage) -> Unit,
     encodeSession: () -> String?,
     encodeExpression: () -> String?,
     encodeBubble: () -> String?,
-    encodeLoadLive2d: () -> String?,
-    encodeMusicBeat: () -> String?
+    encodeLoadLive2d: () -> String?
 ) {
     val webViewRef = remember { mutableStateOf<WebView?>(null) }
 
@@ -610,9 +588,6 @@ private fun CompanionLive2dWebView(
                 pushRaw(webView, encodeExpression())
                 pushRaw(webView, encodeBubble())
             }
-            if (beatTicket > 0L) {
-                pushRaw(webView, encodeMusicBeat())
-            }
         }
     )
 
@@ -640,14 +615,11 @@ data class CompanionUiState(
     val statusLine: String = "内置 Live2D · 可直接打字",
     val lastReply: String = "",
     val webPushTicket: Long = 0L,
-    val beatPushTicket: Long = 0L,
     val musicPlaying: Boolean = false,
     val musicTitle: String = "",
     val musicError: String? = null,
     val musicDirHint: String = "LanXin/music/",
-    val musicBeatSway: Boolean = false,
     val musicVolume: Float = 0.7f,
-    val beatLevel: Float = 0f,
     val trackNames: List<String> = emptyList(),
     val trackIndex: Int = -1,
     val trackCount: Int = 0
@@ -671,16 +643,6 @@ class CompanionViewModel @Inject constructor(
     @Volatile
     private var modelPath: String = ""
 
-    @Volatile
-    private var lastBeatLevel: Float = 0f
-
-    @Volatile
-    private var beatSwayEnabled: Boolean = false
-
-    /** WebView beat 推送限频：≥150–200ms，避免 evaluateJavascript 抖 scale/layout。 */
-    private var lastBeatPushMs: Long = 0L
-    private var lastPushedBeatLevel: Float = -1f
-
     private var musicPlayer: CompanionMusicPlayer? = null
 
     private fun player(): CompanionMusicPlayer {
@@ -688,24 +650,6 @@ class CompanionViewModel @Inject constructor(
         if (existing != null) return existing
         val created = CompanionMusicPlayer(
             appContext = appContext,
-            onBeat = { level ->
-                lastBeatLevel = level
-                if (!beatSwayEnabled) return@CompanionMusicPlayer
-                val now = System.currentTimeMillis()
-                // 限频 ~5–6Hz（≥180ms）；幅度变化极小则跳过
-                val elapsed = now - lastBeatPushMs
-                val delta = kotlin.math.abs(level - lastPushedBeatLevel)
-                if (elapsed < 180L) return@CompanionMusicPlayer
-                if (delta < 0.02f && elapsed < 320L) return@CompanionMusicPlayer
-                lastBeatPushMs = now
-                lastPushedBeatLevel = level
-                _uiState.update {
-                    it.copy(
-                        beatLevel = level,
-                        beatPushTicket = it.beatPushTicket + 1
-                    )
-                }
-            },
             onState = { st ->
                 val names = musicPlayer?.currentTracks()?.map { it.name }.orEmpty()
                 _uiState.update {
@@ -731,15 +675,12 @@ class CompanionViewModel @Inject constructor(
             if (!config.enabled) {
                 petSettings.setEnabled(true)
             }
-            beatSwayEnabled = config.musicBeatSway
             BuiltInMusicAssets.ensureTestTrackInstalled(appContext)
             val p = player()
-            p.setBeatEnabled(beatSwayEnabled)
             p.refreshPlaylist()
             resolveLive2d()
             _uiState.update {
                 it.copy(
-                    musicBeatSway = beatSwayEnabled,
                     musicDirHint = p.musicDirPath(),
                     trackNames = p.currentTracks().map { f -> f.name },
                     trackCount = p.currentTracks().size,
@@ -856,27 +797,6 @@ class CompanionViewModel @Inject constructor(
         }
     }
 
-    fun setMusicBeatSway(enabled: Boolean) {
-        viewModelScope.launch {
-            petSettings.setMusicBeatSway(enabled)
-            beatSwayEnabled = enabled
-            player().setBeatEnabled(enabled)
-            if (!enabled) {
-                lastBeatLevel = 0f
-                lastPushedBeatLevel = 0f
-            }
-            // 开关切换立即推一次（关=0），不受限频阻塞
-            lastBeatPushMs = 0L
-            _uiState.update {
-                it.copy(
-                    musicBeatSway = enabled,
-                    beatLevel = if (enabled) lastBeatLevel else 0f,
-                    beatPushTicket = it.beatPushTicket + 1
-                )
-            }
-        }
-    }
-
     fun importAudio(uriString: String) {
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
@@ -962,13 +882,6 @@ class CompanionViewModel @Inject constructor(
         val decision = lastDecision ?: Live2dDisplayController.decide(modelPath)
         lastDecision = decision
         return bridge.encodeLoadLive2d(decision)
-    }
-
-    fun encodeMusicBeatRaw(): String? {
-        return bridge.encodeMusicBeat(
-            level01 = if (beatSwayEnabled) lastBeatLevel else 0f,
-            enabled = beatSwayEnabled
-        )
     }
 
     private suspend fun resolveLive2d() {

@@ -90,9 +90,6 @@ class VoiceSessionToolBridgeTest {
         override suspend fun setLive2dModelPath(path: String?) {
             config = config.copy(live2dModelPath = path.orEmpty())
         }
-        override suspend fun setMusicBeatSway(enabled: Boolean) {
-            config = config.copy(musicBeatSway = enabled)
-        }
         override suspend fun setOverlayPosition(x: Int, y: Int) {
             config = config.copy(overlayPosition = OverlayPosition(x, y))
         }
