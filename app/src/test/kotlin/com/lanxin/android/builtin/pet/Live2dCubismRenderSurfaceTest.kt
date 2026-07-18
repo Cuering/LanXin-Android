@@ -58,21 +58,28 @@ class Live2dCubismRenderSurfaceTest {
     }
 
     @Test
-    fun desktopPetHtml_softMusicDance_notViolentSway() {
+    fun desktopPetHtml_softMusicDance_usesCubismParamsNotContainerSway() {
         val html = assetFile("pet/desktop-pet.html").readText()
-        // 慢舞路径：强平滑 + 限斜率 + softDanceOffset
+        // 慢舞路径：强平滑 + Cubism 参数轻舞（人物自身律动）
         assertTrue(html.contains("advanceMusicBeatSmooth"))
-        assertTrue(html.contains("softDanceOffset"))
+        assertTrue(html.contains("softDanceCubismParams"))
+        assertTrue(html.contains("applyCubismSoftDance"))
+        assertTrue(html.contains("lockModelTransform"))
         assertTrue(html.contains("musicBeatDisplay"))
         assertTrue(html.contains("tickCubismFrame"))
+        // Cubism 参数：角度 / 身体 / 呼吸
+        assertTrue(html.contains("ParamAngleX"))
+        assertTrue(html.contains("ParamAngleY"))
+        assertTrue(html.contains("ParamAngleZ"))
+        assertTrue(html.contains("ParamBodyAngleX"))
+        assertTrue(html.contains("ParamBodyAngleY"))
+        assertTrue(html.contains("ParamBreath"))
         // 禁止旧的剧烈 beat 位移系数（* beat * 5/6）
         assertFalse(html.contains("beat * 5"))
         assertFalse(html.contains("beat * 6"))
         assertFalse(html.contains("beat * 0.05"))
-        // 新限幅：X≤1.5 Y≤1.0 rot≤0.01；scalePulse 恒 0
-        assertTrue(html.contains("1.5") || html.contains("maxStep"))
-        assertTrue(html.contains("scalePulse = 0") || html.contains("scalePulse: scalePulse"))
-        assertTrue(html.contains("scalePulse 恒") || html.contains("scalePulse = 0"))
+        // scalePulse 恒 0
+        assertTrue(html.contains("var scalePulse = 0") || html.contains("scalePulse = 0"))
     }
 
     @Test
@@ -87,20 +94,28 @@ class Live2dCubismRenderSurfaceTest {
         // 键盘高度下降：skip layout
         assertTrue(html.contains("__lastFullLayoutH"))
         assertTrue(html.contains("0.92"))
-        // softDanceOffset 禁止缩放脉冲
+        // soft dance 禁止缩放脉冲
         assertTrue(html.contains("var scalePulse = 0"))
     }
 
     @Test
-    fun desktopPetHtml_scalePulseAlwaysZero() {
+    fun desktopPetHtml_containerTransformLocked_noStickerSway() {
         val html = assetFile("pet/desktop-pet.html").readText()
-        // softDanceOffset 返回 scalePulse: 0
+        // 容器 transform 锁定：scale=__baseScale, x/y=__baseX/Y, rotation=0
+        assertTrue(html.contains("lockModelTransform"))
+        assertTrue(html.contains("__baseScale"))
+        assertTrue(html.contains("__baseX"))
+        assertTrue(html.contains("__baseY"))
+        // tick 不再用 softDanceOffset 写 live2dModel.x/y/rotation 做整模晃
+        // （softDanceOffset 仅保留给 shell canvas fallback）
+        assertTrue(html.contains("softDanceOffset"))
+        assertTrue(html.contains("drawShellFrame"))
+        // scalePulse 恒 0；禁止 scale 脉冲乘回 scale
         assertTrue(html.contains("var scalePulse = 0"))
-        // tick 路径不把 d.scalePulse 加进 scaleMul
         assertFalse(html.contains("1 + breath + d.scalePulse"))
-        // 位移限幅更小
-        assertTrue(html.contains("swayX > 1.5") || html.contains("if (swayX > 1.5)"))
-        assertTrue(html.contains("swayY > 1.0") || html.contains("if (swayY > 1.0)"))
+        // Cubism 参数限幅存在
+        assertTrue(html.contains("angleX > 6") || html.contains("if (angleX > 6)"))
+        assertTrue(html.contains("bodyX > 3") || html.contains("if (bodyX > 3)"))
     }
 
     @Test
