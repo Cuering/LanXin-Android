@@ -48,6 +48,7 @@ object PetBridgeProtocol {
     const val KEY_LIVE2D_DIR_URL = "live2dDirUrl"
     const val KEY_LIVE2D_MODE = "live2dMode"
     const val KEY_LIVE2D_REASON = "live2dReason"
+
     /**
      * model3.json 的 Base64(UTF-8) 载荷，避免 WebView `fetch(file://)` 失败。
      * NO_WRAP，可直接 atob。
