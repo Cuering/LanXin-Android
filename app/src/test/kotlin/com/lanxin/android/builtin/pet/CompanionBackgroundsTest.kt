@@ -99,4 +99,33 @@ class CompanionBackgroundsTest {
         bad.writeBytes(byteArrayOf(1))
         assertFalse(CompanionBackgrounds.isImageFile(bad))
     }
+
+    @Test
+    fun `resolve relative path under lanXinDir`() {
+        val lanXin = File(tmp.root, "LanXin").apply { mkdirs() }
+        val img = File(lanXin, "backgrounds/rel.jpg").apply {
+            parentFile?.mkdirs()
+            writeBytes(byteArrayOf(1, 2, 3))
+        }
+        val r = CompanionBackgrounds.resolve(
+            CompanionBackgrounds.CUSTOM_ID,
+            "backgrounds/rel.jpg",
+            lanXinDir = lanXin
+        )
+        assertTrue(r is CompanionBackgrounds.Resolved.Image)
+        assertEquals(img.absolutePath, (r as CompanionBackgrounds.Resolved.Image).path)
+    }
+
+    @Test
+    fun `storePathKey prefers relative`() {
+        val lanXin = File(tmp.root, "LanXin").apply { mkdirs() }
+        val img = File(lanXin, "backgrounds/k.jpg").apply {
+            parentFile?.mkdirs()
+            writeBytes(byteArrayOf(1))
+        }
+        assertEquals(
+            "backgrounds/k.jpg",
+            CompanionBackgrounds.storePathKey(img.absolutePath, lanXin)
+        )
+    }
 }

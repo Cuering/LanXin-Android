@@ -23,6 +23,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.lanxin.android.builtin.pet.domain.CompanionBackgrounds
+import com.lanxin.android.builtin.pet.domain.LanXinSafTree
 import com.lanxin.android.builtin.pet.domain.OverlayPosition
 import com.lanxin.android.builtin.pet.domain.PetConfig
 import com.lanxin.android.builtin.pet.domain.PetSettings
@@ -54,6 +55,7 @@ class PetPreferences @Inject constructor(
     private val overlayYKey = intPreferencesKey(KEY_OVERLAY_Y)
     private val companionBgPresetKey = stringPreferencesKey(KEY_COMPANION_BG_PRESET)
     private val companionBgCustomKey = stringPreferencesKey(KEY_COMPANION_BG_CUSTOM)
+    private val lanXinSafTreeKey = stringPreferencesKey(KEY_LANXIN_SAF_TREE)
 
     override suspend fun getConfig(): PetConfig {
         val prefs = dataStore.data.first()
@@ -68,7 +70,8 @@ class PetPreferences @Inject constructor(
             ),
             companionBgPresetId = prefs[companionBgPresetKey]
                 ?: CompanionBackgrounds.DEFAULT_ID,
-            companionBgCustomPath = prefs[companionBgCustomKey].orEmpty()
+            companionBgCustomPath = prefs[companionBgCustomKey].orEmpty(),
+            lanXinSafTreeUri = prefs[lanXinSafTreeKey].orEmpty()
         )
     }
 
@@ -115,6 +118,17 @@ class PetPreferences @Inject constructor(
         }
     }
 
+    override suspend fun setLanXinSafTreeUri(uri: String?) {
+        dataStore.edit { prefs ->
+            val v = uri?.trim().orEmpty()
+            if (v.isBlank()) {
+                prefs.remove(lanXinSafTreeKey)
+            } else {
+                prefs[lanXinSafTreeKey] = v
+            }
+        }
+    }
+
     companion object {
         const val KEY_ENABLED = "desktop_pet_enabled"
         const val KEY_OVERLAY_RUNNING = "desktop_pet_overlay_running"
@@ -129,7 +143,13 @@ class PetPreferences @Inject constructor(
         /** 陪伴页背景预设 ID 或 `custom`。 */
         const val KEY_COMPANION_BG_PRESET = "companion_bg_preset_id"
 
-        /** 自定义背景图绝对路径。 */
+        /**
+         * 自定义背景图路径：优先相对 `LanXin/`（如 `backgrounds/a.jpg`），
+         * 兼容历史绝对路径。
+         */
         const val KEY_COMPANION_BG_CUSTOM = "companion_bg_custom_path"
+
+        /** SAF 公共 LanXin 树 Uri（[LanXinSafTree.PREFS_KEY]）。 */
+        const val KEY_LANXIN_SAF_TREE = LanXinSafTree.PREFS_KEY
     }
 }

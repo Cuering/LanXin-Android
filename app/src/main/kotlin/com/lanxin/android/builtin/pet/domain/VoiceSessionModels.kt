@@ -95,8 +95,16 @@ data class PetConfig(
      * [CompanionBackgrounds.CUSTOM_ID]（配合 [companionBgCustomPath]）。
      */
     val companionBgPresetId: String = CompanionBackgrounds.DEFAULT_ID,
-    /** 自定义背景图绝对路径（仅 custom 模式使用）。 */
-    val companionBgCustomPath: String = ""
+    /**
+     * 自定义背景图路径（仅 custom 模式使用）。
+     * 优先存相对 `LanXin/` 键（如 `backgrounds/a.jpg`），兼容历史绝对路径。
+     */
+    val companionBgCustomPath: String = "",
+    /**
+     * SAF 公共 `LanXin/` 树 Uri（OpenDocumentTree 持久化）。
+     * 空 = 未授权；引擎写盘仍优先 File，SAF 用于公共目录可写/镜像。
+     */
+    val lanXinSafTreeUri: String = ""
 )
 
 /**
@@ -114,6 +122,12 @@ interface PetSettings {
 
     /** 陪伴页背景：预设 ID 或 custom + 可选自定义图路径。 */
     suspend fun setCompanionBackground(presetId: String, customPath: String? = null)
+
+    /**
+     * 保存/清除公共 `LanXin/` SAF 树 Uri。
+     * @param uri content:// tree Uri；null 或空串清除
+     */
+    suspend fun setLanXinSafTreeUri(uri: String?)
 }
 
 /**
