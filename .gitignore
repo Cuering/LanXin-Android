@@ -50,6 +50,12 @@ libs/sherpa-onnx/**
 app/libs/*.aar
 !app/libs/README.md
 
+# MNN prebuilt so downloaded at build time
+app/src/main/jniLibs/**/*.so
+app/libs/*.zip
+!app/libs/README.md
+.tmp-mnn/
+
 # Desktop pet commercial / large assets (never commit Meiju dumps)
 **/models/tts/**
 **/models/live2d/**

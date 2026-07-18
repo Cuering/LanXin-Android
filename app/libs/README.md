@@ -24,11 +24,63 @@ export SHERPA_ONNX_AAR=/path/to/sherpa-onnx-static-link-onnxruntime-1.13.4.aar
 export SHERPA_ONNX_AAR_URL=https://ghfast.top/https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.4/sherpa-onnx-static-link-onnxruntime-1.13.4.aar
 ```
 
-**不要**把 AAR / `.so` commit 进 git。
+## MNN 本地 LLM（P2）
+
+构建时由 `app/build.gradle.kts` 的 `downloadMnnNative` 任务自动拉取官方 zip 并解压 so：
+
+| 属性 | 值 |
+|------|-----|
+| zip | `mnn_3.6.0_android_armv7_armv8_cpu_opencl_vulkan.zip` |
+| 落盘 | `app/src/main/jniLibs/arm64-v8a/*.so`（gitignore） |
+| 默认 URL | `https://github.com/alibaba/MNN/releases/download/3.6.0/...` |
+| JNI | CMake 编 `libmnn_lanxin.so`（`app/src/main/cpp/`） |
+
+覆盖方式：
+
+```bash
+export MNN_NATIVE_ZIP=/path/to/mnn_3.6.0_android_armv7_armv8_cpu_opencl_vulkan.zip
+# 或
+export MNN_NATIVE_URL=https://ghfast.top/https://github.com/alibaba/MNN/releases/download/3.6.0/mnn_3.6.0_android_armv7_armv8_cpu_opencl_vulkan.zip
+```
+
+**不要**把 AAR / `.so` / zip commit 进 git。
 
 模型权重外置：
 
 - ASR → `LanXin/asr/...`
 - TTS → `LanXin/tts/...`（Matcha 另需 `vocos-22khz-univ.onnx` 等 vocoder，可放模型目录或上一级）
+- 本地脑 → `LanXin/models/local-llm/light/`（`config.json` + `llm.mnn` + weight）
 
-许可证：Apache-2.0（见 `third_party/sherpa-onnx/NOTICE`）。
+许可证：
+
+- sherpa-onnx Apache-2.0（见 `third_party/sherpa-onnx/NOTICE`）
+- MNN Apache-2.0（见 `third_party/mnn/NOTICE`）
+
+## MNN（P2 本地 LLM）
+
+构建时由 `app/build.gradle.kts` 的 `downloadMnnNative` 任务自动拉取官方 Android 预编译 zip，并只解压 **arm64-v8a** 的 `.so` 到 `app/src/main/jniLibs/arm64-v8a/`：
+
+| 属性 | 值 |
+|------|-----|
+| 版本 | **3.6.0** |
+| 文件 | `mnn_3.6.0_android_armv7_armv8_cpu_opencl_vulkan.zip`（暂存 `app/libs/`，gitignore） |
+| 来源 | [alibaba/MNN v3.6.0](https://github.com/alibaba/MNN/releases/tag/3.6.0) |
+| 必需 so | `libMNN.so` · `libMNN_Express.so` · `libllm.so` · `libc++_shared.so` |
+| 可选 so | OpenCL / Vulkan / OpenCV / Audio（缺则跳过，CPU 路径仍可用） |
+| 我方 JNI | CMake 产出 `libmnn_lanxin.so`（`app/src/main/cpp/`） |
+
+覆盖方式：
+
+```bash
+# 本地已有 zip
+export MNN_NATIVE_ZIP=/path/to/mnn_3.6.0_android_armv7_armv8_cpu_opencl_vulkan.zip
+
+# 或自定义下载 URL（国内镜像等）
+export MNN_NATIVE_URL=https://ghfast.top/https://github.com/alibaba/MNN/releases/download/3.6.0/mnn_3.6.0_android_armv7_armv8_cpu_opencl_vulkan.zip
+```
+
+**不要**把 zip / `.so` commit 进 git。
+
+模型权重外置：`LanXin/models/local-llm/light/`（`config.json` + `*.mnn` + tokenizer，见 `docs/local-inference.md`）。
+
+许可证：Apache-2.0（见 `third_party/mnn/NOTICE`）。

@@ -95,6 +95,113 @@ val sherpaAarForCompile: File = when {
     else -> sherpaAarLocal
 }
 
+// ---------------------------------------------------------------------------
+// P2: MNN 本地 LLM 预编译 so（构建期下载，不进 git）
+// 官方 zip: mnn_{ver}_android_armv7_armv8_cpu_opencl_vulkan.zip
+// 解压 arm64-v8a → app/src/main/jniLibs/arm64-v8a/（CMake 链 libllm + 我方 JNI）
+// 覆盖: MNN_NATIVE_ZIP=本地 zip 或 MNN_NATIVE_URL=下载 URL
+// ---------------------------------------------------------------------------
+val mnnVersion = "3.6.0"
+val mnnZipFileName = "mnn_${mnnVersion}_android_armv7_armv8_cpu_opencl_vulkan.zip"
+val mnnZipLocal = layout.projectDirectory.file("libs/$mnnZipFileName").asFile
+val mnnJniArm64 = layout.projectDirectory.dir("src/main/jniLibs/arm64-v8a").asFile
+val mnnDefaultUrl =
+    "https://github.com/alibaba/MNN/releases/download/$mnnVersion/$mnnZipFileName"
+val mnnMirrorUrl =
+    "https://ghfast.top/https://github.com/alibaba/MNN/releases/download/$mnnVersion/$mnnZipFileName"
+val mnnRequiredSo = listOf(
+    "libMNN.so",
+    "libMNN_Express.so",
+    "libllm.so",
+    "libc++_shared.so"
+)
+
+fun mnnNativeReady(): Boolean {
+    return mnnRequiredSo.all { name ->
+        val f = File(mnnJniArm64, name)
+        f.isFile && f.length() > 10_000L
+    }
+}
+
+val downloadMnnNative by tasks.registering {
+    group = "lanxin"
+    description = "Download MNN Android prebuilt so into jniLibs (not committed)"
+    outputs.dir(mnnJniArm64)
+    onlyIf {
+        val override = System.getenv("MNN_NATIVE_ZIP")
+        if (!override.isNullOrBlank()) {
+            val src = file(override)
+            if (src.isFile && src.length() > 1_000_000L) {
+                if (src.absolutePath != mnnZipLocal.absolutePath) {
+                    mnnZipLocal.parentFile.mkdirs()
+                    src.copyTo(mnnZipLocal, overwrite = true)
+                }
+                // still need extract if jni not ready
+            }
+        }
+        !mnnNativeReady()
+    }
+    doLast {
+        mnnZipLocal.parentFile.mkdirs()
+        mnnJniArm64.mkdirs()
+        if (!(mnnZipLocal.isFile && mnnZipLocal.length() > 1_000_000L)) {
+            val envUrl = System.getenv("MNN_NATIVE_URL")
+            val urls = buildList {
+                if (!envUrl.isNullOrBlank()) add(envUrl)
+                add(mnnDefaultUrl)
+                add(mnnMirrorUrl)
+            }
+            var lastError: Exception? = null
+            var ok = false
+            for (url in urls) {
+                try {
+                    logger.lifecycle("Downloading MNN native zip from $url")
+                    URI(url).toURL().openStream().use { input ->
+                        Files.copy(input, mnnZipLocal.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                    }
+                    require(mnnZipLocal.isFile && mnnZipLocal.length() > 1_000_000L) {
+                        "Downloaded MNN zip too small: ${mnnZipLocal.length()}"
+                    }
+                    ok = true
+                    break
+                } catch (e: Exception) {
+                    lastError = e
+                    logger.warn("Failed $url: ${e.message}")
+                    mnnZipLocal.delete()
+                }
+            }
+            if (!ok) {
+                throw GradleException(
+                    "Unable to download MNN native zip. Set MNN_NATIVE_ZIP or MNN_NATIVE_URL. Last error: ${lastError?.message}"
+                )
+            }
+        }
+        // extract arm64-v8a so only
+        val tmpDir = layout.buildDirectory.dir("mnn-extract").get().asFile
+        if (tmpDir.exists()) tmpDir.deleteRecursively()
+        tmpDir.mkdirs()
+        copy {
+            from(zipTree(mnnZipLocal))
+            into(tmpDir)
+        }
+        // zip root: mnn_3.6.0_android_.../arm64-v8a/*.so
+        val arm64Dir = tmpDir.walkTopDown()
+            .firstOrNull { it.isDirectory && it.name == "arm64-v8a" }
+            ?: throw GradleException("arm64-v8a not found in $mnnZipLocal")
+        arm64Dir.listFiles()
+            ?.filter { it.isFile && it.name.endsWith(".so") }
+            ?.forEach { so ->
+                so.copyTo(File(mnnJniArm64, so.name), overwrite = true)
+            }
+        require(mnnNativeReady()) {
+            "MNN extract incomplete under $mnnJniArm64: ${mnnJniArm64.list()?.toList()}"
+        }
+        logger.lifecycle(
+            "MNN native ready under $mnnJniArm64 (${mnnJniArm64.list()?.size ?: 0} files)"
+        )
+    }
+}
+
 extensions.configure<ApplicationExtension> {
     namespace = "com.lanxin.android"
     compileSdk = 37
@@ -113,6 +220,22 @@ extensions.configure<ApplicationExtension> {
         // 真机为主；保留 x86_64 供模拟器 / CI 体积可控
         ndk {
             abiFilters += listOf("arm64-v8a", "x86_64")
+        }
+        externalNativeBuild {
+            cmake {
+                cppFlags += listOf("-std=c++17", "-fexceptions", "-frtti")
+                arguments += listOf(
+                    "-DANDROID_STL=c++_shared",
+                    "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
+                )
+            }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
         }
     }
 
@@ -165,7 +288,11 @@ extensions.configure<ApplicationExtension> {
                 "lib/arm64-v8a/libonnxruntime.so",
                 "lib/x86_64/libonnxruntime.so",
                 "lib/armeabi-v7a/libonnxruntime.so",
-                "lib/x86/libonnxruntime.so"
+                "lib/x86/libonnxruntime.so",
+                // MNN / NDK c++_shared 可能与其它 AAR 重复
+                "lib/arm64-v8a/libc++_shared.so",
+                "lib/x86_64/libc++_shared.so",
+                "lib/armeabi-v7a/libc++_shared.so"
             )
         }
     }
@@ -175,17 +302,29 @@ extensions.configure<ApplicationExtension> {
     }
 }
 
-// 保证 preBuild / 编译前 AAR 就绪
-tasks.named("preBuild").configure { dependsOn(downloadSherpaOnnxAar) }
+// 保证 preBuild / 编译前 AAR + MNN so 就绪
+tasks.named("preBuild").configure {
+    dependsOn(downloadSherpaOnnxAar)
+    dependsOn(downloadMnnNative)
+}
 afterEvaluate {
     listOf(
         "compileDebugKotlin",
         "compileReleaseKotlin",
         "compileDebugUnitTestKotlin",
-        "compileReleaseUnitTestKotlin"
+        "compileReleaseUnitTestKotlin",
+        "configureCMakeDebug",
+        "configureCMakeRelWithDebInfo",
+        "configureCMakeRelease",
+        "externalNativeBuildDebug",
+        "externalNativeBuildRelease"
     ).forEach { name ->
         tasks.findByName(name)?.dependsOn(downloadSherpaOnnxAar)
+        tasks.findByName(name)?.dependsOn(downloadMnnNative)
     }
+    // CMake 配置前必须已有 jniLibs
+    tasks.matching { it.name.startsWith("configureCMake") || it.name.startsWith("buildCMake") }
+        .configureEach { dependsOn(downloadMnnNative) }
 }
 
 ksp {

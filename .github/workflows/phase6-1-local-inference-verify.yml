@@ -76,20 +76,35 @@ jobs:
           test -f app/src/main/kotlin/com/lanxin/android/builtin/localinference/domain/InferenceRouteSelector.kt
           test -f app/src/main/kotlin/com/lanxin/android/builtin/localinference/data/StubLocalLlmEngine.kt
           test -f app/src/main/kotlin/com/lanxin/android/builtin/localinference/data/MnnNativeBridge.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/localinference/data/MnnLocalLlmEngine.kt
           test -f app/src/main/kotlin/com/lanxin/android/builtin/localinference/data/LocalInferencePreferences.kt
           test -f app/src/main/kotlin/com/lanxin/android/builtin/localinference/di/LocalInferenceModule.kt
+          test -f app/src/main/cpp/CMakeLists.txt
+          test -f app/src/main/cpp/mnn_lanxin_jni.cpp
+          test -f app/src/main/cpp/mnn_lanxin_jni_stub.cpp
+          test -f third_party/mnn/NOTICE
+          test -f third_party/mnn/include/llm/llm.hpp
+          # cpp dir is 4 levels under repo root: app/src/main/cpp
+          grep -F -n "../../../../third_party/mnn/include" app/src/main/cpp/CMakeLists.txt
           test -f app/src/test/kotlin/com/lanxin/android/builtin/localinference/InferenceRouteSelectorTest.kt
           test -f app/src/test/kotlin/com/lanxin/android/builtin/localinference/StubLocalLlmEngineTest.kt
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/localinference/MnnLocalLlmEngineTest.kt
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/localinference/MnnNativeBridgeTest.kt
           grep -E -n "interface LocalLlmEngine|fun load|fun generate|fun stream|isReady|isAvailable" \
             app/src/main/kotlin/com/lanxin/android/builtin/localinference/domain/LocalLlmEngine.kt
           grep -E -n "fun select|preferLocal|offline_fallback|InferenceRouteTarget" \
             app/src/main/kotlin/com/lanxin/android/builtin/localinference/domain/InferenceRouteSelector.kt
           grep -E -n "local_inference_enabled|local_inference_model_path" \
             app/src/main/kotlin/com/lanxin/android/builtin/localinference/data/LocalInferencePreferences.kt
-          grep -E -n "MnnNativeBridge|System.loadLibrary|validateModelPath" \
+          grep -E -n "MnnNativeBridge|System.loadLibrary|validateModelPath|tryLoadNative|nativeLoadModel" \
             app/src/main/kotlin/com/lanxin/android/builtin/localinference/data/MnnNativeBridge.kt
+          grep -E -n "MnnLocalLlmEngine|usingNative|isUsingNative|native_degraded" \
+            app/src/main/kotlin/com/lanxin/android/builtin/localinference/data/MnnLocalLlmEngine.kt
+          grep -E -n "bindLocalLlmEngine|MnnLocalLlmEngine" \
+            app/src/main/kotlin/com/lanxin/android/builtin/localinference/di/LocalInferenceModule.kt
+          grep -E -n "downloadMnnNative|mnnVersion|libllm" app/build.gradle.kts
           grep -E -n "LOCAL_INFERENCE|LocalInferenceScreen" \
             app/src/main/kotlin/com/lanxin/android/presentation/common/Route.kt \
             app/src/main/kotlin/com/lanxin/android/presentation/common/NavigationGraph.kt
           grep -E -n "6\.1|本地推理|local.inference|MNN" ARCHITECTURE.md
-          grep -E -n "StubLocalLlmEngine|MnnNativeBridge|能力边界" docs/local-inference.md
+          grep -E -n "StubLocalLlmEngine|MnnNativeBridge|MnnLocalLlmEngine|能力边界|P2" docs/local-inference.md

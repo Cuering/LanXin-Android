@@ -1,20 +1,22 @@
-# 本地推理引擎（Phase 6.1–6.3）
+# 本地推理引擎（Phase 6.1–6.3 + P2 MNN）
 
-> 分支：`feat/phase6-3-chat-router`  
-> 状态：**6.1 ✅ 骨架 · 6.2 ✅ 离线兜底 · 6.3 🚧 ChatRouter 统一路由**
+> 分支：`feat/p2-mnn-local-llm`  
+> 状态：**6.1 ✅ 骨架 · 6.2 ✅ 离线兜底 · 6.3 ✅ ChatRouter · P2 ✅ MNN 真引擎进 APK**
 
 ## 目标
 
 落地端侧 LLM 推理抽象层，并在 **无网络且本地就绪** 时自动 fallback 到本地小模型；
-Phase 6.3 将云端 ↔ 本地切换提升为 **一等公民 ChatRouter**。
+Phase 6.3 将云端 ↔ 本地切换提升为 **一等公民 ChatRouter**；
+**P2** 将官方 MNN 预编译 so + 薄 JNI 打进 APK，真机可跑 `Llm::createLLM` / `response`。
 
 ## 能力边界
 
 | 能力 | 状态 |
 |------|------|
 | `LocalLlmEngine` 接口（load / unload / generate / stream / isReady / isAvailable） | ✅ 6.1 |
-| `StubLocalLlmEngine`（无 MNN so，路径校验 + stub 回复） | ✅ 6.1 |
-| `MnnNativeBridge` JNI 接入点 | ✅ 6.1 预留 |
+| `StubLocalLlmEngine`（无 MNN so，路径校验 + stub 回复） | ✅ 6.1（单测保留） |
+| `MnnNativeBridge` JNI 接入点 | ✅ **P2 真实现**（load/generate/unload） |
+| `MnnLocalLlmEngine`（native 失败降级 stub） | ✅ **P2** · Hilt 默认绑定 |
 | DataStore 配置（启用 / 模型路径 / maxTokens / preferLocal） | ✅ 6.1 |
 | `LocalInferenceProvider` → `ApiState` 流 | ✅ 6.1 |
 | `InferenceRouteSelector` 纯逻辑路由（现委托 ChatRouter） | ✅ 6.1 / 6.3 |
@@ -28,8 +30,10 @@ Phase 6.3 将云端 ↔ 本地切换提升为 **一等公民 ChatRouter**。
 | 设置页路由预览 | ✅ **6.2** / 6.3 增强 |
 | **`ChatRouter` 统一决策 + reason 码** | ✅ **6.3** |
 | **needsTools → 优先云端** | ✅ **6.3** |
-| 真实 MNN so + tokenizer + 量化模型 | ❌ 后续 |
+| **真实 MNN so + 薄 JNI 进 APK** | ✅ **P2** |
+| 量化模型权重打包 | ❌ 外置用户自备（不进 git） |
 | 本地 tool_call | ❌ 不做（产品边界） |
+| 真 token 流式回调 | 🔜 后续（现整段 generate 后一次 emit） |
 
 ## Phase 6.3 ChatRouter
 
@@ -150,16 +154,26 @@ app/src/main/kotlin/com/lanxin/android/builtin/localinference/
 │   ├── NetworkStatusProvider.kt
 │   └── ChatLocalFallback.kt
 ├── data/
-│   ├── StubLocalLlmEngine.kt
-│   ├── MnnNativeBridge.kt
+│   ├── StubLocalLlmEngine.kt         ← 单测保留
+│   ├── MnnLocalLlmEngine.kt          ← P2 默认引擎（native / stub 降级）
+│   ├── MnnNativeBridge.kt            ← P2 真 JNI
 │   ├── LocalInferencePreferences.kt
 │   ├── DefaultLocalInferenceProvider.kt
 │   └── ConnectivityNetworkStatusProvider.kt
 ├── di/
-│   └── LocalInferenceModule.kt
+│   └── LocalInferenceModule.kt       ← @Binds MnnLocalLlmEngine
 └── presentation/
     ├── LocalInferenceScreen.kt
     └── LocalInferenceViewModel.kt
+
+app/src/main/cpp/
+├── CMakeLists.txt                    ← arm64 链 libllm；x86_64 stub
+├── mnn_lanxin_jni.cpp
+└── mnn_lanxin_jni_stub.cpp
+
+third_party/mnn/
+├── include/                          ← MNN + llm headers
+└── NOTICE                            ← Apache-2.0
 
 builtin/local_inference/README.md
 docs/local-inference.md   ← 本文
@@ -180,27 +194,43 @@ docs/local-inference.md   ← 本文
 推荐放置：
 
 ```
-{filesDir}/models/local-llm/
-├── model.mnn
-└── tokenizer.json
+{filesDir}/models/local-llm/light/
+├── config.json
+├── *.mnn
+└── tokenizer.*
 ```
 
-单测可用虚拟路径：`stub://demo-model`（`MnnNativeBridge` 认作合法）。
+单测可用虚拟路径：`stub://demo-model`（`MnnNativeBridge` 认作合法，不走 native）。
 
-## MNN 接入路线（后续）
+## P2 MNN 真引擎
 
-1. 引入 `libMNN.so` + CMake / prefab  
-2. 实现 `MnnNativeBridge.loadModel` / `generate`  
-3. 新增 `MnnLocalLlmEngine`，Hilt `@Binds` 替换 stub  
-4. 真机验证 token 流式  
+### 构建期
 
-## 非目标（6.3）
+- `app/build.gradle.kts` → `downloadMnnNative`：拉取 MNN **3.6.0** 官方 Android zip  
+  → 解压 `arm64-v8a/*.so` 到 `app/src/main/jniLibs/arm64-v8a/`（**gitignore**）  
+- 覆盖：`MNN_NATIVE_ZIP` / `MNN_NATIVE_URL`  
+- CMake 编 `libmnn_lanxin.so`；x86_64 用 stub，Kotlin 安全降级  
 
-- 真实 MNN so / 量化权重  
-- 本地 tool_call  
-- ASR / TTS / 桌宠（6.4–6.7）  
-- 修改 AstrBot 系统源码  
+### 运行时
+
+1. `MnnNativeBridge.tryLoadNative` 按序 load：`c++_shared` → `MNN` → `MNN_Express` → `MNN_CL` / `MNN_Vulkan` / `MNNOpenCV` / `MNNAudio` → `llm` → `mnn_lanxin`（与 libllm NEEDED 对齐；仅 c++_shared 允许缺失）  
+2. `nativeLoadModel(path)` → `Llm::createLLM` + `load`（目录下 `config.json` 或 `llm.mnn`）  
+3. `nativeGenerate` → `Llm::response`  
+4. 失败：`MnnLocalLlmEngine` 路径合法则 **READY + isStub 降级**（`native_degraded:`），不崩  
+
+
+### 接入路线（历史 / 已完成）
+
+1. ~~引入 `libMNN.so` + CMake / prefab~~ ✅ P2  
+2. ~~实现 `MnnNativeBridge.loadModel` / `generate`~~ ✅ P2  
+3. ~~新增 `MnnLocalLlmEngine`，Hilt `@Binds` 替换 stub~~ ✅ P2  
+4. 真机验证 token 流式 🔜  
+
+## 非目标
+
 - 打包任何大模型文件进 APK / git  
+- 本地 tool_call  
+- 修改 AstrBot 系统源码  
 
 ## 单测
 
