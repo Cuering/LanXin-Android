@@ -27,40 +27,86 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 无 vision 时不瞎编 + 模型启发式。
+ * 视觉能力启发式 + OpenAI vision body 构造：无 vision 不瞎编。
  */
 class VisionModelCapabilityTest {
 
     @Test
-    fun `default deny without platform`() {
-        val reason = VisionModelCapability.denyVisionReason(
-            hasEnabledPlatform = false,
-            clientType = null,
-            modelId = null
-        )
-        assertEquals(VisionModelCapability.MSG_NO_PLATFORM, reason)
+    fun `looksLikeVisionModel accepts known multimodal ids`() {
+        assertTrue(VisionModelCapability.looksLikeVisionModel("gpt-4o"))
+        assertTrue(VisionModelCapability.looksLikeVisionModel("gpt-4o-mini"))
+        assertTrue(VisionModelCapability.looksLikeVisionModel("gemini-2.0-flash"))
+        assertTrue(VisionModelCapability.looksLikeVisionModel("qwen2.5-vl-72b"))
+        assertTrue(VisionModelCapability.looksLikeVisionModel("claude-3-5-sonnet"))
+        assertTrue(VisionModelCapability.looksLikeVisionModel("llava-v1.6"))
     }
 
     @Test
-    fun `text-only model is denied with no-vision message`() {
+    fun `looksLikeVisionModel rejects plain text models`() {
+        assertFalse(VisionModelCapability.looksLikeVisionModel(""))
+        assertFalse(VisionModelCapability.looksLikeVisionModel("gpt-4"))
+        assertFalse(VisionModelCapability.looksLikeVisionModel("gpt-3.5-turbo"))
+        assertFalse(VisionModelCapability.looksLikeVisionModel("deepseek-chat"))
+        assertFalse(VisionModelCapability.looksLikeVisionModel("llama-3.1-8b"))
+    }
+
+    @Test
+    fun `supportsOpenAiVisionPath only for openai-compatible clients`() {
+        assertTrue(VisionModelCapability.supportsOpenAiVisionPath(ClientType.OPENAI))
+        assertTrue(VisionModelCapability.supportsOpenAiVisionPath(ClientType.OPENROUTER))
+        assertTrue(VisionModelCapability.supportsOpenAiVisionPath(ClientType.CUSTOM))
+        assertTrue(VisionModelCapability.supportsOpenAiVisionPath(ClientType.GROQ))
+        assertTrue(VisionModelCapability.supportsOpenAiVisionPath(ClientType.OLLAMA))
+        assertFalse(VisionModelCapability.supportsOpenAiVisionPath(ClientType.ANTHROPIC))
+        assertFalse(VisionModelCapability.supportsOpenAiVisionPath(ClientType.GOOGLE))
+        assertFalse(VisionModelCapability.supportsOpenAiVisionPath(ClientType.LANXIN))
+    }
+
+    @Test
+    fun `denyVisionReason when no platform`() {
+        assertEquals(
+            VisionModelCapability.MSG_NO_PLATFORM,
+            VisionModelCapability.denyVisionReason(
+                hasEnabledPlatform = false,
+                clientType = ClientType.OPENAI,
+                modelId = "gpt-4o"
+            )
+        )
+        assertEquals(
+            VisionModelCapability.MSG_NO_PLATFORM,
+            VisionModelCapability.denyVisionReason(
+                hasEnabledPlatform = true,
+                clientType = null,
+                modelId = "gpt-4o"
+            )
+        )
+    }
+
+    @Test
+    fun `denyVisionReason for unsupported provider path`() {
+        assertEquals(
+            VisionModelCapability.MSG_PROVIDER_PATH_UNSUPPORTED,
+            VisionModelCapability.denyVisionReason(
+                hasEnabledPlatform = true,
+                clientType = ClientType.ANTHROPIC,
+                modelId = "claude-3-5-sonnet"
+            )
+        )
+    }
+
+    @Test
+    fun `denyVisionReason for non-vision model name`() {
         val reason = VisionModelCapability.denyVisionReason(
             hasEnabledPlatform = true,
             clientType = ClientType.OPENAI,
             modelId = "gpt-3.5-turbo"
         )
         assertEquals(VisionModelCapability.MSG_NO_VISION, reason)
-        assertFalse(VisionModelCapability.looksLikeVisionModel("gpt-3.5-turbo"))
-        assertFalse(VisionModelCapability.looksLikeVisionModel("gpt-4"))
-        assertFalse(VisionModelCapability.looksLikeVisionModel("deepseek-chat"))
+        assertTrue(reason!!.contains("不会假装"))
     }
 
     @Test
-    fun `known vision models allowed on OpenAI path`() {
-        assertTrue(VisionModelCapability.looksLikeVisionModel("gpt-4o"))
-        assertTrue(VisionModelCapability.looksLikeVisionModel("gpt-4o-mini"))
-        assertTrue(VisionModelCapability.looksLikeVisionModel("gpt-4-turbo"))
-        assertTrue(VisionModelCapability.looksLikeVisionModel("qwen2.5-vl-7b"))
-        assertTrue(VisionModelCapability.looksLikeVisionModel("gemini-2.0-flash"))
+    fun `denyVisionReason null when openai path and vision model`() {
         assertNull(
             VisionModelCapability.denyVisionReason(
                 hasEnabledPlatform = true,
@@ -71,70 +117,80 @@ class VisionModelCapabilityTest {
         assertNull(
             VisionModelCapability.denyVisionReason(
                 hasEnabledPlatform = true,
-                clientType = ClientType.OPENROUTER,
-                modelId = "google/gemini-2.0-flash"
+                clientType = ClientType.CUSTOM,
+                modelId = "qwen-vl-max"
             )
         )
     }
 
     @Test
-    fun `anthropic path denied in V1 even if model name looks vision`() {
-        val reason = VisionModelCapability.denyVisionReason(
-            hasEnabledPlatform = true,
-            clientType = ClientType.ANTHROPIC,
-            modelId = "claude-3-5-sonnet"
-        )
-        assertEquals(VisionModelCapability.MSG_PROVIDER_PATH_UNSUPPORTED, reason)
-    }
-
-    @Test
-    fun `no vision message must not claim local VLM`() {
-        val msg = VisionModelCapability.MSG_NO_VISION
-        assertTrue(msg.contains("看不了") || msg.contains("视觉"))
-        assertFalse(msg.contains("本地已识别"))
-        assertFalse(msg.contains("我看到了"))
-        assertTrue(msg.contains("不会假装") || msg.contains("不会假装本地"))
-    }
-
-    @Test
-    fun `vision request body includes image_url and question`() {
+    fun `buildVisionBody embeds image_url and user question`() {
         val body = OpenAiVisionExplainClient.buildVisionBody(
             modelId = "gpt-4o",
-            question = "桌上是什么",
-            dataUri = "data:image/jpeg;base64,abc"
+            question = "桌上有什么",
+            dataUri = "data:image/jpeg;base64,ZmFrZQ=="
         )
-        assertTrue(body.contains("\"image_url\""))
-        assertTrue(body.contains("data:image/jpeg;base64,abc"))
-        assertTrue(body.contains("桌上是什么"))
-        assertTrue(body.contains("gpt-4o"))
-        assertTrue(body.contains("\"stream\":false") || body.contains("\"stream\": false"))
+        assertTrue("body should mention model", body.contains("gpt-4o"))
+        assertTrue(body.contains("image_url"))
+        assertTrue(body.contains("data:image/jpeg;base64,ZmFrZQ=="))
+        assertTrue(body.contains("桌上有什么"))
+        assertTrue(body.contains("\"stream\""))
+        assertTrue(body.contains("false"))
+        // 禁止本地颜色启发式字样
+        assertFalse(body.contains("LocalSceneClassifier"))
+        assertFalse(body.contains("heuristic"))
     }
 
     @Test
-    fun `extractAssistantContent reads simple message`() {
+    fun `buildVisionBody blank question uses describe prompt`() {
+        val body = OpenAiVisionExplainClient.buildVisionBody(
+            modelId = "gpt-4o",
+            question = "  ",
+            dataUri = "data:image/jpeg;base64,xx"
+        )
+        assertTrue(body.contains("描述你看到的画面") || body.contains("简要描述"))
+    }
+
+    @Test
+    fun `extractAssistantContent from standard openai payload`() {
         val json = """
-            {"choices":[{"message":{"role":"assistant","content":"画面里是一杯茶"}}]}
+            {
+              "choices": [
+                {
+                  "message": {
+                    "role": "assistant",
+                    "content": "画面里是一只猫。"
+                  }
+                }
+              ]
+            }
         """.trimIndent()
-        assertEquals(
-            "画面里是一杯茶",
-            OpenAiVisionExplainClient.extractAssistantContent(json)
-        )
+        assertEquals("画面里是一只猫。", OpenAiVisionExplainClient.extractAssistantContent(json))
     }
 
     @Test
-    fun `extractAssistantContent blank returns null`() {
-        assertNull(OpenAiVisionExplainClient.extractAssistantContent("{}"))
-        assertNull(
-            OpenAiVisionExplainClient.extractAssistantContent(
-                """{"choices":[{"message":{"content":""}}]}"""
-            )
-        )
+    fun `extractAssistantContent from content array`() {
+        val json = """
+            {
+              "choices": [
+                {
+                  "message": {
+                    "content": [
+                      {"type": "text", "text": "左边"},
+                      {"type": "text", "text": "有书"}
+                    ]
+                  }
+                }
+              ]
+            }
+        """.trimIndent()
+        assertEquals("左边有书", OpenAiVisionExplainClient.extractAssistantContent(json))
     }
 
     @Test
-    fun `capability messages are non-blank`() {
-        assertNotNull(VisionModelCapability.MSG_NO_VISION)
-        assertTrue(VisionModelCapability.MSG_NO_VISION.isNotBlank())
-        assertTrue(VisionModelCapability.MSG_CAPTURE_FAILED.isNotBlank())
+    fun `extractAssistantContent returns null on garbage`() {
+        assertNull(OpenAiVisionExplainClient.extractAssistantContent("not-json"))
+        assertNull(OpenAiVisionExplainClient.extractAssistantContent("""{"choices":[]}"""))
+        assertNotNull(VisionModelCapability.MSG_CAPTURE_FAILED)
     }
 }

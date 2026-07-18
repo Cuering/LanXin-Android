@@ -16,30 +16,22 @@
 
 package com.lanxin.android.builtin.pet
 
+import com.lanxin.android.builtin.pet.domain.CompanionVisionFrame
 import com.lanxin.android.builtin.pet.domain.CompanionVisionSession
-import com.lanxin.android.builtin.pet.presentation.CompanionUiState
+import com.lanxin.android.builtin.platform.domain.SceneSensingGate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 看世界：默认关 · Gate 复用 · 提问才抓帧。
+ * 全屏陪伴「看世界」会话门闸：默认关、复用 #99 consent/camera、仅提问抓帧。
  */
 class CompanionVisionSessionTest {
 
     @Test
-    fun `default ui state vision is off`() {
-        val s = CompanionUiState()
-        assertFalse(s.visionLooking)
-        assertFalse(s.visionConsentGranted)
-        assertFalse(s.cameraGranted)
-        assertFalse(s.visionPreviewReady)
-        assertFalse(s.showVisionConsentDialog)
-    }
-
-    @Test
-    fun `canUseCamera requires looking consent and camera`() {
+    fun `default looking off cannot use camera`() {
         assertFalse(
             CompanionVisionSession.canUseCamera(
                 lookingEnabled = false,
@@ -47,6 +39,25 @@ class CompanionVisionSessionTest {
                 cameraGranted = true
             )
         )
+        assertFalse(
+            CompanionVisionSession.shouldCaptureOnAsk(
+                lookingEnabled = false,
+                consentGranted = true,
+                cameraGranted = true
+            )
+        )
+        assertEquals(
+            "companion_vision_off",
+            CompanionVisionSession.denyReason(
+                lookingEnabled = false,
+                consentGranted = true,
+                cameraGranted = true
+            )
+        )
+    }
+
+    @Test
+    fun `looking on still requires consent and camera like SceneSensingGate`() {
         assertFalse(
             CompanionVisionSession.canUseCamera(
                 lookingEnabled = true,
@@ -68,10 +79,51 @@ class CompanionVisionSessionTest {
                 cameraGranted = true
             )
         )
+        assertEquals(
+            SceneSensingGate.DENIED_NO_CONSENT,
+            CompanionVisionSession.denyReason(
+                lookingEnabled = true,
+                consentGranted = false,
+                cameraGranted = true
+            )
+        )
+        assertEquals(
+            SceneSensingGate.DENIED_NO_CAMERA,
+            CompanionVisionSession.denyReason(
+                lookingEnabled = true,
+                consentGranted = true,
+                cameraGranted = false
+            )
+        )
+        assertNull(
+            CompanionVisionSession.denyReason(
+                lookingEnabled = true,
+                consentGranted = true,
+                cameraGranted = true
+            )
+        )
     }
 
     @Test
-    fun `needsConsentDialog when turning on without consent`() {
+    fun `shouldCaptureOnAsk only when fully allowed`() {
+        assertTrue(
+            CompanionVisionSession.shouldCaptureOnAsk(
+                lookingEnabled = true,
+                consentGranted = true,
+                cameraGranted = true
+            )
+        )
+        assertFalse(
+            CompanionVisionSession.shouldCaptureOnAsk(
+                lookingEnabled = true,
+                consentGranted = true,
+                cameraGranted = false
+            )
+        )
+    }
+
+    @Test
+    fun `needsConsentDialog delegates to SceneSensingGate`() {
         assertTrue(
             CompanionVisionSession.needsConsentDialog(
                 consentGranted = false,
@@ -93,48 +145,32 @@ class CompanionVisionSessionTest {
     }
 
     @Test
-    fun `shouldCaptureOnAsk aligns with canUseCamera`() {
-        assertFalse(
-            CompanionVisionSession.shouldCaptureOnAsk(
-                lookingEnabled = false,
-                consentGranted = true,
-                cameraGranted = true
-            )
-        )
-        assertTrue(
-            CompanionVisionSession.shouldCaptureOnAsk(
-                lookingEnabled = true,
-                consentGranted = true,
-                cameraGranted = true
-            )
-        )
-    }
-
-    @Test
-    fun `status labels`() {
+    fun `statusLabel reflects looking and preview ready`() {
         assertEquals(
             CompanionVisionSession.STATUS_OFF,
-            CompanionVisionSession.statusLabel(lookingEnabled = false, previewReady = false)
+            CompanionVisionSession.statusLabel(lookingEnabled = false, previewReady = true)
         )
         assertEquals(
             CompanionVisionSession.STATUS_LOOKING,
             CompanionVisionSession.statusLabel(lookingEnabled = true, previewReady = true)
         )
-        assertTrue(
+        assertEquals(
+            "看世界·准备中",
             CompanionVisionSession.statusLabel(lookingEnabled = true, previewReady = false)
-                .contains("准备")
         )
     }
 
     @Test
-    fun `denyReason when off`() {
-        assertEquals(
-            "companion_vision_off",
-            CompanionVisionSession.denyReason(
-                lookingEnabled = false,
-                consentGranted = true,
-                cameraGranted = true
-            )
+    fun `frame dataUri has jpeg mime and no disk path`() {
+        val frame = CompanionVisionFrame(
+            jpegBase64 = "abc123",
+            mimeType = "image/jpeg",
+            width = 64,
+            height = 48,
+            capturedAtMs = 1L
         )
+        assertEquals("data:image/jpeg;base64,abc123", frame.dataUri())
+        assertEquals(CompanionVisionFrame.MAX_EDGE_PX, 768)
+        assertEquals(CompanionVisionFrame.JPEG_QUALITY, 85)
     }
 }

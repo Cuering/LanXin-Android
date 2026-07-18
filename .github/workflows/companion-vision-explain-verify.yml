@@ -68,6 +68,7 @@ jobs:
           ./gradlew :app:testDebugUnitTest \
             --tests "com.lanxin.android.builtin.pet.CompanionVisionSessionTest" \
             --tests "com.lanxin.android.builtin.pet.VisionModelCapabilityTest" \
+            --tests "com.lanxin.android.builtin.pet.CompanionVisionFrameEncoderTest" \
             --tests "com.lanxin.android.builtin.platform.SceneSensingGateTest" \
             --no-daemon --stacktrace
 
@@ -80,6 +81,7 @@ jobs:
           test -f app/src/main/kotlin/com/lanxin/android/builtin/pet/presentation/CompanionCameraPreview.kt
           test -f app/src/test/kotlin/com/lanxin/android/builtin/pet/CompanionVisionSessionTest.kt
           test -f app/src/test/kotlin/com/lanxin/android/builtin/pet/VisionModelCapabilityTest.kt
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/pet/CompanionVisionFrameEncoderTest.kt
           grep -E -n "visionLooking|看世界|VisionExplainClient" \
             app/src/main/kotlin/com/lanxin/android/builtin/pet/presentation/CompanionScreen.kt
           grep -E -n "bindVisionExplainClient|OpenAiVisionExplainClient" \
@@ -87,4 +89,6 @@ jobs:
           grep -E -n "camera-core|androidx.camera" gradle/libs.versions.toml app/build.gradle.kts
           grep -E -n "MSG_NO_VISION|不会假装" \
             app/src/main/kotlin/com/lanxin/android/builtin/pet/domain/VisionModelCapability.kt
+          grep -E -n "shouldCaptureOnAsk|explainWithFrame|lookOnce" \
+            app/src/main/kotlin/com/lanxin/android/builtin/pet/presentation/CompanionScreen.kt
           grep -E -n "V1 已实现|看世界|提问" docs/companion-vision-explain.md

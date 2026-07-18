@@ -150,6 +150,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
 /**
  * 妹居式 App 内全屏陪伴页：Live2D 铺满 + 顶/底浮层（无白框小窗）。
  *
@@ -329,8 +330,8 @@ fun CompanionScreen(
             }
         }
 
-        // 状态角标：轻量浮层（Cubism·闲置 等）
-        if (state.statusLine.isNotBlank() || state.visionLooking) {
+        // 状态角标：轻量浮层（Cubism·闲置 / 看世界 / 提示）
+        if (state.statusLine.isNotBlank() || state.visionLooking || !state.visionHint.isNullOrBlank()) {
             Surface(
                 modifier = Modifier
                     .align(Alignment.TopStart)
@@ -341,13 +342,15 @@ fun CompanionScreen(
                 color = Color(0xFF1A0A12).copy(alpha = 0.42f),
                 tonalElevation = 0.dp
             ) {
-                val badge = if (state.visionLooking) {
-                    CompanionVisionSession.statusLabel(
-                        lookingEnabled = true,
-                        previewReady = state.visionPreviewReady
-                    )
-                } else {
-                    companionStatusBadge(state.statusLine)
+                val badge = when {
+                    !state.visionHint.isNullOrBlank() && !state.visionLooking ->
+                        state.visionHint!!
+                    state.visionLooking ->
+                        CompanionVisionSession.statusLabel(
+                            lookingEnabled = true,
+                            previewReady = state.visionPreviewReady
+                        )
+                    else -> companionStatusBadge(state.statusLine)
                 }
                 Text(
                     text = badge,
