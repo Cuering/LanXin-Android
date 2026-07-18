@@ -21,8 +21,8 @@ plugins {
 }
 
 // ---------------------------------------------------------------------------
-// P0: sherpa-onnx Android 运行时 AAR（构建期下载，不进 git）
-// 默认 static-link-onnxruntime，减少与 ORT Mobile 的 so 分片依赖。
+// P0/P1: sherpa-onnx Android 运行时 AAR（构建期下载，不进 git）
+// 含 Offline ASR + OfflineTts；默认 static-link-onnxruntime。
 // 覆盖: SHERPA_ONNX_AAR=本地路径 或 SHERPA_ONNX_AAR_URL=下载 URL
 // ---------------------------------------------------------------------------
 val sherpaOnnxVersion = "1.13.4"
@@ -259,7 +259,7 @@ dependencies {
     // ONNX Runtime Mobile（GTE-small 推理）
     implementation(libs.onnxruntime.android)
 
-    // sherpa-onnx ASR 运行时（AAR 构建期下载到 app/libs）
+    // sherpa-onnx ASR + TTS 运行时（AAR 构建期下载到 app/libs）
     if (sherpaAarForCompile.isFile && sherpaAarForCompile.length() > 1_000_000L) {
         implementation(files(sherpaAarForCompile))
     } else {
