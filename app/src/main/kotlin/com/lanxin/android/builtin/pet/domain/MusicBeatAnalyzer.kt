@@ -31,6 +31,7 @@ object MusicBeatAnalyzer {
 
     /** EMA 系数：更小更稳，避免 Visualizer 尖峰传导到 Live2D。 */
     const val DEFAULT_SMOOTH = 0.14f
+
     /** 增益：略降，包络更柔和。 */
     const val DEFAULT_GAIN = 1.6f
 

@@ -63,6 +63,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -271,6 +272,14 @@ fun CompanionScreen(
                     placeholder = { Text("跟兰心说点什么…") },
                     singleLine = true,
                     enabled = !state.busy,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color(0xFF1A0A12),
+                        unfocusedTextColor = Color(0xFF1A0A12),
+                        cursorColor = Color(0xFFE85D8E),
+                        focusedBorderColor = Color(0xFFE85D8E).copy(alpha = 0.5f),
+                        unfocusedBorderColor = Color(0xFF5A2038).copy(alpha = 0.25f),
+                        placeholderColor = Color(0xFF5A2038).copy(alpha = 0.55f)
+                    ),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                     keyboardActions = KeyboardActions(
                         onSend = {
