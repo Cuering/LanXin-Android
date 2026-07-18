@@ -518,6 +518,7 @@ class FloatingPetService : Service() {
         const val CHANNEL_ID = "lanxin_desktop_pet"
         const val NOTIFICATION_ID = 64061
         const val ASSET_URL = "file:///android_asset/pet/desktop-pet.html"
+
         /**
          * 悬浮窗尺寸（dp）。略增高以容纳 Mao 全高（帽+裙摆）；
          * HTML 小窗 isCompact 走 contain，避免 scale 溢出裁切。
