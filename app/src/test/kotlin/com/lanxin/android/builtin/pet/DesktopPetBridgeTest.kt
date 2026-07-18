@@ -8,6 +8,7 @@ import com.lanxin.android.builtin.pet.domain.PetBridgeProtocol
 import com.lanxin.android.builtin.pet.domain.VoiceSessionPhase
 import com.lanxin.android.builtin.pet.domain.VoiceSessionSnapshot
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -61,7 +62,21 @@ class DesktopPetBridgeTest {
         assertTrue(out.contains("command=SET_EXPRESSION"))
         assertTrue(out.contains("expression=SPEAKING"))
         assertTrue(out.contains("mouthAnimating=true"))
+        assertTrue(out.contains("cubismExpression=exp_04"))
         assertEquals(out, bridge.lastOutbound)
+    }
+
+    @Test
+    fun `encodePlayMotion writes Idle and TapBody`() {
+        val bridge = DesktopPetBridge {}
+        val idle = bridge.encodePlayMotion("Idle", 0)
+        assertTrue(idle.contains("command=PLAY_MOTION"))
+        assertTrue(idle.contains("motionGroup=Idle"))
+        assertTrue(idle.contains("motionIndex=0"))
+        val tap = bridge.encodePlayMotion("TapBody", null)
+        assertTrue(tap.contains("motionGroup=TapBody"))
+        assertFalse(tap.contains("motionIndex="))
+        assertEquals(tap, bridge.lastOutbound)
     }
 
     @Test

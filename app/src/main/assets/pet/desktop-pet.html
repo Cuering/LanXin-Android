@@ -246,6 +246,17 @@
       var danceBreath = 0.5;
       var danceShoulderL = 0;
       var danceShoulderR = 0;
+      // Mao 官方 motion / 扩展表情
+      var motionBusy = false;          // TapBody 等优先级动作播放中
+      var motionBusyUntil = 0;         // 预计结束时间戳 ms
+      var idleMotionIndex = 0;         // Idle 组轮询
+      var tapMotionIndex = 0;          // TapBody 组轮询
+      var lastCubismExpName = '';
+      var idleVariantTimer = null;
+      var musicPeakExpActive = false;
+      var lastTapAt = 0;
+      // 参数律动降权：motion 播放时 <1，空闲时 1
+      var danceWeight = 1;
 
       // Cubism / Pixi runtime
       var pixiApp = null;
@@ -316,7 +327,7 @@
             mouthEl.style.height = h + 'px';
           }
         }
-        applyCubismExpression(lastExpression, mouthOpen, mouthAnimating);
+        applyCubismExpression(lastExpression, mouthOpen, mouthAnimating, meta.cubismExpression);
       }
 
       function showBubble(text) {
@@ -715,15 +726,19 @@
           if (Math.abs(danceShoulderL) < 0.005) danceShoulderL = 0;
           if (Math.abs(danceShoulderR) < 0.005) danceShoulderR = 0;
         }
-        // 写 Cubism 参数（有则设，无则跳过）
-        setCubismParam('ParamAngleX', danceAngleX, 1);
-        setCubismParam('ParamAngleY', danceAngleY, 1);
-        setCubismParam('ParamAngleZ', danceAngleZ, 1);
-        setCubismParam('ParamBodyAngleX', danceBodyX, 1);
-        setCubismParam('ParamBodyAngleY', danceBodyY, 1);
-        setCubismParam('ParamBreath', danceBreath, 1);
-        setCubismParam('ParamLeftShoulderUp', danceShoulderL, 1);
-        setCubismParam('ParamRightShoulderUp', danceShoulderR, 1);
+        // 写 Cubism 参数；motion 播放时 danceWeight 降权，避免与官方动作打架
+        var dw = (typeof danceWeight === 'number' && isFinite(danceWeight)) ? danceWeight : 1;
+        if (dw < 0) dw = 0;
+        if (dw > 1) dw = 1;
+        setCubismParam('ParamAngleX', danceAngleX, dw);
+        setCubismParam('ParamAngleY', danceAngleY, dw);
+        setCubismParam('ParamAngleZ', danceAngleZ, dw);
+        setCubismParam('ParamBodyAngleX', danceBodyX, dw);
+        setCubismParam('ParamBodyAngleY', danceBodyY, dw);
+        // 呼吸保留极弱，不随 motion 完全关掉
+        setCubismParam('ParamBreath', danceBreath, Math.max(0.35, dw));
+        setCubismParam('ParamLeftShoulderUp', danceShoulderL, dw);
+        setCubismParam('ParamRightShoulderUp', danceShoulderR, dw);
         return target;
       }
 
@@ -747,14 +762,23 @@
       function tickCubismFrame() {
         if (!live2dModel) return;
         try {
+          // 0) TapBody busy 超时保险 → 回 Idle 弱播
+          if (motionBusy && motionBusyUntil > 0 && Date.now() > motionBusyUntil) {
+            motionBusy = false;
+            danceWeight = 1;
+            if (lastPhase === 'IDLE' || lastPhase === 'SPEAKING') {
+              tryPlayIdleMotion();
+            }
+          }
+
           // 1) 锁定容器 transform（禁止整模 x/y/rot/scale 贴纸晃）
           lockModelTransform();
 
-          // 2) Cubism 参数轻舞：人物自身侧身/呼吸/律动
+          // 2) Cubism 参数轻舞：人物自身侧身/呼吸/律动（motion 时降权）
           var beat = musicBeatEnabled ? musicBeatDisplay : 0;
           applyCubismSoftDance(beat);
 
-          // 3) lip sync ParamMouthOpenY
+          // 3) lip sync ParamMouthOpenY（不与 motion 互斥）
           var mOpen = mouthAnimating
             ? (0.25 + 0.45 * (0.5 + 0.5 * Math.sin(breathT * 0.35)))
             : Math.max(0, Math.min(1, mouthOpen));
@@ -773,22 +797,57 @@
         } catch (e) {}
       }
 
-      function applyCubismExpression(expression, open, anim) {
+      /**
+       * Mao 官方表情映射（与 MaoOfficialMotionCatalog / model3 一致）。
+       * 相位：IDLE→01 LISTENING→02 THINKING→03 SPEAKING→04 APOLOGY→05
+       * 扩展：IDLE_VARIANT_A→06 TAP_REACTION→07 MUSIC_PEAK→08
+       */
+      var CUBISM_EXP_MAP = {
+        IDLE_SMILE: 'exp_01',
+        LISTENING: 'exp_02',
+        THINKING: 'exp_03',
+        SPEAKING: 'exp_04',
+        APOLOGY: 'exp_05',
+        IDLE_VARIANT_A: 'exp_06',
+        TAP_REACTION: 'exp_07',
+        MUSIC_PEAK: 'exp_08',
+        FALLBACK_NEUTRAL: 'exp_01',
+        exp_01: 'exp_01',
+        exp_02: 'exp_02',
+        exp_03: 'exp_03',
+        exp_04: 'exp_04',
+        exp_05: 'exp_05',
+        exp_06: 'exp_06',
+        exp_07: 'exp_07',
+        exp_08: 'exp_08'
+      };
+
+      function resolveCubismExpName(expression, cubismHint) {
+        if (cubismHint && CUBISM_EXP_MAP[cubismHint]) return CUBISM_EXP_MAP[cubismHint];
+        if (expression && CUBISM_EXP_MAP[expression]) return CUBISM_EXP_MAP[expression];
+        return 'exp_01';
+      }
+
+      function applyCubismExpression(expression, open, anim, cubismHint) {
         if (!live2dModel) return;
         try {
-          // 尝试按 phase 映射官方 exp
-          var map = {
-            IDLE_SMILE: 'exp_01',
-            LISTENING: 'exp_02',
-            THINKING: 'exp_03',
-            SPEAKING: 'exp_04',
-            APOLOGY: 'exp_05',
-            FALLBACK_NEUTRAL: 'exp_01'
-          };
-          var name = map[expression] || 'exp_01';
-          if (typeof live2dModel.expression === 'function') {
-            try { live2dModel.expression(name); } catch (e1) {
-              try { live2dModel.expression(0); } catch (e2) {}
+          var name = resolveCubismExpName(expression, cubismHint);
+          if (name !== lastCubismExpName) {
+            lastCubismExpName = name;
+            if (typeof live2dModel.expression === 'function') {
+              try {
+                live2dModel.expression(name);
+              } catch (e1) {
+                // 按名失败 → 尝试 index（exp_0N → N-1）
+                var idx = parseInt(String(name).replace(/\D/g, ''), 10);
+                if (isFinite(idx) && idx >= 1) {
+                  try { live2dModel.expression(idx - 1); } catch (e2) {
+                    try { live2dModel.expression(0); } catch (e3) {}
+                  }
+                } else {
+                  try { live2dModel.expression(0); } catch (e4) {}
+                }
+              }
             }
           }
           if (!anim) setMouthOpen(open || 0);
@@ -1018,14 +1077,151 @@
           });
       }
 
+      /** Idle 组：mtn_01 / sample_01 轮换循环；TapBody 忙时不抢。 */
       function tryPlayIdleMotion() {
         if (!live2dModel) return;
-        try {
-          if (typeof live2dModel.motion === 'function') {
-            // Mao Idle group
-            live2dModel.motion('Idle').catch(function () {});
+        if (motionBusy && Date.now() < motionBusyUntil) return;
+        // SPEAKING 保持 Idle 弱播，不和口型死锁；index 由 playMotionGroup 轮询
+        playMotionGroup('Idle', null, false);
+      }
+
+      /**
+       * 播放 Mao 官方 motion 组。
+       * group: Idle | TapBody
+       * index: 可选；缺省轮询
+       * priority: TapBody 优先，期间参数律动降权
+       */
+      function playMotionGroup(group, index, isTap) {
+        if (!live2dModel) return;
+        if (typeof live2dModel.motion !== 'function') return;
+        var g = group || 'Idle';
+        if (g !== 'Idle' && g !== 'TapBody') {
+          // 只允许官方 model3 组名
+          g = 'Idle';
+        }
+        var idx = index;
+        if (idx == null || !isFinite(idx) || idx < 0) {
+          if (g === 'TapBody') {
+            idx = tapMotionIndex % 6;
+            tapMotionIndex = (tapMotionIndex + 1) % 6;
+          } else {
+            idx = idleMotionIndex % 2;
+            idleMotionIndex = (idleMotionIndex + 1) % 2;
           }
-        } catch (e) {}
+        }
+        try {
+          if (isTap || g === 'TapBody') {
+            motionBusy = true;
+            // TapBody 官方动作约 2–6s；保守占位后自动回 Idle
+            motionBusyUntil = Date.now() + 4500;
+            danceWeight = 0.25; // 参数律动降权，优先 motion 自然
+          }
+          var p = live2dModel.motion(g, idx);
+          if (p && typeof p.then === 'function') {
+            p.then(function () {
+              if (isTap || g === 'TapBody') {
+                motionBusy = false;
+                motionBusyUntil = 0;
+                danceWeight = 1;
+                // 点触后回 Idle，不打断当前相位表情
+                if (lastPhase === 'IDLE' || lastPhase === 'SPEAKING') {
+                  tryPlayIdleMotion();
+                }
+              }
+            }).catch(function () {
+              motionBusy = false;
+              motionBusyUntil = 0;
+              danceWeight = 1;
+            });
+          } else {
+            // 无 Promise：定时解除 busy
+            if (isTap || g === 'TapBody') {
+              setTimeout(function () {
+                motionBusy = false;
+                motionBusyUntil = 0;
+                danceWeight = 1;
+              }, 4000);
+            }
+          }
+        } catch (e) {
+          motionBusy = false;
+          danceWeight = 1;
+        }
+      }
+
+      /** 点触：TapBody 随机/轮询 + exp_07 短表情。 */
+      function onModelTapped(hitArea) {
+        var now = Date.now();
+        if (now - lastTapAt < 600) return; // 防抖
+        lastTapAt = now;
+        playMotionGroup('TapBody', null, true);
+        // 短表情 exp_07，约 2s 后回相位主表情
+        applyCubismExpression('TAP_REACTION', mouthOpen, mouthAnimating);
+        setTimeout(function () {
+          applyCubismExpression(lastExpression, mouthOpen, mouthAnimating);
+        }, 1800);
+        // 回传 Native
+        try {
+          var wire = 'command=MODEL_TAPPED\nhitArea=' + (hitArea || 'Body') +
+            '\ntimestampMs=' + now;
+          if (window.DesktopPetBridge && DesktopPetBridge.postMessage) {
+            DesktopPetBridge.postMessage(wire);
+          }
+        } catch (eTap) {}
+      }
+
+      function bindModelTapHandlers(model) {
+        if (!model) return;
+        try {
+          model.interactive = true;
+          model.buttonMode = true;
+          model.cursor = 'pointer';
+        } catch (e0) {}
+        var handler = function (ev) {
+          var area = 'Body';
+          try {
+            if (ev && ev.data && model.hitTest) {
+              // pixi-live2d hitTest by name if available
+              if (typeof model.hit === 'function') {
+                if (model.hit('HitAreaHead') || model.hit('Head')) area = 'Head';
+                else if (model.hit('HitAreaBody') || model.hit('Body')) area = 'Body';
+              }
+            }
+          } catch (e1) {}
+          onModelTapped(area);
+        };
+        try {
+          model.removeAllListeners && model.removeAllListeners('pointertap');
+          model.on('pointertap', handler);
+        } catch (e2) {
+          try { model.on('click', handler); } catch (e3) {}
+        }
+        // 舞台空白处也可轻点（非按钮）
+        try {
+          if (pixiHost && !pixiHost.__tapBound) {
+            pixiHost.__tapBound = true;
+            pixiHost.addEventListener('click', function (e) {
+              if (e.target && (e.target.tagName === 'BUTTON' || e.target.closest && e.target.closest('button'))) return;
+              onModelTapped('stage');
+            });
+          }
+        } catch (e4) {}
+      }
+
+      /** 闲置长驻时偶发 exp_06 变体。 */
+      function scheduleIdleVariant() {
+        if (idleVariantTimer) clearTimeout(idleVariantTimer);
+        idleVariantTimer = setTimeout(function () {
+          if (lastPhase === 'IDLE' && live2dModel && !motionBusy) {
+            applyCubismExpression('IDLE_VARIANT_A', 0, false);
+            setTimeout(function () {
+              if (lastPhase === 'IDLE') {
+                applyCubismExpression('IDLE_SMILE', 0, false);
+              }
+            }, 2500);
+          }
+          scheduleIdleVariant();
+        }, 12000 + Math.floor(Math.random() * 8000));
       }
 
       function loadCubismModel(modelUrl, token) {
@@ -1058,18 +1254,16 @@
               }
               destroyCubismModel();
               live2dModel = model;
-              try {
-                model.interactive = false;
-                model.buttonMode = false;
-              } catch (e1) {}
               app.stage.addChild(model);
               // 加载后只完整 layout 一次；之后禁止用动画 scale 回写 base
               __layoutDone = false;
               __nativeModelW = 0;
               __nativeModelH = 0;
               layoutLive2dModel(true);
+              bindModelTapHandlers(model);
               tryPlayIdleMotion();
               applyCubismExpression(lastExpression, mouthOpen, mouthAnimating);
+              scheduleIdleVariant();
               resolve(model);
             })
             .catch(function (err) {
@@ -1164,6 +1358,18 @@
             musicBeat = 0;
             musicBeatSmoothed = 0;
             musicBeatDisplay = 0;
+            musicPeakExpActive = false;
+          } else if (musicBeat >= 0.72 && lastPhase === 'IDLE' && !motionBusy) {
+            // 音乐高潮弱表情 exp_08（不抢会话相位）
+            if (!musicPeakExpActive) {
+              musicPeakExpActive = true;
+              applyCubismExpression('MUSIC_PEAK', mouthOpen, mouthAnimating);
+            }
+          } else if (musicPeakExpActive && musicBeat < 0.45) {
+            musicPeakExpActive = false;
+            if (lastPhase === 'IDLE') {
+              applyCubismExpression(lastExpression, mouthOpen, mouthAnimating);
+            }
           }
         }
         if (cmd === 'SET_PET_STATE' && map.phase) setPhase(map.phase);
@@ -1173,10 +1379,13 @@
             mouthOpen: map.mouthOpen,
             mouthAnimating: map.mouthAnimating,
             emoji: map.expressionEmoji,
-            label: map.expressionLabel
+            label: map.expressionLabel,
+            cubismExpression: map.cubismExpression
           });
           if (map.phase) {
             lastPhase = map.phase;
+            // 回 Idle 时续播 Idle motion
+            if (map.phase === 'IDLE') tryPlayIdleMotion();
             if (displayMode === 'LIVE2D_REAL') {
               modeTag.textContent = 'Cubism·' + (map.expressionLabel || map.phase);
             } else if (displayMode === 'LIVE2D_SHELL') {
@@ -1190,8 +1399,17 @@
             mouthOpen: map.mouthOpen,
             mouthAnimating: map.mouthAnimating,
             emoji: map.expressionEmoji,
-            label: map.expressionLabel
+            label: map.expressionLabel,
+            cubismExpression: map.cubismExpression
           });
+          if (map.phase === 'IDLE') tryPlayIdleMotion();
+        }
+        // Native 主动播官方 motion
+        if (cmd === 'PLAY_MOTION' || map.motionGroup) {
+          var mg = map.motionGroup || 'Idle';
+          var mi = map.motionIndex != null ? parseInt(map.motionIndex, 10) : null;
+          if (!isFinite(mi)) mi = null;
+          playMotionGroup(mg, mi, mg === 'TapBody');
         }
       }
 
@@ -1276,11 +1494,25 @@
         hideBubble();
       };
 
-      // 探测引擎，供单测/调试
+      // 探测引擎 + 官方资源映射，供单测/调试
       window.__lanxinLive2dEngine = {
         detect: detectEngine,
         isReal: function () { return displayMode === 'LIVE2D_REAL' && !!live2dModel; },
-        mode: function () { return displayMode; }
+        mode: function () { return displayMode; },
+        expMap: CUBISM_EXP_MAP,
+        playMotion: playMotionGroup,
+        tap: onModelTapped
+      };
+      window.__lanxinMaoCatalog = {
+        expressions: ['exp_01','exp_02','exp_03','exp_04','exp_05','exp_06','exp_07','exp_08'],
+        idleMotions: ['mtn_01','sample_01'],
+        tapBodyMotions: ['mtn_02','mtn_03','mtn_04','special_01','special_02','special_03'],
+        groups: { Idle: 2, TapBody: 6 },
+        phaseExp: {
+          IDLE: 'exp_01', LISTENING: 'exp_02', THINKING: 'exp_03',
+          SPEAKING: 'exp_04', ERROR: 'exp_05'
+        },
+        extraExp: { idleVariant: 'exp_06', tap: 'exp_07', musicPeak: 'exp_08' }
       };
 
       setPhase('IDLE');

@@ -142,6 +142,12 @@ enum class PetBridgeCommand {
     /** Native → Web：背景音乐节拍能量 0..1（壳层轻晃）。 */
     SET_MUSIC_BEAT,
 
+    /** Native → Web：播放官方 motion 组（Idle / TapBody）。 */
+    PLAY_MOTION,
+
+    /** Web → Native：模型被点触（hit area / 点击）。 */
+    MODEL_TAPPED,
+
     /** WebView 请求开始语音会话。 */
     START_VOICE,
 

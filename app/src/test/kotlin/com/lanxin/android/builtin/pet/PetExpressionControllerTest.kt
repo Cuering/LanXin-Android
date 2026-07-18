@@ -89,8 +89,32 @@ class PetExpressionControllerTest {
         )
         assertEquals(PetBridgeCommand.SET_EXPRESSION, msg.command)
         assertEquals("LISTENING", msg.payload[PetBridgeProtocol.KEY_EXPRESSION])
+        assertEquals("exp_02", msg.payload[PetBridgeProtocol.KEY_CUBISM_EXPRESSION])
         val decoded = PetBridgeProtocol.decode(PetBridgeProtocol.encode(msg))
         assertEquals(PetBridgeCommand.SET_EXPRESSION, decoded.command)
         assertEquals("在听", decoded.payload[PetBridgeProtocol.KEY_EXPRESSION_LABEL])
+        assertEquals("exp_02", decoded.payload[PetBridgeProtocol.KEY_CUBISM_EXPRESSION])
+    }
+
+    @Test
+    fun `extended poses for idle variant tap music`() {
+        assertEquals(
+            PetExpressionController.Expression.IDLE_VARIANT_A,
+            PetExpressionController.idleVariantPose().expression
+        )
+        assertEquals(
+            PetExpressionController.Expression.TAP_REACTION,
+            PetExpressionController.tapReactionPose().expression
+        )
+        assertEquals(
+            PetExpressionController.Expression.MUSIC_PEAK,
+            PetExpressionController.musicPeakPose().expression
+        )
+        assertEquals(
+            "exp_07",
+            PetExpressionController.cubismExpressionName(
+                PetExpressionController.Expression.TAP_REACTION
+            )
+        )
     }
 }
