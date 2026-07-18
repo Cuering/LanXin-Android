@@ -1,5 +1,6 @@
 package com.lanxin.android.builtin.pet
 
+import com.lanxin.android.builtin.pet.domain.OverlayPosition
 import com.lanxin.android.builtin.pet.domain.PetChatResponder
 import com.lanxin.android.builtin.pet.domain.PetConfig
 import com.lanxin.android.builtin.pet.domain.PetSettings
@@ -70,6 +71,9 @@ class VoiceSessionCoordinatorTest {
         }
         override suspend fun setMusicBeatSway(enabled: Boolean) {
             config = config.copy(musicBeatSway = enabled)
+        }
+        override suspend fun setOverlayPosition(x: Int, y: Int) {
+            config = config.copy(overlayPosition = OverlayPosition(x, y))
         }
     }
 

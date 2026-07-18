@@ -20,7 +20,9 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.lanxin.android.builtin.pet.domain.OverlayPosition
 import com.lanxin.android.builtin.pet.domain.PetConfig
 import com.lanxin.android.builtin.pet.domain.PetSettings
 import javax.inject.Inject
@@ -33,6 +35,7 @@ import kotlinx.coroutines.flow.first
  * 键：
  * - `desktop_pet_*` 开关类
  * - `live2d_model_path` Live2D 模型路径（一等公民；换模型不改状态机）
+ * - `desktop_pet_overlay_x/y` 悬浮窗位置（拖拽记忆）
  *
  * 默认全关。路径空时由 [com.lanxin.android.builtin.pet.domain.PetResourceResolver]
  * 在 **debug** 下尝试 meiju-ref 旁路。
@@ -47,6 +50,8 @@ class PetPreferences @Inject constructor(
     private val autoListenKey = booleanPreferencesKey(KEY_AUTO_LISTEN)
     private val live2dPathKey = stringPreferencesKey(KEY_LIVE2D_MODEL_PATH)
     private val musicBeatSwayKey = booleanPreferencesKey(KEY_MUSIC_BEAT_SWAY)
+    private val overlayXKey = intPreferencesKey(KEY_OVERLAY_X)
+    private val overlayYKey = intPreferencesKey(KEY_OVERLAY_Y)
 
     override suspend fun getConfig(): PetConfig {
         val prefs = dataStore.data.first()
@@ -55,7 +60,11 @@ class PetPreferences @Inject constructor(
             overlayRunning = prefs[overlayKey] ?: false,
             autoListen = prefs[autoListenKey] ?: false,
             live2dModelPath = prefs[live2dPathKey].orEmpty(),
-            musicBeatSway = prefs[musicBeatSwayKey] ?: true
+            musicBeatSway = prefs[musicBeatSwayKey] ?: true,
+            overlayPosition = OverlayPosition(
+                x = prefs[overlayXKey] ?: OverlayPosition.UNSET,
+                y = prefs[overlayYKey] ?: OverlayPosition.UNSET
+            )
         )
     }
 
@@ -85,6 +94,13 @@ class PetPreferences @Inject constructor(
         dataStore.edit { it[musicBeatSwayKey] = enabled }
     }
 
+    override suspend fun setOverlayPosition(x: Int, y: Int) {
+        dataStore.edit {
+            it[overlayXKey] = x
+            it[overlayYKey] = y
+        }
+    }
+
     companion object {
         const val KEY_ENABLED = "desktop_pet_enabled"
         const val KEY_OVERLAY_RUNNING = "desktop_pet_overlay_running"
@@ -95,5 +111,8 @@ class PetPreferences @Inject constructor(
 
         /** 跟随音乐节拍晃动。 */
         const val KEY_MUSIC_BEAT_SWAY = "desktop_pet_music_beat_sway"
+
+        const val KEY_OVERLAY_X = "desktop_pet_overlay_x"
+        const val KEY_OVERLAY_Y = "desktop_pet_overlay_y"
     }
 }
