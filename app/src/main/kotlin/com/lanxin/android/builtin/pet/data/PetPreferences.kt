@@ -22,6 +22,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.lanxin.android.builtin.pet.domain.CompanionBackgrounds
 import com.lanxin.android.builtin.pet.domain.OverlayPosition
 import com.lanxin.android.builtin.pet.domain.PetConfig
 import com.lanxin.android.builtin.pet.domain.PetSettings
@@ -51,6 +52,8 @@ class PetPreferences @Inject constructor(
     private val live2dPathKey = stringPreferencesKey(KEY_LIVE2D_MODEL_PATH)
     private val overlayXKey = intPreferencesKey(KEY_OVERLAY_X)
     private val overlayYKey = intPreferencesKey(KEY_OVERLAY_Y)
+    private val companionBgPresetKey = stringPreferencesKey(KEY_COMPANION_BG_PRESET)
+    private val companionBgCustomKey = stringPreferencesKey(KEY_COMPANION_BG_CUSTOM)
 
     override suspend fun getConfig(): PetConfig {
         val prefs = dataStore.data.first()
@@ -62,7 +65,10 @@ class PetPreferences @Inject constructor(
             overlayPosition = OverlayPosition(
                 x = prefs[overlayXKey] ?: OverlayPosition.UNSET,
                 y = prefs[overlayYKey] ?: OverlayPosition.UNSET
-            )
+            ),
+            companionBgPresetId = prefs[companionBgPresetKey]
+                ?: CompanionBackgrounds.DEFAULT_ID,
+            companionBgCustomPath = prefs[companionBgCustomKey].orEmpty()
         )
     }
 
@@ -95,6 +101,20 @@ class PetPreferences @Inject constructor(
         }
     }
 
+    override suspend fun setCompanionBackground(presetId: String, customPath: String?) {
+        dataStore.edit { prefs ->
+            val id = presetId.trim().ifBlank { CompanionBackgrounds.DEFAULT_ID }
+            prefs[companionBgPresetKey] = id
+            if (customPath == null) {
+                // 仅改预设时保留已有 custom 路径（切回 custom 仍可用）
+            } else if (customPath.isBlank()) {
+                prefs.remove(companionBgCustomKey)
+            } else {
+                prefs[companionBgCustomKey] = customPath.trim()
+            }
+        }
+    }
+
     companion object {
         const val KEY_ENABLED = "desktop_pet_enabled"
         const val KEY_OVERLAY_RUNNING = "desktop_pet_overlay_running"
@@ -105,5 +125,11 @@ class PetPreferences @Inject constructor(
 
         const val KEY_OVERLAY_X = "desktop_pet_overlay_x"
         const val KEY_OVERLAY_Y = "desktop_pet_overlay_y"
+
+        /** 陪伴页背景预设 ID 或 `custom`。 */
+        const val KEY_COMPANION_BG_PRESET = "companion_bg_preset_id"
+
+        /** 自定义背景图绝对路径。 */
+        const val KEY_COMPANION_BG_CUSTOM = "companion_bg_custom_path"
     }
 }

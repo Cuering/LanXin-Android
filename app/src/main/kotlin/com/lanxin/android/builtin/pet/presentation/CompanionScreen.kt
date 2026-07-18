@@ -18,16 +18,21 @@ package com.lanxin.android.builtin.pet.presentation
 
 import android.annotation.SuppressLint
 import android.content.pm.ApplicationInfo
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.view.ViewGroup
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,15 +40,18 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -51,6 +59,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -78,20 +87,27 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+
+import dagger.hilt.android.lifecycle.HiltViewModel
+
 import com.lanxin.android.builtin.pet.data.DesktopPetBridge
 import com.lanxin.android.builtin.pet.domain.BuiltInLive2dAssets
 import com.lanxin.android.builtin.pet.domain.BuiltInMusicAssets
+import com.lanxin.android.builtin.pet.domain.CompanionBackgrounds
 import com.lanxin.android.builtin.pet.domain.CompanionMusicPlayer
 import com.lanxin.android.builtin.pet.domain.DebugAssetStorage
 import com.lanxin.android.builtin.pet.domain.Live2dDisplayController
@@ -105,9 +121,11 @@ import com.lanxin.android.builtin.pet.domain.PetSettings
 import com.lanxin.android.builtin.pet.domain.VoiceSessionCoordinator
 import com.lanxin.android.builtin.pet.domain.VoiceSessionInput
 import com.lanxin.android.util.PathImportHelper
-import dagger.hilt.android.lifecycle.HiltViewModel
+
 import java.io.File
+
 import javax.inject.Inject
+
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -115,7 +133,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
 /**
  * 妹居式 App 内全屏陪伴页：Live2D 铺满 + 顶/底浮层（无白框小窗）。
  *
@@ -132,12 +149,21 @@ fun CompanionScreen(
     val keyboard = LocalSoftwareKeyboardController.current
     var draft by remember { mutableStateOf("") }
     var musicPanelOpen by remember { mutableStateOf(false) }
+    var bgPanelOpen by remember { mutableStateOf(false) }
 
     val pickAudio = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         if (uri != null) {
             viewModel.importAudio(uri.toString())
+        }
+    }
+
+    val pickBgImage = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            viewModel.importBackground(uri.toString())
         }
     }
 
@@ -149,19 +175,14 @@ fun CompanionScreen(
         onDispose { viewModel.onLeavePage() }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(
-                        Color(0xFFFFE4EC),
-                        Color(0xFFFFC1D6),
-                        Color(0xFFFF9BB8)
-                    )
-                )
-            )
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        // 背景层：预设渐变 / 自定义图（WebView 透明叠上）
+        CompanionBackgroundLayer(
+            modifier = Modifier.fillMaxSize(),
+            presetId = state.bgPresetId,
+            customPath = state.bgCustomPath
+        )
+
         // Live2D / 占位 / 降级：全屏铺底，无卡片裁切
         CompanionLive2dWebView(
             modifier = Modifier.fillMaxSize(),
@@ -310,15 +331,33 @@ fun CompanionScreen(
             }
         }
 
-        // 右下角半透明音乐图标 + 弹出控制（抬高避开底栏）
+        // 右下角：换背景 + 背景音乐（抬高避开底栏）
         Column(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .navigationBarsPadding()
                 .imePadding()
                 .padding(end = 14.dp, bottom = 88.dp),
-            horizontalAlignment = Alignment.End
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            AnimatedVisibility(visible = bgPanelOpen) {
+                CompanionBackgroundPanel(
+                    state = state,
+                    onSelectPreset = { id ->
+                        viewModel.selectBackgroundPreset(id)
+                    },
+                    onPick = { pickBgImage.launch(arrayOf("image/*")) },
+                    onUseCustom = {
+                        if (state.bgCustomPath.isNotBlank()) {
+                            viewModel.selectBackgroundPreset(CompanionBackgrounds.CUSTOM_ID)
+                        } else {
+                            pickBgImage.launch(arrayOf("image/*"))
+                        }
+                    },
+                    onClose = { bgPanelOpen = false }
+                )
+            }
             AnimatedVisibility(visible = musicPanelOpen) {
                 CompanionMusicPanel(
                     state = state,
@@ -332,12 +371,37 @@ fun CompanionScreen(
                     onClose = { musicPanelOpen = false }
                 )
             }
+            // 换背景按钮（在音乐上方）
+            Surface(
+                modifier = Modifier
+                    .size(44.dp)
+                    .alpha(0.72f)
+                    .clickable {
+                        musicPanelOpen = false
+                        bgPanelOpen = !bgPanelOpen
+                    },
+                shape = CircleShape,
+                color = Color.White.copy(alpha = 0.42f),
+                tonalElevation = 1.dp
+            ) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                    Icon(
+                        Icons.Filled.Image,
+                        contentDescription = "换背景",
+                        tint = Color(0xFF5A2038),
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
             if (state.trackCount > 0 || state.musicPlaying) {
                 Surface(
                     modifier = Modifier
                         .size(48.dp)
                         .alpha(if (state.musicPlaying) 0.92f else 0.55f)
-                        .clickable { musicPanelOpen = !musicPanelOpen },
+                        .clickable {
+                            bgPanelOpen = false
+                            musicPanelOpen = !musicPanelOpen
+                        },
                     shape = CircleShape,
                     color = Color.White.copy(alpha = 0.42f),
                     tonalElevation = 1.dp
@@ -357,7 +421,10 @@ fun CompanionScreen(
                     modifier = Modifier
                         .size(44.dp)
                         .alpha(0.35f)
-                        .clickable { musicPanelOpen = !musicPanelOpen },
+                        .clickable {
+                            bgPanelOpen = false
+                            musicPanelOpen = !musicPanelOpen
+                        },
                     shape = CircleShape,
                     color = Color.White.copy(alpha = 0.28f)
                 ) {
@@ -393,6 +460,161 @@ private fun companionStatusBadge(statusLine: String): String {
         s.startsWith("出错") -> "出错"
         head.length in 1..18 -> head
         else -> head.take(16)
+    }
+}
+
+
+@Composable
+private fun CompanionBackgroundLayer(
+    modifier: Modifier,
+    presetId: String,
+    customPath: String
+) {
+    val resolved = remember(presetId, customPath) {
+        CompanionBackgrounds.resolve(presetId, customPath)
+    }
+    when (resolved) {
+        is CompanionBackgrounds.Resolved.Image -> {
+            val bitmap = remember(resolved.path) {
+                runCatching {
+                    BitmapFactory.decodeFile(resolved.path)?.asImageBitmap()
+                }.getOrNull()
+            }
+            if (bitmap != null) {
+                Image(
+                    bitmap = bitmap,
+                    contentDescription = null,
+                    modifier = modifier,
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                val fallback = CompanionBackgrounds.presetById(CompanionBackgrounds.DEFAULT_ID)!!
+                Box(
+                    modifier = modifier.background(
+                        Brush.verticalGradient(fallback.colorsArgb.map { Color(it) })
+                    )
+                )
+            }
+        }
+        is CompanionBackgrounds.Resolved.Preset -> {
+            Box(
+                modifier = modifier.background(
+                    Brush.verticalGradient(resolved.preset.colorsArgb.map { Color(it) })
+                )
+            )
+        }
+    }
+}
+
+@Composable
+private fun CompanionBackgroundPanel(
+    state: CompanionUiState,
+    onSelectPreset: (String) -> Unit,
+    onPick: () -> Unit,
+    onUseCustom: () -> Unit,
+    onClose: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .widthIn(max = 320.dp)
+            .padding(bottom = 4.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = Color.White.copy(alpha = 0.92f),
+        tonalElevation = 3.dp
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "换背景",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = Color(0xFF5A2038),
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(onClick = onClose) {
+                    Text("收起", color = Color(0xFF5A2038))
+                }
+            }
+            Text(
+                text = state.bgLabel.ifBlank { "樱花粉" },
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFF5A2038),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (state.bgError != null) {
+                Text(
+                    text = state.bgError,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFFB00020)
+                )
+            }
+            Text(
+                text = "目录：${state.bgDirHint}",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(0xFF5A2038).copy(alpha = 0.7f),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                CompanionBackgrounds.PRESETS.forEach { preset ->
+                    val selected = state.bgPresetId == preset.id
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .width(64.dp)
+                            .clickable { onSelectPreset(preset.id) }
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(52.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(
+                                    Brush.verticalGradient(preset.colorsArgb.map { Color(it) })
+                                )
+                                .then(
+                                    if (selected) {
+                                        Modifier.border(
+                                            2.dp,
+                                            Color(0xFFE85D8E),
+                                            RoundedCornerShape(12.dp)
+                                        )
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                        )
+                        Text(
+                            text = preset.label,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (selected) Color(0xFFE85D8E) else Color(0xFF5A2038),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onPick) { Text("导入图片") }
+                if (state.bgCustomPath.isNotBlank()) {
+                    TextButton(onClick = onUseCustom) {
+                        Text(
+                            if (state.bgPresetId == CompanionBackgrounds.CUSTOM_ID) {
+                                "自定义·当前"
+                            } else {
+                                "用自定义图"
+                            }
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -622,7 +844,12 @@ data class CompanionUiState(
     val musicVolume: Float = 0.7f,
     val trackNames: List<String> = emptyList(),
     val trackIndex: Int = -1,
-    val trackCount: Int = 0
+    val trackCount: Int = 0,
+    val bgPresetId: String = CompanionBackgrounds.DEFAULT_ID,
+    val bgCustomPath: String = "",
+    val bgLabel: String = "樱花粉",
+    val bgDirHint: String = "LanXin/backgrounds/",
+    val bgError: String? = null
 )
 
 @HiltViewModel
@@ -679,6 +906,7 @@ class CompanionViewModel @Inject constructor(
             val p = player()
             p.refreshPlaylist()
             resolveLive2d()
+            applyBackgroundFromConfig()
             _uiState.update {
                 it.copy(
                     musicDirHint = p.musicDirPath(),
@@ -794,6 +1022,78 @@ class CompanionViewModel @Inject constructor(
                     musicDirHint = p.musicDirPath()
                 )
             }
+        }
+    }
+
+    fun selectBackgroundPreset(presetId: String) {
+        viewModelScope.launch {
+            val id = presetId.trim().ifBlank { CompanionBackgrounds.DEFAULT_ID }
+            petSettings.setCompanionBackground(id, customPath = null)
+            applyBackgroundFromConfig(clearError = true)
+        }
+    }
+
+    fun importBackground(uriString: String) {
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val uri = Uri.parse(uriString)
+                    val name = queryDisplayName(uri) ?: "bg_${System.currentTimeMillis()}.jpg"
+                    val safe = PathImportHelper.sanitizeFileName(name)
+                    val destDir = CompanionBackgrounds.backgroundsDirFromStorage(appContext)
+                    destDir.mkdirs()
+                    val dest = uniqueDest(destDir, safe)
+                    appContext.contentResolver.openInputStream(uri)?.use { input ->
+                        dest.outputStream().use { out -> input.copyTo(out) }
+                    } ?: error("无法打开图片")
+                    if (!CompanionBackgrounds.isImageFile(dest)) {
+                        dest.delete()
+                        error("不支持的格式（请用 jpg/png/webp）")
+                    }
+                    dest.absolutePath
+                }
+            }
+            result.onSuccess { path ->
+                petSettings.setCompanionBackground(
+                    CompanionBackgrounds.CUSTOM_ID,
+                    customPath = path
+                )
+                applyBackgroundFromConfig(clearError = true)
+            }.onFailure { e ->
+                _uiState.update { it.copy(bgError = e.message ?: "导入失败") }
+            }
+        }
+    }
+
+    private suspend fun applyBackgroundFromConfig(clearError: Boolean = false) {
+        val config = petSettings.getConfig()
+        val resolved = CompanionBackgrounds.resolve(
+            config.companionBgPresetId,
+            config.companionBgCustomPath
+        )
+        val label = when (resolved) {
+            is CompanionBackgrounds.Resolved.Preset -> resolved.preset.label
+            is CompanionBackgrounds.Resolved.Image -> "自定义 · ${resolved.displayName}"
+        }
+        val dirHint = runCatching {
+            CompanionBackgrounds.backgroundsDirFromStorage(appContext).absolutePath
+        }.getOrDefault("LanXin/backgrounds/")
+        val presetId = when (resolved) {
+            is CompanionBackgrounds.Resolved.Preset -> resolved.preset.id
+            is CompanionBackgrounds.Resolved.Image -> CompanionBackgrounds.CUSTOM_ID
+        }
+        val customPath = when (resolved) {
+            is CompanionBackgrounds.Resolved.Image -> resolved.path
+            else -> config.companionBgCustomPath
+        }
+        _uiState.update {
+            it.copy(
+                bgPresetId = presetId,
+                bgCustomPath = customPath,
+                bgLabel = label,
+                bgDirHint = dirHint,
+                bgError = if (clearError) null else it.bgError
+            )
         }
     }
 

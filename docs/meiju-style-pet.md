@@ -49,6 +49,13 @@ IDLE → LISTENING → THINKING → SPEAKING → IDLE
 - 内置 CC0 `test-loop.wav`（`BuiltInMusicAssets.ensureTestTrackInstalled`）
 - MediaPlayer 播放列表（无节拍跟随 / Visualizer）
 
+### 2.2 陪伴页换背景
+
+- 右下角 🖼（音乐上方）；面板：6 个预设渐变 + 导入图片
+- 预设零资源（Compose 渐变）；自定义图落盘 `LanXin/backgrounds/`
+- DataStore：`companion_bg_preset_id` / `companion_bg_custom_path`
+- 渲染在 Compose 底层，WebView 透明叠上（不进 HTML/Cubism）
+
 ## 3. M2a 交付
 
 ### 3.1 路径就绪

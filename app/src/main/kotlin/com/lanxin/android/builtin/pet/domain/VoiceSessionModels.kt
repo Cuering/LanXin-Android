@@ -89,7 +89,14 @@ data class PetConfig(
     val autoListen: Boolean = false,
     val live2dModelPath: String = "",
     /** 悬浮窗位置（px，Gravity.TOP|START）；未保存时 [OverlayPosition.UNSET]。 */
-    val overlayPosition: OverlayPosition = OverlayPosition()
+    val overlayPosition: OverlayPosition = OverlayPosition(),
+    /**
+     * 陪伴页背景预设 ID（[CompanionBackgrounds.PRESETS]）或
+     * [CompanionBackgrounds.CUSTOM_ID]（配合 [companionBgCustomPath]）。
+     */
+    val companionBgPresetId: String = CompanionBackgrounds.DEFAULT_ID,
+    /** 自定义背景图绝对路径（仅 custom 模式使用）。 */
+    val companionBgCustomPath: String = ""
 )
 
 /**
@@ -104,6 +111,9 @@ interface PetSettings {
 
     /** 持久化悬浮窗位置（拖拽松手后写入）。 */
     suspend fun setOverlayPosition(x: Int, y: Int)
+
+    /** 陪伴页背景：预设 ID 或 custom + 可选自定义图路径。 */
+    suspend fun setCompanionBackground(presetId: String, customPath: String? = null)
 }
 
 /**
