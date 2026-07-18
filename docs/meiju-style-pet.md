@@ -56,6 +56,14 @@ IDLE → LISTENING → THINKING → SPEAKING → IDLE
 - DataStore：`companion_bg_preset_id` / `companion_bg_custom_path`
 - 渲染在 Compose 底层，WebView 透明叠上（不进 HTML/Cubism）
 
+### 2.3 文本 → 表情 / 动作规则映射
+
+- `TextExpressionMotionMapper`：关键词规则（无 ML），SPEAKING 相位叠加
+- 命中后覆盖 `SET_EXPRESSION`（exp_01…08）+ 可选 `PLAY_MOTION`（Idle / TapBody）
+- 规则：apology / joy / music / tap_invite / think_tone / greeting / sad / idle_variant
+- 接线：`FloatingPetService` 悬浮层、`CompanionViewModel` 陪伴页、设置页表情标签
+- 同一 `roundId:ruleId` 只推一次 motion，防 snapshot 重复 collect 连播
+
 ## 3. M2a 交付
 
 ### 3.1 路径就绪

@@ -46,7 +46,9 @@ import com.lanxin.android.builtin.pet.domain.PetBridgeCommand
 import com.lanxin.android.builtin.pet.domain.PetBridgeMessage
 import com.lanxin.android.builtin.pet.domain.PetExpressionController
 import com.lanxin.android.builtin.pet.domain.PetSettings
+import com.lanxin.android.builtin.pet.domain.TextExpressionMotionMapper
 import com.lanxin.android.builtin.pet.domain.VoiceSessionCoordinator
+import com.lanxin.android.builtin.pet.domain.VoiceSessionPhase
 import com.lanxin.android.presentation.ui.main.MainActivity
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -89,6 +91,9 @@ class FloatingPetService : Service() {
     @Volatile
     var lastLive2dWebMode: String = ""
         private set
+
+    /** 同一 round + rule 只推一次 PLAY_MOTION，避免 snapshot 重复 collect 连播。 */
+    private var lastPushedMotionKey: String? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -425,12 +430,29 @@ class FloatingPetService : Service() {
             ?: Live2dDisplayController.Live2dDisplayMode.PLACEHOLDER
         val encoded = desktopBridge?.encodeSession(snap, displayMode = mode) ?: return
         pushRawToWeb(encoded)
-        // 显式 SET_EXPRESSION，便于 Web 侧只订阅读表情通道
-        val pose = PetExpressionController.poseFor(snap.phase, mode)
+        // 相位默认 pose；SPEAKING 时用回复文本关键词叠加表情/动作
+        val phasePose = PetExpressionController.poseFor(snap.phase, mode)
+        val bubbleText = snap.subtitle.ifBlank { snap.replyText }
+        val pose = TextExpressionMotionMapper.overlaySpeakingPose(
+            phasePose,
+            snap.phase,
+            bubbleText
+        )
         desktopBridge?.encodeExpression(pose, snap.phase)?.let { pushRawToWeb(it) }
-        val bubble = snap.subtitle.ifBlank { snap.replyText }
-        if (bubble.isNotBlank()) {
-            desktopBridge?.encodeBubble(bubble)?.let { pushRawToWeb(it) }
+        if (snap.phase == VoiceSessionPhase.SPEAKING && bubbleText.isNotBlank()) {
+            val match = TextExpressionMotionMapper.match(bubbleText)
+            val group = match?.motionGroup
+            if (match != null && group != null) {
+                val key = "${snap.roundId}:${match.ruleId}"
+                if (key != lastPushedMotionKey) {
+                    lastPushedMotionKey = key
+                    desktopBridge?.encodePlayMotion(group, match.motionIndex)
+                        ?.let { pushRawToWeb(it) }
+                }
+            }
+        }
+        if (bubbleText.isNotBlank()) {
+            desktopBridge?.encodeBubble(bubbleText)?.let { pushRawToWeb(it) }
         }
     }
 
