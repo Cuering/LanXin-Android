@@ -35,11 +35,19 @@ IDLE → LISTENING → THINKING → SPEAKING → IDLE
 | **M2a** | 真资源路径闭环 + 设置「已就绪/缺失」+ fetch 脚本文案 + 本地脑 1.5B 键说明 | ✅ main `#49` |
 | **M2b** | Live2D 真显示（WebView 渲染壳 + model3/纹理，失败降级） | ✅ main `#57` |
 | **M2b 打磨** | 会话相位→表情/口型 + 缺资源引导 + 悬浮生命周期 | ✅ main `#63` |
-| **仓内 Live2D Mao** | 官方 Sample 进 assets，release 默认可开箱 | ✅ 本分支 |
+| **仓内 Live2D Mao** | 官方 Sample 进 assets，release 默认可开箱 | ✅ main |
+| **陪伴页 BGM** | 右下角 🎵 + `LanXin/music/` + 节拍轻晃 | ✅ 本分支 |
 | **M2c** | sherpa ASR/TTS 可 load 文件则 READY（无 so 仍 stub） | 后续 |
 | **M3** | 真 TTS + 口型 | 后续 |
 | **M4** | 自有/授权 Live2D | 后续 |
 | **M5** | 场景感知（显式授权） | 后续 |
+
+### 2.1 陪伴页背景音乐
+
+- 右下角半透明 🎵；面板：播放/暂停、上一/下一、音量、导入、扫描
+- 目录：`LanXin/music/`（与 live2d/asr/tts 同根）
+- 内置 CC0 `test-loop.wav`（`BuiltInMusicAssets.ensureTestTrackInstalled`）
+- MediaPlayer + Visualizer → bridge `SET_MUSIC_BEAT` → 壳层轻晃
 
 ## 3. M2a 交付
 

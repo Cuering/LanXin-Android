@@ -87,7 +87,9 @@ data class PetConfig(
     val enabled: Boolean = false,
     val overlayRunning: Boolean = false,
     val autoListen: Boolean = false,
-    val live2dModelPath: String = ""
+    val live2dModelPath: String = "",
+    /** 背景音乐时 Live2D/壳是否跟随节拍轻晃。默认开。 */
+    val musicBeatSway: Boolean = true
 )
 
 /**
@@ -99,6 +101,7 @@ interface PetSettings {
     suspend fun setOverlayRunning(running: Boolean)
     suspend fun setAutoListen(autoListen: Boolean)
     suspend fun setLive2dModelPath(path: String?)
+    suspend fun setMusicBeatSway(enabled: Boolean)
 }
 
 /**
@@ -135,6 +138,9 @@ enum class PetBridgeCommand {
 
     /** Native → Web：表情 / 口型姿态（M2b 打磨，随会话相位）。 */
     SET_EXPRESSION,
+
+    /** Native → Web：背景音乐节拍能量 0..1（壳层轻晃）。 */
+    SET_MUSIC_BEAT,
 
     /** WebView 请求开始语音会话。 */
     START_VOICE,
