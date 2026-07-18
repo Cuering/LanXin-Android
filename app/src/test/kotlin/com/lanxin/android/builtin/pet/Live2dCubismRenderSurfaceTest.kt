@@ -30,40 +30,6 @@ import org.junit.Test
  */
 class Live2dCubismRenderSurfaceTest {
 
-    private fun readAsset(relative: String): String {
-        val roots = listOf(
-            File("app/src/main/assets"),
-            File("src/main/assets"),
-            File("../app/src/main/assets")
-        )
-        for (root in roots) {
-            val f = File(root, relative)
-            if (f.isFile) return f.readText(Charsets.UTF_8)
-        }
-        // unit test working dir may be module root
-        val f = File("src/main/assets/$relative")
-        if (f.isFile) return f.readText(Charsets.UTF_8)
-        // fallback: walk from user.dir
-        val ud = File(System.getProperty("user.dir") ?: ".")
-        val candidates = listOf(
-            File(ud, "app/src/main/assets/$relative"),
-            File(ud, "src/main/assets/$relative"),
-            File(ud.parentFile, "app/src/main/assets/$relative")
-        )
-        for (c in candidates) {
-            if (c.isFile) return c.readText(Charsets.UTF_8)
-        }
-        error("asset not found: $relative under ${ud.absolutePath}")
-    }
-
-    private fun assetExists(relative: String): Boolean {
-        return runCatching { readAsset(relative); true }.getOrDefault(false) ||
-            listOf(
-                File("app/src/main/assets/$relative"),
-                File("src/main/assets/$relative")
-            ).any { it.isFile }
-    }
-
     @Test
     fun cubismRuntimeLibs_present() {
         assertTrue(assetFile("pet/lib/live2dcubismcore.min.js").isFile)
