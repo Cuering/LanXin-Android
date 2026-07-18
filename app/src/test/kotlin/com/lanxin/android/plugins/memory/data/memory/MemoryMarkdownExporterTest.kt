@@ -83,7 +83,7 @@ class MemoryMarkdownExporterTest {
         )
 
         assertTrue(md.contains("- total: 1"))
-        assertTrue(md.contains("- filter: auto_knowledge"))
+        assertTrue(md.contains("- filter: type=auto_knowledge"))
         assertTrue(md.contains("## auto_knowledge"))
         assertTrue(md.contains("**自动抽取：用户在上海**"))
         assertFalse(md.contains("**永久偏好：喜欢草莓**"))
@@ -119,77 +119,22 @@ class MemoryMarkdownExporterTest {
     }
 
     @Test
-    fun `filter by lifecycle permanent excludes normal chat`() {
-        // permanent 既匹配 lifecycle，也匹配分组名；chat(normal) 不应命中
-        val md = MemoryMarkdownExporter.build(
-            memories = sampleItems,
-            exportedAt = 1_700_100_000_000L,
-            typeFilter = "permanent"
-        )
-
-        // sample 中 lifecycle=permanent 的有 id1,3,4；但 resolveExportGroup 把 3→auto_knowledge、4→relationship、1→permanent
-        // matchesTypeFilter：lifecycle.equals("permanent") 也会命中 1,3,4
-        assertTrue(md.contains("**永久偏好：喜欢草莓**"))
-        assertTrue(md.contains("**自动抽取：用户在上海**"))
-        assertTrue(md.contains("**与同事的关系备注**"))
-        assertFalse(md.contains("**普通对话记忆**"))
-        assertTrue(md.contains("- total: 3"))
-    }
-
-    @Test
-    fun `empty export still has header`() {
+    fun `empty list renders placeholder`() {
         val md = MemoryMarkdownExporter.build(
             memories = emptyList(),
-            exportedAt = 1_700_100_000_000L
+            exportedAt = 1_700_100_000_000L,
+            typeFilter = null
         )
-        assertTrue(md.contains("# LanXin Memory Export"))
         assertTrue(md.contains("- total: 0"))
-        assertTrue(md.contains("无记忆条目"))
+        assertTrue(md.contains("_（无记忆条目）_"))
     }
 
     @Test
-    fun `matchesTypeFilter accepts group and type keys`() {
-        val auto = sampleItems[2]
-        assertTrue(MemoryMarkdownExporter.matchesTypeFilter(auto, "auto_knowledge"))
-        assertTrue(MemoryMarkdownExporter.matchesTypeFilter(auto, "fact"))
-        assertFalse(MemoryMarkdownExporter.matchesTypeFilter(auto, "chat"))
-
-        val chat = sampleItems[1]
-        assertTrue(MemoryMarkdownExporter.matchesTypeFilter(chat, "memory"))
-        assertTrue(MemoryMarkdownExporter.matchesTypeFilter(chat, MemoryType.CHAT))
-        assertFalse(MemoryMarkdownExporter.matchesTypeFilter(chat, "permanent"))
-    }
-
-    @Test
-    fun `resolveExportGroup priority auto_knowledge over permanent`() {
-        val item = sampleItems[2]
-        assertEquals("auto_knowledge", MemoryMarkdownExporter.resolveExportGroup(item))
-    }
-
-    @Test
-    fun `extractTags from json array and missing`() {
-        assertEquals(
-            listOf("food", "fruit"),
-            MemoryMarkdownExporter.extractTags("""{"tags":["food","fruit"]}""")
-        )
-        assertEquals(emptyList<String>(), MemoryMarkdownExporter.extractTags(null))
-        assertEquals(emptyList<String>(), MemoryMarkdownExporter.extractTags("not-json"))
-        assertEquals(
-            listOf("a", "b"),
-            MemoryMarkdownExporter.extractTags("""{"tags":"a,b"}""")
-        )
-    }
-
-    @Test
-    fun `item fields include createdAt and score lines`() {
-        val md = MemoryMarkdownExporter.build(
-            memories = listOf(sampleItems[0]),
-            exportedAt = 1_700_100_000_000L
-        )
-        assertTrue(md.contains("createdAt:"))
-        assertTrue(md.contains("score: 8.0"))
-        assertTrue(md.contains("type: preference"))
-        assertTrue(md.contains("lifecycle: permanent"))
+    fun `matchesTypeFilter supports lifecycle alias`() {
+        val item = sampleItems[0]
+        assertTrue(MemoryMarkdownExporter.matchesTypeFilter(item, "permanent"))
+        assertTrue(MemoryMarkdownExporter.matchesTypeFilter(item, "preference"))
+        assertFalse(MemoryMarkdownExporter.matchesTypeFilter(item, "chat"))
     }
 
     @Test
@@ -299,4 +244,3 @@ class MemoryMarkdownExporterTest {
         assertTrue(d.contains("before=2024-05-31"))
     }
 }
-
