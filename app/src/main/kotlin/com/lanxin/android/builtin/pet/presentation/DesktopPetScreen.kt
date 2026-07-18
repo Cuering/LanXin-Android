@@ -500,21 +500,6 @@ fun DesktopPetScreen(
                         )
                     }
 
-                    if (state.isDebugBuild) {
-                        Text(
-                            "Debug：LanXin/ 或历史 debug-assets 存在则自动选用开源包；" +
-                                "妹居 so/moc3 仅本机旁路，禁止入库。",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    } else {
-                        Text(
-                            "Release：不依赖默认大模型；路径空则占位。",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
                     Text(
                         "自定义路径（高级）",
                         fontWeight = FontWeight.Medium
