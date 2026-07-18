@@ -20,6 +20,7 @@ import com.lanxin.android.builtin.pet.domain.AssetDownloadTransport
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.plugins.HttpTimeoutConfig
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.header
 import io.ktor.client.request.prepareGet
@@ -243,9 +244,15 @@ class KtorAssetDownloadTransport @Inject constructor() : AssetDownloadTransport 
 
         /**
          * 整请求不设上限（880MB 可达数十分钟）。
-         * Ktor 3.x：`0` = 禁用 request timeout；用 socket 空闲 + 用户取消兜底。
+         *
+         * **Ktor 3.5 陷阱**：`requestTimeoutMillis = 0` 会在配置时直接
+         * `require(value > 0)` 抛 [IllegalArgumentException]
+         *（“Only positive timeout values are allowed”），导致**所有**模型
+         * 下载在第一次 HTTP 请求前就失败。必须用
+         * [HttpTimeoutConfig.INFINITE_TIMEOUT_MS]（= Long.MAX_VALUE）。
+         * 大文件靠 socket 空闲超时 + 用户取消兜底。
          */
-        const val REQUEST_TIMEOUT_MS: Long = 0L
+        const val REQUEST_TIMEOUT_MS: Long = HttpTimeoutConfig.INFINITE_TIMEOUT_MS
 
         /** 单文件瞬时失败最大尝试次数（含首次）。 */
         const val MAX_ATTEMPTS: Int = 3
