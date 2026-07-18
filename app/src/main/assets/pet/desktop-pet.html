@@ -453,10 +453,19 @@
         }
       }
 
+      // 上次全屏布局高度，用于检测键盘弹起
+      var __lastFullLayoutH = 0;
+
       function resizePixi() {
         if (!pixiApp) return;
         var sz = stageSize();
         try {
+          // 键盘弹起检测：高度骤缩（<85%）且宽度不变→跳过模型重布局
+          if (__lastFullLayoutH > 0 && sz.h < __lastFullLayoutH * 0.85) {
+            pixiApp.renderer.resize(sz.w, sz.h);
+            return;
+          }
+          if (sz.h > __lastFullLayoutH) __lastFullLayoutH = sz.h;
           pixiApp.renderer.resize(sz.w, sz.h);
           layoutLive2dModel();
         } catch (e) {}
@@ -1072,6 +1081,7 @@
         musicBeatSmoothed = 0;
         musicBeatDisplay = 0;
         dancePhase = 0;
+        __lastFullLayoutH = 0;
         if (mouthEl) mouthEl.classList.remove('anim');
         if (hideTimer) clearTimeout(hideTimer);
         hideBubble();
