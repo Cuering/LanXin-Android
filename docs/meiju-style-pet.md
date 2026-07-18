@@ -57,11 +57,16 @@ IDLE → LISTENING → THINKING → SPEAKING → IDLE
 ### 3.2 设置页
 
 - 展示 Live2D / ASR / TTS 来源标签 + 就绪短标签
+- **Live2D 模型列表与切换**（`Live2dModelCatalog`）
+  - 扫描 `LanXin/live2d/*/`（含 `*.model3.json`）+ 内置 Mao + 兼容 `filesDir/debug-assets/live2d/`
+  - 点选写 `live2d_model_path`；桌宠运行中推送 `RELOAD_LIVE2D`
+  - 导入 model3 / 文件夹 → 落盘 `LanXin/live2d/<name>/`
+  - 可选「同步内置到目录」将 Mao 导出到同目录，文件管理器可找
 - **App 内一键下载**（推荐）：Live2D Mao / ASR zipformer-14M / TTS matcha-baker
   - 镜像：jsDelivr / HF / hf-mirror 优先，官方 GitHub 回退（旧 ghproxy 已弃用）
   - 进度、可取消、失败短文案；落盘 `LanXin/**` 后写配置键
   - Live2D 仓内 Mao 仍默认就绪；下载可作更新/覆盖
-- 本地脑：仅说明自备路径，**不**提供 App 内下载
+- 本地脑：App 内一键下载到 `LanXin/models/local-llm/light/`（可选）
 - 可选：高级手填路径 / 开发者脚本说明
 
 ### 3.3 脚本（可选旁路）
@@ -138,6 +143,7 @@ builtin/voice/        ASR + TtsEngine / StubTtsEngine
 
 - `live2d_model_path` 可空 → 内置 Mao；`PetPathReadiness` 标「已就绪（内置示例）」；ASR/TTS 仍靠脚本
 - 换路径不改 VoiceSession 状态机
+- 设置页模型列表切换 / 导入后运行中桌宠立即 `LOAD_LIVE2D`
 
 ### 9.3 非目标（M2b）
 

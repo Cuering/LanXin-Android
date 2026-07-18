@@ -21,6 +21,8 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
+import com.lanxin.android.builtin.pet.domain.DebugAssetStorage
+import com.lanxin.android.builtin.pet.domain.Live2dModelCatalog
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import javax.inject.Inject
@@ -29,11 +31,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * 将 SAF 选取的 Uri 导入应用私有目录，返回引擎可用的绝对路径。
+ * 将 SAF 选取的 Uri 导入应用可访问目录，返回引擎可用的绝对路径。
  *
  * - 文件：OpenDocument → [importFile]
  * - 目录：OpenDocumentTree → [importTree]（整树拷贝）
- * - Live2D 目录：拷贝后解析 `*.model3.json` 路径
+ * - Live2D：落盘到用户可见的 `LanXin/live2d/<name>/`（与 ASR/TTS 同根）
  */
 @Singleton
 class LocalPathImporter @Inject constructor(
@@ -126,17 +128,72 @@ class LocalPathImporter @Inject constructor(
     }
 
     /**
-     * Live2D：优先按文件导入 `*.model3.json`；
-     * 若扩展名不像 model3，仍拷贝并返回路径（由 readiness 判定）。
+     * Live2D：按文件导入 `*.model3.json` 到 `LanXin/live2d/<name>/`。
+     * 仅单文件时同包纹理/moc3 可能缺失，优先用 [importLive2dTree]。
      */
     suspend fun importLive2dModel3(uriString: String): Result<ImportResult> =
-        importFile(uriString, PathImportHelper.Kind.LIVE2D)
+        withContext(Dispatchers.IO) {
+            runCatching {
+                takePersistable(uriString, isTree = false)
+                val uri = Uri.parse(uriString)
+                val name = queryDisplayName(uri) ?: "model_${System.currentTimeMillis()}.model3.json"
+                val staging = PathImportHelper.newImportDir(
+                    context.filesDir,
+                    PathImportHelper.Kind.LIVE2D
+                )
+                staging.mkdirs()
+                val staged = File(staging, PathImportHelper.sanitizeFileName(name))
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    staged.outputStream().use { out -> input.copyTo(out) }
+                } ?: error("无法打开文件: $uriString")
+                if (!staged.isFile || staged.length() <= 0L) {
+                    error("导入后文件无效")
+                }
+                val lanXin = DebugAssetStorage.resolve(context).lanXinDir
+                val preferred = name
+                    .removeSuffix(".model3.json")
+                    .removeSuffix(".model3")
+                    .ifBlank { null }
+                val dest = Live2dModelCatalog.importModel3File(
+                    lanXinDir = lanXin,
+                    sourceFile = staged,
+                    preferredName = preferred
+                )
+                staging.deleteRecursively()
+                ImportResult(absolutePath = dest.absolutePath, displayName = dest.name)
+            }
+        }
 
     /**
-     * Live2D：选文件夹，自动定位 model3.json。
+     * Live2D：选文件夹，拷到 `LanXin/live2d/<name>/` 并定位 model3.json。
      */
     suspend fun importLive2dTree(treeUriString: String): Result<ImportResult> =
-        importTree(treeUriString, PathImportHelper.Kind.LIVE2D)
+        withContext(Dispatchers.IO) {
+            runCatching {
+                takePersistable(treeUriString, isTree = true)
+                val treeUri = Uri.parse(treeUriString)
+                val staging = PathImportHelper.newImportDir(
+                    context.filesDir,
+                    PathImportHelper.Kind.LIVE2D
+                )
+                if (staging.exists()) staging.deleteRecursively()
+                staging.mkdirs()
+                val docId = DocumentsContract.getTreeDocumentId(treeUri)
+                copyDocumentNode(treeUri, docId, staging)
+                val model3 = PathImportHelper.findModel3Json(staging)
+                    ?: error("所选文件夹中未找到 *.model3.json")
+                val lanXin = DebugAssetStorage.resolve(context).lanXinDir
+                val preferred = model3.parentFile?.name
+                    ?.takeIf { it.isNotBlank() && !it.startsWith("import_") }
+                val dest = Live2dModelCatalog.importModelTree(
+                    lanXinDir = lanXin,
+                    sourceDir = staging,
+                    preferredName = preferred
+                )
+                staging.deleteRecursively()
+                ImportResult(absolutePath = dest.absolutePath, displayName = dest.name)
+            }
+        }
 
     private fun copyDocumentNode(treeUri: Uri, documentId: String, destDir: File) {
         destDir.mkdirs()

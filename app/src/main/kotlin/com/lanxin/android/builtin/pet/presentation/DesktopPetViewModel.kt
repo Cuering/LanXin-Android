@@ -34,6 +34,7 @@ import com.lanxin.android.builtin.pet.domain.DebugAssetMirror
 import com.lanxin.android.builtin.pet.domain.DebugAssetStorage
 import com.lanxin.android.builtin.pet.domain.DebugOpenSourcePaths
 import com.lanxin.android.builtin.pet.domain.Live2dDisplayController
+import com.lanxin.android.builtin.pet.domain.Live2dModelCatalog
 import com.lanxin.android.builtin.pet.domain.PetExpressionController
 import com.lanxin.android.builtin.pet.domain.PetPathReadiness
 import com.lanxin.android.builtin.pet.domain.PetResourceResolver
@@ -47,12 +48,14 @@ import com.lanxin.android.util.LocalPathImporter
 import com.lanxin.android.util.PathImportHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class DesktopPetUiState(
     val enabled: Boolean = false,
@@ -118,7 +121,12 @@ data class DesktopPetUiState(
     val live2dBuiltinHint: String = DebugAssetCatalog.LIVE2D_BUILTIN_PRIMARY_HINT,
     /** 实际落盘根（LanXin）绝对路径，下载成功后展示给用户。 */
     val downloadRootPath: String = "",
-    val downloadRootFallback: Boolean = false
+    val downloadRootFallback: Boolean = false,
+    /** Live2D 可切换模型列表（内置 Mao 与 LanXin/live2d 下各模型）。 */
+    val live2dModels: List<Live2dModelCatalog.ModelEntry> = emptyList(),
+    val live2dCurrentName: String = Live2dModelCatalog.BUILTIN_DISPLAY_NAME,
+    /** 文件管理器提示：LanXin/live2d 绝对路径。 */
+    val live2dDirHint: String = ""
 )
 
 @HiltViewModel
@@ -222,6 +230,22 @@ class DesktopPetViewModel @Inject constructor(
                 asrReady = asrCheck.ready,
                 ttsReady = ttsCheck.ready
             )
+            // 将内置 Mao 同步到 LanXin/live2d/Mao/（用户文件管理器可找）
+            withContext(Dispatchers.IO) {
+                Live2dModelCatalog.ensureBuiltinExported(app, storageRoot.lanXinDir)
+            }
+            val live2dModels = Live2dModelCatalog.listModels(
+                configuredPath = config.live2dModelPath,
+                resolvedPath = resolved.live2dModelPath,
+                filesDir = app.filesDir,
+                lanXinDir = storageRoot.lanXinDir
+            )
+            val live2dName = Live2dModelCatalog.currentDisplayName(
+                live2dModels,
+                config.live2dModelPath,
+                resolved.live2dModelPath
+            )
+            val live2dDir = Live2dModelCatalog.live2dRootDisplay(storageRoot.lanXinDir)
             _uiState.update {
                 it.copy(
                     enabled = config.enabled,
@@ -269,6 +293,9 @@ class DesktopPetViewModel @Inject constructor(
                     downloadItems = buildDownloadItems(storageRoot.baseDir),
                     downloadRootPath = storageRoot.displayPath,
                     downloadRootFallback = storageRoot.usedFallback,
+                    live2dModels = live2dModels,
+                    live2dCurrentName = live2dName,
+                    live2dDirHint = live2dDir,
                     phase = snap.phase,
                     asrText = snap.asrText,
                     replyText = snap.replyText,
@@ -305,10 +332,77 @@ class DesktopPetViewModel @Inject constructor(
     fun setLive2dModelPath(path: String) {
         viewModelScope.launch {
             petSettings.setLive2dModelPath(path.ifBlank { null })
+            notifyLive2dReloadIfRunning()
             refresh()
             _uiState.update {
-                it.copy(snackbarMessage = if (path.isBlank()) "已清除 Live2D 自定义路径" else "Live2D 路径已保存")
+                it.copy(
+                    snackbarMessage = if (path.isBlank()) {
+                        "已清除 Live2D 自定义路径"
+                    } else {
+                        "Live2D 路径已保存"
+                    }
+                )
             }
+        }
+    }
+
+    /**
+     * 设置页一键切换：写入 [live2d_model_path] 并在桌宠运行时立即 RELOAD。
+     * 内置 Mao：优先写已安装绝对路径；未安装则清空走默认解析。
+     */
+    fun selectLive2dModel(entry: Live2dModelCatalog.ModelEntry) {
+        viewModelScope.launch {
+            val app = getApplication<Application>()
+            val path = Live2dModelCatalog.resolveSwitchPath(entry, app.filesDir)
+            petSettings.setLive2dModelPath(path)
+            notifyLive2dReloadIfRunning()
+            refresh()
+            _uiState.update {
+                it.copy(snackbarMessage = "已切换 Live2D：${entry.displayName}")
+            }
+        }
+    }
+
+    /** 将内置 Mao 导出到 LanXin/live2d/Mao/（用户主动点「同步到目录」）。 */
+    fun exportBuiltinLive2dToLanXin() {
+        viewModelScope.launch {
+            val app = getApplication<Application>()
+            val root = DebugAssetStorage.resolve(app)
+            val path = withContext(Dispatchers.IO) {
+                Live2dModelCatalog.ensureBuiltinExported(app, root.lanXinDir)
+            }
+            refresh()
+            _uiState.update {
+                it.copy(
+                    snackbarMessage = if (path != null) {
+                        "内置 Mao 已同步到 $path"
+                    } else {
+                        "同步失败：内置 Sample 不可用"
+                    }
+                )
+            }
+        }
+    }
+
+    fun showLive2dDirHint() {
+        val hint = _uiState.value.live2dDirHint.ifBlank {
+            "LanXin/live2d/"
+        }
+        val message = buildString {
+            append("请在文件管理器中打开：")
+            append(hint)
+            append('\n')
+            append("每个模型一个文件夹，内含 *.model3.json。导入或下载后会出现在此列表。")
+        }
+        _uiState.update {
+            it.copy(snackbarMessage = message)
+        }
+    }
+
+    private fun notifyLive2dReloadIfRunning() {
+        val app = getApplication<Application>()
+        if (_uiState.value.overlayRunning) {
+            FloatingPetService.reloadLive2d(app)
         }
     }
 
@@ -414,11 +508,21 @@ class DesktopPetViewModel @Inject constructor(
             } catch (e: Exception) {
                 Result.failure<Any>(e)
             }
+            if (label == "Live2D" && result.isSuccess) {
+                notifyLive2dReloadIfRunning()
+            }
             _uiState.update {
                 it.copy(
                     pathImportBusy = false,
                     snackbarMessage = result.fold(
-                        onSuccess = { "$label 已导入并就绪" },
+                        onSuccess = {
+                            if (label == "Live2D") {
+                                val dir = _uiState.value.live2dDirHint
+                                "Live2D 已导入到 $dir 并可切换"
+                            } else {
+                                "$label 已导入并就绪"
+                            }
+                        },
                         onFailure = { e -> "$label 导入失败：${e.message ?: e}" }
                     )
                 )
@@ -697,7 +801,10 @@ class DesktopPetViewModel @Inject constructor(
 
     private suspend fun onDownloadCompleted(kind: DebugAssetKind, readyPath: String) {
         when (kind) {
-            DebugAssetKind.LIVE2D -> petSettings.setLive2dModelPath(readyPath)
+            DebugAssetKind.LIVE2D -> {
+                petSettings.setLive2dModelPath(readyPath)
+                notifyLive2dReloadIfRunning()
+            }
             DebugAssetKind.ASR -> asrSettings.setModelPath(readyPath)
             DebugAssetKind.TTS -> ttsSettings.setModelDir(readyPath)
             DebugAssetKind.LOCAL_LLM -> localInferenceSettings.setModelPath(readyPath)

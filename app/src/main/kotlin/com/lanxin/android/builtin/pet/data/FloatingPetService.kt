@@ -116,6 +116,10 @@ class FloatingPetService : Service() {
                         ?.let { pushRawToWeb(it) }
                 }
             }
+            ACTION_RELOAD_LIVE2D -> {
+                pushLive2dPathToWeb()
+                pushSessionToWeb()
+            }
             else -> pushSessionToWeb()
         }
         return START_STICKY
@@ -354,6 +358,9 @@ class FloatingPetService : Service() {
     companion object {
         const val ACTION_STOP = "com.lanxin.android.pet.STOP"
         const val ACTION_DEMO_ROUND = "com.lanxin.android.pet.DEMO_ROUND"
+
+        /** 设置页切换模型后立即重新 LOAD_LIVE2D。 */
+        const val ACTION_RELOAD_LIVE2D = "com.lanxin.android.pet.RELOAD_LIVE2D"
         const val CHANNEL_ID = "lanxin_desktop_pet"
         const val NOTIFICATION_ID = 64061
         const val ASSET_URL = "file:///android_asset/pet/desktop-pet.html"
@@ -377,6 +384,19 @@ class FloatingPetService : Service() {
             val i = Intent(context, FloatingPetService::class.java).setAction(ACTION_DEMO_ROUND)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(i)
+            } else {
+                context.startService(i)
+            }
+        }
+
+        /** 桌宠已运行时按当前 live2d_model_path 重新推送 LOAD_LIVE2D。 */
+        fun reloadLive2d(context: Context) {
+            val i = Intent(context, FloatingPetService::class.java)
+                .setAction(ACTION_RELOAD_LIVE2D)
+            // 未 start 时 startService 可能新建实例；仅在业务侧确认 overlay 运行时调用
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                runCatching { context.startForegroundService(i) }
+                    .onFailure { context.startService(i) }
             } else {
                 context.startService(i)
             }

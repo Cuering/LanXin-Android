@@ -19,6 +19,7 @@ package com.lanxin.android.builtin.pet.presentation
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -41,6 +42,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -66,6 +68,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lanxin.android.builtin.pet.domain.DebugAssetKind
 import com.lanxin.android.builtin.pet.domain.DebugAssetMirror
+import com.lanxin.android.builtin.pet.domain.Live2dModelCatalog
 import com.lanxin.android.presentation.common.PathPickerField
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -218,6 +221,94 @@ fun DesktopPetScreen(
                         Switch(
                             checked = state.enabled,
                             onCheckedChange = viewModel::setEnabled
+                        )
+                    }
+                }
+            }
+
+            // Live2D 模型切换
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("Live2D 模型", fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "当前：${state.live2dCurrentName} · ${state.live2dReadyLabel}" +
+                            if (state.live2dReady) " ✓" else "",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        "路径：${
+                            com.lanxin.android.util.PathImportHelper.shortSummary(
+                                state.live2dModelPathResolved.ifBlank {
+                                    state.live2dModelPathConfigured
+                                }
+                            )
+                        }",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        "点选即可切换；导入/下载落在同一目录，文件管理器可找到。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (state.live2dModels.isEmpty()) {
+                        Text(
+                            "暂无模型（应至少有内置 Mao）",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    } else {
+                        state.live2dModels.forEach { entry ->
+                            Live2dModelRow(
+                                entry = entry,
+                                enabled = !state.pathImportBusy,
+                                onSelect = { viewModel.selectLive2dModel(entry) }
+                            )
+                        }
+                    }
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                live2dFilePicker.launch(arrayOf("application/json", "*/*"))
+                            },
+                            enabled = !state.pathImportBusy,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("导入 model3")
+                        }
+                        OutlinedButton(
+                            onClick = { live2dTreePicker.launch(null) },
+                            enabled = !state.pathImportBusy,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("导入文件夹")
+                        }
+                    }
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        TextButton(onClick = viewModel::showLive2dDirHint) {
+                            Text("打开目录说明")
+                        }
+                        TextButton(onClick = viewModel::exportBuiltinLive2dToLanXin) {
+                            Text("同步内置到目录")
+                        }
+                        TextButton(onClick = viewModel::refresh) {
+                            Text("刷新列表")
+                        }
+                    }
+                    if (state.live2dDirHint.isNotBlank()) {
+                        Text(
+                            "目录：${state.live2dDirHint}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -429,20 +520,20 @@ fun DesktopPetScreen(
                         fontWeight = FontWeight.Medium
                     )
                     Text(
-                        "普通用户优先用上方「内置 / 一键下载」。选择器会把文件导入 App 私有目录，" +
-                            "无需手敲绝对路径。清除后回到内置 / 下载路径解析。",
+                        "普通用户优先用上方「Live2D 模型」列表切换与导入。" +
+                            "Live2D 导入落盘到 LanXin/live2d/；清除后回到内置解析。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
                     PathPickerField(
-                        label = "Live2D 模型（*.model3.json）",
+                        label = "Live2D 模型（高级手填）",
                         path = state.live2dModelPathConfigured,
                         readyLabel = "就绪：${state.live2dReadyLabel} · 生效：${
                             state.live2dModelPathResolved.ifBlank { "（空 → 占位/内置）" }
                         }",
                         ready = state.live2dReady,
-                        helperText = "可选文件或整包文件夹；文件夹会自动定位 model3.json。",
+                        helperText = "优先用上方列表；此处可手填绝对路径。导入请用上方「导入 model3/文件夹」。",
                         pickButtonText = "选 model3.json",
                         onPick = {
                             live2dFilePicker.launch(arrayOf("application/json", "*/*"))
@@ -650,6 +741,44 @@ fun DesktopPetScreen(
             }
 
             Spacer(modifier = Modifier.height(24.dp))
+        }
+    }
+}
+
+@Composable
+private fun Live2dModelRow(
+    entry: Live2dModelCatalog.ModelEntry,
+    enabled: Boolean,
+    onSelect: () -> Unit
+) {
+    val sourceLabel = when (entry.source) {
+        Live2dModelCatalog.Source.BUILTIN -> "内置"
+        Live2dModelCatalog.Source.LANXIN -> "LanXin"
+        Live2dModelCatalog.Source.CUSTOM -> "自定义"
+    }
+    val readyText = if (entry.ready) "就绪" else "未就绪"
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = enabled, onClick = onSelect)
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(
+            selected = entry.selected,
+            onClick = onSelect,
+            enabled = enabled
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                entry.displayName,
+                fontWeight = if (entry.selected) FontWeight.SemiBold else FontWeight.Normal
+            )
+            Text(
+                "$sourceLabel · $readyText · ${entry.shortPath}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

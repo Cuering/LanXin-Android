@@ -26,7 +26,8 @@
 3. 进度条、取消、失败短文案（含真实尝试过的源）
 4. 成功写回：`live2d_model_path` / `offline_asr_model_path` / `tts_model_dir` / `local_inference_model_path`，并展示绝对路径 + 成功源
 5. Live2D 仓内 Mao 仍为默认兜底；下载可覆盖到 `LanXin/live2d/Mao/`
-6. 本地脑：一键下载到 `LanXin/models/local-llm/light/`（~880MB，请 Wi‑Fi）；也可自备路径导入
+6. **Live2D 模型切换**：设置页扫描 `LanXin/live2d/*/`（含 `*.model3.json`）+ 内置 Mao；点选写 `live2d_model_path`；导入落盘同一目录；桌宠运行中自动 `RELOAD_LIVE2D`
+7. 本地脑：一键下载到 `LanXin/models/local-llm/light/`（~880MB，请 Wi‑Fi）；也可自备路径导入
 
 ### 下载源优先级
 
@@ -45,8 +46,8 @@
 |:------:|------|------|
 | **1** | `{外部存储}/LanXin/` | 如 `/storage/emulated/0/LanXin/`；文件管理器易见 |
 | 2 | `Android/data/com.lanxin.android/files/LanXin/` | 公共目录不可写时回退（`getExternalFilesDir`） |
-| 子目录 | `live2d/Mao/` · `asr/…` · `tts/…` · `models/local-llm/light/` | 相对 `LanXin/` |
-| 兼容 | 历史 `filesDir/debug-assets/` | 仍可被路径解析识别 |
+| 子目录 | `live2d/<模型名>/` · `asr/…` · `tts/…` · `models/local-llm/light/` | 相对 `LanXin/`；Live2D 以目录内 `*.model3.json` 为准 |
+| 兼容 | 历史 `filesDir/debug-assets/live2d/` | 仍可被路径解析与模型列表识别 |
 
 成功下载后 UI 展示「已保存到 <绝对路径>」。
 
