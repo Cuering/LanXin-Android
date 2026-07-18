@@ -85,6 +85,24 @@ Native → Web：`PLAY_MOTION`（`motionGroup` / 可选 `motionIndex`）。
 Web → Native：`MODEL_TAPPED`（`hitArea`）。  
 与 Cubism 参数音乐律动共存：motion 忙时降权，不整模贴纸晃。
 
+## 文本 → 表情 / 动作（关键词规则）
+
+SPEAKING 相位下，对 `replyText` / 字幕做关键词首命中映射（无 ML、无网络）。
+
+| ruleId | 关键词示例 | Expression | Motion |
+|--------|------------|------------|--------|
+| apology | 抱歉 / 对不起 / 出错 | APOLOGY | — |
+| joy | 哈哈 / 太棒 / 喜欢 | TAP_REACTION | TapBody[3] |
+| music | 音乐 / 听歌 / BGM | MUSIC_PEAK | Idle[1] |
+| tap_invite | 点我 / 摸摸 | TAP_REACTION | TapBody[0] |
+| think_tone | 让我想 / 稍等 | THINKING | — |
+| greeting | 你好 / hello | IDLE_SMILE | Idle[0] |
+| sad | 难过 / 呜呜 | APOLOGY | — |
+| idle_variant | 闲着 / 摸鱼 | IDLE_VARIANT_A | — |
+
+实现：`TextExpressionMotionMapper`；接入点：`FloatingPetService.pushSessionToWeb`、`CompanionViewModel.encodeExpressionRaw/encodePlayMotionRaw`。  
+同一 `roundId:ruleId` 只推一次 `PLAY_MOTION`，口型保持 SPEAKING。未命中回落相位默认。
+
 ## 验证
 
 ```bash
