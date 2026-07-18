@@ -78,8 +78,8 @@ class CompanionMusicPlayer(
                 smoothLevel *= 0.85f
                 onBeat(smoothLevel)
             }
-            // 兜底轮询 100ms；Visualizer 仍是主路径，整体再由 VM 限频推 WebView
-            mainHandler.postDelayed(this, 100L)
+            // 兜底轮询 200ms；Visualizer 仍是主路径，整体再由 VM ≥180ms 限频推 WebView
+            mainHandler.postDelayed(this, 200L)
         }
     }
 

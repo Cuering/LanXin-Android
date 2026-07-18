@@ -69,9 +69,38 @@ class Live2dCubismRenderSurfaceTest {
         assertFalse(html.contains("beat * 5"))
         assertFalse(html.contains("beat * 6"))
         assertFalse(html.contains("beat * 0.05"))
-        // 限幅常量存在
-        assertTrue(html.contains("2.8") || html.contains("maxStep"))
-        assertTrue(html.contains("0.012") || html.contains("0.018"))
+        // 新限幅：X≤1.5 Y≤1.0 rot≤0.01；scalePulse 恒 0
+        assertTrue(html.contains("1.5") || html.contains("maxStep"))
+        assertTrue(html.contains("scalePulse = 0") || html.contains("scalePulse: scalePulse"))
+        assertTrue(html.contains("scalePulse 恒") || html.contains("scalePulse = 0"))
+    }
+
+    @Test
+    fun desktopPetHtml_layoutNoScaleFeedbackLoop() {
+        val html = assetFile("pet/desktop-pet.html").readText()
+        // 切断反馈环：layout 可 scale.set(1) 再 getBounds；缓存原生尺寸
+        assertTrue(html.contains("scale.set(1") || html.contains("scale.set(1, 1)"))
+        assertTrue(html.contains("__layoutDone"))
+        assertTrue(html.contains("__nativeModelW"))
+        assertTrue(html.contains("__nativeModelH"))
+        assertTrue(html.contains("layoutLive2dModel"))
+        // 键盘高度下降：skip layout
+        assertTrue(html.contains("__lastFullLayoutH"))
+        assertTrue(html.contains("0.92"))
+        // softDanceOffset 禁止缩放脉冲
+        assertTrue(html.contains("var scalePulse = 0"))
+    }
+
+    @Test
+    fun desktopPetHtml_scalePulseAlwaysZero() {
+        val html = assetFile("pet/desktop-pet.html").readText()
+        // softDanceOffset 返回 scalePulse: 0
+        assertTrue(html.contains("var scalePulse = 0"))
+        // tick 路径不把 d.scalePulse 加进 scaleMul
+        assertFalse(html.contains("1 + breath + d.scalePulse"))
+        // 位移限幅更小
+        assertTrue(html.contains("swayX > 1.5") || html.contains("if (swayX > 1.5)"))
+        assertTrue(html.contains("swayY > 1.0") || html.contains("if (swayY > 1.0)"))
     }
 
     @Test
