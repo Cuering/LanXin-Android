@@ -58,6 +58,22 @@ class Live2dCubismRenderSurfaceTest {
     }
 
     @Test
+    fun desktopPetHtml_fullscreenStage_noCardWindow() {
+        val html = assetFile("pet/desktop-pet.html").readText()
+        // 全屏舞台：#stage / #live2d-shell 铺满，去掉小窗尺寸与白框
+        assertTrue(html.contains("#stage"))
+        assertTrue(html.contains("inset: 0") || html.contains("width: 100%"))
+        assertTrue(html.contains("#live2d-shell"))
+        assertFalse(html.contains("width: 140px; height: 160px"))
+        assertTrue(html.contains("stageSize") || html.contains("layoutLive2dModel"))
+        // 桌宠构图：偏下 + 更大 scale
+        assertTrue(html.contains("0.62") || html.contains("h * 0.62"))
+        assertTrue(html.contains("1.18") || html.contains("1.08"))
+        assertTrue(html.contains("ResizeObserver") || html.contains("resizePixi"))
+        assertTrue(html.contains("background: transparent"))
+    }
+
+    @Test
     fun nativeDecision_stillShellMode_webReportsReal() {
         // Native 侧就绪仍为 LIVE2D_SHELL；Web 成功后回传 LIVE2D_REAL
         val f = File.createTempFile("Mao", ".model3.json")

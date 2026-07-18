@@ -12,68 +12,79 @@
       overflow: hidden;
       font-family: "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
     }
+    /* 全屏舞台：无白框卡片，模型铺满可用区域 */
     #root {
       width: 100%; height: 100%;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: flex-end;
-      padding-bottom: 8px;
+      display: block;
       position: relative;
+      overflow: hidden;
+      background: transparent;
     }
     #bubble {
-      max-width: 92%;
+      position: absolute;
+      left: 50%;
+      top: 12%;
+      transform: translate(-50%, 8px);
+      max-width: min(88vw, 360px);
       min-width: 80px;
-      background: rgba(255, 72, 96, 0.95);
+      background: rgba(255, 72, 96, 0.92);
       color: #fff;
       padding: 10px 14px;
       border-radius: 16px;
-      border: 2px solid #fff;
-      font-size: 13px;
+      border: 2px solid rgba(255,255,255,.85);
+      font-size: 14px;
       font-weight: 600;
       line-height: 1.35;
       text-align: center;
       word-break: break-word;
-      box-shadow: 0 6px 18px rgba(0,0,0,.35);
+      box-shadow: 0 6px 18px rgba(0,0,0,.28);
       opacity: 0;
-      transform: translateY(8px);
       transition: opacity .25s ease, transform .25s ease;
-      margin-bottom: 8px;
       pointer-events: none;
       z-index: 5;
     }
-    #bubble.show { opacity: 1; transform: translateY(0); }
+    #bubble.show { opacity: 1; transform: translate(-50%, 0); }
     #stage {
-      width: 140px; height: 160px;
-      position: relative;
-      display: flex; align-items: center; justify-content: center;
+      position: absolute;
+      inset: 0;
+      width: 100%; height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
     }
+    /* 占位/失败态同样全屏，无小窗白框 */
     #avatar {
-      width: 120px; height: 140px;
-      border-radius: 24px 24px 32px 32px;
+      width: min(72vw, 280px);
+      height: min(78vw, 340px);
+      max-height: 72vh;
+      border-radius: 28px 28px 36px 36px;
       background: linear-gradient(160deg, #ffb7c5 0%, #ff7aa2 55%, #e85d8e 100%);
-      box-shadow: 0 10px 24px rgba(232, 93, 142, .4);
+      box-shadow: 0 14px 36px rgba(232, 93, 142, .35);
       display: flex; flex-direction: column;
       align-items: center; justify-content: center;
       position: relative;
-      border: 3px solid rgba(255,255,255,.85);
+      border: none;
       z-index: 2;
+      transform: translateY(6%);
     }
     #avatar.hidden { display: none; }
     #face {
-      font-size: 42px;
+      font-size: clamp(48px, 12vw, 72px);
       line-height: 1;
       filter: drop-shadow(0 2px 2px rgba(0,0,0,.15));
     }
     #status {
-      margin-top: 6px;
-      font-size: 11px;
+      margin-top: 8px;
+      font-size: 12px;
       color: rgba(255,255,255,.95);
-      background: rgba(0,0,0,.25);
-      padding: 2px 8px;
+      background: rgba(0,0,0,.28);
+      padding: 3px 10px;
       border-radius: 999px;
     }
     #mouth {
-      width: 28px; height: 8px;
-      margin-top: 4px;
+      width: 32px; height: 8px;
+      margin-top: 6px;
       border-radius: 0 0 14px 14px;
       background: rgba(80, 20, 40, .55);
       transform-origin: center top;
@@ -86,15 +97,17 @@
       from { height: 6px; border-radius: 0 0 10px 10px; }
       to   { height: 16px; border-radius: 0 0 18px 18px; background: rgba(60,10,30,.7); }
     }
+    /* Live2D 壳：全屏透明，去掉圆角白边小窗 */
     #live2d-shell {
       display: none;
-      width: 140px; height: 160px;
-      border-radius: 20px;
+      position: absolute;
+      inset: 0;
+      width: 100%; height: 100%;
+      border-radius: 0;
       overflow: hidden;
-      position: relative;
-      background: linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,183,197,.18));
-      border: 2px solid rgba(255,255,255,.55);
-      box-shadow: 0 10px 24px rgba(232, 93, 142, .35);
+      background: transparent;
+      border: none;
+      box-shadow: none;
       z-index: 2;
     }
     #live2d-shell.active { display: block; }
@@ -110,34 +123,44 @@
       height: 100%;
       display: none;
       z-index: 1;
+      background: transparent;
     }
     #pixi-host.active { display: block; }
+    /* 角标轻量浮层，不占主体 */
     #live2d-badge {
       position: absolute;
-      left: 6px; bottom: 6px;
+      left: 10px; bottom: 10px;
       font-size: 10px;
       font-weight: 700;
       color: #fff;
-      background: rgba(0,0,0,.45);
-      padding: 2px 6px;
+      background: rgba(0,0,0,.38);
+      padding: 2px 7px;
       border-radius: 999px;
       pointer-events: none;
       z-index: 4;
+      opacity: 0.72;
     }
     #mode-tag {
       position: absolute;
-      right: 6px; top: 6px;
-      font-size: 9px;
+      right: 10px; top: 10px;
+      font-size: 10px;
       font-weight: 700;
       color: #fff;
-      background: rgba(232, 93, 142, .85);
-      padding: 2px 6px;
-      border-radius: 6px;
+      background: rgba(0,0,0,.38);
+      padding: 3px 8px;
+      border-radius: 999px;
       pointer-events: none;
       z-index: 3;
+      opacity: 0.78;
     }
     #controls {
-      display: flex; gap: 8px; margin-top: 8px;
+      display: none;
+      position: absolute;
+      left: 50%;
+      bottom: 12px;
+      transform: translateX(-50%);
+      gap: 8px;
+      z-index: 6;
     }
     button {
       border: none;
@@ -151,16 +174,14 @@
     }
     button:active { transform: scale(.96); }
     button.danger { background: rgba(180, 30, 50, .85); }
-    @media (min-width: 280px) and (min-height: 420px) {
-      #root { justify-content: center; padding-bottom: 12px; }
-      #stage { width: min(72vw, 320px); height: min(78vw, 360px); }
-      #avatar { width: 86%; height: 88%; }
-      #live2d-shell { width: 100%; height: 100%; }
-      #bubble { font-size: 15px; max-width: 86%; }
-      #controls { display: none; }
-    }
+    /* 小窗悬浮场景才露出控件 */
     @media (max-width: 200px), (max-height: 280px) {
       #controls { display: flex; }
+      #avatar {
+        width: 110px; height: 130px;
+        transform: none;
+      }
+      #bubble { top: 4%; font-size: 12px; }
     }
   </style>
 </head>
@@ -379,16 +400,27 @@
         cubismReady = false;
       }
 
+      function stageSize() {
+        var w = (pixiHost && pixiHost.clientWidth) ||
+          (shell && shell.clientWidth) ||
+          (document.documentElement && document.documentElement.clientWidth) ||
+          window.innerWidth || 360;
+        var h = (pixiHost && pixiHost.clientHeight) ||
+          (shell && shell.clientHeight) ||
+          (document.documentElement && document.documentElement.clientHeight) ||
+          window.innerHeight || 640;
+        return { w: Math.max(64, w), h: Math.max(64, h) };
+      }
+
       function ensurePixiApp() {
         if (pixiApp) return pixiApp;
         if (!detectEngine()) return null;
-        var w = pixiHost.clientWidth || shell.clientWidth || 140;
-        var h = pixiHost.clientHeight || shell.clientHeight || 160;
+        var sz = stageSize();
         var dpr = Math.min(window.devicePixelRatio || 1, 2);
         try {
           pixiApp = new PIXI.Application({
-            width: Math.max(64, w),
-            height: Math.max(64, h),
+            width: sz.w,
+            height: sz.h,
             backgroundAlpha: 0,
             antialias: true,
             autoDensity: true,
@@ -419,10 +451,9 @@
 
       function resizePixi() {
         if (!pixiApp) return;
-        var w = pixiHost.clientWidth || shell.clientWidth || 140;
-        var h = pixiHost.clientHeight || shell.clientHeight || 160;
+        var sz = stageSize();
         try {
-          pixiApp.renderer.resize(Math.max(64, w), Math.max(64, h));
+          pixiApp.renderer.resize(sz.w, sz.h);
           layoutLive2dModel();
         } catch (e) {}
       }
@@ -432,16 +463,18 @@
         try {
           var w = pixiApp.renderer.width / (pixiApp.renderer.resolution || 1);
           var h = pixiApp.renderer.height / (pixiApp.renderer.resolution || 1);
-          // 以模型 bounds 适配 stage
+          // 全屏桌宠构图：更大 scale，角色居中偏下
           var bounds = live2dModel.getBounds ? live2dModel.getBounds(true) : null;
           var mw = (bounds && bounds.width) || live2dModel.width || 1;
           var mh = (bounds && bounds.height) || live2dModel.height || 1;
-          var scale = Math.min((w * 0.92) / mw, (h * 0.96) / mh);
-          if (!isFinite(scale) || scale <= 0) scale = 0.15;
+          var scale = Math.min((w * 1.18) / mw, (h * 1.08) / mh);
+          if (!isFinite(scale) || scale <= 0) scale = 0.22;
+          // 略放大，避免小窗感
+          scale = scale * 1.05;
           live2dModel.scale.set(scale);
           live2dModel.anchor && live2dModel.anchor.set && live2dModel.anchor.set(0.5, 0.5);
           live2dModel.x = w / 2;
-          live2dModel.y = h * 0.55;
+          live2dModel.y = h * 0.62;
           live2dModel.__baseScale = scale;
           live2dModel.__baseX = live2dModel.x;
           live2dModel.__baseY = live2dModel.y;
@@ -534,38 +567,41 @@
           for (var i = 0; i < Math.min(textures.length, 3); i++) {
             var img = textures[i];
             if (!img || !img.complete || !img.naturalWidth) continue;
-            var maxW = w * 0.88;
-            var maxH = h * 0.9;
-            var r = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight);
+            // 全屏壳：纹理尽量铺满，略偏下
+            var maxW = w * 0.98;
+            var maxH = h * 0.98;
+            var r = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight) * 1.08;
             var dw = img.naturalWidth * r;
             var dh = img.naturalHeight * r;
             ctx.globalAlpha = i === 0 ? 1 : 0.95;
-            ctx.drawImage(img, -dw / 2, -dh / 2 + 4, dw, dh);
+            ctx.drawImage(img, -dw / 2, -dh / 2 + h * 0.04, dw, dh);
           }
         } else {
+          var bodyR = Math.min(w, h) * 0.22;
           ctx.fillStyle = ui.tint;
           ctx.beginPath();
-          ctx.ellipse(0, 10, 42, 56, 0, 0, Math.PI * 2);
+          ctx.ellipse(0, 10, bodyR * 0.72, bodyR, 0, 0, Math.PI * 2);
           ctx.fill();
           ctx.fillStyle = '#fff';
-          ctx.font = '42px system-ui,sans-serif';
+          ctx.font = Math.round(bodyR * 0.9) + 'px system-ui,sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText(ui.face, 0, 0);
         }
 
         var mOpen = mouthAnimating ? (0.25 + 0.45 * (0.5 + 0.5 * Math.sin(t * 0.35))) : mouthOpen;
+        var mouthScale = Math.min(w, h) / 320;
         ctx.globalAlpha = 0.9;
         ctx.fillStyle = 'rgba(60, 15, 30, 0.75)';
         ctx.beginPath();
-        ctx.ellipse(0, 28, 12, 4 + mOpen * 10, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, 28 * mouthScale, 12 * mouthScale, (4 + mOpen * 10) * mouthScale, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        ctx.globalAlpha = 0.85;
-        ctx.strokeStyle = 'rgba(255,255,255,0.75)';
-        ctx.lineWidth = 3;
+        ctx.globalAlpha = 0.55;
+        ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+        ctx.lineWidth = Math.max(2, 2 * mouthScale);
         ctx.beginPath();
-        ctx.arc(0, 10, 58 + Math.sin(t * 0.08) * 2, 0, Math.PI * 2);
+        ctx.arc(0, 10, Math.min(w, h) * 0.18 + Math.sin(t * 0.08) * 2, 0, Math.PI * 2);
         ctx.stroke();
         ctx.restore();
       }
@@ -575,15 +611,30 @@
         hidePixiHost();
         var ctx = canvas.getContext('2d');
         if (!ctx) return;
-        var dpr = Math.min(window.devicePixelRatio || 1, 2);
-        var cssW = canvas.clientWidth || 140;
-        var cssH = canvas.clientHeight || 160;
-        canvas.width = Math.floor(cssW * dpr);
-        canvas.height = Math.floor(cssH * dpr);
+        function resizeCanvas() {
+          var dpr = Math.min(window.devicePixelRatio || 1, 2);
+          var sz = stageSize();
+          var cssW = canvas.clientWidth || sz.w;
+          var cssH = canvas.clientHeight || sz.h;
+          canvas.width = Math.floor(cssW * dpr);
+          canvas.height = Math.floor(cssH * dpr);
+        }
+        resizeCanvas();
         function tick() {
           breathT += 1;
           musicBeatSmoothed = musicBeatSmoothed * 0.88 + musicBeat * 0.12;
           if (!musicBeatEnabled) musicBeatSmoothed *= 0.9;
+          // 偶发旋转/键盘弹起后容器尺寸变化
+          if (breathT % 30 === 0) {
+            var sz = stageSize();
+            var dpr = Math.min(window.devicePixelRatio || 1, 2);
+            var wantW = Math.floor((canvas.clientWidth || sz.w) * dpr);
+            var wantH = Math.floor((canvas.clientHeight || sz.h) * dpr);
+            if (canvas.width !== wantW || canvas.height !== wantH) {
+              canvas.width = wantW;
+              canvas.height = wantH;
+            }
+          }
           drawShellFrame(ctx, canvas.width, canvas.height, lastPhase, breathT, textures);
           animHandle = requestAnimationFrame(tick);
         }
@@ -924,6 +975,16 @@
       window.addEventListener('resize', function () {
         if (pixiApp) resizePixi();
       });
+      // 全屏容器尺寸变化（Compose/WebView 布局后）
+      try {
+        if (typeof ResizeObserver !== 'undefined' && shell) {
+          var ro = new ResizeObserver(function () {
+            if (pixiApp) resizePixi();
+          });
+          ro.observe(shell);
+          if (pixiHost) ro.observe(pixiHost);
+        }
+      } catch (eRo) {}
 
       window.__lanxinPetTeardown = function () {
         loadToken += 1;

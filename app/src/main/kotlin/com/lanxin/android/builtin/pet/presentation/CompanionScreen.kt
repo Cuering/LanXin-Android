@@ -117,7 +117,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * 妹居式 App 内全屏陪伴页：Live2D（内置 Mao）+ 底部文本输入 + 背景音乐。
+ * 妹居式 App 内全屏陪伴页：Live2D 铺满 + 顶/底浮层（无白框小窗）。
  *
  * 不依赖悬浮权限 / ASR / TTS 下载；发送走 [VoiceSessionCoordinator] + stub 回复。
  * 设置入口仍进 [DesktopPetScreen]。
@@ -162,6 +162,7 @@ fun CompanionScreen(
                 )
             )
     ) {
+        // Live2D / 占位 / 降级：全屏铺底，无卡片裁切
         CompanionLive2dWebView(
             modifier = Modifier.fillMaxSize(),
             pushTicket = state.webPushTicket,
@@ -175,127 +176,140 @@ fun CompanionScreen(
             encodeMusicBeat = viewModel::encodeMusicBeatRaw
         )
 
-        Column(
+        // 顶栏：半透明浮在模型上，不挤占中间舞台
+        Row(
             modifier = Modifier
-                .fillMaxSize()
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
                 .statusBarsPadding()
+                .background(Color.White.copy(alpha = 0.22f))
+                .padding(horizontal = 2.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onBackAction) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "返回",
+                    tint = Color(0xFF5A2038)
+                )
+            }
+            Text(
+                text = "陪伴",
+                style = MaterialTheme.typography.titleMedium,
+                color = Color(0xFF5A2038),
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = onOpenSettings) {
+                Icon(
+                    Icons.Filled.Settings,
+                    contentDescription = null,
+                    tint = Color(0xFF5A2038)
+                )
+                Spacer(modifier = Modifier.padding(horizontal = 2.dp))
+                Text("设置", color = Color(0xFF5A2038))
+            }
+        }
+
+        // 状态角标：轻量浮层（Cubism·闲置 等）
+        if (state.statusLine.isNotBlank()) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .statusBarsPadding()
+                    .padding(start = 12.dp, top = 52.dp)
+                    .alpha(0.88f),
+                shape = RoundedCornerShape(999.dp),
+                color = Color(0xFF1A0A12).copy(alpha = 0.42f),
+                tonalElevation = 0.dp
+            ) {
+                Text(
+                    text = companionStatusBadge(state.statusLine),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                        .widthIn(max = 220.dp)
+                )
+            }
+        }
+
+        if (state.busy) {
+            CircularProgressIndicator(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(8.dp),
+                color = Color(0xFFE85D8E)
+            )
+        }
+
+        // 底栏：输入 + 发送 半透明浮在模型上方
+        Surface(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
                 .navigationBarsPadding()
                 .imePadding()
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            shape = RoundedCornerShape(22.dp),
+            color = Color.White.copy(alpha = 0.55f),
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 4.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                IconButton(onClick = onBackAction) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "返回",
-                        tint = Color(0xFF5A2038)
-                    )
-                }
-                Text(
-                    text = "陪伴",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Color(0xFF5A2038),
-                    modifier = Modifier.weight(1f)
-                )
-                TextButton(onClick = onOpenSettings) {
-                    Icon(
-                        Icons.Filled.Settings,
-                        contentDescription = null,
-                        tint = Color(0xFF5A2038)
-                    )
-                    Spacer(modifier = Modifier.padding(horizontal = 2.dp))
-                    Text("设置", color = Color(0xFF5A2038))
-                }
-            }
-
-            Spacer(modifier = Modifier.weight(1f))
-
-            if (state.busy) {
-                CircularProgressIndicator(
-                    modifier = Modifier
-                        .align(Alignment.CenterHorizontally)
-                        .padding(8.dp),
-                    color = Color(0xFFE85D8E)
-                )
-            }
-
-            if (state.statusLine.isNotBlank()) {
-                Text(
-                    text = state.statusLine,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFF5A2038),
-                    modifier = Modifier
-                        .padding(horizontal = 16.dp)
-                        .align(Alignment.CenterHorizontally)
-                )
-            }
-
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                shape = RoundedCornerShape(20.dp),
-                color = Color.White.copy(alpha = 0.92f),
-                tonalElevation = 2.dp
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    OutlinedTextField(
-                        value = draft,
-                        onValueChange = { draft = it },
-                        modifier = Modifier.weight(1f),
-                        placeholder = { Text("跟兰心说点什么…") },
-                        singleLine = true,
-                        enabled = !state.busy,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                        keyboardActions = KeyboardActions(
-                            onSend = {
-                                val text = draft
-                                if (text.isNotBlank() && !state.busy) {
-                                    viewModel.sendText(text)
-                                    draft = ""
-                                    keyboard?.hide()
-                                }
-                            }
-                        )
-                    )
-                    IconButton(
-                        onClick = {
+                OutlinedTextField(
+                    value = draft,
+                    onValueChange = { draft = it },
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text("跟兰心说点什么…") },
+                    singleLine = true,
+                    enabled = !state.busy,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                    keyboardActions = KeyboardActions(
+                        onSend = {
                             val text = draft
                             if (text.isNotBlank() && !state.busy) {
                                 viewModel.sendText(text)
                                 draft = ""
                                 keyboard?.hide()
                             }
-                        },
-                        enabled = !state.busy && draft.isNotBlank()
-                    ) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.Send,
-                            contentDescription = "发送",
-                            tint = Color(0xFFE85D8E)
-                        )
-                    }
+                        }
+                    )
+                )
+                IconButton(
+                    onClick = {
+                        val text = draft
+                        if (text.isNotBlank() && !state.busy) {
+                            viewModel.sendText(text)
+                            draft = ""
+                            keyboard?.hide()
+                        }
+                    },
+                    enabled = !state.busy && draft.isNotBlank()
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.Send,
+                        contentDescription = "发送",
+                        tint = Color(0xFFE85D8E)
+                    )
                 }
             }
         }
 
-        // 右下角半透明音乐图标 + 弹出控制（不遮挡 Live2D 主体）
+        // 右下角半透明音乐图标 + 弹出控制（抬高避开底栏）
         Column(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .navigationBarsPadding()
                 .imePadding()
-                .padding(end = 14.dp, bottom = 92.dp),
+                .padding(end = 14.dp, bottom = 88.dp),
             horizontalAlignment = Alignment.End
         ) {
             AnimatedVisibility(visible = musicPanelOpen) {
@@ -352,6 +366,27 @@ fun CompanionScreen(
                 }
             }
         }
+    }
+}
+
+/** 状态角标文案：压缩成长串 statusLine，突出 Cubism / 壳 / 占位。 */
+private fun companionStatusBadge(statusLine: String): String {
+    val s = statusLine.trim()
+    if (s.isEmpty()) return "闲置"
+    // 「显示：Live2D Cubism · 可直接打字…」→ 取显示段
+    val afterShow = s.removePrefix("显示：").trim()
+    val head = afterShow.substringBefore("·").trim()
+        .ifBlank { afterShow.substringBefore("·").trim() }
+    return when {
+        head.contains("Cubism", ignoreCase = true) -> "Cubism·闲置"
+        head.contains("壳") -> "L2D壳·闲置"
+        head.contains("占位") -> "占位"
+        head.contains("降级") -> "降级"
+        s.startsWith("思考") -> "思考中"
+        s.startsWith("已回复") -> "已回复"
+        s.startsWith("出错") -> "出错"
+        head.length in 1..18 -> head
+        else -> head.take(16)
     }
 }
 
