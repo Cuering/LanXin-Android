@@ -212,17 +212,11 @@ fun CompanionScreen(
             title = { Text("开启「看世界」？") },
             text = {
                 Text(
-                    "全屏陪伴内会显示相机预览（画中画，非后台偷拍）。
-
-" +
-                        "· 默认关闭；仅你打开开关时预览
-" +
-                        "· 提问或点「看一眼」时抓 1 帧缩略图，送已配置的多模态模型讲解
-" +
-                        "· 帧不落盘、不写日志原图；关开关 / 离开页面立即停相机
-" +
-                        "· 无视觉模型时会明确提示，不会假装本地会看图
-" +
+                    "全屏陪伴内会显示相机预览（画中画，非后台偷拍）。\n\n" +
+                        "· 默认关闭；仅你打开开关时预览\n" +
+                        "· 提问或点「看一眼」时抓 1 帧缩略图，送已配置的多模态模型讲解\n" +
+                        "· 帧不落盘、不写日志原图；关开关 / 离开页面立即停相机\n" +
+                        "· 无视觉模型时会明确提示，不会假装本地会看图\n" +
                         "· 同意记录与设置页「场景识别」共用（可随时撤回）"
                 )
             },
@@ -1290,19 +1284,14 @@ class CompanionViewModel @Inject constructor(
             }.orEmpty()
             val notice = cap.message.ifBlank { VisionModelCapability.MSG_NO_VISION }
             return if (chat.isBlank()) {
-                "[[mood=think]]
-$notice"
+                "[[mood=think]]\n$notice"
             } else {
-                "[[mood=think]]
-$notice
-
-$chat"
+                "[[mood=think]]\n$notice\n\n$chat"
             }
         }
         val bmp = holder?.snapshotCopy()
         if (bmp == null) {
-            return "[[mood=sorry]]
-${VisionModelCapability.MSG_CAPTURE_FAILED}"
+            return "[[mood=sorry]]\n${VisionModelCapability.MSG_CAPTURE_FAILED}"
         }
         val frame = withContext(Dispatchers.Default) {
             try {
@@ -1312,15 +1301,12 @@ ${VisionModelCapability.MSG_CAPTURE_FAILED}"
             }
         }
         if (frame == null) {
-            return "[[mood=sorry]]
-${VisionModelCapability.MSG_CAPTURE_FAILED}"
+            return "[[mood=sorry]]\n${VisionModelCapability.MSG_CAPTURE_FAILED}"
         }
         return when (val r = visionExplainClient.explain(question, frame)) {
             is VisionExplainResult.Ok -> r.replyText
-            is VisionExplainResult.Unavailable -> "[[mood=think]]
-${r.userMessage}"
-            is VisionExplainResult.Error -> "[[mood=sorry]]
-${r.userMessage}"
+            is VisionExplainResult.Unavailable -> "[[mood=think]]\n${r.userMessage}"
+            is VisionExplainResult.Error -> "[[mood=sorry]]\n${r.userMessage}"
         }
     }
 
