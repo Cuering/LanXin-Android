@@ -29,8 +29,14 @@ import kotlin.math.sqrt
  */
 object MusicBeatAnalyzer {
 
-    const val DEFAULT_SMOOTH = 0.28f
-    const val DEFAULT_GAIN = 2.4f
+    /** EMA 系数：更小更稳，避免 Visualizer 尖峰传导到 Live2D。 */
+    const val DEFAULT_SMOOTH = 0.14f
+
+    /** 增益：略降，包络更柔和。 */
+    const val DEFAULT_GAIN = 1.6f
+
+    /** 每帧最大变化量（0..1），限斜率防抖。 */
+    const val MAX_LEVEL_STEP = 0.04f
 
     /**
      * @param waveform Visualizer captureWaveForm 输出（0..255 无符号字节，中心约 128）
@@ -53,7 +59,10 @@ object MusicBeatAnalyzer {
         }
         val boosted = min(1f, max(0f, raw * gain))
         val s = smooth.coerceIn(0.05f, 0.95f)
-        return previous * (1f - s) + boosted * s
+        val ema = previous * (1f - s) + boosted * s
+        // 限斜率：单帧变化不超过 MAX_LEVEL_STEP
+        val delta = (ema - previous).coerceIn(-MAX_LEVEL_STEP, MAX_LEVEL_STEP)
+        return (previous + delta).coerceIn(0f, 1f)
     }
 
     fun rmsFromWaveform(waveform: ByteArray): Float {
@@ -88,10 +97,12 @@ object MusicBeatAnalyzer {
         return min(1f, (mean / 90.0).toFloat())
     }
 
-    /** 无 Visualizer 时的伪节拍（2Hz 呼吸增强），仅作降级。 */
+    /** 无 Visualizer 时的伪节拍（~0.5Hz 慢呼吸），仅作降级，幅度小。 */
     fun fallbackPulse(elapsedMs: Long, previous: Float = 0f): Float {
-        val phase = (elapsedMs % 500L) / 500.0
-        val pulse = (0.5 + 0.5 * kotlin.math.sin(phase * Math.PI * 2)).toFloat() * 0.35f
-        return previous * 0.7f + pulse * 0.3f
+        val phase = (elapsedMs % 2000L) / 2000.0
+        val pulse = (0.5 + 0.5 * kotlin.math.sin(phase * Math.PI * 2)).toFloat() * 0.18f
+        val ema = previous * 0.85f + pulse * 0.15f
+        val delta = (ema - previous).coerceIn(-MAX_LEVEL_STEP, MAX_LEVEL_STEP)
+        return (previous + delta).coerceIn(0f, 1f)
     }
 }

@@ -50,9 +50,23 @@ class MusicBeatAnalyzerTest {
     }
 
     @Test
+    fun `levelFromCapture rate-limits single frame jump`() {
+        // 从 0 跳到极响：单帧不应超过 MAX_LEVEL_STEP
+        val loud = ByteArray(64) { i -> if (i % 2 == 0) 0 else 255.toByte() }
+        val next = MusicBeatAnalyzer.levelFromCapture(loud, previous = 0f, smooth = 0.9f, gain = 4f)
+        assertTrue(next in 0f..1f)
+        assertTrue(
+            "expected step <= ${MusicBeatAnalyzer.MAX_LEVEL_STEP}, got $next",
+            next <= MusicBeatAnalyzer.MAX_LEVEL_STEP + 1e-4f
+        )
+    }
+
+    @Test
     fun `fallbackPulse in range`() {
         val p = MusicBeatAnalyzer.fallbackPulse(250L, 0f)
         assertTrue(p in 0f..1f)
+        // 慢伪节拍幅度更小
+        assertTrue(p < 0.25f)
     }
 
     @Test
