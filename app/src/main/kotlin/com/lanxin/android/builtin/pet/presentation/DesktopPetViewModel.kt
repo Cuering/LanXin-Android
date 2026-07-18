@@ -956,7 +956,12 @@ class DesktopPetViewModel @Inject constructor(
                     old?.lastError != null -> "失败"
                     else -> "未下载"
                 },
-                lastError = if (old?.downloading == true) old.lastError else null
+                // refresh 不得抹掉真实失败原因（仅就绪或下载中按状态覆盖）
+                lastError = when {
+                    old?.downloading == true -> old.lastError
+                    ready -> null
+                    else -> old?.lastError
+                }
             )
         }
     }

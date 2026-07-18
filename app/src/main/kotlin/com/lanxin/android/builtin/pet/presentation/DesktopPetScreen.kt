@@ -118,6 +118,12 @@ fun DesktopPetScreen(
     ) { uri: Uri? ->
         uri?.toString()?.let(viewModel::importLocalLlmFromDocument)
     }
+    // 公共 LanXin/ 目录 SAF 授权（下载主路径仍写 App 私有；成功后可选镜像）
+    val lanXinSafTreePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        uri?.toString()?.let(viewModel::grantLanXinSafTree)
+    }
 
     DisposableEffect(lifecycleOwner) {
         val obs = LifecycleEventObserver { _, event ->
@@ -378,13 +384,49 @@ fun DesktopPetScreen(
                             buildString {
                                 append("保存位置：")
                                 append(state.downloadRootPath)
-                                if (state.downloadRootFallback) {
-                                    append("（公共目录不可写，已回退）")
+                                when {
+                                    !state.downloadRootFallback -> Unit
+                                    state.safWritable -> append("（引擎写 App 目录，已授权 SAF）")
+                                    else -> append("（公共目录不可写，已回退 App 私有）")
                                 }
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    }
+                    // SAF：可选镜像到公共 LanXin；无授权时下载仍走 App 私有 files，不阻塞
+                    Text(
+                        buildString {
+                            append("公共目录：")
+                            when {
+                                state.safWritable ->
+                                    append("已授权可写 · ${state.safDisplayLabel.ifBlank { "LanXin" }}")
+                                state.safGranted ->
+                                    append("已授权但不可写 · ${state.safDisplayLabel.ifBlank { "—" }}")
+                                else ->
+                                    append("未授权（下载仍可用 App 私有目录，无需授权）")
+                            }
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        OutlinedButton(
+                            onClick = { lanXinSafTreePicker.launch(null) },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                if (state.safGranted) "重新授权公共 LanXin" else "授权公共 LanXin"
+                            )
+                        }
+                        if (state.safGranted) {
+                            TextButton(onClick = viewModel::clearLanXinSafTree) {
+                                Text("清除授权")
+                            }
+                        }
                     }
                     Text(
                         state.live2dLicenseHint,
