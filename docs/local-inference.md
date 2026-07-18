@@ -213,10 +213,11 @@ docs/local-inference.md   ← 本文
 
 ### 运行时
 
-1. `MnnNativeBridge.tryLoadNative` 按序 load：`c++_shared` → `MNN` → `MNN_Express` → 可选 CL/Vulkan/OpenCV/Audio → `llm` → `mnn_lanxin`  
-2. `nativeLoadModel(path)` → `Llm::createLLM` + `load`  
-3. `nativeGenerate` → `response`  
-4. 失败：`MnnLocalLlmEngine` 路径合法则 **READY + isStub 降级**，不崩  
+1. `MnnNativeBridge.tryLoadNative` 按序 load：`c++_shared` → `MNN` → `MNN_Express` → `MNN_CL` / `MNN_Vulkan` / `MNNOpenCV` / `MNNAudio` → `llm` → `mnn_lanxin`（与 libllm NEEDED 对齐；仅 c++_shared 允许缺失）  
+2. `nativeLoadModel(path)` → `Llm::createLLM` + `load`（目录下 `config.json` 或 `llm.mnn`）  
+3. `nativeGenerate` → `Llm::response`  
+4. 失败：`MnnLocalLlmEngine` 路径合法则 **READY + isStub 降级**（`native_degraded:`），不崩  
+
 
 ### 接入路线（历史 / 已完成）
 

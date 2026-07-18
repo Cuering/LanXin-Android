@@ -83,6 +83,9 @@ jobs:
           test -f app/src/main/cpp/mnn_lanxin_jni.cpp
           test -f app/src/main/cpp/mnn_lanxin_jni_stub.cpp
           test -f third_party/mnn/NOTICE
+          test -f third_party/mnn/include/llm/llm.hpp
+          # cpp dir is 4 levels under repo root: app/src/main/cpp
+          grep -F -n "../../../../third_party/mnn/include" app/src/main/cpp/CMakeLists.txt
           test -f app/src/test/kotlin/com/lanxin/android/builtin/localinference/InferenceRouteSelectorTest.kt
           test -f app/src/test/kotlin/com/lanxin/android/builtin/localinference/StubLocalLlmEngineTest.kt
           test -f app/src/test/kotlin/com/lanxin/android/builtin/localinference/MnnLocalLlmEngineTest.kt

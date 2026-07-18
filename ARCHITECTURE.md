@@ -15,7 +15,9 @@
 > - Phase 6.1：MNN 本地推理引擎骨架（接口 + stub + 配置 + 路由选择）✅
 > - Phase 6.2：离线兜底（无网自动切本地）✅（`feat/phase6-2-offline-local-fallback`）
 > - Phase 6.3：ChatRouter 路由层重构（云端 ↔ 本地）✅（`feat/phase6-3-chat-router`）
+> - **P2**：MNN 真引擎进 APK（`downloadMnnNative` + `libmnn_lanxin` + `MnnLocalLlmEngine`）✅（`feat/p2-mnn-local-llm`）
 > - Phase 6.4：Sherpa-ONNX 离线语音识别（ASR）骨架 ✅ + **P0 真引擎 AAR 进包** ✅（`feat/p0-sherpa-asr-native`）
+> - Phase 6.5 / **P1**：Sherpa Offline TTS 真引擎进 APK ✅（`feat/p1-tts-native`）
 > - Phase 6 主线 M1：妹居风格桌宠 + VoiceSession 听→想→说 ✅（#48 已合 main）
 > - Phase 6 主线 M2a：资源路径就绪 + 设置体验 + fetch 脚本指引 ✅（#49）
 > - Phase 6 主线 M2b：Live2D 真显示壳（model3 + 降级）✅（#57）
@@ -605,7 +607,7 @@ app/.../plugins/unifiedinbox/
 
 | 步骤 | 内容 | 难度 | 预估 |
 |:----:|------|:----:|:----:|
-| **6.1** | MNN 本地推理引擎接入（参考妹居） | 🔴 高 | 5d | ✅ 骨架 |
+| **6.1 / P2** | MNN 本地推理引擎接入（参考妹居） | 🔴 高 | 5d | ✅ 骨架 + **P2 真 so** |
 | **6.2** | 离线兜底：无网络时自动切本地小模型 | 🟡 中 | 2d | ✅ |
 | **6.3** | ChatRouter 路由层重构：云端 ↔ 本地自动切换 | 🔴 高 | 3d | ✅ |
 | **6.4** | Sherpa-ONNX 离线语音识别（ASR） | 🔴 高 | 4d | ✅ 骨架 + P0 真引擎 |
@@ -623,12 +625,13 @@ app/.../plugins/unifiedinbox/
 | 设计文档 | `docs/local-inference.md`、`builtin/local_inference/README.md` |
 | 模块 | `app/.../builtin/localinference/*`（domain / data / di / presentation） |
 | 接口 | `LocalLlmEngine` / `LocalInferenceProvider` / `LocalInferenceSettings` |
-| 实现 | `StubLocalLlmEngine` + `MnnNativeBridge`（JNI 预留，无 so） |
+| 实现 | **P2** `MnnLocalLlmEngine` + `MnnNativeBridge`（真 JNI）；`StubLocalLlmEngine` 单测保留 |
+| so | 构建期 `downloadMnnNative` → jniLibs；CMake `libmnn_lanxin.so`；权重外置 `LanXin/models/local-llm/` |
 | 配置 | DataStore：`local_inference_enabled` / `model_path` / `max_tokens` / `prefer_local` |
 | 路由 | `InferenceRouteSelector` 纯逻辑（preferLocal / offline / cloud）；完整 ChatRouter 见 6.3 |
 | UI | 设置 →「本地推理」→ `Route.LOCAL_INFERENCE` |
-| 单测 | RouteSelector / StubEngine / NativeBridge / Config |
-| 非目标 | 打包模型文件、真实 MNN so、6.3 ChatRouter 重构（6.2 已落地最小 fallback） |
+| 单测 | RouteSelector / StubEngine / MnnLocalLlmEngine / NativeBridge / Config |
+| 非目标 | 打包模型权重进 git；本地 tool_call |
 
 
 

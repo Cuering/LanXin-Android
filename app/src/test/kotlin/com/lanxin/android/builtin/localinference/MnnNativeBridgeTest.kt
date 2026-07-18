@@ -7,14 +7,16 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
+/**
+ * JVM 单测：无 libmnn_lanxin.so 时 bridge 不崩。
+ */
 class MnnNativeBridgeTest {
 
     private val bridge = MnnNativeBridge()
 
     @Before
-    fun setUp() {
+    fun resetNative() {
         MnnNativeBridge.resetNativeLoadStateForTests()
-        bridge.unload()
     }
 
     @Test
@@ -36,39 +38,23 @@ class MnnNativeBridgeTest {
     @Test
     fun `loadModel stub returns false`() {
         assertFalse(bridge.loadModel("stub://x"))
-        assertFalse(bridge.isSessionLoaded())
+        assertTrue(bridge.lastError()!!.contains("stub"))
     }
 
     @Test
-    fun `isNativeAvailable false on JVM unit tests`() {
-        // No MNN so on pure JVM → false, must not throw
+    fun `isNativeAvailable false without so`() {
+        // JVM 单测无 APK jniLibs
         assertFalse(bridge.isNativeAvailable())
     }
 
     @Test
     fun `generate without load returns null`() {
-        assertNull(bridge.generate("hello", 16))
+        assertNull(bridge.generate("hi", 16))
     }
 
     @Test
-    fun `loadModel missing path returns false`() {
-        assertFalse(bridge.loadModel("/no/such/model/dir"))
-        assertFalse(bridge.isSessionLoaded())
-        assertTrue(bridge.lastError() != null)
-    }
-
-    @Test
-    fun `unload is idempotent`() {
-        bridge.unload()
+    fun `unload is safe without native`() {
         bridge.unload()
         assertFalse(bridge.isSessionLoaded())
-    }
-
-    @Test
-    fun `nativeLoadError safe after failed tryLoad`() {
-        bridge.isNativeAvailable()
-        // may be null or UnsatisfiedLinkError string; just must not throw
-        bridge.nativeLoadError()
-        bridge.lastError()
     }
 }

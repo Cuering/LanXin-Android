@@ -1,0 +1,111 @@
+# P2 本地脑：MNN 真引擎 / 单测 / 文档 / so 下载任务
+name: P2 MNN Local LLM Verify
+
+on:
+  push:
+    branches: [main, 'feat/p2-mnn*', 'feat/phase6*']
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/localinference/**'
+      - 'app/src/test/kotlin/com/lanxin/android/builtin/localinference/**'
+      - 'app/src/main/cpp/**'
+      - 'app/build.gradle.kts'
+      - 'app/libs/**'
+      - 'third_party/mnn/**'
+      - 'docs/local-inference.md'
+      - 'builtin/local_inference/**'
+      - 'ARCHITECTURE.md'
+      - '.github/workflows/p2-mnn-local-llm-verify.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/localinference/**'
+      - 'app/src/test/kotlin/com/lanxin/android/builtin/localinference/**'
+      - 'app/src/main/cpp/**'
+      - 'app/build.gradle.kts'
+      - 'app/libs/**'
+      - 'third_party/mnn/**'
+      - 'docs/local-inference.md'
+      - 'builtin/local_inference/**'
+      - 'ARCHITECTURE.md'
+      - '.github/workflows/p2-mnn-local-llm-verify.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: p2-mnn-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: Local LLM unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: gradle
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup local.properties and debug keystore
+        run: |
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+          rm -f debug-keystore.jks
+          keytool -genkeypair -v -keystore debug-keystore.jks -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Create assets model dir (models gitignored)
+        run: |
+          mkdir -p app/src/main/assets/models/gte-small
+          touch app/src/main/assets/models/gte-small/.gitkeep
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Download MNN native prebuilts
+        run: |
+          ./gradlew :app:downloadMnnNative --no-daemon --stacktrace
+          test -f app/src/main/jniLibs/arm64-v8a/libllm.so
+          test -f app/src/main/jniLibs/arm64-v8a/libMNN.so
+          ls -lh app/src/main/jniLibs/arm64-v8a/ | head -20
+
+      - name: Run local inference unit tests
+        run: |
+          ./gradlew :app:testDebugUnitTest \
+            --tests "com.lanxin.android.builtin.localinference.*" \
+            --no-daemon --stacktrace
+
+      - name: Surfaces and docs present
+        run: |
+          test -f docs/local-inference.md
+          test -f builtin/local_inference/README.md
+          test -f third_party/mnn/NOTICE
+          test -f third_party/mnn/include/llm/llm.hpp
+          test -f app/src/main/cpp/CMakeLists.txt
+          test -f app/src/main/cpp/mnn_lanxin_jni.cpp
+          test -f app/src/main/cpp/mnn_lanxin_jni_stub.cpp
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/localinference/domain/LocalLlmEngine.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/localinference/data/StubLocalLlmEngine.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/localinference/data/MnnLocalLlmEngine.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/localinference/data/MnnNativeBridge.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/localinference/di/LocalInferenceModule.kt
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/localinference/MnnLocalLlmEngineTest.kt
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/localinference/MnnNativeBridgeTest.kt
+          # cpp → repo root is ../../../../ (NOT ../../../)
+          grep -F -n "../../../../third_party/mnn/include" app/src/main/cpp/CMakeLists.txt
+          grep -E -n "MnnLocalLlmEngine|bindLocalLlmEngine" \
+            app/src/main/kotlin/com/lanxin/android/builtin/localinference/di/LocalInferenceModule.kt
+          grep -E -n "System.loadLibrary|mnn_lanxin|nativeLoadModel|isNativeAvailable" \
+            app/src/main/kotlin/com/lanxin/android/builtin/localinference/data/MnnNativeBridge.kt
+          grep -E -n "downloadMnnNative|pickFirsts|libc\\+\\+_shared|externalNativeBuild" \
+            app/build.gradle.kts
+          grep -E -n "MnnLocalLlmEngine|native_degraded|libmnn_lanxin|LanXin/models/local-llm" \
+            docs/local-inference.md
+          grep -E -n "Apache|MNN|libllm" third_party/mnn/NOTICE

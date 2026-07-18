@@ -24,14 +24,37 @@ export SHERPA_ONNX_AAR=/path/to/sherpa-onnx-static-link-onnxruntime-1.13.4.aar
 export SHERPA_ONNX_AAR_URL=https://ghfast.top/https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.4/sherpa-onnx-static-link-onnxruntime-1.13.4.aar
 ```
 
-**不要**把 AAR / `.so` commit 进 git。
+## MNN 本地 LLM（P2）
+
+构建时由 `app/build.gradle.kts` 的 `downloadMnnNative` 任务自动拉取官方 zip 并解压 so：
+
+| 属性 | 值 |
+|------|-----|
+| zip | `mnn_3.6.0_android_armv7_armv8_cpu_opencl_vulkan.zip` |
+| 落盘 | `app/src/main/jniLibs/arm64-v8a/*.so`（gitignore） |
+| 默认 URL | `https://github.com/alibaba/MNN/releases/download/3.6.0/...` |
+| JNI | CMake 编 `libmnn_lanxin.so`（`app/src/main/cpp/`） |
+
+覆盖方式：
+
+```bash
+export MNN_NATIVE_ZIP=/path/to/mnn_3.6.0_android_armv7_armv8_cpu_opencl_vulkan.zip
+# 或
+export MNN_NATIVE_URL=https://ghfast.top/https://github.com/alibaba/MNN/releases/download/3.6.0/mnn_3.6.0_android_armv7_armv8_cpu_opencl_vulkan.zip
+```
+
+**不要**把 AAR / `.so` / zip commit 进 git。
 
 模型权重外置：
 
 - ASR → `LanXin/asr/...`
 - TTS → `LanXin/tts/...`（Matcha 另需 `vocos-22khz-univ.onnx` 等 vocoder，可放模型目录或上一级）
+- 本地脑 → `LanXin/models/local-llm/light/`（`config.json` + `llm.mnn` + weight）
 
-许可证：Apache-2.0（见 `third_party/sherpa-onnx/NOTICE`）。
+许可证：
+
+- sherpa-onnx Apache-2.0（见 `third_party/sherpa-onnx/NOTICE`）
+- MNN Apache-2.0（见 `third_party/mnn/NOTICE`）
 
 ## MNN（P2 本地 LLM）
 

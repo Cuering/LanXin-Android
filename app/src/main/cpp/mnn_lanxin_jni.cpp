@@ -39,32 +39,44 @@ void unloadLocked() {
     }
 }
 
-/** Resolve model dir or config.json path → config path expected by createLLM. */
+/** Resolve model dir / config.json / llm.mnn → path expected by createLLM. */
 std::string resolveConfigPath(const std::string& path) {
     if (path.empty()) return path;
-    // If path ends with .json, use as-is
+    // If path ends with .json or .mnn, createLLM accepts both
     if (path.size() > 5 && path.substr(path.size() - 5) == ".json") {
         return path;
     }
-    // Directory: prefer config.json then llm_config.json
+    if (path.size() > 4 && path.substr(path.size() - 4) == ".mnn") {
+        return path;
+    }
     std::string base = path;
     while (!base.empty() && (base.back() == '/' || base.back() == '\\')) {
         base.pop_back();
     }
+    // Prefer explicit config; else pass directory (LlmConfig defaults llm.mnn)
     const std::string candidates[] = {
         base + "/config.json",
         base + "/llm_config.json",
-        base + "/config.mnn.json",
-        path // last: allow bare file path without .json suffix
+        base + "/llm.mnn.json",
+        base + "/llm.mnn",
+        base // directory → LlmConfig uses base_dir + default filenames
     };
     for (const auto& c : candidates) {
+        if (c == base) {
+            // Directory must contain at least llm.mnn or config
+            FILE* m = fopen((base + "/llm.mnn").c_str(), "rb");
+            if (m != nullptr) {
+                fclose(m);
+                return base;
+            }
+            continue;
+        }
         FILE* f = fopen(c.c_str(), "rb");
         if (f != nullptr) {
             fclose(f);
             return c;
         }
     }
-    // Fall back to config.json under dir (createLLM will fail with clearer error)
     return base + "/config.json";
 }
 

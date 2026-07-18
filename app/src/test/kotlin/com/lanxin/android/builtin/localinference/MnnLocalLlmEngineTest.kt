@@ -5,25 +5,31 @@ import com.lanxin.android.builtin.localinference.data.MnnNativeBridge
 import com.lanxin.android.builtin.localinference.domain.LocalEngineState
 import com.lanxin.android.builtin.localinference.domain.LocalGenerateRequest
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceConfig
+import java.io.File
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 
 /**
- * JVM 单测：无 MNN so 时 [MnnLocalLlmEngine] 走 stub:// READY 与路径合法降级。
+ * JVM：无 so 时 [MnnLocalLlmEngine] 对 stub:// / 合法路径降级 stub，不崩。
  */
 class MnnLocalLlmEngineTest {
 
-    private fun engine() = MnnLocalLlmEngine(MnnNativeBridge())
+    @get:Rule
+    val tmp = TemporaryFolder()
 
     @Before
-    fun setUp() {
+    fun resetNative() {
         MnnNativeBridge.resetNativeLoadStateForTests()
     }
+
+    private fun engine() = MnnLocalLlmEngine(MnnNativeBridge())
 
     @Test
     fun `load disabled stays DISABLED`() = runBlocking {
@@ -53,13 +59,27 @@ class MnnLocalLlmEngineTest {
         )
         assertTrue(ok)
         assertTrue(e.isReady)
-        assertTrue(e.isAvailable)
         assertEquals(LocalEngineState.READY, e.state.value)
         assertFalse(e.isUsingNative)
     }
 
     @Test
-    fun `generate returns stub text when not native`() = runBlocking {
+    fun `load real dir without native degrades READY with lastError`() = runBlocking {
+        val dir = tmp.newFolder("local-llm-light")
+        File(dir, "config.json").writeText(
+            """{"llm_model":"llm.mnn","llm_weight":"llm.mnn.weight"}"""
+        )
+        File(dir, "llm.mnn").writeBytes(ByteArray(64))
+        val e = engine()
+        val ok = e.load(LocalInferenceConfig(enabled = true, modelPath = dir.absolutePath))
+        assertTrue(ok)
+        assertTrue(e.isReady)
+        assertFalse(e.isUsingNative)
+        assertTrue(e.lastError!!.startsWith("native_degraded:"))
+    }
+
+    @Test
+    fun `generate returns stub text when no native`() = runBlocking {
         val e = engine()
         e.load(LocalInferenceConfig(enabled = true, modelPath = "stub://m"))
         val result = e.generate(

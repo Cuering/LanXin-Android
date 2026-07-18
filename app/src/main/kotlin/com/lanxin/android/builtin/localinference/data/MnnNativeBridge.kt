@@ -163,7 +163,10 @@ class MnnNativeBridge @Inject constructor() {
         const val STUB_SCHEME = "stub://"
         private const val TAG = "MnnNativeBridge"
 
-        /** 依赖顺序：c++ → 核心 → Express → 可选后端 → llm → 我方 JNI */
+        /**
+         * 依赖顺序（与 libllm.so NEEDED 一致）：
+         * c++_shared → MNN → Express → CL/Vulkan/OpenCV/Audio → llm → mnn_lanxin
+         */
         private val NATIVE_LIBS = listOf(
             "c++_shared",
             "MNN",
@@ -188,7 +191,8 @@ class MnnNativeBridge @Inject constructor() {
         /**
          * 尝试加载 MNN 相关 so。
          * 可重复调用；失败不抛到调用方。
-         * GPU so（CL/Vulkan）失败仅 warn，不阻断 CPU 路径。
+         * 仅 c++_shared 允许缺失（部分设备 / 系统已提供）。
+         * libllm 依赖 CL/Vulkan/OpenCV/Audio，不可跳过。
          */
         @JvmStatic
         fun tryLoadNative(): Boolean {
@@ -197,16 +201,11 @@ class MnnNativeBridge @Inject constructor() {
                 if (nativeLoadAttempted) return nativeOk
                 nativeLoadAttempted = true
                 return try {
-                    val optional = setOf("MNN_CL", "MNN_Vulkan", "MNNOpenCV", "MNNAudio")
                     for (lib in NATIVE_LIBS) {
                         try {
                             System.loadLibrary(lib)
                         } catch (e: UnsatisfiedLinkError) {
-                            if (lib in optional) {
-                                Log.w(TAG, "optional so skip: $lib (${e.message})")
-                                continue
-                            }
-                            // c++_shared 在部分设备已由系统提供
+                            // c++_shared 在部分设备已由系统 / 其它 AAR 提供
                             if (lib == "c++_shared") {
                                 Log.w(TAG, "c++_shared skip: ${e.message}")
                                 continue
