@@ -24,6 +24,16 @@
 -keepclassmembers class com.k2fsa.sherpa.onnx.** { *; }
 -dontwarn com.k2fsa.sherpa.onnx.**
 
+# MNN native
+-keep class com.lanxin.android.builtin.localinference.data.MnnNativeBridge { *; }
+-keepclassmembers class com.lanxin.android.builtin.localinference.data.MnnNativeBridge {
+    native <methods>;
+}
+-keep class MNN.** { *; }
+-dontwarn MNN.**
+-keep class MNNExpress.** { *; }
+-dontwarn MNNExpress.**
+
 # ObjectBox
 -keep class io.objectbox.** { *; }
 -keep class com.lanxin.android.builtin.knowledge.data.** { *; }
