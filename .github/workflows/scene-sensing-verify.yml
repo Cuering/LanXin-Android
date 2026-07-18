@@ -1,0 +1,108 @@
+# 摄像头 → 场景识别：门闸 + 本地分类 + 设置接线
+name: Scene Sensing Verify
+
+on:
+  push:
+    branches: [main, 'feat/camera-scene*', 'feat/scene-sensing*']
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/platform/**'
+      - 'app/src/test/kotlin/com/lanxin/android/builtin/platform/**'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/setting/SettingScreen.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/common/Route.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/common/NavigationGraph.kt'
+      - 'app/src/main/AndroidManifest.xml'
+      - 'docs/scene-sensing.md'
+      - 'docs/meiju-style-pet.md'
+      - 'ARCHITECTURE.md'
+      - '.github/workflows/scene-sensing-verify.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/platform/**'
+      - 'app/src/test/kotlin/com/lanxin/android/builtin/platform/**'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/setting/SettingScreen.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/common/Route.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/common/NavigationGraph.kt'
+      - 'app/src/main/AndroidManifest.xml'
+      - 'docs/scene-sensing.md'
+      - 'docs/meiju-style-pet.md'
+      - 'ARCHITECTURE.md'
+      - '.github/workflows/scene-sensing-verify.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: scene-sensing-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: Scene Sensing unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: gradle
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup local.properties and debug keystore
+        run: |
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+          rm -f debug-keystore.jks
+          keytool -genkeypair -v -keystore debug-keystore.jks -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Create assets model dir (models gitignored)
+        run: |
+          mkdir -p app/src/main/assets/models/gte-small
+          touch app/src/main/assets/models/gte-small/.gitkeep
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run scene sensing unit tests
+        run: |
+          ./gradlew :app:testDebugUnitTest \
+            --tests "com.lanxin.android.builtin.platform.SceneSensingGateTest" \
+            --tests "com.lanxin.android.builtin.platform.LocalSceneClassifierTest" \
+            --no-daemon --stacktrace
+
+      - name: Surfaces and docs present
+        run: |
+          test -f docs/scene-sensing.md
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/platform/domain/SceneSensingConfig.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/platform/domain/SceneSensingSettings.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/platform/domain/SceneSensingGate.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/platform/domain/LocalSceneClassifier.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/platform/domain/SceneCaptureAnalyzer.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/platform/data/SceneSensingPreferences.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/platform/presentation/SceneSensingScreen.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/platform/presentation/SceneSensingViewModel.kt
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/platform/SceneSensingGateTest.kt
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/platform/LocalSceneClassifierTest.kt
+          grep -E -n "SceneSensingGate|needsConsentDialog|clampEnabled" \
+            app/src/main/kotlin/com/lanxin/android/builtin/platform/domain/SceneSensingGate.kt
+          grep -E -n "bindSceneSensingSettings|SceneSensingPreferences" \
+            app/src/main/kotlin/com/lanxin/android/builtin/platform/di/PlatformModule.kt
+          grep -E -n "SCENE_SENSING|SceneSensingScreen|onNavigateToSceneSensing" \
+            app/src/main/kotlin/com/lanxin/android/presentation/common/Route.kt \
+            app/src/main/kotlin/com/lanxin/android/presentation/common/NavigationGraph.kt \
+            app/src/main/kotlin/com/lanxin/android/presentation/ui/setting/SettingScreen.kt
+          grep -E -n "android.permission.CAMERA" app/src/main/AndroidManifest.xml
+          grep -E -n "setCompanionBackground|SceneCaptureAnalyzer" \
+            app/src/main/kotlin/com/lanxin/android/builtin/platform/presentation/SceneSensingViewModel.kt
+          # Must not invent new mood/exp protocol
+          grep -E -n "ALLOWED_MOODS|CompanionBackgrounds.PRESETS" \
+            app/src/main/kotlin/com/lanxin/android/builtin/platform/domain/LocalSceneClassifier.kt \
+            app/src/main/kotlin/com/lanxin/android/builtin/platform/domain/SceneCaptureAnalyzer.kt
+          grep -E -n "场景识别|scene-sensing|SceneSensing" \
+            docs/scene-sensing.md ARCHITECTURE.md docs/meiju-style-pet.md
