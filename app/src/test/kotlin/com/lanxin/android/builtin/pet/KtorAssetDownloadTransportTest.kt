@@ -17,6 +17,7 @@
 package com.lanxin.android.builtin.pet
 
 import com.lanxin.android.builtin.pet.data.KtorAssetDownloadTransport
+import io.ktor.client.plugins.HttpTimeoutConfig
 import java.io.File
 import java.net.SocketTimeoutException
 import org.junit.Assert.assertEquals
@@ -26,7 +27,10 @@ import org.junit.Test
 
 /**
  * 下载专用超时 + 可恢复：不复用 API 默认短超时。
- * connect ≥ 30s；socket 长空闲；request=0 禁用（大文件靠进度 + 取消）。
+ * connect ≥ 30s；socket 长空闲；request=INFINITE（大文件靠进度 + 取消）。
+ *
+ * 回归：Ktor 3.5 禁止 requestTimeoutMillis=0，必须用 INFINITE_TIMEOUT_MS，
+ * 否则每次下载在装 HttpTimeout 时立刻 IllegalArgumentException。
  */
 class KtorAssetDownloadTransportTest {
 
@@ -45,9 +49,34 @@ class KtorAssetDownloadTransportTest {
             KtorAssetDownloadTransport.SOCKET_TIMEOUT_MS >= 120_000L
         )
         assertEquals(
-            "requestTimeout=0 禁用整包上限，避免 880MB 被掐（Ktor 3.x）",
-            0L,
+            "requestTimeout 必须用 INFINITE，禁止 0（Ktor 3.5 require>0）",
+            HttpTimeoutConfig.INFINITE_TIMEOUT_MS,
             KtorAssetDownloadTransport.REQUEST_TIMEOUT_MS
+        )
+        assertTrue(
+            "requestTimeout 必须 > 0，否则 HttpTimeoutConfig 直接抛",
+            KtorAssetDownloadTransport.REQUEST_TIMEOUT_MS > 0L
+        )
+    }
+
+    @Test
+    fun requestTimeout_zeroIsInvalid_infiniteIsValid() {
+        // 复现 #93 误伤：0 在 Ktor 3.5 非法
+        var zeroFailed = false
+        try {
+            HttpTimeoutConfig(requestTimeoutMillis = 0L)
+        } catch (_: IllegalArgumentException) {
+            zeroFailed = true
+        }
+        assertTrue("Ktor 3.5 应拒绝 requestTimeout=0", zeroFailed)
+
+        // INFINITE 可配置
+        val cfg = HttpTimeoutConfig(
+            requestTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS
+        )
+        assertEquals(
+            HttpTimeoutConfig.INFINITE_TIMEOUT_MS,
+            cfg.requestTimeoutMillis
         )
     }
 
@@ -57,6 +86,29 @@ class KtorAssetDownloadTransportTest {
         val part = KtorAssetDownloadTransport.partFile(dest)
         assertEquals("llm.mnn.weight.part", part.name)
         assertEquals(dest.parentFile, part.parentFile)
+    }
+
+    @Test
+    fun urlHint_keepsHostAndFile() {
+        val hint = KtorAssetDownloadTransport.urlHint(
+            "https://hf-mirror.com/csukuangfj/sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23/resolve/main/tokens.txt?download=true"
+        )
+        assertTrue(hint.contains("hf-mirror.com"))
+        assertTrue(hint.contains("tokens.txt"))
+        assertFalse(hint.contains("download=true"))
+    }
+
+    @Test
+    fun enrichError_appendsUrlHint() {
+        val dest = File("/tmp/LanXin/asr/tokens.txt")
+        val err = KtorAssetDownloadTransport.enrichError(
+            url = "https://cdn.jsdelivr.net/gh/Live2D/CubismWebSamples@develop/Samples/Resources/Mao/Mao.model3.json",
+            destFile = dest,
+            cause = IllegalStateException("下载失败 HTTP 403")
+        )
+        val msg = err.message.orEmpty()
+        assertTrue(msg.contains("HTTP 403"))
+        assertTrue(msg.contains("cdn.jsdelivr.net") || msg.contains("Mao.model3.json"))
     }
 
     @Test
