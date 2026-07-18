@@ -1,0 +1,22 @@
+sherpa-onnx
+===========
+
+Project: sherpa-onnx
+Upstream: https://github.com/k2-fsa/sherpa-onnx
+Version used by LanXin Android: 1.13.4
+Packaging: official Android AAR
+  - sherpa-onnx-static-link-onnxruntime-1.13.4.aar
+  - (alternative) sherpa-onnx-1.13.4.aar
+
+License: Apache License 2.0
+Full text: https://github.com/k2-fsa/sherpa-onnx/blob/master/LICENSE
+
+Copyright: sherpa-onnx authors and contributors (k2-fsa / Xiaomi and others).
+
+Notes for LanXin:
+- Runtime native libraries are packaged into the APK via the AAR (Gradle download at build time).
+- ASR model weights (ONNX / tokens) are NOT redistributed in this repository; users download
+  them separately into LanXin/asr/ (see docs/voice-asr.md and docs/debug-assets.md).
+- Bundled ONNX Runtime inside the static-link AAR is used by sherpa-onnx ASR.
+  The app may also depend on Microsoft onnxruntime-android for embeddings; packaging
+  pickFirsts handle duplicate libonnxruntime.so when both are present.

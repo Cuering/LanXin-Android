@@ -15,7 +15,7 @@
 > - Phase 6.1：MNN 本地推理引擎骨架（接口 + stub + 配置 + 路由选择）✅
 > - Phase 6.2：离线兜底（无网自动切本地）✅（`feat/phase6-2-offline-local-fallback`）
 > - Phase 6.3：ChatRouter 路由层重构（云端 ↔ 本地）✅（`feat/phase6-3-chat-router`）
-> - Phase 6.4：Sherpa-ONNX 离线语音识别（ASR）骨架 ✅（`feat/phase6-4-offline-asr`）
+> - Phase 6.4：Sherpa-ONNX 离线语音识别（ASR）骨架 ✅ + **P0 真引擎 AAR 进包** ✅（`feat/p0-sherpa-asr-native`）
 > - Phase 6 主线 M1：妹居风格桌宠 + VoiceSession 听→想→说 ✅（#48 已合 main）
 > - Phase 6 主线 M2a：资源路径就绪 + 设置体验 + fetch 脚本指引 ✅（#49）
 > - Phase 6 主线 M2b：Live2D 真显示壳（model3 + 降级）✅（#57）
@@ -193,7 +193,7 @@ Phase 4（已落地 ✅）       Phase 5（5.1–5.7 ✅）
 | `builtin/knowledge/` | ✅ Phase 3 | 高 | GTE-small(ONNX) + ObjectBox + BM25 RRF 混合检索 |
 | `plugins/unified_inbox/` | ✅ Phase 3 | 中 | 跨 session 历史 + 跨工作区文件浏览 |
 | `builtin/local_inference/` | ✅ 6.1 · ✅ 6.2 · ✅ 6.3 | 高 | MNN 骨架 + 离线兜底 + ChatRouter（见第十四节） |
-| `builtin/voice/` | ✅ 6.4 ASR 骨架 · ✅ M1 TTS stub · 🔜 真 TTS | 高 | Sherpa-ONNX ASR + Bert-VITS2 TTS（见第十四节 / meiju-style-pet） |
+| `builtin/voice/` | ✅ 6.4 ASR + P0 sherpa AAR 真引擎 · ✅ M1 TTS stub · 🔜 真 TTS | 高 | Sherpa-ONNX ASR + Bert-VITS2 TTS（见第十四节 / meiju-style-pet） |
 | `builtin/pet/` | ✅ M1 · ✅ M2a · ✅ M2b L2D 壳 · ✅ 表情/口型打磨 | 高 | 悬浮 WebView + VoiceSession + Live2D 壳 + 相位表情（见第十四节） |
 | `builtin/systemtools/` | ✅ Phase 7.5 | 中 | DeviceTool + Bridge + Gate + Calendar/Alarm/Notes/Files（见第十四节 / system-tools） |
 
@@ -608,7 +608,7 @@ app/.../plugins/unifiedinbox/
 | **6.1** | MNN 本地推理引擎接入（参考妹居） | 🔴 高 | 5d | ✅ 骨架 |
 | **6.2** | 离线兜底：无网络时自动切本地小模型 | 🟡 中 | 2d | ✅ |
 | **6.3** | ChatRouter 路由层重构：云端 ↔ 本地自动切换 | 🔴 高 | 3d | ✅ |
-| **6.4** | Sherpa-ONNX 离线语音识别（ASR） | 🔴 高 | 4d | ✅ 骨架 |
+| **6.4** | Sherpa-ONNX 离线语音识别（ASR） | 🔴 高 | 4d | ✅ 骨架 + P0 真引擎 |
 | **6.5 / M3** | Bert-VITS2 语音合成（TTS） | 🔴 高 | 4d | 🔜 真机；M1 已有 StubTtsEngine |
 | **6.6 / M1** | 桌宠悬浮窗 + VoiceSession 主线（听→想→说） | 🔴 高 | 4d | ✅ M1（#48） |
 | **6.6 / M2** | 路径就绪 + Live2D 真显 + 引擎可接 | 🔴 高 | 3d | ✅ M2a（#49）· ✅ M2b（#57）· ✅ 表情打磨（本 PR） |
@@ -664,14 +664,14 @@ app/.../plugins/unifiedinbox/
 
 
 
-#### Phase 6.4 设计要点（`feat/phase6-4-offline-asr`）
+#### Phase 6.4 设计要点（`feat/phase6-4-offline-asr` → P0 `feat/p0-sherpa-asr-native`）
 
 | 项 | 说明 |
 |----|------|
 | 设计文档 | `docs/voice-asr.md`、`builtin/voice/README.md` |
 | 模块 | `app/.../builtin/voice/*`（domain / data / di / presentation） |
 | 接口 | `AsrEngine` / `AsrSettings` / `VoiceInputCoordinator` |
-| 实现 | `StubAsrEngine` + `SherpaOnnxBridge`（JNI 预留，无 so） |
+| 实现 | `SherpaAsrEngine`（Hilt）+ `SherpaOnnxBridge` 真 load/transcribe；`StubAsrEngine` 保留单测；AAR 构建期下载 |
 | 配置 | DataStore：`offline_asr_enabled` / `model_path` / `language` / `sample_rate`（**默认关**） |
 | 权限 | `RECORD_AUDIO`；`MicPermissionGate` 温柔拒绝文案；不后台偷录 |
 | UI | 设置 →「离线语音识别」→ `Route.OFFLINE_ASR`；试转写走 stub PCM |

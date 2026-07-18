@@ -18,7 +18,7 @@ package com.lanxin.android.builtin.voice.di
 
 import com.lanxin.android.builtin.voice.data.AndroidMicPermissionChecker
 import com.lanxin.android.builtin.voice.data.AsrPreferences
-import com.lanxin.android.builtin.voice.data.StubAsrEngine
+import com.lanxin.android.builtin.voice.data.SherpaAsrEngine
 import com.lanxin.android.builtin.voice.data.StubTtsEngine
 import com.lanxin.android.builtin.voice.data.TtsPreferences
 import com.lanxin.android.builtin.voice.domain.AsrEngine
@@ -34,10 +34,10 @@ import dagger.hilt.migration.DisableInstallInCheck
 import javax.inject.Singleton
 
 /**
- * Phase 6.4+ 语音 DI（ASR + TTS stub）。
+ * 语音 DI（ASR + TTS）。
  *
- * 对齐 LocalInferenceModule 风格。
- * 后续 Sherpa / Bert-VITS2 就绪后替换 stub 绑定。
+ * ASR：绑定 [SherpaAsrEngine]（native 可用则真识别，否则路径合法时 stub 降级）。
+ * TTS：仍为 [StubTtsEngine]（P1）。
  */
 @Module
 @DisableInstallInCheck
@@ -46,7 +46,7 @@ abstract class VoiceModule {
 
     @Binds
     @Singleton
-    abstract fun bindAsrEngine(impl: StubAsrEngine): AsrEngine
+    abstract fun bindAsrEngine(impl: SherpaAsrEngine): AsrEngine
 
     @Binds
     @Singleton

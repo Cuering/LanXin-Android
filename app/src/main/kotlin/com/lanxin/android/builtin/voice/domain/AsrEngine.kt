@@ -22,13 +22,10 @@ import kotlinx.coroutines.flow.StateFlow
 /**
  * 离线语音识别（ASR）引擎抽象。
  *
- * Phase 6.4：接口 + [com.lanxin.android.builtin.voice.data.StubAsrEngine]。
- * 后续接入 Sherpa-ONNX / JNI 时替换实现，不改 Chat 调用方。
+ * 实现：Hilt → [com.lanxin.android.builtin.voice.data.SherpaAsrEngine]
+ *（native 可用真转写；否则 / stub:// 降级）。对照 [com.lanxin.android.builtin.voice.data.StubAsrEngine]。
  *
- * 能力边界：
- * - 已实现：load / unload / transcribe / streamPartial(stub) / isReady / isAvailable / state
- * - stub：无真实 so 时返回可控 stub 文本
- * - 非目标：打包真实 sherpa-onnx so / 大模型文件（见 docs/voice-asr.md）
+ * 能力边界见 docs/voice-asr.md。
  */
 interface AsrEngine {
 
