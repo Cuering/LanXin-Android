@@ -60,7 +60,7 @@ class PetPreferences @Inject constructor(
             overlayRunning = prefs[overlayKey] ?: false,
             autoListen = prefs[autoListenKey] ?: false,
             live2dModelPath = prefs[live2dPathKey].orEmpty(),
-            musicBeatSway = prefs[musicBeatSwayKey] ?: true,
+            musicBeatSway = prefs[musicBeatSwayKey] ?: false,
             overlayPosition = OverlayPosition(
                 x = prefs[overlayXKey] ?: OverlayPosition.UNSET,
                 y = prefs[overlayYKey] ?: OverlayPosition.UNSET

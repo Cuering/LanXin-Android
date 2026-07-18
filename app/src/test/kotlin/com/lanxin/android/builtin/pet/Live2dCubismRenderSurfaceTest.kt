@@ -113,9 +113,14 @@ class Live2dCubismRenderSurfaceTest {
         // scalePulse 恒 0；禁止 scale 脉冲乘回 scale
         assertTrue(html.contains("var scalePulse = 0"))
         assertFalse(html.contains("1 + breath + d.scalePulse"))
-        // Cubism 参数限幅存在
-        assertTrue(html.contains("angleX > 6") || html.contains("if (angleX > 6)"))
-        assertTrue(html.contains("bodyX > 3") || html.contains("if (bodyX > 3)"))
+        // Cubism 参数限幅存在（稳定版：Angle ≤ 3, Body ≤ 1.5）
+        assertTrue(html.contains("angleX > 3") || html.contains("if (angleX > 3)"))
+        assertTrue(html.contains("bodyX > 1.5") || html.contains("if (bodyX > 1.5)"))
+        // 默认关闭跟随节奏
+        assertTrue(
+            html.contains("var musicBeatEnabled = false") ||
+                html.contains("musicBeatEnabled = false")
+        )
     }
 
     @Test

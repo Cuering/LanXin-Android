@@ -506,7 +506,7 @@ private fun CompanionMusicPanel(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "跟随节奏晃动",
+                    text = "跟随节奏（Cubism 轻舞，默认关）",
                     style = MaterialTheme.typography.bodySmall,
                     color = Color(0xFF5A2038),
                     modifier = Modifier.weight(1f)
@@ -645,7 +645,7 @@ data class CompanionUiState(
     val musicTitle: String = "",
     val musicError: String? = null,
     val musicDirHint: String = "LanXin/music/",
-    val musicBeatSway: Boolean = true,
+    val musicBeatSway: Boolean = false,
     val musicVolume: Float = 0.7f,
     val beatLevel: Float = 0f,
     val trackNames: List<String> = emptyList(),
@@ -675,7 +675,7 @@ class CompanionViewModel @Inject constructor(
     private var lastBeatLevel: Float = 0f
 
     @Volatile
-    private var beatSwayEnabled: Boolean = true
+    private var beatSwayEnabled: Boolean = false
 
     /** WebView beat 推送限频：≥150–200ms，避免 evaluateJavascript 抖 scale/layout。 */
     private var lastBeatPushMs: Long = 0L
