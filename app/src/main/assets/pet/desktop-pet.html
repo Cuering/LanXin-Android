@@ -405,11 +405,69 @@
         });
       }
 
+      /** Base64 → UTF-8 字符串（优先 atob，兼容 Android WebView）。 */
+      function decodeModel3B64(b64) {
+        if (!b64) return null;
+        try {
+          var bin = atob(String(b64).replace(/\s+/g, ''));
+          // 处理 UTF-8 multi-byte
+          if (typeof TextDecoder !== 'undefined') {
+            var bytes = new Uint8Array(bin.length);
+            for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            return new TextDecoder('utf-8').decode(bytes);
+          }
+          // fallback latin1-ish
+          try {
+            return decodeURIComponent(escape(bin));
+          } catch (e2) {
+            return bin;
+          }
+        } catch (e) {
+          console.warn('[LanXin Pet] model3 b64 decode fail', e);
+          return null;
+        }
+      }
+
+      function parseModel3Json(text) {
+        if (!text) return null;
+        try {
+          return JSON.parse(text);
+        } catch (e) {
+          console.warn('[LanXin Pet] model3 JSON parse fail', e);
+          return null;
+        }
+      }
+
+      function finishShellWithJson(json, dirUrl) {
+        loadTexturesFromModel3(json, dirUrl, function (textures) {
+          startShellAnim(textures);
+          reportStatus('LIVE2D_SHELL', textures.length ? 'textures_ok' : 'textures_empty_geom');
+          if (!textures.length) {
+            modeTag.textContent = 'L2D·几何';
+          }
+        });
+      }
+
       function activateLive2dShell(meta) {
         var fileUrl = meta.live2dFileUrl || '';
         var dirUrl = meta.live2dDirUrl || '';
+        var model3B64 = meta.live2dModel3B64 || '';
+        var injectedJson = null;
+        if (model3B64) {
+          injectedJson = parseModel3Json(decodeModel3B64(model3B64));
+        }
+        // Native 注入成功：完全不依赖 fetch(file://)
+        if (injectedJson) {
+          shell.classList.add('active');
+          avatar.classList.add('hidden');
+          modeTag.textContent = 'Live2D 壳';
+          displayMode = 'LIVE2D_SHELL';
+          startShellAnim([]);
+          finishShellWithJson(injectedJson, dirUrl);
+          return;
+        }
         if (!fileUrl) {
-          showPlaceholder('live2d_file_url_empty');
+          showPlaceholder('live2d_file_url_empty', 'FALLBACK');
           return;
         }
         shell.classList.add('active');
@@ -418,24 +476,16 @@
         displayMode = 'LIVE2D_SHELL';
         startShellAnim([]);
 
-        // fetch model3 (file:// allowed by Service WebSettings)
+        // 回退：fetch model3（部分机型 file:// 可能失败）
         fetch(fileUrl)
           .then(function (r) {
             if (!r.ok) throw new Error('http_' + r.status);
             return r.json();
           })
           .then(function (json) {
-            loadTexturesFromModel3(json, dirUrl, function (textures) {
-              startShellAnim(textures);
-              reportStatus('LIVE2D_SHELL', textures.length ? 'textures_ok' : 'textures_empty_geom');
-              if (!textures.length) {
-                // still shell mode with geometric fallback inside canvas
-                modeTag.textContent = 'L2D·几何';
-              }
-            });
+            finishShellWithJson(json, dirUrl);
           })
           .catch(function (err) {
-            // 失败降级占位，不崩
             showPlaceholder('live2d_load_fail', 'FALLBACK');
             showBubble('Live2D 加载失败，已降级');
             console.warn('[LanXin Pet] Live2D shell fallback', err);
@@ -448,7 +498,8 @@
           activateLive2dShell({
             live2dFileUrl: map.live2dFileUrl || '',
             live2dDirUrl: map.live2dDirUrl || '',
-            live2dPath: map.live2dPath || ''
+            live2dPath: map.live2dPath || '',
+            live2dModel3B64: map.live2dModel3B64 || ''
           });
           return;
         }
@@ -569,7 +620,7 @@
       // bash scripts/download-debug-live2d.sh  → live2d_model_path
       if (!window.__LANXIN_LIVE2D_HINT__) {
         window.__LANXIN_LIVE2D_HINT__ = true;
-        console.info('[LanXin Pet] M2b+expression: LOAD_LIVE2D + SET_EXPRESSION/mouth; docs/debug-assets.md');
+        console.info('[LanXin Pet] M2b+expression: LOAD_LIVE2D(+model3B64 inject) + SET_EXPRESSION/mouth; docs/debug-assets.md');
       }
     })();
   </script>

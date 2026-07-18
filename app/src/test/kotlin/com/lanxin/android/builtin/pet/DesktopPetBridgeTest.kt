@@ -82,6 +82,27 @@ class DesktopPetBridgeTest {
     }
 
     @Test
+    fun `encodeLoadLive2d includes model3 b64 when injected`() {
+        val bridge = DesktopPetBridge {}
+        val json = """{"Version":3,"FileReferences":{"Textures":["t.png"]}}"""
+        val decision = com.lanxin.android.builtin.pet.domain.Live2dDisplayController.Decision(
+            mode = com.lanxin.android.builtin.pet.domain.Live2dDisplayController.Live2dDisplayMode.LIVE2D_SHELL,
+            model3Path = "/tmp/Mao.model3.json",
+            model3FileUrl = "file:///tmp/Mao.model3.json",
+            modelDirFileUrl = "file:///tmp",
+            reason = "live2d_shell_ready",
+            shortLabel = "Live2D 壳",
+            model3Json = json
+        )
+        val out = bridge.encodeLoadLive2d(decision)
+        assertTrue(out.contains("live2dModel3B64="))
+        val decoded = PetBridgeProtocol.decode(out)
+        val b64 = decoded.payload[PetBridgeProtocol.KEY_LIVE2D_MODEL3_B64]
+        assertTrue(!b64.isNullOrBlank())
+        assertTrue(PetBridgeProtocol.decodeModel3B64(b64!!)?.contains("t.png") == true)
+    }
+
+    @Test
     fun `AndroidVoiceBridge snapshot json and commands`() {
         var snap = VoiceSessionSnapshot(
             phase = VoiceSessionPhase.LISTENING,

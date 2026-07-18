@@ -136,6 +136,21 @@ class Live2dDisplayControllerTest {
     }
 
     @Test
+    fun loadLive2dMessage_withInjectedJson_encodesB64() {
+        val f = tmp.newFile("Mao.model3.json")
+        val body = """{"Version":3,"FileReferences":{"Moc":"a.moc3","Textures":["tx.png"]}}"""
+        f.writeText(body)
+        val d = Live2dDisplayController.withModel3Json(
+            Live2dDisplayController.decide(f.absolutePath),
+            body
+        )
+        val wire = PetBridgeProtocol.encode(PetBridgeProtocol.loadLive2dMessage(d, timestampMs = 2L))
+        assertTrue(wire.contains("live2dModel3B64="))
+        val b64 = PetBridgeProtocol.decode(wire).payload[PetBridgeProtocol.KEY_LIVE2D_MODEL3_B64]!!
+        assertTrue(PetBridgeProtocol.decodeModel3B64(b64)!!.contains("tx.png"))
+    }
+
+    @Test
     fun live2dStatusMessage_roundTrip() {
         val wire = PetBridgeProtocol.encode(
             PetBridgeProtocol.live2dStatusMessage("FALLBACK", "live2d_load_fail", 3L)

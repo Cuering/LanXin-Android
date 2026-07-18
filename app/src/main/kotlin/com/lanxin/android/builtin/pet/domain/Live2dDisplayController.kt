@@ -47,8 +47,22 @@ object Live2dDisplayController {
         val model3FileUrl: String,
         val modelDirFileUrl: String,
         val reason: String,
-        val shortLabel: String
+        val shortLabel: String,
+        /**
+         * model3.json 原文（由 Native 读取后注入，避免 WebView fetch(file://) CORS 失败）。
+         * 空表示未注入，HTML 可回退 fetch。
+         */
+        val model3Json: String = ""
     )
+
+    /** 附上 model3 文本（仅 LIVE2D_SHELL 有意义）。 */
+    fun withModel3Json(decision: Decision, json: String?): Decision {
+        val text = json?.trim().orEmpty()
+        if (text.isEmpty() || decision.mode != Live2dDisplayMode.LIVE2D_SHELL) {
+            return decision
+        }
+        return decision.copy(model3Json = text)
+    }
 
     /**
      * @param resolvedPath [PetResourceResolver] 解析后的绝对路径（可空）
