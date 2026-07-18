@@ -23,7 +23,7 @@ import java.io.File
  *
  * 用户配置为空时优先级：
  * 1. **仓内官方 Sample** [BuiltInLive2dAssets]（APK assets → filesDir/builtin-live2d）
- * 2. **开源 debug 包** [DebugOpenSourcePaths]（`debug-assets/`，脚本拉取）
+ * 2. **开源 debug 包** [DebugOpenSourcePaths]（`LanXin/`，App 内下载 / 脚本）
  * 3. **妹居参考旁路** `meiju-ref/`（仅本机 adb push，**禁止入库**）
  *
  * Live2D 内置 Sample 在 debug/release 均可默认选用（官方 Sample Terms）。
@@ -68,7 +68,7 @@ object MeijuDebugPaths {
         /** 仓内官方 Live2D Sample（Niziiro Mao）。 */
         BUILTIN_SAMPLE,
 
-        /** Debug 开源包（filesDir/debug-assets，脚本拉取）。 */
+        /** Debug 开源包（LanXin/ 或历史 debug-assets，App 内下载/脚本）。 */
         DEBUG_OPEN_SOURCE,
 
         /** Debug 构建且命中 meiju-ref 约定目录（仅本地）。 */
@@ -88,13 +88,19 @@ object MeijuDebugPaths {
 
     fun asrModelDirFile(filesDir: File): File = File(filesDir, ASR_MODEL_DIR)
 
-    fun live2dExists(filesDir: File): Boolean =
+    fun live2dExists(filesDir: File, openSourceBaseDir: File = filesDir): Boolean =
         BuiltInLive2dAssets.isInstalled(filesDir) ||
-            DebugOpenSourcePaths.live2dModelFile(filesDir).isFile ||
+            openSourceSearchBases(filesDir, openSourceBaseDir).any {
+                DebugOpenSourcePaths.live2dModelFile(it).isFile
+            } ||
             live2dModelFile(filesDir).isFile
 
-    fun ttsModelsExist(filesDir: File): Boolean {
-        if (DebugOpenSourcePaths.isModelDirReady(DebugOpenSourcePaths.ttsModelDir(filesDir))) {
+    fun ttsModelsExist(filesDir: File, openSourceBaseDir: File = filesDir): Boolean {
+        if (
+            openSourceSearchBases(filesDir, openSourceBaseDir).any {
+                DebugOpenSourcePaths.isModelDirReady(DebugOpenSourcePaths.ttsModelDir(it))
+            }
+        ) {
             return true
         }
         val dir = ttsModelDirFile(filesDir)
@@ -104,24 +110,28 @@ object MeijuDebugPaths {
     fun ttsReferenceExists(filesDir: File): Boolean = ttsReferenceAudioFile(filesDir).isFile
 
     /**
-     * Live2D：用户配置优先 → 已安装内置 Sample → debug-assets → 妹居旁路 →
+     * Live2D：用户配置优先 → 已安装内置 Sample → LanXin 开源包 → 妹居旁路 →
      * （[preferBuiltinLogical]）仓内 Sample 逻辑路径。
      *
      * @param preferBuiltinLogical 无落盘文件时是否返回 [BuiltInLive2dAssets.LOGICAL_PATH]
      * @param allowMeijuRef debug 才应 true
+     * @param openSourceBaseDir 开源包 base（公共 `…/storage/…` 或 externalFiles），默认 [filesDir]
      */
     fun resolveLive2dIfPresent(
         filesDir: File,
         configured: String,
         preferBuiltinLogical: Boolean = true,
-        allowMeijuRef: Boolean = true
+        allowMeijuRef: Boolean = true,
+        openSourceBaseDir: File = filesDir
     ): String {
         if (configured.isNotBlank()) return configured.trim()
         if (BuiltInLive2dAssets.isInstalled(filesDir)) {
             return BuiltInLive2dAssets.installedModelFile(filesDir).absolutePath
         }
-        val open = DebugOpenSourcePaths.live2dModelFile(filesDir)
-        if (open.isFile) return open.absolutePath
+        for (base in openSourceSearchBases(filesDir, openSourceBaseDir)) {
+            val open = DebugOpenSourcePaths.live2dModelFile(base)
+            if (open.isFile) return open.absolutePath
+        }
         if (allowMeijuRef) {
             val f = live2dModelFile(filesDir)
             if (f.isFile) return f.absolutePath
@@ -129,10 +139,16 @@ object MeijuDebugPaths {
         return if (preferBuiltinLogical) BuiltInLive2dAssets.LOGICAL_PATH else ""
     }
 
-    fun resolveTtsModelDirIfPresent(filesDir: File, configured: String): String {
+    fun resolveTtsModelDirIfPresent(
+        filesDir: File,
+        configured: String,
+        openSourceBaseDir: File = filesDir
+    ): String {
         if (configured.isNotBlank()) return configured.trim()
-        val open = DebugOpenSourcePaths.ttsModelDir(filesDir)
-        if (DebugOpenSourcePaths.isModelDirReady(open)) return open.absolutePath
+        for (base in openSourceSearchBases(filesDir, openSourceBaseDir)) {
+            val open = DebugOpenSourcePaths.ttsModelDir(base)
+            if (DebugOpenSourcePaths.isModelDirReady(open)) return open.absolutePath
+        }
         val d = ttsModelDirFile(filesDir)
         return if (d.isDirectory) d.absolutePath else ""
     }
@@ -143,12 +159,23 @@ object MeijuDebugPaths {
         return if (f.isFile) f.absolutePath else ""
     }
 
-    fun resolveAsrIfPresent(filesDir: File, configured: String): String {
+    fun resolveAsrIfPresent(
+        filesDir: File,
+        configured: String,
+        openSourceBaseDir: File = filesDir
+    ): String {
         if (configured.isNotBlank()) return configured.trim()
-        val open = DebugOpenSourcePaths.asrModelDir(filesDir)
-        if (DebugOpenSourcePaths.isModelDirReady(open)) return open.absolutePath
+        for (base in openSourceSearchBases(filesDir, openSourceBaseDir)) {
+            val open = DebugOpenSourcePaths.asrModelDir(base)
+            if (DebugOpenSourcePaths.isModelDirReady(open)) return open.absolutePath
+        }
         val d = asrModelDirFile(filesDir)
         return if (d.isDirectory) d.absolutePath else ""
+    }
+
+    /** 开源包可能在公共 LanXin base、externalFiles 或历史 filesDir。 */
+    private fun openSourceSearchBases(filesDir: File, openSourceBaseDir: File): List<File> {
+        return listOf(openSourceBaseDir, filesDir).distinctBy { it.absolutePath }
     }
 
     /**

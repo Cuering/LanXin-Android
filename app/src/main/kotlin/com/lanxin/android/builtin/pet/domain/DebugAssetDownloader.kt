@@ -31,14 +31,13 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /**
- * App 内一键下载 Debug 开源资源到 [filesDir]/debug-assets/。
+ * App 内一键下载 Debug 开源资源到 [baseDir]/[DebugOpenSourcePaths.ROOT_DIR]/
+ * （即用户可访问的 `LanXin/`，由 [DebugAssetStorage] 解析 base）。
  *
- * - Live2D：多文件 raw（CubismWebSamples Mao）
- * - ASR / TTS：sherpa-onnx release 归档解压
- * - 镜像：用户首选 + 失败回退官方
- * - 大文件**不进 git**；**禁止** AstrBot 服务器当下载盘
- *
- * 写 DataStore 路径由 ViewModel 在 [DebugAssetDownloadEvent.Completed] 后处理。
+ * - Live2D：jsDelivr → fastly → github-raw（单文件）；内置 Mao 优先，下载可选
+ * - ASR / TTS：HF / hf-mirror 目录文件优先；GitHub release 归档回退
+ * - LOCAL_LLM：ModelScope → hf-mirror → HuggingFace（MNN 运行时文件）
+ * - 终端事件在 try/catch **之外** emit（Flow exception transparency）
  */
 @Singleton
 class DebugAssetDownloader @Inject constructor(
@@ -55,112 +54,129 @@ class DebugAssetDownloader @Inject constructor(
         activeJob = null
     }
 
-    fun isReady(filesDir: File, kind: DebugAssetKind): Boolean {
-        val path = readyPath(filesDir, kind)
+    fun isReady(baseDir: File, kind: DebugAssetKind): Boolean {
+        val path = readyPath(baseDir, kind)
         if (path.isBlank()) return false
         return when (kind) {
             DebugAssetKind.LIVE2D -> File(path).isFile && File(path).length() > 0L
             DebugAssetKind.ASR, DebugAssetKind.TTS ->
                 DebugOpenSourcePaths.isModelDirReady(File(path))
+            DebugAssetKind.LOCAL_LLM ->
+                DebugOpenSourcePaths.isLocalLlmDirReady(File(path))
         }
     }
 
-    fun readyPath(filesDir: File, kind: DebugAssetKind): String {
+    fun readyPath(baseDir: File, kind: DebugAssetKind): String {
         return when (kind) {
             DebugAssetKind.LIVE2D -> {
-                val f = DebugOpenSourcePaths.live2dModelFile(filesDir)
+                val f = DebugOpenSourcePaths.live2dModelFile(baseDir)
                 if (f.isFile) f.absolutePath else ""
             }
             DebugAssetKind.ASR -> {
-                val d = DebugOpenSourcePaths.asrModelDir(filesDir)
+                val d = DebugOpenSourcePaths.asrModelDir(baseDir)
                 if (DebugOpenSourcePaths.isModelDirReady(d)) d.absolutePath else ""
             }
             DebugAssetKind.TTS -> {
-                val d = DebugOpenSourcePaths.ttsModelDir(filesDir)
+                val d = DebugOpenSourcePaths.ttsModelDir(baseDir)
                 if (DebugOpenSourcePaths.isModelDirReady(d)) d.absolutePath else ""
+            }
+            DebugAssetKind.LOCAL_LLM -> {
+                val d = DebugOpenSourcePaths.localLlmModelDir(baseDir)
+                if (DebugOpenSourcePaths.isLocalLlmDirReady(d)) d.absolutePath else ""
             }
         }
     }
 
-    /**
-     * 下载并安装 [kind]；进度以 [DebugAssetDownloadEvent] 流式上报。
-     *
-     * 终端事件（Completed / Failed / Cancelled）一律在 try/catch **之外** emit，
-     * 避免违反 Flow exception transparency（catch 内禁止 emit）。
-     */
     fun download(
-        filesDir: File,
+        baseDir: File,
         kind: DebugAssetKind,
         preferredMirror: DebugAssetMirror
     ): Flow<DebugAssetDownloadEvent> = flow {
         emit(DebugAssetDownloadEvent.Started)
         val job = currentCoroutineContext()[Job]
         activeJob = job
-        // 记录终端结果，catch 内不 emit（Flow exception transparency）
         var terminal: DebugAssetDownloadEvent? = null
         try {
             mutex.withLock {
-                val usedMirror = when (kind) {
-                    DebugAssetKind.LIVE2D -> installLive2d(filesDir, preferredMirror) { event ->
+                val used = when (kind) {
+                    DebugAssetKind.LIVE2D -> installLive2d(baseDir, preferredMirror) { event ->
                         emit(event)
                     }
                     DebugAssetKind.ASR, DebugAssetKind.TTS ->
-                        installArchive(filesDir, kind, preferredMirror) { event ->
+                        installAsrOrTts(baseDir, kind, preferredMirror) { event ->
+                            emit(event)
+                        }
+                    DebugAssetKind.LOCAL_LLM ->
+                        installLocalLlm(baseDir, preferredMirror) { event ->
                             emit(event)
                         }
                 }
-                val path = readyPath(filesDir, kind)
-                terminal = if (path.isBlank() || !isReady(filesDir, kind)) {
+                val path = readyPath(baseDir, kind)
+                terminal = if (path.isBlank() || !isReady(baseDir, kind)) {
                     DebugAssetDownloadEvent.Failed(
                         kind = kind,
-                        message = "下载完成但校验失败（缺少关键文件）"
+                        message = failMessage(
+                            kind,
+                            "下载完成但校验失败（缺少关键文件）",
+                            emptyList()
+                        ),
+                        attemptedSources = emptyList()
                     )
                 } else {
                     DebugAssetDownloadEvent.Completed(
                         kind = kind,
                         readyPath = path,
-                        mirror = usedMirror
+                        mirror = used.mirror,
+                        sourceLabel = used.label
                     )
                 }
             }
         } catch (_: CancellationException) {
-            // 不 rethrow：UI collect 正常收 Cancelled；不在 catch 内 emit
             terminal = DebugAssetDownloadEvent.Cancelled
         } catch (t: Throwable) {
+            val attempted = (t as? MultiSourceFailure)?.attempted.orEmpty()
             terminal = DebugAssetDownloadEvent.Failed(
                 kind = kind,
-                message = shortError(t)
+                message = failMessage(kind, shortError(t), attempted),
+                attemptedSources = attempted
             )
         } finally {
             if (activeJob === job) activeJob = null
         }
-        // 正常路径 emit 终端事件（在 catch 块外）
         terminal?.let { emit(it) }
     }.flowOn(Dispatchers.IO)
 
+    private data class UsedSource(
+        val mirror: DebugAssetMirror,
+        val label: String
+    )
+
+    private class MultiSourceFailure(
+        cause: Throwable,
+        val attempted: List<String>
+    ) : Exception(cause.message, cause)
+
     private suspend fun installLive2d(
-        filesDir: File,
+        baseDir: File,
         preferred: DebugAssetMirror,
         emit: suspend (DebugAssetDownloadEvent) -> Unit
-    ): DebugAssetMirror {
-        val root = File(filesDir, DebugAssetCatalog.live2d.extractDirRel)
-        val staging = File(filesDir, "${DebugOpenSourcePaths.ROOT_DIR}/.tmp/live2d-mao-staging")
+    ): UsedSource {
+        val root = File(baseDir, DebugAssetCatalog.live2d.extractDirRel)
+        val staging = File(baseDir, "${DebugOpenSourcePaths.ROOT_DIR}/.tmp/live2d-mao-staging")
         if (staging.exists()) staging.deleteRecursively()
         staging.mkdirs()
 
         val files = DebugAssetCatalog.live2dMaoRelativeFiles
-        var usedMirror = preferred
+        var used = UsedSource(preferred, preferred.name)
         var done = 0
         for (rel in files) {
             currentCoroutineContext().ensureActive()
-            val official = DebugAssetCatalog.live2dFileUrl(rel)
             val dest = File(staging, rel)
             dest.parentFile?.mkdirs()
-            usedMirror = downloadWithMirrorFallback(
-                officialUrl = official,
-                destFile = dest,
-                preferred = preferred
-            ) { downloaded, total, mirror ->
+            used = downloadFromCandidates(
+                candidates = DebugAssetCatalog.live2dFileCandidates(rel, preferred),
+                destFile = dest
+            ) { downloaded, total, candidate ->
                 val filePct = if (total > 0) {
                     ((downloaded * 100) / total).toInt().coerceIn(0, 100)
                 } else {
@@ -172,8 +188,9 @@ class DebugAssetDownloader @Inject constructor(
                         downloadedBytes = done.toLong() + 1,
                         totalBytes = files.size.toLong(),
                         percent = overall.coerceIn(0, 99),
-                        mirror = mirror,
-                        phase = "live2d-files"
+                        mirror = candidate.mirror,
+                        phase = "live2d-files",
+                        sourceLabel = candidate.label
                     )
                 )
             }
@@ -185,8 +202,9 @@ class DebugAssetDownloader @Inject constructor(
                 downloadedBytes = files.size.toLong(),
                 totalBytes = files.size.toLong(),
                 percent = 95,
-                mirror = usedMirror,
-                phase = "extracting"
+                mirror = used.mirror,
+                phase = "extracting",
+                sourceLabel = used.label
             )
         )
         if (root.exists()) root.deleteRecursively()
@@ -195,119 +213,281 @@ class DebugAssetDownloader @Inject constructor(
             staging.copyRecursively(root, overwrite = true)
             staging.deleteRecursively()
         }
-        // NOTICE 可选
         val notice = File(root, "NOTICE.txt")
         if (!notice.isFile) {
             notice.writeText(
-                "Live2D Sample Mao — see ${DebugAssetLicense.LIVE2D_SAMPLE_TERMS_URL}\n"
+                "Live2D Sample Mao — see ${DebugAssetLicense.LIVE2D_SAMPLE_TERMS_URL}\n" +
+                    "In-app download is optional; APK ships builtin assets/pet/live2d/Mao.\n" +
+                    "Source: ${used.label}\n"
             )
         }
-        return usedMirror
+        return used
     }
 
-    private suspend fun installArchive(
-        filesDir: File,
-        kind: DebugAssetKind,
+    private suspend fun installLocalLlm(
+        baseDir: File,
         preferred: DebugAssetMirror,
         emit: suspend (DebugAssetDownloadEvent) -> Unit
-    ): DebugAssetMirror {
-        val spec = DebugAssetCatalog.spec(kind)
-        val tmp = File(filesDir, "${DebugOpenSourcePaths.ROOT_DIR}/.tmp")
-        tmp.mkdirs()
-        val extractRoot = File(filesDir, spec.extractDirRel)
-        extractRoot.mkdirs()
-
+    ): UsedSource {
+        val attempted = mutableListOf<String>()
         var lastError: Throwable? = null
-        var usedMirror = preferred
-        for (officialUrl in spec.officialUrls) {
-            val archiveName = officialUrl.substringAfterLast('/').ifBlank { "asset.bin" }
-            val archive = File(tmp, archiveName)
+        val multi = DebugAssetCatalog.localLlmMultiFileSources(preferred)
+        for (source in multi) {
+            currentCoroutineContext().ensureActive()
             try {
-                usedMirror = downloadWithMirrorFallback(
-                    officialUrl = officialUrl,
-                    destFile = archive,
-                    preferred = preferred
-                ) { downloaded, total, mirror ->
-                    val pct = if (total > 0) {
-                        ((downloaded * 85) / total).toInt().coerceIn(0, 85)
-                    } else {
-                        40
-                    }
-                    emit(
-                        DebugAssetDownloadEvent.Progress(
-                            downloadedBytes = downloaded,
-                            totalBytes = total,
-                            percent = pct,
-                            mirror = mirror,
-                            phase = "downloading"
-                        )
-                    )
+                installMultiFileSource(baseDir, source, emit)
+                val dir = File(baseDir, source.modelDirRel)
+                if (!DebugOpenSourcePaths.isLocalLlmDirReady(dir)) {
+                    throw IllegalStateException("本地脑校验失败：缺少 llm.mnn")
                 }
-
-                emit(
-                    DebugAssetDownloadEvent.Progress(
-                        downloadedBytes = archive.length(),
-                        totalBytes = archive.length(),
-                        percent = 88,
-                        mirror = usedMirror,
-                        phase = "extracting"
-                    )
-                )
-                // 清空旧内容再解压
-                extractRoot.listFiles()?.forEach { child ->
-                    if (child.isDirectory) child.deleteRecursively() else child.delete()
-                }
-                ArchiveExtractor.extract(archive, extractRoot)
-                archive.delete()
-                return usedMirror
+                return UsedSource(source.mirror, source.label)
             } catch (ce: CancellationException) {
-                archive.delete()
                 throw ce
             } catch (t: Throwable) {
                 lastError = t
-                archive.delete()
+                attempted += source.label
             }
         }
-        throw lastError ?: IllegalStateException("下载失败")
+        throw MultiSourceFailure(
+            lastError ?: IllegalStateException("本地脑下载失败"),
+            attempted
+        )
     }
 
-    /**
-     * 按 [DebugAssetCatalog.mirrorAttemptOrder] 尝试下载；成功返回实际使用的镜像。
-     */
-    private suspend fun downloadWithMirrorFallback(
-        officialUrl: String,
-        destFile: File,
+    private suspend fun installAsrOrTts(
+        baseDir: File,
+        kind: DebugAssetKind,
         preferred: DebugAssetMirror,
-        onProgress: suspend (downloaded: Long, total: Long, mirror: DebugAssetMirror) -> Unit
-    ): DebugAssetMirror {
+        emit: suspend (DebugAssetDownloadEvent) -> Unit
+    ): UsedSource {
+        val attempted = mutableListOf<String>()
         var lastError: Throwable? = null
-        val attempts = DebugAssetCatalog.mirrorAttemptOrder(preferred)
-        for ((mirror, prefixIndex) in attempts) {
+
+        val multi = when (kind) {
+            DebugAssetKind.ASR -> DebugAssetCatalog.asrMultiFileSources(preferred)
+            DebugAssetKind.TTS -> DebugAssetCatalog.ttsMultiFileSources(preferred)
+            else -> emptyList()
+        }
+        for (source in multi) {
             currentCoroutineContext().ensureActive()
-            val url = DebugAssetCatalog.resolveUrl(officialUrl, mirror, prefixIndex)
+            try {
+                installMultiFileSource(baseDir, source, emit)
+                return UsedSource(source.mirror, source.label)
+            } catch (ce: CancellationException) {
+                throw ce
+            } catch (t: Throwable) {
+                lastError = t
+                attempted += source.label
+            }
+        }
+
+        // GitHub release 归档回退
+        val archives = DebugAssetCatalog.archiveCandidates(kind, preferred)
+        for (candidate in archives) {
+            currentCoroutineContext().ensureActive()
+            try {
+                installArchiveUrl(baseDir, kind, candidate, emit)
+                return UsedSource(candidate.mirror, candidate.label)
+            } catch (ce: CancellationException) {
+                throw ce
+            } catch (t: Throwable) {
+                lastError = t
+                attempted += candidate.label
+            }
+        }
+
+        throw MultiSourceFailure(
+            lastError ?: IllegalStateException("下载失败"),
+            attempted
+        )
+    }
+
+    private suspend fun installMultiFileSource(
+        baseDir: File,
+        source: DebugAssetCatalog.MultiFileSource,
+        emit: suspend (DebugAssetDownloadEvent) -> Unit
+    ) {
+        val staging = File(
+            baseDir,
+            "${DebugOpenSourcePaths.ROOT_DIR}/.tmp/mf-${source.label}-staging"
+        )
+        if (staging.exists()) staging.deleteRecursively()
+        staging.mkdirs()
+
+        val files = source.relativeFiles
+        var done = 0
+        for (rel in files) {
+            currentCoroutineContext().ensureActive()
+            val url = "${source.baseUrl.trimEnd('/')}/$rel"
+            val dest = File(staging, rel)
+            dest.parentFile?.mkdirs()
+            transport.downloadToFile(url, dest) { downloaded, total ->
+                val filePct = if (total > 0) {
+                    ((downloaded * 100) / total).toInt().coerceIn(0, 100)
+                } else {
+                    0
+                }
+                val overall = ((done * 100) + filePct) / files.size
+                emit(
+                    DebugAssetDownloadEvent.Progress(
+                        downloadedBytes = done.toLong() + 1,
+                        totalBytes = files.size.toLong(),
+                        percent = overall.coerceIn(0, 90),
+                        mirror = source.mirror,
+                        phase = "downloading",
+                        sourceLabel = source.label
+                    )
+                )
+            }
+            if (!dest.isFile || dest.length() <= 0L) {
+                throw IllegalStateException("空文件 $rel @ ${source.label}")
+            }
+            done++
+        }
+
+        emit(
+            DebugAssetDownloadEvent.Progress(
+                downloadedBytes = files.size.toLong(),
+                totalBytes = files.size.toLong(),
+                percent = 95,
+                mirror = source.mirror,
+                phase = "extracting",
+                sourceLabel = source.label
+            )
+        )
+
+        val target = File(baseDir, source.modelDirRel)
+        if (target.exists()) target.deleteRecursively()
+        target.parentFile?.mkdirs()
+        if (!staging.renameTo(target)) {
+            staging.copyRecursively(target, overwrite = true)
+            staging.deleteRecursively()
+        }
+        val ok = when {
+            source.modelDirRel.contains("local-llm") ->
+                DebugOpenSourcePaths.isLocalLlmDirReady(target)
+            else -> DebugOpenSourcePaths.isModelDirReady(target)
+        }
+        if (!ok) {
+            throw IllegalStateException("多文件安装后目录未就绪：${target.absolutePath}")
+        }
+    }
+
+    private suspend fun installArchiveUrl(
+        baseDir: File,
+        kind: DebugAssetKind,
+        candidate: DebugAssetUrlCandidate,
+        emit: suspend (DebugAssetDownloadEvent) -> Unit
+    ) {
+        val spec = DebugAssetCatalog.spec(kind)
+        val tmp = File(baseDir, "${DebugOpenSourcePaths.ROOT_DIR}/.tmp")
+        tmp.mkdirs()
+        val extractRoot = File(baseDir, spec.extractDirRel)
+        extractRoot.mkdirs()
+
+        val archiveName = candidate.url.substringAfterLast('/').ifBlank { "asset.bin" }
+            .substringBefore('?')
+        val archive = File(tmp, archiveName)
+        try {
+            if (archive.exists()) archive.delete()
+            transport.downloadToFile(candidate.url, archive) { downloaded, total ->
+                val pct = if (total > 0) {
+                    ((downloaded * 85) / total).toInt().coerceIn(0, 85)
+                } else {
+                    40
+                }
+                emit(
+                    DebugAssetDownloadEvent.Progress(
+                        downloadedBytes = downloaded,
+                        totalBytes = total,
+                        percent = pct,
+                        mirror = candidate.mirror,
+                        phase = "downloading",
+                        sourceLabel = candidate.label
+                    )
+                )
+            }
+            if (!archive.isFile || archive.length() <= 0L) {
+                throw IllegalStateException("空归档")
+            }
+            emit(
+                DebugAssetDownloadEvent.Progress(
+                    downloadedBytes = archive.length(),
+                    totalBytes = archive.length(),
+                    percent = 88,
+                    mirror = candidate.mirror,
+                    phase = "extracting",
+                    sourceLabel = candidate.label
+                )
+            )
+            extractRoot.listFiles()?.forEach { child ->
+                if (child.isDirectory) child.deleteRecursively() else child.delete()
+            }
+            ArchiveExtractor.extract(archive, extractRoot)
+        } finally {
+            archive.delete()
+        }
+    }
+
+    private suspend fun downloadFromCandidates(
+        candidates: List<DebugAssetUrlCandidate>,
+        destFile: File,
+        onProgress: suspend (
+            downloaded: Long,
+            total: Long,
+            candidate: DebugAssetUrlCandidate
+        ) -> Unit
+    ): UsedSource {
+        var lastError: Throwable? = null
+        val attempted = mutableListOf<String>()
+        for (candidate in candidates) {
+            currentCoroutineContext().ensureActive()
             try {
                 if (destFile.exists()) destFile.delete()
-                transport.downloadToFile(url, destFile) { downloaded, total ->
-                    onProgress(downloaded, total, mirror)
+                transport.downloadToFile(candidate.url, destFile) { downloaded, total ->
+                    onProgress(downloaded, total, candidate)
                 }
                 if (!destFile.isFile || destFile.length() <= 0L) {
                     throw IllegalStateException("空文件")
                 }
-                return mirror
+                return UsedSource(candidate.mirror, candidate.label)
             } catch (ce: CancellationException) {
                 throw ce
             } catch (t: Throwable) {
                 lastError = t
+                attempted += candidate.label
                 destFile.delete()
             }
         }
-        throw lastError ?: IllegalStateException("所有镜像均失败")
+        throw MultiSourceFailure(
+            lastError ?: IllegalStateException("所有镜像均失败"),
+            attempted
+        )
     }
 
     companion object {
         fun shortError(t: Throwable): String {
-            val raw = t.message?.takeIf { it.isNotBlank() } ?: t.javaClass.simpleName
-            return if (raw.length <= 120) raw else raw.take(117) + "…"
+            val root = generateSequence(t) { it.cause }.last()
+            val raw = root.message?.takeIf { it.isNotBlank() } ?: root.javaClass.simpleName
+            return if (raw.length <= 160) raw else raw.take(157) + "…"
+        }
+
+        fun failMessage(
+            kind: DebugAssetKind,
+            short: String,
+            attempted: List<String>
+        ): String {
+            val base = if (attempted.isEmpty()) short else {
+                val src = attempted.distinct().take(6).joinToString(",")
+                "$short（已试:$src）"
+            }
+            return when (kind) {
+                DebugAssetKind.LIVE2D -> {
+                    val msg = "$base。${DebugAssetCatalog.LIVE2D_DOWNLOAD_FAIL_HINT}"
+                    if (msg.length <= 220) msg else msg.take(217) + "…"
+                }
+                else -> if (base.length <= 180) base else base.take(177) + "…"
+            }
         }
     }
 }

@@ -26,6 +26,7 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.MenuBook
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.AlertDialog
@@ -84,6 +85,7 @@ fun HomeScreen(
     homeViewModel: HomeViewModel = hiltViewModel(),
     settingOnClick: () -> Unit,
     memoryOnClick: () -> Unit = {},
+    companionOnClick: () -> Unit = {},
     onExistingChatClick: (ChatRoomV2) -> Unit,
     navigateToNewChat: (enabledPlatforms: List<String>) -> Unit
 ) {
@@ -132,6 +134,7 @@ fun HomeScreen(
                     }
                 },
                 memoryOnClick = memoryOnClick,
+                companionOnClick = companionOnClick,
                 duplicateOnClick = {
                     homeViewModel.duplicateSelectedChat()
                     Toast.makeText(context, duplicatedChatMessage, Toast.LENGTH_SHORT).show()
@@ -262,6 +265,7 @@ fun HomeTopAppBar(
     scrollBehavior: TopAppBarScrollBehavior,
     actionOnClick: () -> Unit,
     memoryOnClick: () -> Unit = {},
+    companionOnClick: () -> Unit = {},
     duplicateOnClick: () -> Unit,
     navigationOnClick: () -> Unit,
     onSearchQueryChanged: (String) -> Unit,
@@ -391,6 +395,15 @@ fun HomeTopAppBar(
                 }
 
                 !isSearchMode -> {
+                    IconButton(
+                        modifier = Modifier.padding(4.dp),
+                        onClick = companionOnClick
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Favorite,
+                            contentDescription = "陪伴"
+                        )
+                    }
                     IconButton(
                         modifier = Modifier.padding(4.dp),
                         onClick = memoryOnClick

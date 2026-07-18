@@ -1,6 +1,6 @@
 # Debug 资源方案：免费可爱 Live2D + 开源中文语音
 
-> 状态：**M1** · **M2a 路径闭环** · **M2b 壳** · **M2b 打磨** · **App 内一键下载 + 国内镜像**  
+> 状态：**M1** · **M2a 路径闭环** · **M2b 壳** · **M2b 打磨** · **App 内一键下载 + 可达 CDN**  
 > 相关：[`meiju-style-pet.md`](./meiju-style-pet.md) · [`voice-asr.md`](./voice-asr.md) · [`local-inference.md`](./local-inference.md) · [`live2d-mao-sample.md`](./live2d-mao-sample.md)
 
 ## 0. 原则
@@ -9,9 +9,9 @@
 |------|------|
 | 默认走开源 | **Live2D 仓内官方 Sample Mao** + sherpa-onnx ASR/TTS |
 | Live2D 进仓 | `app/src/main/assets/pet/live2d/Mao/`（~4MB，白名单）见 [`live2d-mao-sample.md`](./live2d-mao-sample.md) |
-| **主路径：App 内下载** | 设置页「一键下载」→ `filesDir/debug-assets/`（不进 git） |
-| 国内镜像 | 官方 GitHub / ghproxy 类镜像；失败自动回退 |
-| ASR/TTS 大文件不进 git | 仅本机 filesDir；**禁止** commit 权重 |
+| **主路径：App 内下载** | 设置页「一键下载」→ 用户可访问的 `LanXin/`（公共存储优先；失败回退 `Android/data/.../files/LanXin/`） |
+| 下载源 | **jsDelivr / HF / hf-mirror 优先**；官方 GitHub raw/releases 仅回退（旧 ghproxy 已弃用） |
+| ASR/TTS 大文件不进 git | 仅本机 `LanXin/`；**禁止** commit 权重 |
 | **禁止** | AstrBot 服务器缓存模型当交付；妹居商业资源入库 |
 | 脚本可选 | `fetch-debug-assets.sh` + adb push 为开发者备用 |
 | CI 无大包仍绿 | mock transport 单测；不 curl 真实数百 MB |
@@ -21,12 +21,35 @@
 
 桌宠设置页（`DesktopPetScreen`）：
 
-1. 选择镜像：**国内镜像**（默认）或 **官方**
-2. 分项按钮：下载 Live2D（可选覆盖）/ ASR / TTS
-3. 进度条、取消、失败短文案
-4. 成功写回：`live2d_model_path` / `offline_asr_model_path` / `tts_model_dir`
-5. Live2D 仓内 Mao 仍为默认兜底；下载可覆盖到 `debug-assets/live2d/Mao/`
-6. 本地脑：**不**提供一键下载；仅「自备路径」文案（见 [`local-inference.md`](./local-inference.md)）
+1. 选择源：**CDN（推荐）** 或 **官方源**
+2. 分项按钮：Live2D（可选覆盖）/ ASR / TTS / 本地脑（MNN 1.5B）
+3. 进度条、取消、失败短文案（含真实尝试过的源）
+4. 成功写回：`live2d_model_path` / `offline_asr_model_path` / `tts_model_dir` / `local_inference_model_path`，并展示绝对路径 + 成功源
+5. Live2D 仓内 Mao 仍为默认兜底；下载可覆盖到 `LanXin/live2d/Mao/`
+6. 本地脑：一键下载到 `LanXin/models/local-llm/light/`（~880MB，请 Wi‑Fi）；也可自备路径导入
+
+### 下载源优先级
+
+| 资源 | 优先 | 备选 | 回退 |
+|------|------|------|------|
+| Live2D Mao | `cdn.jsdelivr.net/gh/Live2D/CubismWebSamples@develop/...` | `fastly.jsdelivr.net/...` | `raw.githubusercontent.com/...` |
+| ASR zipformer-14M | `https://hf-mirror.com/csukuangfj/sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23` 目录文件 | `https://huggingface.co/csukuangfj/...` 同仓 | GitHub release `*.tar.bz2`（最后回退） |
+| TTS matcha-baker | `https://hf-mirror.com/csukuangfj/matcha-icefall-zh-baker` 目录文件 | `https://huggingface.co/csukuangfj/matcha-icefall-zh-baker` | GitHub release `matcha-icefall-zh-baker.tar.bz2`（最后回退） |
+| 本地脑 Qwen2.5-1.5B MNN | ModelScope `MNN/Qwen2.5-1.5B-Instruct-MNN` | `hf-mirror.com/taobao-mnn/...` | HuggingFace `taobao-mnn/Qwen2.5-1.5B-Instruct-MNN` |
+
+> 说明：HF 模型仓多为目录而非单 tar；App / 脚本按必要文件列表用 `…/resolve/main/<file>` 直链下载到 `LanXin/asr|tts/<model-dir>/`。旧 ghproxy 与「仅 GitHub tar.bz2」主路径已弃用。Live2D 默认 APK 内置，在线源非硬依赖。
+
+### 落盘路径（用户可访问）
+
+| 优先级 | 路径 | 说明 |
+|:------:|------|------|
+| **1** | `{外部存储}/LanXin/` | 如 `/storage/emulated/0/LanXin/`；文件管理器易见 |
+| 2 | `Android/data/com.lanxin.android/files/LanXin/` | 公共目录不可写时回退（`getExternalFilesDir`） |
+| 子目录 | `live2d/Mao/` · `asr/…` · `tts/…` · `models/local-llm/light/` | 相对 `LanXin/` |
+| 兼容 | 历史 `filesDir/debug-assets/` | 仍可被路径解析识别 |
+
+成功下载后 UI 展示「已保存到 <绝对路径>」。
+
 
 实现要点：
 
@@ -34,6 +57,7 @@
 |------|-----|
 | Catalog / 镜像 | `DebugAssetCatalog` · `DebugAssetMirror` |
 | 下载 | `DebugAssetDownloader` + `AssetDownloadTransport` |
+| 落盘根 | `DebugAssetStorage`（公共 `LanXin/` → externalFiles 回退） |
 | 传输 | `KtorAssetDownloadTransport` |
 | 解压 | `ArchiveExtractor`（zip / tar.bz2 / tar.gz，防 zip-slip） |
 | DI | `PetModule` binds transport |
@@ -71,7 +95,7 @@ bash scripts/download-debug-tts.sh
 
 | Key | 默认 |
 |-----|------|
-| `live2d_model_path` | **可空** → 仓内 Sample（`BuiltInLive2dAssets`）；可选覆盖 `debug-assets/live2d/Mao/...` |
+| `live2d_model_path` | **可空** → 仓内 Sample（`BuiltInLive2dAssets`）；可选覆盖 `LanXin/live2d/Mao/...` |
 
 ### B. ASR（sherpa-onnx）
 
@@ -82,7 +106,7 @@ bash scripts/download-debug-tts.sh
 
 | Key | Debug 默认 |
 |-----|-----------|
-| `offline_asr_model_path` | `debug-assets/asr/sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23` |
+| `offline_asr_model_path` | `LanXin/asr/sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23` |
 | `offline_asr_enabled` | **默认 false** |
 
 ### C. TTS（sherpa-onnx）
@@ -94,17 +118,18 @@ bash scripts/download-debug-tts.sh
 
 | Key | Debug 默认 |
 |-----|-----------|
-| `tts_model_dir` | `debug-assets/tts/<解压目录名>` |
+| `tts_model_dir` | `LanXin/tts/<解压目录名>` |
 | `tts_enabled` | **默认 false** |
 
-### D. 本地脑（路径预留，不强制下载）
+### D. 本地脑（App 内一键下载 + 路径导入）
 
 | Key | 说明 |
 |-----|------|
-| `local_inference_model_path` | 默认选型 **Qwen2.5-1.5B-Instruct**（MNN 量化，用户自备） |
-| 放置建议 | `{filesDir}/models/local-llm/light/` |
+| `local_inference_model_path` | 默认选型 **Qwen2.5-1.5B-Instruct**（MNN 量化） |
+| 一键下载落盘 | `LanXin/models/local-llm/light/`（含 `llm.mnn` / `llm.mnn.weight` / tokenizer 等） |
+| 源序 | ModelScope → hf-mirror → HuggingFace |
 
-本阶段**不在 App 内一键下载**本地脑权重。详见 [`local-inference.md`](./local-inference.md)。
+详见 [`local-inference.md`](./local-inference.md)。
 
 ### E. 妹居（仅文档 fallback）
 
@@ -112,7 +137,7 @@ bash scripts/download-debug-tts.sh
 |----|------|
 | 允许 | 本机 `妹居*.apk` 架构对照 |
 | 禁止 | 上传 so / moc3 / mnn / wav / 商业人设到 GitHub |
-| 设备旁路 | `filesDir/meiju-ref/`（优先级低于开源 `debug-assets`） |
+| 设备旁路 | `filesDir/meiju-ref/`（优先级低于开源 `LanXin`） |
 
 ---
 
@@ -120,10 +145,13 @@ bash scripts/download-debug-tts.sh
 
 ```
 LanXin-Android/
-├── debug-assets/                 # gitignore 大文件；保留 README + .gitkeep
+├── debug-assets/                 # 开发机脚本目录（gitignore 大文件）；真机 App 内改为 LanXin/
 │   ├── live2d/Mao/
 │   ├── asr/<sherpa-...>/
 │   └── tts/<matcha-or-melo>/
+# 真机：
+#   /storage/emulated/0/LanXin/{live2d,asr,tts}/
+#   或 Android/data/<pkg>/files/LanXin/...
 ├── app/src/main/assets/pet/
 │   ├── desktop-pet.html
 │   └── live2d/Mao/               # 官方 Sample（可 commit）
@@ -144,7 +172,7 @@ adb push debug-assets/ /sdcard/Android/data/<pkg>/files/debug-assets/
 # 或 run-as 拷到 filesDir/debug-assets/
 ```
 
-App 内下载直接写入 `Context.filesDir/debug-assets/`，无需 adb。
+App 内下载优先写入公共 `…/LanXin/`（文件管理器可见）；若系统限制写失败则回退 `getExternalFilesDir()/LanXin/`，并在设置页展示真实路径。
 
 ---
 
@@ -165,7 +193,7 @@ App 内下载直接写入 `Context.filesDir/debug-assets/`，无需 adb。
 |------|------|
 | 主仓 commit 数百 MB 模型 | ❌ |
 | 官方 Sample Mao 进 assets（白名单） | ✅ |
-| App 内下载到 filesDir | ✅ |
+| App 内下载到 LanXin/ | ✅ |
 | 脚本 + gitignore（ASR/TTS） | ✅ 备用 |
 | 妹居资源进仓 | ❌ |
 | ASR/TTS/本地脑权重进仓 | ❌ |

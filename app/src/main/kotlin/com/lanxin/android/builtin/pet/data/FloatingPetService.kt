@@ -34,6 +34,7 @@ import android.webkit.WebViewClient
 import androidx.core.app.NotificationCompat
 import com.lanxin.android.R
 import com.lanxin.android.builtin.pet.domain.BuiltInLive2dAssets
+import com.lanxin.android.builtin.pet.domain.DebugAssetStorage
 import com.lanxin.android.builtin.pet.domain.Live2dDisplayController
 import com.lanxin.android.builtin.pet.domain.MeijuDebugPaths
 import com.lanxin.android.builtin.pet.domain.PetBridgeCommand
@@ -256,12 +257,14 @@ class FloatingPetService : Service() {
             val filesDir = applicationContext.filesDir
             val isDebug = (applicationContext.applicationInfo.flags and
                 android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+            val openSourceBase = DebugAssetStorage.resolve(applicationContext).baseDir
             val installed = BuiltInLive2dAssets.ensureInstalled(applicationContext)
             val path = MeijuDebugPaths.resolveLive2dIfPresent(
                 filesDir = filesDir,
                 configured = pet.live2dModelPath,
                 preferBuiltinLogical = true,
-                allowMeijuRef = isDebug
+                allowMeijuRef = isDebug,
+                openSourceBaseDir = openSourceBase
             ).let { resolved ->
                 when {
                     resolved.isNotBlank() &&

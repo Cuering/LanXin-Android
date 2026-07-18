@@ -60,7 +60,7 @@ class PetExpressionControllerTest {
         assertTrue(g.contains("TTS"))
         assertTrue(
             g.contains("一键下载") || g.contains("fetch-debug-assets") ||
-                g.contains("debug-assets")
+                g.contains("LanXin") || g.contains("debug-assets")
         )
         val ok = PetExpressionController.guideForMissingResources(true, true, true)
         assertTrue(ok.contains("路径均已就绪"))

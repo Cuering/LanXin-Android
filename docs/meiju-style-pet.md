@@ -51,15 +51,15 @@ IDLE → LISTENING → THINKING → SPEAKING → IDLE
 - Live2D 解析优先级：
   1. 用户配置 `live2d_model_path`
   2. 仓内官方 Sample（`BuiltInLive2dAssets` / `filesDir/builtin-live2d/Mao/`）
-  3. `filesDir/debug-assets/**`（App 内下载或脚本旁路）
+  3. `LanXin/**`（App 内下载或脚本旁路；公共存储优先）
   4. `meiju-ref/**`（仅本机 debug）
 
 ### 3.2 设置页
 
 - 展示 Live2D / ASR / TTS 来源标签 + 就绪短标签
 - **App 内一键下载**（推荐）：Live2D Mao / ASR zipformer-14M / TTS matcha-baker
-  - 镜像：官方 + 国内 ghproxy 类（可配置，失败回退官方）
-  - 进度、可取消、失败短文案；落盘 `filesDir/debug-assets/**` 后写配置键
+  - 镜像：jsDelivr / HF / hf-mirror 优先，官方 GitHub 回退（旧 ghproxy 已弃用）
+  - 进度、可取消、失败短文案；落盘 `LanXin/**` 后写配置键
   - Live2D 仓内 Mao 仍默认就绪；下载可作更新/覆盖
 - 本地脑：仅说明自备路径，**不**提供 App 内下载
 - 可选：高级手填路径 / 开发者脚本说明

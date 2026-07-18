@@ -72,8 +72,11 @@ object Route {
 
     const val OFFLINE_ASR = "offline_asr"
 
-    /** 桌宠 / 语音陪伴（Phase 6 主线 M1） */
+    /** 桌宠 / 语音陪伴设置（Phase 6） */
     const val DESKTOP_PET = "desktop_pet"
+
+    /** 妹居式 App 内全屏陪伴（Live2D + 输入框） */
+    const val COMPANION = "companion"
 
     /** 系统能力：日历 / 闹钟 / 笔记 / 用户文件（Phase 7） */
     const val SYSTEM_TOOLS = "system_tools"

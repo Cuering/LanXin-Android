@@ -66,7 +66,7 @@ jobs:
             docs/debug-assets.md
           grep -E -n "model-terms|Free Material|Sample Data" docs/debug-assets.md
           grep -E -n "禁止|妹居" docs/debug-assets.md docs/meiju-style-pet.md
-          grep -E -n "一键下载|App 内|filesDir/debug-assets|镜像" docs/debug-assets.md
+          grep -E -n "一键下载|App 内|LanXin|filesDir/debug-assets|镜像" docs/debug-assets.md
 
       - name: gitignore covers large binaries
         run: |
