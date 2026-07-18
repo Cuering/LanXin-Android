@@ -62,6 +62,10 @@ object PetBridgeProtocol {
     const val KEY_EXPRESSION_LABEL = "expressionLabel"
     const val KEY_EXPRESSION_EMOJI = "expressionEmoji"
 
+    /** 背景音乐节拍：level 0..1 或 0..100 整型字符串 */
+    const val KEY_BEAT_LEVEL = "beatLevel"
+    const val KEY_BEAT_ENABLED = "beatEnabled"
+
     fun encode(message: PetBridgeMessage): String {
         val lines = mutableListOf<String>()
         lines += "$KEY_COMMAND=${message.command.name}"
@@ -200,6 +204,27 @@ object PetBridgeProtocol {
                 KEY_MOUTH_ANIM to pose.mouthAnimating.toString(),
                 KEY_EXPRESSION_LABEL to pose.shortLabel,
                 KEY_EXPRESSION_EMOJI to pose.emoji
+            ),
+            timestampMs = timestampMs
+        )
+    }
+
+    /**
+     * Native → Web：音乐节拍。
+     * @param level01 0..1 能量
+     * @param enabled 是否启用晃动（关时 Web 归零）
+     */
+    fun setMusicBeatMessage(
+        level01: Float,
+        enabled: Boolean = true,
+        timestampMs: Long = System.currentTimeMillis()
+    ): PetBridgeMessage {
+        val clamped = level01.coerceIn(0f, 1f)
+        return PetBridgeMessage(
+            command = PetBridgeCommand.SET_MUSIC_BEAT,
+            payload = mapOf(
+                KEY_BEAT_LEVEL to String.format(java.util.Locale.US, "%.3f", clamped),
+                KEY_BEAT_ENABLED to enabled.toString()
             ),
             timestampMs = timestampMs
         )

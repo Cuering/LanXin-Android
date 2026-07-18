@@ -36,6 +36,15 @@ IDLE → LISTENING → THINKING → SPEAKING → IDLE
 | **M2b** | Live2D 真显示（WebView 渲染壳 + model3/纹理，失败降级） | ✅ main `#57` |
 | **M2b 打磨** | 会话相位→表情/口型 + 缺资源引导 + 悬浮生命周期 | ✅ main `#63` |
 | **仓内 Live2D Mao** | 官方 Sample 进 assets，release 默认可开箱 | ✅ 本分支 |
+| **陪伴页 BGM** | 半透明 🎵 + `LanXin/music/` + 节拍壳层轻晃 | ✅ 本分支 |
+
+**陪伴页背景音乐**（`CompanionMusicPlayer`）：
+
+- 半透明 🎵 图标；面板：播放/暂停、上一首/下一首、导入、扫描
+- 目录：`LanXin/music/`（与 `LanXin/live2d/` 同根）
+- 内置测试曲：`assets/pet/music/test-loop.wav`（程序生成 CC0，ensure 时拷贝）
+- 格式：mp3 / m4a / aac / wav / ogg（MediaPlayer）
+- Visualizer → `SET_MUSIC_BEAT` → 壳层 `drawShellFrame` 轻晃；可关「跟随节奏晃动」
 | **M2c** | sherpa ASR/TTS 可 load 文件则 READY（无 so 仍 stub） | 后续 |
 | **M3** | 真 TTS + 口型 | 后续 |
 | **M4** | 自有/授权 Live2D | 后续 |

@@ -18,11 +18,16 @@ package com.lanxin.android.builtin.pet.presentation
 
 import android.annotation.SuppressLint
 import android.content.pm.ApplicationInfo
+import android.net.Uri
 import android.view.ViewGroup
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,24 +35,35 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -59,17 +75,22 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
 import com.lanxin.android.builtin.pet.data.DesktopPetBridge
 import com.lanxin.android.builtin.pet.domain.BuiltInLive2dAssets
+import com.lanxin.android.builtin.pet.domain.BuiltInMusicAssets
+import com.lanxin.android.builtin.pet.domain.CompanionMusicPlayer
 import com.lanxin.android.builtin.pet.domain.DebugAssetStorage
 import com.lanxin.android.builtin.pet.domain.Live2dDisplayController
 import com.lanxin.android.builtin.pet.domain.Live2dModel3Reader
@@ -81,18 +102,20 @@ import com.lanxin.android.builtin.pet.domain.PetExpressionController
 import com.lanxin.android.builtin.pet.domain.PetSettings
 import com.lanxin.android.builtin.pet.domain.VoiceSessionCoordinator
 import com.lanxin.android.builtin.pet.domain.VoiceSessionInput
+import com.lanxin.android.util.PathImportHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.io.File
 import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
- * 妹居式 App 内全屏陪伴页：Live2D（内置 Mao）+ 底部文本输入。
+ * 妹居式 App 内全屏陪伴页：Live2D（内置 Mao）+ 底部文本输入 + 背景音乐。
  *
  * 不依赖悬浮权限 / ASR / TTS 下载；发送走 [VoiceSessionCoordinator] + stub 回复。
  * 设置入口仍进 [DesktopPetScreen]。
@@ -106,9 +129,22 @@ fun CompanionScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val keyboard = LocalSoftwareKeyboardController.current
     var draft by remember { mutableStateOf("") }
+    var musicPanelOpen by remember { mutableStateOf(false) }
+
+    val pickAudio = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            viewModel.importAudio(uri.toString())
+        }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.ensureReady()
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { viewModel.onLeavePage() }
     }
 
     Box(
@@ -127,12 +163,14 @@ fun CompanionScreen(
         CompanionLive2dWebView(
             modifier = Modifier.fillMaxSize(),
             pushTicket = state.webPushTicket,
+            beatTicket = state.beatPushTicket,
             onWebReady = viewModel::onWebReady,
             onBridgeCommand = viewModel::onBridgeCommand,
             encodeSession = viewModel::encodeSessionRaw,
             encodeExpression = viewModel::encodeExpressionRaw,
             encodeBubble = viewModel::encodeBubbleRaw,
-            encodeLoadLive2d = viewModel::encodeLoadLive2dRaw
+            encodeLoadLive2d = viewModel::encodeLoadLive2dRaw,
+            encodeMusicBeat = viewModel::encodeMusicBeatRaw
         )
 
         Column(
@@ -161,6 +199,16 @@ fun CompanionScreen(
                     color = Color(0xFF5A2038),
                     modifier = Modifier.weight(1f)
                 )
+                IconButton(
+                    onClick = { musicPanelOpen = !musicPanelOpen },
+                    modifier = Modifier.alpha(0.72f)
+                ) {
+                    Icon(
+                        Icons.Filled.MusicNote,
+                        contentDescription = "背景音乐",
+                        tint = if (state.musicPlaying) Color(0xFFE85D8E) else Color(0xFF5A2038)
+                    )
+                }
                 TextButton(onClick = onOpenSettings) {
                     Icon(
                         Icons.Filled.Settings,
@@ -170,6 +218,22 @@ fun CompanionScreen(
                     Spacer(modifier = Modifier.padding(horizontal = 2.dp))
                     Text("设置", color = Color(0xFF5A2038))
                 }
+            }
+
+            AnimatedVisibility(visible = musicPanelOpen) {
+                CompanionMusicPanel(
+                    state = state,
+                    onToggle = viewModel::toggleMusic,
+                    onPrev = viewModel::previousTrack,
+                    onNext = viewModel::nextTrack,
+                    onPick = {
+                        pickAudio.launch(arrayOf("audio/*"))
+                    },
+                    onSelectTrack = viewModel::playTrackAt,
+                    onToggleBeatSway = viewModel::setMusicBeatSway,
+                    onRefresh = viewModel::refreshMusicPlaylist,
+                    onClose = { musicPanelOpen = false }
+                )
             }
 
             Spacer(modifier = Modifier.weight(1f))
@@ -251,19 +315,164 @@ fun CompanionScreen(
     }
 }
 
+@Composable
+private fun CompanionMusicPanel(
+    state: CompanionUiState,
+    onToggle: () -> Unit,
+    onPrev: () -> Unit,
+    onNext: () -> Unit,
+    onPick: () -> Unit,
+    onSelectTrack: (Int) -> Unit,
+    onToggleBeatSway: (Boolean) -> Unit,
+    onRefresh: () -> Unit,
+    onClose: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp)
+            .heightIn(max = 280.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = Color.White.copy(alpha = 0.88f),
+        tonalElevation = 3.dp
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "背景音乐",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = Color(0xFF5A2038),
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(onClick = onClose) {
+                    Text("收起", color = Color(0xFF5A2038))
+                }
+            }
+            Text(
+                text = state.musicTitle.ifBlank { "未选曲" } +
+                    if (state.musicPlaying) " · 播放中" else " · 暂停",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFF5A2038),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (state.musicError != null) {
+                Text(
+                    text = state.musicError,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFFB00020)
+                )
+            }
+            Text(
+                text = "目录：${state.musicDirHint}",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(0xFF5A2038).copy(alpha = 0.7f),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onPrev) {
+                    Icon(
+                        Icons.Filled.SkipPrevious,
+                        contentDescription = "上一首",
+                        tint = Color(0xFFE85D8E)
+                    )
+                }
+                IconButton(
+                    onClick = onToggle,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .background(Color(0xFFE85D8E).copy(alpha = 0.15f), CircleShape)
+                ) {
+                    Icon(
+                        if (state.musicPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                        contentDescription = if (state.musicPlaying) "暂停" else "播放",
+                        tint = Color(0xFFE85D8E)
+                    )
+                }
+                IconButton(onClick = onNext) {
+                    Icon(
+                        Icons.Filled.SkipNext,
+                        contentDescription = "下一首",
+                        tint = Color(0xFFE85D8E)
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "跟随节奏晃动",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFF5A2038),
+                    modifier = Modifier.weight(1f)
+                )
+                Switch(
+                    checked = state.musicBeatSway,
+                    onCheckedChange = onToggleBeatSway
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onPick) { Text("导入音频") }
+                TextButton(onClick = onRefresh) { Text("扫描目录") }
+            }
+            if (state.trackNames.isNotEmpty()) {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                LazyColumn(modifier = Modifier.heightIn(max = 100.dp)) {
+                    itemsIndexed(state.trackNames) { index, name ->
+                        val selected = index == state.trackIndex
+                        Text(
+                            text = name,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (selected) Color(0xFFE85D8E) else Color(0xFF5A2038),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onSelectTrack(index) }
+                                .padding(vertical = 6.dp),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 private fun CompanionLive2dWebView(
     modifier: Modifier,
     pushTicket: Long,
+    beatTicket: Long,
     onWebReady: () -> Unit,
     onBridgeCommand: (PetBridgeMessage) -> Unit,
     encodeSession: () -> String?,
     encodeExpression: () -> String?,
     encodeBubble: () -> String?,
-    encodeLoadLive2d: () -> String?
+    encodeLoadLive2d: () -> String?,
+    encodeMusicBeat: () -> String?
 ) {
     val webViewRef = remember { mutableStateOf<WebView?>(null) }
+
+    fun pushRaw(webView: WebView, raw: String?) {
+        if (raw.isNullOrBlank()) return
+        val escaped = raw
+            .replace("\\", "\\\\")
+            .replace("'", "\\'")
+            .replace("\n", "\\n")
+        webView.evaluateJavascript(
+            "window.onNativePetMessage && window.onNativePetMessage('$escaped');",
+            null
+        )
+    }
 
     AndroidView(
         modifier = modifier,
@@ -295,23 +504,14 @@ private fun CompanionLive2dWebView(
             }
         },
         update = { webView ->
-            // ticket 变化时推送最新会话/模型
             if (pushTicket > 0L) {
-                fun push(raw: String?) {
-                    if (raw.isNullOrBlank()) return
-                    val escaped = raw
-                        .replace("\\", "\\\\")
-                        .replace("'", "\\'")
-                        .replace("\n", "\\n")
-                    webView.evaluateJavascript(
-                        "window.onNativePetMessage && window.onNativePetMessage('$escaped');",
-                        null
-                    )
-                }
-                push(encodeLoadLive2d())
-                push(encodeSession())
-                push(encodeExpression())
-                push(encodeBubble())
+                pushRaw(webView, encodeLoadLive2d())
+                pushRaw(webView, encodeSession())
+                pushRaw(webView, encodeExpression())
+                pushRaw(webView, encodeBubble())
+            }
+            if (beatTicket > 0L) {
+                pushRaw(webView, encodeMusicBeat())
             }
         }
     )
@@ -339,7 +539,16 @@ data class CompanionUiState(
     val busy: Boolean = false,
     val statusLine: String = "内置 Live2D · 可直接打字",
     val lastReply: String = "",
-    val webPushTicket: Long = 0L
+    val webPushTicket: Long = 0L,
+    val beatPushTicket: Long = 0L,
+    val musicPlaying: Boolean = false,
+    val musicTitle: String = "",
+    val musicError: String? = null,
+    val musicDirHint: String = "LanXin/music/",
+    val musicBeatSway: Boolean = true,
+    val beatLevel: Float = 0f,
+    val trackNames: List<String> = emptyList(),
+    val trackIndex: Int = -1
 )
 
 @HiltViewModel
@@ -360,16 +569,85 @@ class CompanionViewModel @Inject constructor(
     @Volatile
     private var modelPath: String = ""
 
+    @Volatile
+    private var lastBeatLevel: Float = 0f
+
+    @Volatile
+    private var lastPushedBeat: Float = 0f
+
+    @Volatile
+    private var lastBeatPushAtMs: Long = 0L
+
+    @Volatile
+    private var beatSwayEnabled: Boolean = true
+
+    private var musicPlayer: CompanionMusicPlayer? = null
+
+    private fun player(): CompanionMusicPlayer {
+        val existing = musicPlayer
+        if (existing != null) return existing
+        val created = CompanionMusicPlayer(
+            appContext = appContext,
+            onBeat = { level ->
+                lastBeatLevel = level
+                if (!beatSwayEnabled) return@CompanionMusicPlayer
+                // 节流：约 15fps 推 Web，避免 Compose 过热
+                val now = System.currentTimeMillis()
+                if (now - lastBeatPushAtMs < 66L && kotlin.math.abs(level - lastPushedBeat) < 0.04f) {
+                    return@CompanionMusicPlayer
+                }
+                lastBeatPushAtMs = now
+                lastPushedBeat = level
+                _uiState.update {
+                    it.copy(
+                        beatLevel = level,
+                        beatPushTicket = it.beatPushTicket + 1
+                    )
+                }
+            },
+            onState = { st ->
+                val names = musicPlayer?.currentTracks()?.map { it.name }.orEmpty()
+                _uiState.update {
+                    it.copy(
+                        musicPlaying = st.playing,
+                        musicTitle = st.title,
+                        musicError = st.error,
+                        trackIndex = st.trackIndex,
+                        trackNames = names.ifEmpty { it.trackNames }
+                    )
+                }
+            }
+        )
+        musicPlayer = created
+        return created
+    }
+
     fun ensureReady() {
         viewModelScope.launch {
-            // 全屏陪伴不强制悬浮开关；临时允许会话（若总开关关则打开本会话轮次前 ensure）
             val config = petSettings.getConfig()
             if (!config.enabled) {
                 petSettings.setEnabled(true)
             }
+            beatSwayEnabled = config.musicBeatSway
+            BuiltInMusicAssets.ensureTestTrackInstalled(appContext)
+            val p = player()
+            p.setBeatEnabled(beatSwayEnabled)
+            p.refreshPlaylist()
             resolveLive2d()
+            _uiState.update {
+                it.copy(
+                    musicBeatSway = beatSwayEnabled,
+                    musicDirHint = p.musicDirPath(),
+                    trackNames = p.currentTracks().map { f -> f.name }
+                )
+            }
             bumpWeb()
         }
+    }
+
+    fun onLeavePage() {
+        musicPlayer?.release()
+        musicPlayer = null
     }
 
     fun onWebReady() {
@@ -381,11 +659,8 @@ class CompanionViewModel @Inject constructor(
 
     fun onBridgeCommand(msg: PetBridgeMessage) {
         when (msg.command) {
-            PetBridgeCommand.CLOSE_PET -> {
-                // 全屏页忽略关闭悬浮语义
-            }
+            PetBridgeCommand.CLOSE_PET -> Unit
             PetBridgeCommand.LIVE2D_STATUS -> {
-                // HTML 实际渲染结果：若降级则同步底部状态，避免谎称 Live2D 壳
                 val mode = msg.payload[PetBridgeProtocol.KEY_LIVE2D_MODE].orEmpty()
                 val reason = msg.payload[PetBridgeProtocol.KEY_LIVE2D_REASON].orEmpty()
                 val label = when (mode.uppercase()) {
@@ -395,8 +670,8 @@ class CompanionViewModel @Inject constructor(
                     else -> lastDecision?.shortLabel ?: mode.ifBlank { "未知" }
                 }
                 _uiState.update {
-                    // 保留「思考中/已回复」等瞬时状态
-                    if (it.busy || it.statusLine.startsWith("思考") || it.statusLine.startsWith("已回复") ||
+                    if (it.busy || it.statusLine.startsWith("思考") ||
+                        it.statusLine.startsWith("已回复") ||
                         it.statusLine.startsWith("出错")
                     ) {
                         it
@@ -414,7 +689,6 @@ class CompanionViewModel @Inject constructor(
         if (trimmed.isEmpty()) return
         viewModelScope.launch {
             _uiState.update { it.copy(busy = true, statusLine = "思考中…") }
-            // 确保 enabled
             if (!petSettings.getConfig().enabled) {
                 petSettings.setEnabled(true)
             }
@@ -439,6 +713,112 @@ class CompanionViewModel @Inject constructor(
             }
             bumpWeb()
         }
+    }
+
+    fun toggleMusic() {
+        player().togglePlayPause()
+    }
+
+    fun nextTrack() {
+        player().next()
+    }
+
+    fun previousTrack() {
+        player().previous()
+    }
+
+    fun playTrackAt(index: Int) {
+        player().playIndex(index)
+    }
+
+    fun refreshMusicPlaylist() {
+        viewModelScope.launch {
+            BuiltInMusicAssets.ensureTestTrackInstalled(appContext)
+            val p = player()
+            p.refreshPlaylist()
+            _uiState.update {
+                it.copy(
+                    trackNames = p.currentTracks().map { f -> f.name },
+                    musicDirHint = p.musicDirPath()
+                )
+            }
+        }
+    }
+
+    fun setMusicBeatSway(enabled: Boolean) {
+        viewModelScope.launch {
+            petSettings.setMusicBeatSway(enabled)
+            beatSwayEnabled = enabled
+            player().setBeatEnabled(enabled)
+            if (!enabled) {
+                lastBeatLevel = 0f
+            }
+            _uiState.update {
+                it.copy(
+                    musicBeatSway = enabled,
+                    beatLevel = if (enabled) lastBeatLevel else 0f,
+                    beatPushTicket = it.beatPushTicket + 1
+                )
+            }
+        }
+    }
+
+    fun importAudio(uriString: String) {
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val uri = Uri.parse(uriString)
+                    val name = queryDisplayName(uri) ?: "import_${System.currentTimeMillis()}.mp3"
+                    val safe = PathImportHelper.sanitizeFileName(name)
+                    val destDir = BuiltInMusicAssets.musicDirFromStorage(appContext)
+                    destDir.mkdirs()
+                    val dest = uniqueDest(destDir, safe)
+                    appContext.contentResolver.openInputStream(uri)?.use { input ->
+                        dest.outputStream().use { out -> input.copyTo(out) }
+                    } ?: error("无法打开音频")
+                    if (!BuiltInMusicAssets.isAudioFile(dest)) {
+                        dest.delete()
+                        error("不支持的格式（请用 mp3/m4a/wav/ogg）")
+                    }
+                    dest.absolutePath
+                }
+            }
+            result.onSuccess { path ->
+                val p = player()
+                p.refreshPlaylist()
+                p.playPath(path)
+                _uiState.update {
+                    it.copy(
+                        trackNames = p.currentTracks().map { f -> f.name },
+                        musicError = null
+                    )
+                }
+            }.onFailure { e ->
+                _uiState.update { it.copy(musicError = e.message ?: "导入失败") }
+            }
+        }
+    }
+
+    private fun queryDisplayName(uri: Uri): String? {
+        return runCatching {
+            appContext.contentResolver.query(uri, null, null, null, null)?.use { c ->
+                val idx = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                if (idx >= 0 && c.moveToFirst()) c.getString(idx) else null
+            }
+        }.getOrNull()
+    }
+
+    private fun uniqueDest(dir: File, name: String): File {
+        var dest = File(dir, name)
+        if (!dest.exists()) return dest
+        val base = name.substringBeforeLast('.', name)
+        val ext = name.substringAfterLast('.', "")
+        var i = 2
+        while (dest.exists()) {
+            dest = File(dir, if (ext.isEmpty()) "${base}_$i" else "${base}_$i.$ext")
+            i++
+        }
+        return dest
     }
 
     fun encodeSessionRaw(): String? {
@@ -469,6 +849,13 @@ class CompanionViewModel @Inject constructor(
         return bridge.encodeLoadLive2d(decision)
     }
 
+    fun encodeMusicBeatRaw(): String? {
+        return bridge.encodeMusicBeat(
+            level01 = if (beatSwayEnabled) lastBeatLevel else 0f,
+            enabled = beatSwayEnabled
+        )
+    }
+
     private suspend fun resolveLive2d() {
         val pet = petSettings.getConfig()
         val filesDir = appContext.filesDir
@@ -485,7 +872,7 @@ class CompanionViewModel @Inject constructor(
             when {
                 resolved.isNotBlank() &&
                     !resolved.startsWith("asset://") &&
-                    java.io.File(resolved).isFile -> resolved
+                    File(resolved).isFile -> resolved
                 !installed.isNullOrBlank() -> installed
                 else -> resolved.ifBlank { BuiltInLive2dAssets.LOGICAL_PATH }
             }

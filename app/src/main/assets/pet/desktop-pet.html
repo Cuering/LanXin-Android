@@ -193,6 +193,9 @@
       var lastExpression = 'IDLE_SMILE';
       var mouthOpen = 0;
       var mouthAnimating = false;
+      var musicBeat = 0;
+      var musicBeatEnabled = true;
+      var musicBeatSmoothed = 0;
 
       var PHASE_UI = {
         IDLE:      { face: '😊', label: '闲置', tint: '#ffb7c5' },
@@ -298,9 +301,16 @@
       function drawShellFrame(ctx, w, h, phase, t, textures) {
         ctx.clearRect(0, 0, w, h);
         var ui = PHASE_UI[phase] || PHASE_UI.IDLE;
-        var scale = 1 + Math.sin(t * 0.04) * 0.02;
+        // idle 轻呼吸 + 有音乐时加强节奏感（勿暴力乱抖）
+        var breath = Math.sin(t * 0.04) * 0.02;
+        var beat = musicBeatEnabled ? musicBeatSmoothed : 0;
+        var scale = 1 + breath + beat * 0.045;
+        var swayX = Math.sin(t * 0.06) * 2 + Math.sin(t * 0.11) * beat * 6;
+        var swayY = Math.cos(t * 0.05) * 1.5 - beat * 4;
+        var rot = Math.sin(t * 0.05) * 0.02 + Math.sin(t * 0.09) * beat * 0.06;
         ctx.save();
-        ctx.translate(w / 2, h / 2 + 8);
+        ctx.translate(w / 2 + swayX, h / 2 + 8 + swayY);
+        ctx.rotate(rot);
         ctx.scale(scale, scale);
 
         // soft body glow
@@ -367,6 +377,9 @@
         canvas.height = Math.floor(cssH * dpr);
         function tick() {
           breathT += 1;
+          // 节拍平滑衰减，避免停播后突然定住
+          musicBeatSmoothed = musicBeatSmoothed * 0.88 + musicBeat * 0.12;
+          if (!musicBeatEnabled) musicBeatSmoothed *= 0.9;
           drawShellFrame(ctx, canvas.width, canvas.height, lastPhase, breathT, textures);
           animHandle = requestAnimationFrame(tick);
         }
@@ -525,6 +538,17 @@
         if (cmd === 'HIDE_BUBBLE') hideBubble();
         if (cmd === 'SESSION_STATE' && map.subtitle) showBubble(map.subtitle);
         if (cmd === 'LOAD_LIVE2D') applyLoadLive2d(map);
+        if (cmd === 'SET_MUSIC_BEAT' || map.beatLevel != null) {
+          var rawLv = parseFloat(map.beatLevel);
+          if (!isFinite(rawLv)) rawLv = 0;
+          // 兼容 0..100 整型
+          if (rawLv > 1.0001) rawLv = rawLv / 100;
+          musicBeat = Math.max(0, Math.min(1, rawLv));
+          if (map.beatEnabled != null) {
+            musicBeatEnabled = String(map.beatEnabled).toLowerCase() !== 'false';
+          }
+          if (!musicBeatEnabled) musicBeat = 0;
+        }
         if (cmd === 'SET_PET_STATE' && map.phase) setPhase(map.phase);
         if (cmd === 'SET_EXPRESSION' || map.expression) {
           applyExpression({
@@ -608,6 +632,8 @@
       window.__lanxinPetTeardown = function () {
         stopShellAnim();
         mouthAnimating = false;
+        musicBeat = 0;
+        musicBeatSmoothed = 0;
         if (mouthEl) mouthEl.classList.remove('anim');
         if (hideTimer) clearTimeout(hideTimer);
         hideBubble();
