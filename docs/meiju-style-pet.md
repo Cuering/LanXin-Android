@@ -40,7 +40,8 @@ IDLE → LISTENING → THINKING → SPEAKING → IDLE
 | **M2c** | sherpa ASR/TTS 可 load 文件则 READY（无 so 仍 stub） | 后续 |
 | **M3** | 真 TTS + 口型 | 后续 |
 | **M4** | 自有/授权 Live2D | 后续 |
-| **M5** | 场景识别：摄像头快照 + 确认 Gate → 现有背景/mood（最小） | ✅ 本分支 · `docs/scene-sensing.md` |
+| **M5** | 场景识别最小：快照 + Gate → 背景/mood（#99 底座，非最终） | ✅ #99 · `docs/scene-sensing.md` |
+| **M5b** | 全屏陪伴 · 视觉讲解（预览 + 提问抓帧 + 多模态） | 📋 规划 · `docs/companion-vision-explain.md` |
 
 ### 2.1 陪伴页背景音乐
 

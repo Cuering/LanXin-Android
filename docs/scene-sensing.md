@@ -1,8 +1,11 @@
 # 摄像头 → 场景识别（Scene Sensing / M5 最小）
 
-> 状态：**配置 + 确认 Gate + 本地启发式 + 陪伴背景接线 ✅**（`feat/camera-scene-recognition`）  
+> 状态：**配置 + 确认 Gate + 本地启发式 + 陪伴背景接线 ✅**（#99 / `feat/camera-scene-recognition`）  
 > 模块：`builtin/platform` · DataStore 键 `scene_sensing_*` · 设置路由 `Route.SCENE_SENSING`  
-> **不**改 mood 标签协议（#98）与关键词映射（#97）；**不**发明 Live2D exp/motion。
+> **不**改 mood 标签协议（#98）与关键词映射（#97）；**不**发明 Live2D exp/motion。  
+>
+> ⚠️ **产品澄清**：本页是 **Gate/权限 + 单次手动拍 + 本地氛围映射**，**不是**「边拍边看 + 视觉讲解」。  
+> 真目标见 [`docs/companion-vision-explain.md`](./companion-vision-explain.md)（全屏陪伴 · 多模态讲解 · 未开工）。
 
 ## 1. 目标
 
