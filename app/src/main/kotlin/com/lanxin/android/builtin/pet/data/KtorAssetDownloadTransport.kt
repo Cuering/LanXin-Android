@@ -40,6 +40,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
@@ -180,7 +181,7 @@ class KtorAssetDownloadTransport @Inject constructor() : AssetDownloadTransport 
         val buffer = ByteArray(DEFAULT_BUFFER)
         FileOutputStream(tmp, false).use { out ->
             while (!channel.isClosedForRead) {
-                ensureActive()
+                currentCoroutineContext().ensureActive()
                 val read = channel.readAvailable(buffer, 0, buffer.size)
                 if (read <= 0) break
                 out.write(buffer, 0, read)
@@ -201,7 +202,7 @@ class KtorAssetDownloadTransport @Inject constructor() : AssetDownloadTransport 
         val buffer = ByteArray(DEFAULT_BUFFER)
         FileOutputStream(tmp, true).use { out ->
             while (!channel.isClosedForRead) {
-                ensureActive()
+                currentCoroutineContext().ensureActive()
                 val read = channel.readAvailable(buffer, 0, buffer.size)
                 if (read <= 0) break
                 out.write(buffer, 0, read)
