@@ -17,15 +17,17 @@
 package com.lanxin.android.builtin.pet.domain
 
 /**
- * 文本 → 表情 / 动作规则映射（关键词，无 ML、无网络）。
+ * 文本 → 表情 / 动作规则映射（无 ML、无网络）。
  *
  * 设计：
- * - 仅在 SPEAKING 相位叠加（由调用方约束）；未命中返回 null，回落相位默认。
+ * - 优先级：显式 `[[mood=…]]`（[MoodTagMapper]）→ 关键词规则 → null（回落相位默认）。
+ * - 仅在 SPEAKING 相位叠加（由调用方约束）。
  * - 表情只落 [PetExpressionController.Expression] / Mao exp_01…08。
  * - 动作只落 [MaoOfficialMotionCatalog] Idle / TapBody 组内 index。
- * - 规则按列表顺序首命中；偏中文陪伴口语。
+ * - 关键词按列表顺序首命中；偏中文陪伴口语。
  *
  * 不复制任何商业角色文案；关键词为通用情绪/场景词。
+ * mood 枚举从现有 exp/motion **反推**，禁止映射不存在的资源。
  */
 object TextExpressionMotionMapper {
 
@@ -141,20 +143,24 @@ object TextExpressionMotionMapper {
     )
 
     /**
-     * 对任意文本做关键词匹配；空串 / 无命中 → null。
+     * 对任意文本匹配：先 [MoodTagMapper] 显式标签，再关键词；空串 / 无命中 → null。
      *
-     * 匹配不区分大小写（英文）；中文按包含。
+     * 关键词匹配不区分大小写（英文）；中文按包含。
      */
     fun match(text: String): Match? {
         val t = text.trim()
         if (t.isEmpty()) return null
-        val lower = t.lowercase()
+        // 显式 mood 标签优先（只映射已有 exp/motion）
+        MoodTagMapper.match(t)?.let { return it }
+        // 关键词对「剥标签后」文本兜底，避免标签字面干扰
+        val forKeywords = MoodTagMapper.stripTags(t).ifBlank { t }
+        val lower = forKeywords.lowercase()
         for (rule in RULES) {
             val hit = rule.keywords.any { kw ->
                 if (kw.any { ch -> ch.code < 128 && ch.isLetter() }) {
                     lower.contains(kw.lowercase())
                 } else {
-                    t.contains(kw)
+                    forKeywords.contains(kw)
                 }
             }
             if (!hit) continue

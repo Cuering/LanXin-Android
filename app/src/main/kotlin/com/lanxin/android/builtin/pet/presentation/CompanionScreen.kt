@@ -116,6 +116,7 @@ import com.lanxin.android.builtin.pet.domain.MeijuDebugPaths
 import com.lanxin.android.builtin.pet.domain.PetBridgeCommand
 import com.lanxin.android.builtin.pet.domain.PetBridgeMessage
 import com.lanxin.android.builtin.pet.domain.PetBridgeProtocol
+import com.lanxin.android.builtin.pet.domain.MoodTagMapper
 import com.lanxin.android.builtin.pet.domain.PetExpressionController
 import com.lanxin.android.builtin.pet.domain.PetSettings
 import com.lanxin.android.builtin.pet.domain.TextExpressionMotionMapper
@@ -979,7 +980,9 @@ class CompanionViewModel @Inject constructor(
                     source = "companion_text"
                 )
             )
-            val reply = result.subtitle.ifBlank { result.replyText }
+            val reply = MoodTagMapper.stripTags(
+                result.subtitle.ifBlank { result.replyText }
+            )
             _uiState.update {
                 it.copy(
                     busy = false,
@@ -1196,8 +1199,10 @@ class CompanionViewModel @Inject constructor(
 
     fun encodeBubbleRaw(): String? {
         val snap = sessionCoordinator.current()
-        val bubble = snap.subtitle.ifBlank { snap.replyText }
-            .ifBlank { _uiState.value.lastReply }
+        val bubble = MoodTagMapper.stripTags(
+            snap.subtitle.ifBlank { snap.replyText }
+                .ifBlank { _uiState.value.lastReply }
+        )
         return if (bubble.isBlank()) null else bridge.encodeBubble(bubble)
     }
 

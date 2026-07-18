@@ -36,6 +36,7 @@ import com.lanxin.android.builtin.pet.domain.DebugOpenSourcePaths
 import com.lanxin.android.builtin.pet.domain.LanXinSafTree
 import com.lanxin.android.builtin.pet.domain.Live2dDisplayController
 import com.lanxin.android.builtin.pet.domain.Live2dModelCatalog
+import com.lanxin.android.builtin.pet.domain.MoodTagMapper
 import com.lanxin.android.builtin.pet.domain.PetExpressionController
 import com.lanxin.android.builtin.pet.domain.PetPathReadiness
 import com.lanxin.android.builtin.pet.domain.PetResourceResolver
@@ -172,18 +173,20 @@ class DesktopPetViewModel @Inject constructor(
                     )
                 }.getOrDefault(Live2dDisplayController.Live2dDisplayMode.PLACEHOLDER)
                 val phasePose = PetExpressionController.poseFor(snap.phase, mode)
-                val bubble = snap.subtitle.ifBlank { snap.replyText }
+                val rawBubble = snap.subtitle.ifBlank { snap.replyText }
                 val pose = TextExpressionMotionMapper.overlaySpeakingPose(
                     phasePose,
                     snap.phase,
-                    bubble
+                    rawBubble
                 )
+                val displayReply = MoodTagMapper.stripTags(snap.replyText)
+                val displaySubtitle = MoodTagMapper.stripTags(snap.subtitle)
                 _uiState.update {
                     it.copy(
                         phase = snap.phase,
                         asrText = snap.asrText,
-                        replyText = snap.replyText,
-                        subtitle = snap.subtitle,
+                        replyText = displayReply,
+                        subtitle = displaySubtitle,
                         lastError = snap.lastError,
                         expressionLabel = pose.shortLabel,
                         expressionName = pose.expression.name,
@@ -191,7 +194,7 @@ class DesktopPetViewModel @Inject constructor(
                         sessionPreview = formatPreview(
                             snap.phase.name,
                             snap.asrText,
-                            snap.replyText,
+                            displayReply,
                             snap.lastError
                         )
                     )
@@ -321,13 +324,13 @@ class DesktopPetViewModel @Inject constructor(
                     live2dDirHint = live2dDir,
                     phase = snap.phase,
                     asrText = snap.asrText,
-                    replyText = snap.replyText,
-                    subtitle = snap.subtitle,
+                    replyText = MoodTagMapper.stripTags(snap.replyText),
+                    subtitle = MoodTagMapper.stripTags(snap.subtitle),
                     lastError = snap.lastError,
                     sessionPreview = formatPreview(
                         snap.phase.name,
                         snap.asrText,
-                        snap.replyText,
+                        MoodTagMapper.stripTags(snap.replyText),
                         snap.lastError
                     )
                 )
@@ -606,7 +609,10 @@ class DesktopPetViewModel @Inject constructor(
                     snackbarMessage = if (result.error != null) {
                         "演示失败：${result.error}"
                     } else {
-                        "演示完成：${result.subtitle.ifBlank { result.replyText }}"
+                        val demoText = MoodTagMapper.stripTags(
+                            result.subtitle.ifBlank { result.replyText }
+                        )
+                        "演示完成：$demoText"
                     }
                 )
             }
