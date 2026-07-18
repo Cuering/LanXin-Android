@@ -33,6 +33,7 @@ import com.lanxin.android.builtin.pet.domain.DebugAssetLicense
 import com.lanxin.android.builtin.pet.domain.DebugAssetMirror
 import com.lanxin.android.builtin.pet.domain.DebugAssetStorage
 import com.lanxin.android.builtin.pet.domain.DebugOpenSourcePaths
+import com.lanxin.android.builtin.pet.domain.LanXinSafTree
 import com.lanxin.android.builtin.pet.domain.Live2dDisplayController
 import com.lanxin.android.builtin.pet.domain.Live2dModelCatalog
 import com.lanxin.android.builtin.pet.domain.PetExpressionController
@@ -122,6 +123,12 @@ data class DesktopPetUiState(
     /** 实际落盘根（LanXin）绝对路径，下载成功后展示给用户。 */
     val downloadRootPath: String = "",
     val downloadRootFallback: Boolean = false,
+    /** SAF 公共 LanXin 树是否已授权。 */
+    val safGranted: Boolean = false,
+    /** SAF 树可写探测。 */
+    val safWritable: Boolean = false,
+    val safDisplayLabel: String = "",
+    val safTreeUri: String = "",
     /** Live2D 可切换模型列表（内置 Mao 与 LanXin/live2d 下各模型）。 */
     val live2dModels: List<Live2dModelCatalog.ModelEntry> = emptyList(),
     val live2dCurrentName: String = Live2dModelCatalog.BUILTIN_DISPLAY_NAME,
@@ -192,8 +199,8 @@ class DesktopPetViewModel @Inject constructor(
             val app = getApplication<Application>()
             // 仓内 Mao → filesDir，设置页与悬浮层共用
             BuiltInLive2dAssets.ensureInstalled(app)
-            val storageRoot = DebugAssetStorage.resolve(app)
             val config = petSettings.getConfig()
+            val storageRoot = DebugAssetStorage.resolve(app, config.lanXinSafTreeUri)
             val tts = ttsSettings.getConfig()
             val asr = asrSettings.getConfig()
             val local = localInferenceSettings.getConfig()
@@ -293,6 +300,10 @@ class DesktopPetViewModel @Inject constructor(
                     downloadItems = buildDownloadItems(storageRoot.baseDir),
                     downloadRootPath = storageRoot.displayPath,
                     downloadRootFallback = storageRoot.usedFallback,
+                    safGranted = storageRoot.safGranted,
+                    safWritable = storageRoot.safWritable,
+                    safDisplayLabel = storageRoot.safDisplayLabel,
+                    safTreeUri = storageRoot.safTreeUri,
                     live2dModels = live2dModels,
                     live2dCurrentName = live2dName,
                     live2dDirHint = live2dDir,
@@ -367,7 +378,8 @@ class DesktopPetViewModel @Inject constructor(
     fun exportBuiltinLive2dToLanXin() {
         viewModelScope.launch {
             val app = getApplication<Application>()
-            val root = DebugAssetStorage.resolve(app)
+            val cfg = petSettings.getConfig()
+            val root = DebugAssetStorage.resolve(app, cfg.lanXinSafTreeUri)
             val path = withContext(Dispatchers.IO) {
                 Live2dModelCatalog.ensureBuiltinExported(app, root.lanXinDir)
             }
@@ -641,6 +653,51 @@ class DesktopPetViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 用户 OpenDocumentTree 授权公共 LanXin 目录。
+     * 持久化读+写权限并写入 DataStore。
+     */
+    fun grantLanXinSafTree(treeUriString: String) {
+        viewModelScope.launch {
+            val app = getApplication<Application>()
+            val ok = withContext(Dispatchers.IO) {
+                LanXinSafTree.takePersistable(app, treeUriString)
+            }
+            if (!ok) {
+                _uiState.update {
+                    it.copy(snackbarMessage = "无法持久化目录权限，请重试")
+                }
+                return@launch
+            }
+            val probe = withContext(Dispatchers.IO) {
+                LanXinSafTree.probe(app, treeUriString)
+            }
+            petSettings.setLanXinSafTreeUri(treeUriString.trim())
+            refresh()
+            val msg = when {
+                probe.writable -> "已授权公共目录：${probe.displayLabel}"
+                else -> "已保存授权，但当前不可写：${probe.displayLabel}。请确认选中的是 LanXin 文件夹"
+            }
+            _uiState.update { it.copy(snackbarMessage = msg) }
+        }
+    }
+
+    /** 清除 SAF 树授权（不删用户文件）。 */
+    fun clearLanXinSafTree() {
+        viewModelScope.launch {
+            val app = getApplication<Application>()
+            val uri = petSettings.getConfig().lanXinSafTreeUri
+            if (uri.isNotBlank()) {
+                withContext(Dispatchers.IO) {
+                    LanXinSafTree.releasePersistable(app, uri)
+                }
+            }
+            petSettings.setLanXinSafTreeUri(null)
+            refresh()
+            _uiState.update { it.copy(snackbarMessage = "已清除公共目录授权") }
+        }
+    }
+
     /** 脚本说明（可选路径）；主路径为 App 内下载。 */
     fun showFetchAssetsHint() {
         _uiState.update {
@@ -659,9 +716,10 @@ class DesktopPetViewModel @Inject constructor(
         }
         val app = getApplication<Application>()
         val mirror = _uiState.value.preferredMirror
-        val storageRoot = DebugAssetStorage.resolve(app)
         downloadJob?.cancel()
         downloadJob = viewModelScope.launch {
+            val cfg = petSettings.getConfig()
+            val storageRoot = DebugAssetStorage.resolve(app, cfg.lanXinSafTreeUri)
             assetDownloader.download(storageRoot.baseDir, kind, mirror).collect { event ->
                 when (event) {
                     DebugAssetDownloadEvent.Started -> {
@@ -677,7 +735,11 @@ class DesktopPetViewModel @Inject constructor(
                             it.copy(
                                 downloadBusy = true,
                                 downloadRootPath = storageRoot.displayPath,
-                                downloadRootFallback = storageRoot.usedFallback
+                                downloadRootFallback = storageRoot.usedFallback,
+                                safGranted = storageRoot.safGranted,
+                                safWritable = storageRoot.safWritable,
+                                safDisplayLabel = storageRoot.safDisplayLabel,
+                                safTreeUri = storageRoot.safTreeUri
                             )
                         }
                     }
@@ -701,6 +763,25 @@ class DesktopPetViewModel @Inject constructor(
                     }
                     is DebugAssetDownloadEvent.Completed -> {
                         onDownloadCompleted(kind, event.readyPath)
+                        // 若 File 回退且 SAF 可写，尽力镜像关键就绪路径到公共树
+                        if (storageRoot.usedFallback && storageRoot.safWritable) {
+                            runCatching {
+                                val ready = java.io.File(event.readyPath)
+                                val target = if (ready.isFile) ready else ready
+                                val rel = LanXinSafTree.relativeUnderLanXin(
+                                    target.absolutePath,
+                                    storageRoot.lanXinDir
+                                )
+                                if (rel != null) {
+                                    DebugAssetStorage.mirrorToSafIfNeeded(
+                                        app,
+                                        storageRoot,
+                                        if (target.isFile) target else target,
+                                        rel
+                                    )
+                                }
+                            }
+                        }
                         val src = event.sourceLabel.ifBlank { event.mirror.name }
                         patchDownloadItem(kind) {
                             it.copy(
@@ -713,16 +794,20 @@ class DesktopPetViewModel @Inject constructor(
                             )
                         }
                         val where = event.readyPath
-                        val fallbackNote = if (storageRoot.usedFallback) {
-                            "（公共目录不可写，已回退）"
-                        } else {
-                            ""
+                        val fallbackNote = when {
+                            !storageRoot.usedFallback -> ""
+                            storageRoot.safWritable -> "（引擎写 App 目录，已授权 SAF 公共树）"
+                            else -> "（公共目录不可写，已回退；可点「授权公共 LanXin」）"
                         }
                         _uiState.update {
                             it.copy(
                                 downloadBusy = false,
                                 downloadRootPath = storageRoot.displayPath,
                                 downloadRootFallback = storageRoot.usedFallback,
+                                safGranted = storageRoot.safGranted,
+                                safWritable = storageRoot.safWritable,
+                                safDisplayLabel = storageRoot.safDisplayLabel,
+                                safTreeUri = storageRoot.safTreeUri,
                                 snackbarMessage = "${kind.name} 已保存到 $where（源：$src）$fallbackNote"
                             )
                         }

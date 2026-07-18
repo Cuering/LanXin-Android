@@ -84,8 +84,8 @@ object CompanionBackgrounds {
 
     fun backgroundsDir(baseDir: File): File = File(baseDir, DIR_REL)
 
-    fun backgroundsDirFromStorage(context: Context): File {
-        val root = DebugAssetStorage.resolve(context)
+    fun backgroundsDirFromStorage(context: Context, safTreeUri: String? = null): File {
+        val root = DebugAssetStorage.resolve(context, safTreeUri)
         val dir = File(root.lanXinDir, "backgrounds")
         dir.mkdirs()
         return dir
@@ -108,19 +108,39 @@ object CompanionBackgrounds {
     /**
      * 解析当前生效背景。
      * - 预设 ID → [Resolved.Preset]
-     * - custom + 有效路径 → [Resolved.Image]
+     * - custom + 有效路径（绝对 / 相对 LanXin）→ [Resolved.Image]
      * - 否则回退默认樱花粉
+     *
+     * @param lanXinDir 用于解析相对路径；null 时仅认绝对路径
      */
-    fun resolve(presetId: String, customPath: String): Resolved {
+    fun resolve(
+        presetId: String,
+        customPath: String,
+        lanXinDir: File? = null
+    ): Resolved {
         val id = presetId.trim().ifBlank { DEFAULT_ID }
         if (id == CUSTOM_ID || customPath.isNotBlank() && !isKnownPreset(id)) {
-            val f = File(customPath.trim())
-            if (isImageFile(f)) {
+            val stored = customPath.trim()
+            val f = when {
+                lanXinDir != null ->
+                    LanXinSafTree.resolveUnderLanXin(stored, lanXinDir)
+                        ?: File(stored).takeIf { isImageFile(it) }
+                else -> File(stored).takeIf { isImageFile(it) }
+            }
+            if (f != null && isImageFile(f)) {
                 return Resolved.Image(path = f.absolutePath, displayName = f.name)
             }
         }
         val preset = presetById(id) ?: presetById(DEFAULT_ID)!!
         return Resolved.Preset(preset)
+    }
+
+    /**
+     * 将绝对路径收敛为相对 `LanXin/backgrounds/…` 存储键；失败则退回绝对路径。
+     */
+    fun storePathKey(absolutePath: String, lanXinDir: File): String {
+        return LanXinSafTree.relativeUnderLanXin(absolutePath, lanXinDir)
+            ?: absolutePath.trim()
     }
 
     sealed class Resolved {

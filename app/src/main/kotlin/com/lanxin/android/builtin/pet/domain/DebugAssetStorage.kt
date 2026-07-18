@@ -27,6 +27,10 @@ import java.io.File
  * 写失败时回退到 `getExternalFilesDir()/LanXin/`（仍比内部 filesDir 更易访问）。
  *
  * 不申请 MANAGE_EXTERNAL_STORAGE；仅最小必要尝试 + 优雅回退。
+ * Android 10+ 公共根常不可写：用户可在设置页通过 SAF 授权公共 `LanXin/`
+ *（[LanXinSafTree]），引擎仍写 externalFiles，成功后可选镜像到 SAF 树。
+ *
+ * @see LanXinSafTree
  */
 object DebugAssetStorage {
 
@@ -35,19 +39,32 @@ object DebugAssetStorage {
         val baseDir: File,
         /** 实际 `…/LanXin` 目录。 */
         val lanXinDir: File,
-        /** true = 未用上公共存储根，走了 App 外部 files 回退。 */
+        /** true = 未用上公共存储根 File 直写，走了 App 外部 files 回退。 */
         val usedFallback: Boolean,
         /** 展示给用户的绝对路径。 */
-        val displayPath: String
-    )
+        val displayPath: String,
+        /**
+         * 用户 SAF 授权的公共树 Uri（可空）。
+         * 有授权时 [safGranted] = true；File 仍可能 usedFallback。
+         */
+        val safTreeUri: String = "",
+        val safGranted: Boolean = false,
+        val safWritable: Boolean = false,
+        val safDisplayLabel: String = ""
+    ) {
+        /** 公共 File 可写，或 SAF 树可写。 */
+        val publicWritable: Boolean get() = !usedFallback || safWritable
+    }
 
     /**
      * 解析下载根。
-     * - 优先：`Environment.getExternalStorageDirectory()/LanXin`
+     * - 优先：`Environment.getExternalStorageDirectory()/LanXin`（File 直写）
      * - 回退：`context.getExternalFilesDir(null)/LanXin`
      * - 再回退：`context.filesDir/LanXin`（极少）
+     * - 叠加：DataStore 中的 SAF 树 Uri（[LanXinSafTree.PREFS_KEY] 由调用方传入）
      */
-    fun resolve(context: Context): Root {
+    fun resolve(context: Context, safTreeUri: String? = null): Root {
+        val probe = LanXinSafTree.probe(context, safTreeUri)
         val publicBase = Environment.getExternalStorageDirectory()
         if (publicBase != null) {
             val publicLanXin = File(publicBase, DebugOpenSourcePaths.ROOT_DIR)
@@ -56,7 +73,11 @@ object DebugAssetStorage {
                     baseDir = publicBase,
                     lanXinDir = publicLanXin,
                     usedFallback = false,
-                    displayPath = publicLanXin.absolutePath
+                    displayPath = publicLanXin.absolutePath,
+                    safTreeUri = probe.treeUri,
+                    safGranted = probe.granted,
+                    safWritable = probe.writable,
+                    safDisplayLabel = probe.displayLabel
                 )
             }
         }
@@ -65,11 +86,20 @@ object DebugAssetStorage {
         if (externalFiles != null) {
             val fallbackLanXin = File(externalFiles, DebugOpenSourcePaths.ROOT_DIR)
             if (ensureWritableDir(fallbackLanXin)) {
+                val display = if (probe.writable) {
+                    "App 私有 + SAF(${probe.displayLabel})"
+                } else {
+                    fallbackLanXin.absolutePath
+                }
                 return Root(
                     baseDir = externalFiles,
                     lanXinDir = fallbackLanXin,
                     usedFallback = true,
-                    displayPath = fallbackLanXin.absolutePath
+                    displayPath = display,
+                    safTreeUri = probe.treeUri,
+                    safGranted = probe.granted,
+                    safWritable = probe.writable,
+                    safDisplayLabel = probe.displayLabel
                 )
             }
         }
@@ -81,7 +111,11 @@ object DebugAssetStorage {
             baseDir = internalBase,
             lanXinDir = last,
             usedFallback = true,
-            displayPath = last.absolutePath
+            displayPath = last.absolutePath,
+            safTreeUri = probe.treeUri,
+            safGranted = probe.granted,
+            safWritable = probe.writable,
+            safDisplayLabel = probe.displayLabel
         )
     }
 
@@ -94,6 +128,25 @@ object DebugAssetStorage {
             lanXinDir = lanXin,
             usedFallback = false,
             displayPath = lanXin.absolutePath
+        )
+    }
+
+    /**
+     * 下载完成后：若 File 走了回退且 SAF 可写，把 [localFile] 镜像到树。
+     * @return 镜像成功的 document Uri，或 null
+     */
+    fun mirrorToSafIfNeeded(
+        context: Context,
+        root: Root,
+        localFile: File,
+        relativeUnderLanXin: String
+    ): String? {
+        if (!root.usedFallback || !root.safWritable || root.safTreeUri.isBlank()) return null
+        return LanXinSafTree.mirrorFile(
+            context = context,
+            treeUriString = root.safTreeUri,
+            file = localFile,
+            relativeUnderLanXin = relativeUnderLanXin
         )
     }
 
