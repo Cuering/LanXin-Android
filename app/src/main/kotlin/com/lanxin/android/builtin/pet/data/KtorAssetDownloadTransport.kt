@@ -147,7 +147,11 @@ class KtorAssetDownloadTransport @Inject constructor() : AssetDownloadTransport 
          */
         const val SOCKET_TIMEOUT_MS: Long = 5 * 60_000L
 
-        /** 整请求不设上限（880MB 可达数十分钟）；用 socket 空闲 + 用户取消兜底。 */
-        const val REQUEST_TIMEOUT_MS: Long = HttpTimeout.INFINITE_TIMEOUT_MS
+        /**
+         * 整请求不设上限（880MB 可达数十分钟）。
+         * Ktor 3.x：`0` = 禁用 request timeout；用 socket 空闲 + 用户取消兜底。
+         * （3.5 无 `HttpTimeout.INFINITE_TIMEOUT_MS` 常量）
+         */
+        const val REQUEST_TIMEOUT_MS: Long = 0L
     }
 }

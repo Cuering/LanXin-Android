@@ -17,14 +17,13 @@
 package com.lanxin.android.builtin.pet
 
 import com.lanxin.android.builtin.pet.data.KtorAssetDownloadTransport
-import io.ktor.client.plugins.HttpTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
  * 下载专用超时：不复用 API 默认短超时。
- * connect ≥ 30s；socket 长空闲；request 无限（大文件靠进度 + 取消）。
+ * connect ≥ 30s；socket 长空闲；request=0 禁用（大文件靠进度 + 取消）。
  */
 class KtorAssetDownloadTransportTest {
 
@@ -43,8 +42,8 @@ class KtorAssetDownloadTransportTest {
             KtorAssetDownloadTransport.SOCKET_TIMEOUT_MS >= 120_000L
         )
         assertEquals(
-            "requestTimeout 应无限，避免 880MB 整包被掐",
-            HttpTimeout.INFINITE_TIMEOUT_MS,
+            "requestTimeout=0 禁用整包上限，避免 880MB 被掐（Ktor 3.x）",
+            0L,
             KtorAssetDownloadTransport.REQUEST_TIMEOUT_MS
         )
     }
