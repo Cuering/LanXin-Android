@@ -40,6 +40,7 @@ import com.lanxin.android.builtin.pet.domain.PetExpressionController
 import com.lanxin.android.builtin.pet.domain.PetPathReadiness
 import com.lanxin.android.builtin.pet.domain.PetResourceResolver
 import com.lanxin.android.builtin.pet.domain.PetSettings
+import com.lanxin.android.builtin.pet.domain.TextExpressionMotionMapper
 import com.lanxin.android.builtin.pet.domain.VoiceSessionCoordinator
 import com.lanxin.android.builtin.pet.domain.VoiceSessionPhase
 import com.lanxin.android.builtin.voice.domain.AsrSettings
@@ -170,7 +171,13 @@ class DesktopPetViewModel @Inject constructor(
                         _uiState.value.live2dDisplayMode
                     )
                 }.getOrDefault(Live2dDisplayController.Live2dDisplayMode.PLACEHOLDER)
-                val pose = PetExpressionController.poseFor(snap.phase, mode)
+                val phasePose = PetExpressionController.poseFor(snap.phase, mode)
+                val bubble = snap.subtitle.ifBlank { snap.replyText }
+                val pose = TextExpressionMotionMapper.overlaySpeakingPose(
+                    phasePose,
+                    snap.phase,
+                    bubble
+                )
                 _uiState.update {
                     it.copy(
                         phase = snap.phase,
@@ -231,7 +238,12 @@ class DesktopPetViewModel @Inject constructor(
             val live2dDecision = Live2dDisplayController.decide(resolved.live2dModelPath)
             val can = OverlayPermissionHelper.canDrawOverlays(app)
             val snap = sessionCoordinator.current()
-            val pose = PetExpressionController.poseFor(snap.phase, live2dDecision.mode)
+            val phasePose = PetExpressionController.poseFor(snap.phase, live2dDecision.mode)
+            val pose = TextExpressionMotionMapper.overlaySpeakingPose(
+                phasePose,
+                snap.phase,
+                snap.subtitle.ifBlank { snap.replyText }
+            )
             val guide = PetExpressionController.guideForMissingResources(
                 live2dReady = live2dCheck.ready,
                 asrReady = asrCheck.ready,

@@ -118,8 +118,10 @@ import com.lanxin.android.builtin.pet.domain.PetBridgeMessage
 import com.lanxin.android.builtin.pet.domain.PetBridgeProtocol
 import com.lanxin.android.builtin.pet.domain.PetExpressionController
 import com.lanxin.android.builtin.pet.domain.PetSettings
+import com.lanxin.android.builtin.pet.domain.TextExpressionMotionMapper
 import com.lanxin.android.builtin.pet.domain.VoiceSessionCoordinator
 import com.lanxin.android.builtin.pet.domain.VoiceSessionInput
+import com.lanxin.android.builtin.pet.domain.VoiceSessionPhase
 import com.lanxin.android.util.PathImportHelper
 
 import java.io.File
@@ -191,6 +193,7 @@ fun CompanionScreen(
             onBridgeCommand = viewModel::onBridgeCommand,
             encodeSession = viewModel::encodeSessionRaw,
             encodeExpression = viewModel::encodeExpressionRaw,
+            encodePlayMotion = viewModel::encodePlayMotionRaw,
             encodeBubble = viewModel::encodeBubbleRaw,
             encodeLoadLive2d = viewModel::encodeLoadLive2dRaw
         )
@@ -754,6 +757,7 @@ private fun CompanionLive2dWebView(
     onBridgeCommand: (PetBridgeMessage) -> Unit,
     encodeSession: () -> String?,
     encodeExpression: () -> String?,
+    encodePlayMotion: () -> String?,
     encodeBubble: () -> String?,
     encodeLoadLive2d: () -> String?
 ) {
@@ -808,6 +812,7 @@ private fun CompanionLive2dWebView(
                 pushRaw(webView, encodeLoadLive2d())
                 pushRaw(webView, encodeSession())
                 pushRaw(webView, encodeExpression())
+                pushRaw(webView, encodePlayMotion())
                 pushRaw(webView, encodeBubble())
             }
         }
@@ -1167,8 +1172,26 @@ class CompanionViewModel @Inject constructor(
         val snap = sessionCoordinator.current()
         val mode = lastDecision?.mode
             ?: Live2dDisplayController.Live2dDisplayMode.PLACEHOLDER
-        val pose = PetExpressionController.poseFor(snap.phase, mode)
+        val phasePose = PetExpressionController.poseFor(snap.phase, mode)
+        val bubble = snap.subtitle.ifBlank { snap.replyText }
+            .ifBlank { _uiState.value.lastReply }
+        val pose = TextExpressionMotionMapper.overlaySpeakingPose(
+            phasePose,
+            snap.phase,
+            bubble
+        )
         return bridge.encodeExpression(pose, snap.phase)
+    }
+
+    fun encodePlayMotionRaw(): String? {
+        val snap = sessionCoordinator.current()
+        if (snap.phase != VoiceSessionPhase.SPEAKING) return null
+        val bubble = snap.subtitle.ifBlank { snap.replyText }
+            .ifBlank { _uiState.value.lastReply }
+        if (bubble.isBlank()) return null
+        val match = TextExpressionMotionMapper.match(bubble) ?: return null
+        val group = match.motionGroup ?: return null
+        return bridge.encodePlayMotion(group, match.motionIndex)
     }
 
     fun encodeBubbleRaw(): String? {
