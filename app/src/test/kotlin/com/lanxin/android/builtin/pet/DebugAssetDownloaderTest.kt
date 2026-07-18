@@ -553,6 +553,33 @@ class DebugAssetDownloaderTest {
     }
 
     @Test
+    fun compactTimeoutMessage_badConfigNotMislabelledTimeout() {
+        val c = DebugAssetDownloader.compactTimeoutMessage(
+            "Only positive timeout values are allowed, for request timeout millis 0"
+        )
+        assertEquals("Bad timeout config", c)
+        assertFalse(c.equals("Timeout", ignoreCase = true))
+    }
+
+    @Test
+    fun shortError_prefersClassifiedTransportMessage() {
+        val t = IllegalStateException(
+            "Connect timeout · config.json @ modelscope.cn/…/config.json"
+        )
+        val s = DebugAssetDownloader.shortError(t)
+        assertTrue(s.startsWith("Connect timeout"))
+        assertTrue(s.contains("config.json"))
+    }
+
+    @Test
+    fun shortError_illegalArgPositiveTimeoutIsBadConfig() {
+        val t = IllegalArgumentException(
+            "Only positive timeout values are allowed, for request timeout millis 0"
+        )
+        assertEquals("Bad timeout config", DebugAssetDownloader.shortError(t))
+    }
+
+    @Test
     fun formatSourceErrors_keepsEachSource() {
         val s = DebugAssetDownloader.formatSourceErrors(
             listOf(
