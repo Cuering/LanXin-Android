@@ -619,8 +619,7 @@ class DesktopPetViewModel @Inject constructor(
                                 downloadBusy = false,
                                 downloadRootPath = storageRoot.displayPath,
                                 downloadRootFallback = storageRoot.usedFallback,
-                                snackbarMessage =
-                                    "${kind.name} 已保存到 $where（源：$src）$fallbackNote"
+                                snackbarMessage = "${kind.name} 已保存到 $where（源：$src）$fallbackNote"
                             )
                         }
                         refresh()
