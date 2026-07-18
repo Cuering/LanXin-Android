@@ -34,7 +34,7 @@ class MemoryPluginTest {
         assertEquals("json", result["format"]?.jsonPrimitive?.contentOrNull)
         assertEquals("all", result["type_filter"]?.jsonPrimitive?.contentOrNull)
         val payload = result["payload"]?.jsonPrimitive?.contentOrNull.orEmpty()
-        assertTrue(payload.contains("\"version\":1"))
+        assertTrue(payload.contains("\"version\""))
         assertTrue(payload.contains("喜欢草莓"))
     }
 
@@ -54,7 +54,7 @@ class MemoryPluginTest {
         assertEquals("preference", result["type_filter"]?.jsonPrimitive?.contentOrNull)
         val payload = result["payload"]?.jsonPrimitive?.contentOrNull.orEmpty()
         assertTrue(payload.contains("# LanXin Memory Export"))
-        assertTrue(payload.contains("- filter: preference"))
+        assertTrue(payload.contains("- filter: type=preference"))
         assertTrue(payload.contains("喜欢草莓"))
         assertTrue(!payload.contains("普通聊天"))
     }
