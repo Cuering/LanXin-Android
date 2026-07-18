@@ -17,6 +17,11 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- Phase 6 桌宠悬浮层：需用户显式授权 SYSTEM_ALERT_WINDOW -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- M5 场景识别：仅用户确认开启后请求；默认不采集 -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
     <!-- 枚举已安装应用（app_install_check 列表模式，Android 11+） -->
     <uses-permission
         android:name="android.permission.QUERY_ALL_PACKAGES"

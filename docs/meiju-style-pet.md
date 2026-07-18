@@ -40,7 +40,7 @@ IDLE → LISTENING → THINKING → SPEAKING → IDLE
 | **M2c** | sherpa ASR/TTS 可 load 文件则 READY（无 so 仍 stub） | 后续 |
 | **M3** | 真 TTS + 口型 | 后续 |
 | **M4** | 自有/授权 Live2D | 后续 |
-| **M5** | 场景感知（显式授权） | 后续 |
+| **M5** | 场景识别（摄像头·默认关+确认 Gate） | ✅ 最小可用 |
 
 ### 2.1 陪伴页背景音乐
 
@@ -66,6 +66,12 @@ IDLE → LISTENING → THINKING → SPEAKING → IDLE
 - 气泡 / TTS / 历史 `stripTags`；接线悬浮层 / 陪伴页 / 设置页
 - 提示词：正文前可加 `[[mood=…]]`（仅允许表内 mood），本地脑/云端同协议
 - 同一 `roundId:ruleId` 只推一次 motion，防 snapshot 重复 collect 连播
+
+### 2.4 场景识别（摄像头）
+
+- **默认关**；开启需隐私确认 + CAMERA 权限（见 `docs/scene-recognition.md`）
+- 启发式场景标签 → 轻量文案反馈；会话内存缓存，关闭即清
+- **不**硬绑 Live2D 资源
 
 ## 3. M2a 交付
 

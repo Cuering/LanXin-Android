@@ -80,6 +80,7 @@ fun SettingScreen(
     onNavigateToSystemTools: () -> Unit = {},
     onNavigateToWebSearch: () -> Unit = {},
     onNavigateToDeviceSensing: () -> Unit = {},
+    onNavigateToSceneRecognition: () -> Unit = {},
     onNavigateToClawHost: () -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
@@ -255,6 +256,14 @@ fun SettingScreen(
                 title = "设备感知",
                 description = "默认关；system_info（型号/网络/电量）；开后 Agent 可见",
                 onItemClick = onNavigateToDeviceSensing,
+                showTrailingIcon = true,
+                showLeadingIcon = false
+            )
+
+            SettingItem(
+                title = "场景识别",
+                description = "默认关；摄像头轻量场景；开启需确认 + 权限，关闭清缓存",
+                onItemClick = onNavigateToSceneRecognition,
                 showTrailingIcon = true,
                 showLeadingIcon = false
             )

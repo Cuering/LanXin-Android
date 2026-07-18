@@ -615,7 +615,7 @@ app/.../plugins/unifiedinbox/
 | **6.5 / P1** | Sherpa-ONNX Offline TTS（真引擎进 APK） | 🔴 高 | 2d | ✅ P1；模型外置 LanXin/tts |
 | **6.6 / M1** | 桌宠悬浮窗 + VoiceSession 主线（听→想→说） | 🔴 高 | 4d | ✅ M1（#48） |
 | **6.6 / M2** | 路径就绪 + Live2D 真显 + 引擎可接 | 🔴 高 | 3d | ✅ M2a（#49）· ✅ M2b（#57）· ✅ 表情打磨（本 PR） |
-| **6.7 / M5** | 场景感知：UsageStats + 截屏 → 桌宠主动关怀 | 🔴 高 | 3d | 🔜 |
+| **6.7 / M5** | 场景识别：摄像头默认关+确认 Gate → 轻量文案（UsageStats/截屏后续） | 🔴 高 | 3d | ✅ 最小可用 |
 
 **交付主线：** **桌宠语音会话**（妹居级：Live2D/占位 + 语音听/说 + 对话）；6.5 TTS / 6.6 Pet 合并进该主线叙述。见 `docs/meiju-style-pet.md`。
 

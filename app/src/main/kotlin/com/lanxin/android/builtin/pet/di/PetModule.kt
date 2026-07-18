@@ -18,9 +18,13 @@ package com.lanxin.android.builtin.pet.di
 
 import com.lanxin.android.builtin.pet.data.KtorAssetDownloadTransport
 import com.lanxin.android.builtin.pet.data.PetPreferences
+import com.lanxin.android.builtin.pet.data.SceneRecognitionPreferences
 import com.lanxin.android.builtin.pet.domain.AssetDownloadTransport
+import com.lanxin.android.builtin.pet.domain.HeuristicSceneRecognizer
 import com.lanxin.android.builtin.pet.domain.PetChatResponder
 import com.lanxin.android.builtin.pet.domain.PetSettings
+import com.lanxin.android.builtin.pet.domain.SceneRecognitionSettings
+import com.lanxin.android.builtin.pet.domain.SceneRecognizer
 import com.lanxin.android.builtin.pet.domain.StubPetChatResponder
 import dagger.Binds
 import dagger.Module
@@ -30,7 +34,7 @@ import dagger.hilt.migration.DisableInstallInCheck
 import javax.inject.Singleton
 
 /**
- * 桌宠 / 语音会话 DI。
+ * 桌宠 / 语音会话 / 场景识别 DI。
  */
 @Module
 @DisableInstallInCheck
@@ -50,4 +54,14 @@ abstract class PetModule {
     abstract fun bindAssetDownloadTransport(
         impl: KtorAssetDownloadTransport
     ): AssetDownloadTransport
+
+    @Binds
+    @Singleton
+    abstract fun bindSceneRecognitionSettings(
+        impl: SceneRecognitionPreferences
+    ): SceneRecognitionSettings
+
+    @Binds
+    @Singleton
+    abstract fun bindSceneRecognizer(impl: HeuristicSceneRecognizer): SceneRecognizer
 }

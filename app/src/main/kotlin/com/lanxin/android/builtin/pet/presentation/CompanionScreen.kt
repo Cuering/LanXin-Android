@@ -258,6 +258,31 @@ fun CompanionScreen(
             }
         }
 
+        // 场景识别会话反馈（可选轻量文案，不绑 Live2D）
+        if (!state.sceneFeedback.isNullOrBlank()) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .statusBarsPadding()
+                    .padding(start = 12.dp, top = 80.dp)
+                    .alpha(0.88f),
+                shape = RoundedCornerShape(999.dp),
+                color = Color(0xFF1A0A12).copy(alpha = 0.42f),
+                tonalElevation = 0.dp
+            ) {
+                Text(
+                    text = state.sceneFeedback,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                        .widthIn(max = 240.dp)
+                )
+            }
+        }
+
         if (state.busy) {
             CircularProgressIndicator(
                 modifier = Modifier
@@ -855,13 +880,16 @@ data class CompanionUiState(
     val bgCustomPath: String = "",
     val bgLabel: String = "樱花粉",
     val bgDirHint: String = "LanXin/backgrounds/",
-    val bgError: String? = null
+    val bgError: String? = null,
+    /** 场景识别会话反馈（可选；无缓存为空） */
+    val sceneFeedback: String? = null
 )
 
 @HiltViewModel
 class CompanionViewModel @Inject constructor(
     private val sessionCoordinator: VoiceSessionCoordinator,
     private val petSettings: PetSettings,
+    private val sceneSession: com.lanxin.android.builtin.pet.domain.SceneRecognitionSession,
     @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context
 ) : ViewModel() {
 
@@ -918,7 +946,8 @@ class CompanionViewModel @Inject constructor(
                     musicDirHint = p.musicDirPath(),
                     trackNames = p.currentTracks().map { f -> f.name },
                     trackCount = p.currentTracks().size,
-                    musicVolume = p.currentVolume()
+                    musicVolume = p.currentVolume(),
+                    sceneFeedback = sceneSession.feedbackLine()
                 )
             }
             bumpWeb()

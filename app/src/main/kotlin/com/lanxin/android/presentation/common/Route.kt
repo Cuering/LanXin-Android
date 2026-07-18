@@ -87,6 +87,9 @@ object Route {
     /** 设备感知（system_info 配置） */
     const val DEVICE_SENSING = "device_sensing_settings"
 
+    /** 摄像头场景识别（默认关 + 确认 Gate） */
+    const val SCENE_RECOGNITION = "scene_recognition_settings"
+
     /** 机器人 / Claw 动态插件宿主（常驻 + PlatformHost） */
     const val CLAW_HOST = "claw_host_settings"
 }

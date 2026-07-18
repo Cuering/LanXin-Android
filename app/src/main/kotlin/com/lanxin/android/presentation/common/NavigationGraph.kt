@@ -38,6 +38,7 @@ import com.lanxin.android.presentation.ui.setting.SettingScreen
 import com.lanxin.android.builtin.localinference.presentation.LocalInferenceScreen
 import com.lanxin.android.builtin.pet.presentation.CompanionScreen
 import com.lanxin.android.builtin.pet.presentation.DesktopPetScreen
+import com.lanxin.android.builtin.pet.presentation.SceneRecognitionScreen
 import com.lanxin.android.builtin.systemtools.presentation.SystemToolsScreen
 import com.lanxin.android.builtin.platform.presentation.DeviceSensingScreen
 import com.lanxin.android.builtin.platform.presentation.WebSearchScreen
@@ -83,6 +84,7 @@ fun SetupNavGraph(navController: NavHostController) {
         systemToolsScreenNavigation(navController)
         webSearchScreenNavigation(navController)
         deviceSensingScreenNavigation(navController)
+        sceneRecognitionScreenNavigation(navController)
         clawHostScreenNavigation(navController)
     }
 }
@@ -124,7 +126,10 @@ fun NavGraphBuilder.desktopPetScreenNavigation(navController: NavHostController)
     composable(Route.DESKTOP_PET) {
         DesktopPetScreen(
             onBackAction = { navController.navigateUp() },
-            onOpenCompanion = { navController.navigate(Route.COMPANION) }
+            onOpenCompanion = { navController.navigate(Route.COMPANION) },
+            onOpenSceneRecognition = {
+                navController.navigate(Route.SCENE_RECOGNITION)
+            }
         )
     }
 }
@@ -158,6 +163,14 @@ fun NavGraphBuilder.webSearchScreenNavigation(navController: NavHostController) 
 fun NavGraphBuilder.deviceSensingScreenNavigation(navController: NavHostController) {
     composable(Route.DEVICE_SENSING) {
         DeviceSensingScreen(
+            onBackAction = { navController.navigateUp() }
+        )
+    }
+}
+
+fun NavGraphBuilder.sceneRecognitionScreenNavigation(navController: NavHostController) {
+    composable(Route.SCENE_RECOGNITION) {
+        SceneRecognitionScreen(
             onBackAction = { navController.navigateUp() }
         )
     }
@@ -492,6 +505,9 @@ fun NavGraphBuilder.settingNavigation(navController: NavHostController) {
                 onNavigateToSystemTools = { navController.navigate(Route.SYSTEM_TOOLS) },
                 onNavigateToWebSearch = { navController.navigate(Route.WEB_SEARCH) },
                 onNavigateToDeviceSensing = { navController.navigate(Route.DEVICE_SENSING) },
+                onNavigateToSceneRecognition = {
+                    navController.navigate(Route.SCENE_RECOGNITION)
+                },
                 onNavigateToClawHost = { navController.navigate(Route.CLAW_HOST) }
             )
         }

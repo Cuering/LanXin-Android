@@ -76,6 +76,7 @@ import com.lanxin.android.presentation.common.PathPickerField
 fun DesktopPetScreen(
     onBackAction: () -> Unit,
     onOpenCompanion: () -> Unit = {},
+    onOpenSceneRecognition: () -> Unit = {},
     viewModel: DesktopPetViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -193,6 +194,13 @@ fun DesktopPetScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("打开全屏陪伴（Live2D + 输入框）")
+            }
+
+            OutlinedButton(
+                onClick = onOpenSceneRecognition,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("场景识别（默认关 · 需确认）")
             }
 
             if (state.isBusy || state.pathImportBusy || state.downloadBusy) {
