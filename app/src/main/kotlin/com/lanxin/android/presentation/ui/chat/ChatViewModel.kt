@@ -862,12 +862,14 @@ class ChatViewModel @Inject constructor(
             base = personaPrompt,
             dialogs = persona?.moodImitationDialogs
         )
+        // 本地脑与云端同一协议：约定回复前可选 [[mood=…]] 隐藏标签
+        val withPetMood = PersonaMoodFormatter.appendPetMoodTagInstruction(withMood)
         val platform = platformPrompt?.trim().orEmpty()
         return when {
-            withMood.isEmpty() -> platform
-            platform.isEmpty() -> withMood
-            withMood == platform -> withMood
-            else -> "$withMood\n\n$platform"
+            withPetMood.isEmpty() -> platform
+            platform.isEmpty() -> withPetMood
+            withPetMood == platform -> withPetMood
+            else -> "$withPetMood\n\n$platform"
         }
     }
 

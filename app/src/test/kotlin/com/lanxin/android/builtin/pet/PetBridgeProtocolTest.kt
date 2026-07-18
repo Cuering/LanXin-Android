@@ -61,4 +61,20 @@ class PetBridgeProtocolTest {
         assertEquals(PetBridgeCommand.SHOW_BUBBLE, msg.command)
         assertEquals("气泡", msg.payload[PetBridgeProtocol.KEY_BUBBLE])
     }
+
+    @Test
+    fun `session and bubble strip mood tags on wire`() {
+        val snap = VoiceSessionSnapshot(
+            phase = VoiceSessionPhase.SPEAKING,
+            asrText = "q",
+            replyText = "[[mood=joy]]你好呀",
+            subtitle = "你好呀",
+            roundId = 1
+        )
+        val session = PetBridgeProtocol.sessionStateMessage(snap, timestampMs = 1L)
+        assertEquals("你好呀", session.payload[PetBridgeProtocol.KEY_REPLY])
+        assertEquals("你好呀", session.payload[PetBridgeProtocol.KEY_SUBTITLE])
+        val bubble = PetBridgeProtocol.showBubbleMessage("[[mood=sorry]]抱歉", 2L)
+        assertEquals("抱歉", bubble.payload[PetBridgeProtocol.KEY_BUBBLE])
+    }
 }

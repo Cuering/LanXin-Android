@@ -85,9 +85,32 @@ Native → Web：`PLAY_MOTION`（`motionGroup` / 可选 `motionIndex`）。
 Web → Native：`MODEL_TAPPED`（`hitArea`）。  
 与 Cubism 参数音乐律动共存：motion 忙时降权，不整模贴纸晃。
 
-## 文本 → 表情 / 动作（关键词规则）
+## 文本 → 表情 / 动作
 
-SPEAKING 相位下，对 `replyText` / 字幕做关键词首命中映射（无 ML、无网络）。
+SPEAKING 相位下，对 `replyText` / 字幕做映射（无 ML、无网络）。
+
+**优先级**：显式 `[[mood=…]]`（`MoodTagMapper`）→ 关键词（#97）→ 相位默认。
+
+### mood 标签（从现有 exp/motion 反推，禁止发明资源）
+
+| mood | Expression | exp | Motion | 说明 |
+|------|------------|-----|--------|------|
+| smile | IDLE_SMILE | exp_01 | Idle[0] | 微笑 / greeting 别名 |
+| listen | LISTENING | exp_02 | — | 在听 |
+| think | THINKING | exp_03 | — | 思考 |
+| speak | SPEAKING | exp_04 | — | 说话态表情 |
+| sorry | APOLOGY | exp_05 | — | 抱歉 / sad 别名 |
+| idle | IDLE_VARIANT_A | exp_06 | — | 闲变 |
+| joy | TAP_REACTION | exp_07 | TapBody[3] | 开心；happy/excited 别名 |
+| music | MUSIC_PEAK | exp_08 | Idle[1] | 律动 |
+| tap | TAP_REACTION | exp_07 | TapBody[0] | 点触邀请 |
+
+生成侧**只允许**上表 mood。无合适动作则只播表情；非法 mood 忽略。  
+气泡 / TTS / 历史 / SESSION_STATE 线协议均 `MoodTagMapper.stripTags` 剥离；匹配读本地 `replyText`（SPEAKING 期可暂留标签）。
+
+**提示词一行约定（本地脑/云端同一协议）**：回复正文前可加隐藏标签 `[[mood=joy]]`（mood∈smile|listen|think|speak|sorry|idle|joy|music|tap），气泡与语音不读出标签。
+
+### 关键词兜底（#97）
 
 | ruleId | 关键词示例 | Expression | Motion |
 |--------|------------|------------|--------|
@@ -100,8 +123,8 @@ SPEAKING 相位下，对 `replyText` / 字幕做关键词首命中映射（无 M
 | sad | 难过 / 呜呜 | APOLOGY | — |
 | idle_variant | 闲着 / 摸鱼 | IDLE_VARIANT_A | — |
 
-实现：`TextExpressionMotionMapper`；接入点：`FloatingPetService.pushSessionToWeb`、`CompanionViewModel.encodeExpressionRaw/encodePlayMotionRaw`。  
-同一 `roundId:ruleId` 只推一次 `PLAY_MOTION`，口型保持 SPEAKING。未命中回落相位默认。
+实现：`MoodTagMapper` + `TextExpressionMotionMapper`；接入：`FloatingPetService.pushSessionToWeb`、`CompanionViewModel.encodeExpressionRaw/encodePlayMotionRaw/encodeBubbleRaw`。  
+同一 `roundId:ruleId` 只推一次 `PLAY_MOTION`，口型保持 SPEAKING。
 
 ## 验证
 

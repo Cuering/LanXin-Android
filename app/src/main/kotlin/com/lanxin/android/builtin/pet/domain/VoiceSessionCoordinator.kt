@@ -130,12 +130,17 @@ class VoiceSessionCoordinator @Inject constructor(
                 )
             }
 
-        val reply = composeReply(chatReply, toolTurn)
+        // rawReply 保留 [[mood=…]] 供 SPEAKING 相位匹配；展示/TTS/历史统一剥标签
+        val rawReply = composeReply(chatReply, toolTurn)
+        val displayReply = MoodTagMapper.stripTags(rawReply)
 
-        snap = VoiceSessionStateMachine.onThinkDone(snap, reply)
+        // SPEAKING：replyText=raw（匹配），subtitle=剥后（气泡立刻干净）
+        snap = VoiceSessionStateMachine.onThinkDone(snap, rawReply).copy(
+            subtitle = displayReply
+        )
         _snapshot.value = snap
 
-        // TTS：未就绪时仍展示字幕气泡（M1 stub 可 auto-load）
+        // TTS：未就绪时仍展示字幕气泡（M1 stub 可 auto-load）；绝不把标签念出来
         if (!ttsEngine.isReady) {
             runCatching {
                 ttsEngine.load(
@@ -144,21 +149,21 @@ class VoiceSessionCoordinator @Inject constructor(
             }
         }
         val tts = runCatching {
-            ttsEngine.synthesize(TtsSynthesizeRequest(text = reply))
+            ttsEngine.synthesize(TtsSynthesizeRequest(text = displayReply))
         }.getOrElse { e ->
-            // 合成失败仍回 IDLE，保留 reply 文本
+            // 合成失败仍回 IDLE；历史/字幕用剥离后文本
             snap = VoiceSessionStateMachine.fail(snap, e.message ?: "tts_failed")
             _snapshot.value = snap
             snap = VoiceSessionStateMachine.reset(snap).copy(
-                replyText = reply,
-                subtitle = reply,
+                replyText = displayReply,
+                subtitle = displayReply,
                 asrText = text
             )
             _snapshot.value = snap
             return@withLock VoiceSessionResult(
                 asrText = text,
-                replyText = reply,
-                subtitle = reply,
+                replyText = displayReply,
+                subtitle = displayReply,
                 phase = snap.phase,
                 isStub = input.isStub,
                 error = "tts_failed:${e.message}",
@@ -168,16 +173,23 @@ class VoiceSessionCoordinator @Inject constructor(
             )
         }
 
-        snap = snap.copy(subtitle = tts.subtitle.ifBlank { reply })
+        val spokenSubtitle = MoodTagMapper.stripTags(tts.subtitle.ifBlank { displayReply })
+        // 匹配仍读 replyText(raw)；气泡优先 subtitle(已剥)
+        snap = snap.copy(subtitle = spokenSubtitle)
         _snapshot.value = snap
 
         snap = VoiceSessionStateMachine.onSpeakDone(snap)
+        // 说完后历史快照统一剥离，避免标签进 UI / 预览
+        snap = snap.copy(
+            replyText = MoodTagMapper.stripTags(snap.replyText),
+            subtitle = MoodTagMapper.stripTags(snap.subtitle)
+        )
         _snapshot.value = snap
 
         VoiceSessionResult(
             asrText = text,
-            replyText = reply,
-            subtitle = tts.subtitle.ifBlank { reply },
+            replyText = displayReply,
+            subtitle = spokenSubtitle,
             phase = snap.phase,
             isStub = input.isStub || tts.isStub,
             durationMs = System.currentTimeMillis() - started,
