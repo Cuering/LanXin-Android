@@ -418,6 +418,12 @@ dependencies {
     // Debug asset archive extract (tar.bz2 / xz)
     implementation(libs.commons.compress)
 
+    // CameraX — 全屏陪伴「看世界」预览 + 提问抓帧
+    implementation(libs.androidx.camera.core)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
+
     // Test
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

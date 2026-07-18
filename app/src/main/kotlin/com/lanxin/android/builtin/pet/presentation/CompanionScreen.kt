@@ -16,8 +16,10 @@
 
 package com.lanxin.android.builtin.pet.presentation
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.view.ViewGroup
@@ -66,6 +68,9 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -75,6 +80,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -92,11 +98,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -109,6 +117,8 @@ import com.lanxin.android.builtin.pet.domain.BuiltInLive2dAssets
 import com.lanxin.android.builtin.pet.domain.BuiltInMusicAssets
 import com.lanxin.android.builtin.pet.domain.CompanionBackgrounds
 import com.lanxin.android.builtin.pet.domain.CompanionMusicPlayer
+import com.lanxin.android.builtin.pet.domain.CompanionVisionFrameEncoder
+import com.lanxin.android.builtin.pet.domain.CompanionVisionSession
 import com.lanxin.android.builtin.pet.domain.DebugAssetStorage
 import com.lanxin.android.builtin.pet.domain.Live2dDisplayController
 import com.lanxin.android.builtin.pet.domain.Live2dModel3Reader
@@ -120,9 +130,13 @@ import com.lanxin.android.builtin.pet.domain.MoodTagMapper
 import com.lanxin.android.builtin.pet.domain.PetExpressionController
 import com.lanxin.android.builtin.pet.domain.PetSettings
 import com.lanxin.android.builtin.pet.domain.TextExpressionMotionMapper
+import com.lanxin.android.builtin.pet.domain.VisionExplainClient
+import com.lanxin.android.builtin.pet.domain.VisionExplainResult
+import com.lanxin.android.builtin.pet.domain.VisionModelCapability
 import com.lanxin.android.builtin.pet.domain.VoiceSessionCoordinator
 import com.lanxin.android.builtin.pet.domain.VoiceSessionInput
 import com.lanxin.android.builtin.pet.domain.VoiceSessionPhase
+import com.lanxin.android.builtin.platform.domain.SceneSensingSettings
 import com.lanxin.android.util.PathImportHelper
 
 import java.io.File
@@ -136,6 +150,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
 /**
  * 妹居式 App 内全屏陪伴页：Live2D 铺满 + 顶/底浮层（无白框小窗）。
  *
@@ -150,9 +165,11 @@ fun CompanionScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val keyboard = LocalSoftwareKeyboardController.current
+    val context = LocalContext.current
     var draft by remember { mutableStateOf("") }
     var musicPanelOpen by remember { mutableStateOf(false) }
     var bgPanelOpen by remember { mutableStateOf(false) }
+    var frameHolder by remember { mutableStateOf<CompanionFrameHolder?>(null) }
 
     val pickAudio = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -170,12 +187,50 @@ fun CompanionScreen(
         }
     }
 
+    val requestCamera = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        viewModel.onCameraPermissionResult(granted)
+    }
+
     LaunchedEffect(Unit) {
         viewModel.ensureReady()
+        val granted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.CAMERA
+        ) == PackageManager.PERMISSION_GRANTED
+        viewModel.onCameraPermissionResult(granted)
     }
 
     DisposableEffect(Unit) {
         onDispose { viewModel.onLeavePage() }
+    }
+
+    if (state.showVisionConsentDialog) {
+        AlertDialog(
+            onDismissRequest = viewModel::dismissVisionConsent,
+            title = { Text("开启「看世界」？") },
+            text = {
+                Text(
+                    "全屏陪伴内会显示相机预览（画中画，非后台偷拍）。\n\n" +
+                        "· 默认关闭；仅你打开开关时预览\n" +
+                        "· 提问或点「看一眼」时抓 1 帧缩略图，送已配置的多模态模型讲解\n" +
+                        "· 帧不落盘、不写日志原图；关开关 / 离开页面立即停相机\n" +
+                        "· 无视觉模型时会明确提示，不会假装本地会看图\n" +
+                        "· 同意记录与设置页「场景识别」共用（可随时撤回）"
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = viewModel::confirmVisionConsentAndEnable) {
+                    Text("同意并开启")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissVisionConsent) {
+                    Text("取消")
+                }
+            }
+        )
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -222,6 +277,42 @@ fun CompanionScreen(
                 color = Color(0xFF5A2038),
                 modifier = Modifier.weight(1f)
             )
+            // 看世界开关（默认关）
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(end = 2.dp)
+            ) {
+                Icon(
+                    if (state.visionLooking) Icons.Filled.Visibility else Icons.Filled.VisibilityOff,
+                    contentDescription = null,
+                    tint = if (state.visionLooking) Color(0xFFE85D8E) else Color(0xFF5A2038),
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(2.dp))
+                Text(
+                    text = "看世界",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color(0xFF5A2038)
+                )
+                Switch(
+                    checked = state.visionLooking,
+                    onCheckedChange = { on ->
+                        viewModel.setVisionLooking(on)
+                        if (on) {
+                            val granted = ContextCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.CAMERA
+                            ) == PackageManager.PERMISSION_GRANTED
+                            if (!granted) {
+                                requestCamera.launch(Manifest.permission.CAMERA)
+                            } else {
+                                viewModel.onCameraPermissionResult(true)
+                            }
+                        }
+                    },
+                    modifier = Modifier.padding(start = 2.dp)
+                )
+            }
             TextButton(onClick = onOpenSettings) {
                 Icon(
                     Icons.Filled.Settings,
@@ -233,8 +324,8 @@ fun CompanionScreen(
             }
         }
 
-        // 状态角标：轻量浮层（Cubism·闲置 等）
-        if (state.statusLine.isNotBlank()) {
+        // 状态角标：轻量浮层（Cubism·闲置 / 看世界 / 提示）
+        if (state.statusLine.isNotBlank() || state.visionLooking || !state.visionHint.isNullOrBlank()) {
             Surface(
                 modifier = Modifier
                     .align(Alignment.TopStart)
@@ -245,8 +336,18 @@ fun CompanionScreen(
                 color = Color(0xFF1A0A12).copy(alpha = 0.42f),
                 tonalElevation = 0.dp
             ) {
+                val badge = when {
+                    !state.visionHint.isNullOrBlank() && !state.visionLooking ->
+                        state.visionHint!!
+                    state.visionLooking ->
+                        CompanionVisionSession.statusLabel(
+                            lookingEnabled = true,
+                            previewReady = state.visionPreviewReady
+                        )
+                    else -> companionStatusBadge(state.statusLine)
+                }
                 Text(
-                    text = companionStatusBadge(state.statusLine),
+                    text = badge,
                     style = MaterialTheme.typography.labelSmall,
                     color = Color.White,
                     maxLines = 1,
@@ -255,6 +356,32 @@ fun CompanionScreen(
                         .padding(horizontal = 10.dp, vertical = 4.dp)
                         .widthIn(max = 220.dp)
                 )
+            }
+        }
+
+        // 画中画预览：仅看世界开 + consent + 相机权限
+        if (state.visionLooking && state.visionConsentGranted && state.cameraGranted) {
+            CompanionCameraPip(
+                active = true,
+                onPreviewReady = viewModel::onVisionPreviewReady,
+                onFrameHolder = { frameHolder = it },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .statusBarsPadding()
+                    .padding(top = 56.dp, end = 12.dp)
+            )
+            // 「看一眼」
+            TextButton(
+                onClick = {
+                    viewModel.lookOnce(frameHolder)
+                },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .statusBarsPadding()
+                    .padding(top = 232.dp, end = 8.dp),
+                enabled = !state.busy && state.visionPreviewReady
+            ) {
+                Text("看一眼", color = Color(0xFFE85D8E))
             }
         }
 
@@ -308,7 +435,7 @@ fun CompanionScreen(
                         onSend = {
                             val text = draft
                             if (text.isNotBlank() && !state.busy) {
-                                viewModel.sendText(text)
+                                viewModel.sendText(text, frameHolder)
                                 draft = ""
                                 keyboard?.hide()
                             }
@@ -319,7 +446,7 @@ fun CompanionScreen(
                     onClick = {
                         val text = draft
                         if (text.isNotBlank() && !state.busy) {
-                            viewModel.sendText(text)
+                            viewModel.sendText(text, frameHolder)
                             draft = ""
                             keyboard?.hide()
                         }
@@ -855,13 +982,22 @@ data class CompanionUiState(
     val bgCustomPath: String = "",
     val bgLabel: String = "樱花粉",
     val bgDirHint: String = "LanXin/backgrounds/",
-    val bgError: String? = null
+    val bgError: String? = null,
+    /** 陪伴页「看世界」会话开关；默认关，不持久化（离开页即停） */
+    val visionLooking: Boolean = false,
+    val visionConsentGranted: Boolean = false,
+    val cameraGranted: Boolean = false,
+    val visionPreviewReady: Boolean = false,
+    val showVisionConsentDialog: Boolean = false,
+    val visionHint: String? = null
 )
 
 @HiltViewModel
 class CompanionViewModel @Inject constructor(
     private val sessionCoordinator: VoiceSessionCoordinator,
     private val petSettings: PetSettings,
+    private val sceneSensingSettings: SceneSensingSettings,
+    private val visionExplainClient: VisionExplainClient,
     @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context
 ) : ViewModel() {
 
@@ -909,6 +1045,7 @@ class CompanionViewModel @Inject constructor(
                 petSettings.setEnabled(true)
             }
             BuiltInMusicAssets.ensureTestTrackInstalled(appContext)
+            val scene = sceneSensingSettings.getConfig()
             val p = player()
             p.refreshPlaylist()
             resolveLive2d()
@@ -918,7 +1055,11 @@ class CompanionViewModel @Inject constructor(
                     musicDirHint = p.musicDirPath(),
                     trackNames = p.currentTracks().map { f -> f.name },
                     trackCount = p.currentTracks().size,
-                    musicVolume = p.currentVolume()
+                    musicVolume = p.currentVolume(),
+                    visionConsentGranted = scene.consentGranted,
+                    // 会话开关默认关
+                    visionLooking = false,
+                    visionPreviewReady = false
                 )
             }
             bumpWeb()
@@ -928,6 +1069,104 @@ class CompanionViewModel @Inject constructor(
     fun onLeavePage() {
         musicPlayer?.release()
         musicPlayer = null
+        // 关开关即停预览+释放相机
+        _uiState.update {
+            it.copy(
+                visionLooking = false,
+                visionPreviewReady = false,
+                showVisionConsentDialog = false
+            )
+        }
+    }
+
+    fun setVisionLooking(on: Boolean) {
+        viewModelScope.launch {
+            val scene = sceneSensingSettings.getConfig()
+            if (on && CompanionVisionSession.needsConsentDialog(scene.consentGranted, turningOn = true)) {
+                _uiState.update {
+                    it.copy(
+                        showVisionConsentDialog = true,
+                        visionConsentGranted = scene.consentGranted
+                    )
+                }
+                return@launch
+            }
+            if (on) {
+                // 同步 #99 enabled，便于设置页一致；consent 已有
+                sceneSensingSettings.setEnabled(true)
+            }
+            _uiState.update {
+                it.copy(
+                    visionLooking = on,
+                    visionConsentGranted = scene.consentGranted,
+                    visionPreviewReady = if (on) it.visionPreviewReady else false,
+                    visionHint = if (on) null else CompanionVisionSession.STATUS_PAUSED,
+                    showVisionConsentDialog = false
+                )
+            }
+        }
+    }
+
+    fun dismissVisionConsent() {
+        _uiState.update {
+            it.copy(showVisionConsentDialog = false, visionLooking = false)
+        }
+    }
+
+    fun confirmVisionConsentAndEnable() {
+        viewModelScope.launch {
+            sceneSensingSettings.setConsentGranted(true)
+            sceneSensingSettings.setEnabled(true)
+            _uiState.update {
+                it.copy(
+                    showVisionConsentDialog = false,
+                    visionConsentGranted = true,
+                    visionLooking = true,
+                    visionHint = null
+                )
+            }
+        }
+    }
+
+    fun onCameraPermissionResult(granted: Boolean) {
+        _uiState.update { it.copy(cameraGranted = granted) }
+    }
+
+    fun onVisionPreviewReady(ready: Boolean) {
+        _uiState.update { it.copy(visionPreviewReady = ready) }
+    }
+
+    /**
+     * 点「看一眼」：抓 1 帧送多模态；无 vision 时友好提示，不编造。
+     */
+    fun lookOnce(holder: CompanionFrameHolder?) {
+        viewModelScope.launch {
+            val st = _uiState.value
+            if (!CompanionVisionSession.shouldCaptureOnAsk(
+                    lookingEnabled = st.visionLooking,
+                    consentGranted = st.visionConsentGranted,
+                    cameraGranted = st.cameraGranted
+                )
+            ) {
+                _uiState.update { it.copy(visionHint = "请先打开「看世界」并授权相机") }
+                return@launch
+            }
+            _uiState.update { it.copy(busy = true, statusLine = "看一眼…") }
+            val reply = explainWithFrame(
+                question = "请描述你现在看到的画面，并简要讲解。",
+                holder = holder
+            )
+            val display = MoodTagMapper.stripTags(reply)
+            _uiState.update {
+                it.copy(
+                    busy = false,
+                    lastReply = display,
+                    statusLine = "已看一眼",
+                    visionHint = null
+                )
+            }
+            bumpWeb()
+        }
     }
 
     fun onWebReady() {
@@ -965,13 +1204,34 @@ class CompanionViewModel @Inject constructor(
         }
     }
 
-    fun sendText(text: String) {
+    fun sendText(text: String, frameHolder: CompanionFrameHolder? = null) {
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return
         viewModelScope.launch {
             _uiState.update { it.copy(busy = true, statusLine = "思考中…") }
             if (!petSettings.getConfig().enabled) {
                 petSettings.setEnabled(true)
+            }
+            val st = _uiState.value
+            val useVision = CompanionVisionSession.shouldCaptureOnAsk(
+                lookingEnabled = st.visionLooking,
+                consentGranted = st.visionConsentGranted,
+                cameraGranted = st.cameraGranted
+            )
+            if (useVision) {
+                // P0：提问时抓 1 帧 → 多模态；无 vision 不瞎编
+                val reply = explainWithFrame(trimmed, frameHolder)
+                val display = MoodTagMapper.stripTags(reply)
+                _uiState.update {
+                    it.copy(
+                        busy = false,
+                        lastReply = display,
+                        statusLine = "已回复",
+                        visionHint = null
+                    )
+                }
+                bumpWeb()
+                return@launch
             }
             val result = sessionCoordinator.runRound(
                 VoiceSessionInput(
@@ -996,6 +1256,57 @@ class CompanionViewModel @Inject constructor(
                 )
             }
             bumpWeb()
+        }
+    }
+
+    /**
+     * 抓帧 → vision 讲解；能力不足时返回明确文案（禁止假装本地 VLM）。
+     * 帧仅内存，用完即丢。
+     */
+    private suspend fun explainWithFrame(
+        question: String,
+        holder: CompanionFrameHolder?
+    ): String {
+        val cap = visionExplainClient.resolveCapability()
+        if (!cap.available) {
+            // 无 vision：友好提示 + 仍可用 stub 闲聊（不注入假画面描述）
+            val stub = runCatching {
+                sessionCoordinator.runRound(
+                    VoiceSessionInput(
+                        asrText = question,
+                        isStub = true,
+                        source = "companion_text_no_vision"
+                    )
+                )
+            }.getOrNull()
+            val chat = stub?.let {
+                MoodTagMapper.stripTags(it.subtitle.ifBlank { it.replyText })
+            }.orEmpty()
+            val notice = cap.message.ifBlank { VisionModelCapability.MSG_NO_VISION }
+            return if (chat.isBlank()) {
+                "[[mood=think]]\n$notice"
+            } else {
+                "[[mood=think]]\n$notice\n\n$chat"
+            }
+        }
+        val bmp = holder?.snapshotCopy()
+        if (bmp == null) {
+            return "[[mood=sorry]]\n${VisionModelCapability.MSG_CAPTURE_FAILED}"
+        }
+        val frame = withContext(Dispatchers.Default) {
+            try {
+                CompanionVisionFrameEncoder.encode(bmp)
+            } finally {
+                if (!bmp.isRecycled) bmp.recycle()
+            }
+        }
+        if (frame == null) {
+            return "[[mood=sorry]]\n${VisionModelCapability.MSG_CAPTURE_FAILED}"
+        }
+        return when (val r = visionExplainClient.explain(question, frame)) {
+            is VisionExplainResult.Ok -> r.replyText
+            is VisionExplainResult.Unavailable -> "[[mood=think]]\n${r.userMessage}"
+            is VisionExplainResult.Error -> "[[mood=sorry]]\n${r.userMessage}"
         }
     }
 
