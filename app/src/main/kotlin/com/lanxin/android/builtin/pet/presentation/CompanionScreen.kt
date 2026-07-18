@@ -1531,7 +1531,8 @@ class CompanionViewModel @Inject constructor(
         val pet = petSettings.getConfig()
         val filesDir = appContext.filesDir
         val isDebug = (appContext.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
-        val openSourceBase = DebugAssetStorage.resolve(appContext).baseDir
+        val safUri = petSettings.getConfig().lanXinSafTreeUri
+        val openSourceBase = DebugAssetStorage.resolve(appContext, safUri).baseDir
         val installed = BuiltInLive2dAssets.ensureInstalled(appContext)
         val path = MeijuDebugPaths.resolveLive2dIfPresent(
             filesDir = filesDir,

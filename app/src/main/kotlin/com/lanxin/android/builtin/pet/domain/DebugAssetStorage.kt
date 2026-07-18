@@ -28,7 +28,8 @@ import java.io.File
  *
  * 不申请 MANAGE_EXTERNAL_STORAGE；仅最小必要尝试 + 优雅回退。
  * Android 10+ 公共根常不可写：用户可在设置页通过 SAF 授权公共 `LanXin/`
- *（[LanXinSafTree]），引擎仍写 externalFiles，成功后可选镜像到 SAF 树。
+ *（[LanXinSafTree]）。引擎主路径仍写可 File 访问的目录；授权成功后
+ * **必须**把下载结果镜像到公共树，失败要可见，避免 UI 显示「已授权」却只落私有目录。
  *
  * @see LanXinSafTree
  */
@@ -50,10 +51,18 @@ object DebugAssetStorage {
         val safTreeUri: String = "",
         val safGranted: Boolean = false,
         val safWritable: Boolean = false,
-        val safDisplayLabel: String = ""
+        val safDisplayLabel: String = "",
+        /**
+         * 最近一次镜像结果说明（成功/失败/跳过）；供 UI snackbar 展示，避免静默。
+         */
+        val lastMirrorNote: String = ""
     ) {
         /** 公共 File 可写，或 SAF 树可写。 */
         val publicWritable: Boolean get() = !usedFallback || safWritable
+
+        /** 下载后是否需要把 File 结果镜像到公共 SAF 树。 */
+        val shouldMirrorToSaf: Boolean
+            get() = usedFallback && safWritable && safTreeUri.isNotBlank()
     }
 
     /**
@@ -62,6 +71,9 @@ object DebugAssetStorage {
      * - 回退：`context.getExternalFilesDir(null)/LanXin`
      * - 再回退：`context.filesDir/LanXin`（极少）
      * - 叠加：DataStore 中的 SAF 树 Uri（[LanXinSafTree.PREFS_KEY] 由调用方传入）
+     *
+     * 注意：SAF 授权**不会**把 [baseDir] 改成 content Uri（引擎要 File 路径），
+     * 但 [shouldMirrorToSaf] 为 true 时下载完成后必须镜像到公共树。
      */
     fun resolve(context: Context, safTreeUri: String? = null): Root {
         val probe = LanXinSafTree.probe(context, safTreeUri)
@@ -73,7 +85,12 @@ object DebugAssetStorage {
                     baseDir = publicBase,
                     lanXinDir = publicLanXin,
                     usedFallback = false,
-                    displayPath = publicLanXin.absolutePath,
+                    // 公共 File 可写：展示真实公共路径；SAF 仅作补充标记
+                    displayPath = if (probe.writable) {
+                        "${publicLanXin.absolutePath}（公共可写）"
+                    } else {
+                        publicLanXin.absolutePath
+                    },
                     safTreeUri = probe.treeUri,
                     safGranted = probe.granted,
                     safWritable = probe.writable,
@@ -86,10 +103,13 @@ object DebugAssetStorage {
         if (externalFiles != null) {
             val fallbackLanXin = File(externalFiles, DebugOpenSourcePaths.ROOT_DIR)
             if (ensureWritableDir(fallbackLanXin)) {
-                val display = if (probe.writable) {
-                    "App 私有 + SAF(${probe.displayLabel})"
-                } else {
-                    fallbackLanXin.absolutePath
+                // 授权可写时明确告知：引擎写 App 私有，完成后会镜像到公共树
+                val display = when {
+                    probe.writable ->
+                        "引擎：${fallbackLanXin.absolutePath} → 镜像公共 ${probe.displayLabel}"
+                    probe.granted ->
+                        "引擎：${fallbackLanXin.absolutePath}（SAF 已授权但不可写：${probe.displayLabel}）"
+                    else -> fallbackLanXin.absolutePath
                 }
                 return Root(
                     baseDir = externalFiles,
@@ -107,11 +127,16 @@ object DebugAssetStorage {
         val internalBase = context.filesDir
         val last = File(internalBase, DebugOpenSourcePaths.ROOT_DIR)
         last.mkdirs()
+        val display = when {
+            probe.writable ->
+                "引擎：${last.absolutePath} → 镜像公共 ${probe.displayLabel}"
+            else -> last.absolutePath
+        }
         return Root(
             baseDir = internalBase,
             lanXinDir = last,
             usedFallback = true,
-            displayPath = last.absolutePath,
+            displayPath = display,
             safTreeUri = probe.treeUri,
             safGranted = probe.granted,
             safWritable = probe.writable,
@@ -132,6 +157,12 @@ object DebugAssetStorage {
     }
 
     /**
+     * 是否应在下载完成后镜像到 SAF（与 [mirrorToSafIfNeeded] / [mirrorReadyPathToSaf] 门控一致）。
+     * 纯逻辑，供单测锁定契约。
+     */
+    fun shouldMirror(root: Root): Boolean = root.shouldMirrorToSaf
+
+    /**
      * 下载完成后：若 File 走了回退且 SAF 可写，把 [localFile] 镜像到树。
      * @return 镜像成功的 document Uri，或 null
      */
@@ -141,13 +172,131 @@ object DebugAssetStorage {
         localFile: File,
         relativeUnderLanXin: String
     ): String? {
-        if (!root.usedFallback || !root.safWritable || root.safTreeUri.isBlank()) return null
+        if (!shouldMirror(root)) return null
+        if (!localFile.isFile || localFile.length() <= 0L) return null
         return LanXinSafTree.mirrorFile(
             context = context,
             treeUriString = root.safTreeUri,
             file = localFile,
             relativeUnderLanXin = relativeUnderLanXin
         )
+    }
+
+    /**
+     * 下载完成后把就绪路径（文件或目录）镜像到公共 SAF 树。
+     *
+     * - 文件：单文件镜像
+     * - 目录：递归镜像全部非空文件
+     * - 失败不抛异常，返回 [MirrorResult] 供 UI 展示（**禁止静默**）
+     */
+    data class MirrorResult(
+        val attempted: Boolean,
+        val success: Boolean,
+        val mirroredCount: Int,
+        val message: String
+    ) {
+        companion object {
+            val SKIPPED = MirrorResult(
+                attempted = false,
+                success = true,
+                mirroredCount = 0,
+                message = ""
+            )
+        }
+    }
+
+    fun mirrorReadyPathToSaf(
+        context: Context,
+        root: Root,
+        readyPath: String
+    ): MirrorResult {
+        if (!shouldMirror(root)) return MirrorResult.SKIPPED
+        val target = File(readyPath)
+        if (!target.exists()) {
+            return MirrorResult(
+                attempted = true,
+                success = false,
+                mirroredCount = 0,
+                message = "镜像失败：就绪路径不存在 $readyPath"
+            )
+        }
+        return try {
+            if (target.isFile) {
+                val rel = LanXinSafTree.relativeUnderLanXin(
+                    target.absolutePath,
+                    root.lanXinDir
+                )
+                if (rel == null) {
+                    return MirrorResult(
+                        attempted = true,
+                        success = false,
+                        mirroredCount = 0,
+                        message = "镜像失败：路径不在 LanXin 下 ${target.absolutePath}"
+                    )
+                }
+                val uri = LanXinSafTree.mirrorFile(
+                    context = context,
+                    treeUriString = root.safTreeUri,
+                    file = target,
+                    relativeUnderLanXin = rel
+                )
+                if (uri != null) {
+                    MirrorResult(
+                        attempted = true,
+                        success = true,
+                        mirroredCount = 1,
+                        message = "已同步到公共目录 ${root.safDisplayLabel.ifBlank { "LanXin" }}：$rel"
+                    )
+                } else {
+                    MirrorResult(
+                        attempted = true,
+                        success = false,
+                        mirroredCount = 0,
+                        message = "镜像到公共目录失败（$rel）。引擎仍可用 App 私有路径；请重新授权公共 LanXin"
+                    )
+                }
+            } else if (target.isDirectory) {
+                val rel = LanXinSafTree.relativeUnderLanXin(
+                    target.absolutePath,
+                    root.lanXinDir
+                ) ?: target.name
+                val count = LanXinSafTree.mirrorDirectory(
+                    context = context,
+                    treeUriString = root.safTreeUri,
+                    dir = target,
+                    relativeUnderLanXin = rel
+                )
+                if (count > 0) {
+                    MirrorResult(
+                        attempted = true,
+                        success = true,
+                        mirroredCount = count,
+                        message = "已同步 $count 个文件到公共目录 ${root.safDisplayLabel.ifBlank { "LanXin" }}（$rel）"
+                    )
+                } else {
+                    MirrorResult(
+                        attempted = true,
+                        success = false,
+                        mirroredCount = 0,
+                        message = "镜像目录到公共树失败（$rel）。引擎仍可用 App 私有路径；请重新授权公共 LanXin"
+                    )
+                }
+            } else {
+                MirrorResult(
+                    attempted = true,
+                    success = false,
+                    mirroredCount = 0,
+                    message = "镜像失败：未知路径类型 $readyPath"
+                )
+            }
+        } catch (t: Throwable) {
+            MirrorResult(
+                attempted = true,
+                success = false,
+                mirroredCount = 0,
+                message = "镜像异常：${t.message ?: t.javaClass.simpleName}"
+            )
+        }
     }
 
     private fun ensureWritableDir(dir: File): Boolean {

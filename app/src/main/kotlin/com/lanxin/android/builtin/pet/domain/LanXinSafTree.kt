@@ -170,8 +170,11 @@ object LanXinSafTree {
         val rel = normalizeRelative(relativeUnderLanXin) ?: return null
         val treeUri = Uri.parse(treeUriString.trim())
         return try {
-            val parentDocId = ensureDirPath(context, treeUri, rel.substringBeforeLast('/', missingDelimiterValue = ""))
-                ?: DocumentsContract.getTreeDocumentId(treeUri)
+            val parentDocId = ensureDirPath(
+                context,
+                treeUri,
+                rel.substringBeforeLast('/', missingDelimiterValue = "")
+            ) ?: DocumentsContract.getTreeDocumentId(treeUri)
             val parentUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, parentDocId)
             val displayName = rel.substringAfterLast('/')
             val mime = guessMime(displayName)
@@ -194,6 +197,93 @@ object LanXinSafTree {
             null
         }
     }
+
+    /**
+     * 递归镜像目录到 SAF 树下 [relativeUnderLanXin]。
+     * @return 成功拷贝的文件数；失败/跳过返回 0
+     */
+    fun mirrorDirectory(
+        context: Context,
+        treeUriString: String,
+        dir: File,
+        relativeUnderLanXin: String
+    ): Int {
+        if (!dir.isDirectory) return 0
+        if (!isContentUri(treeUriString)) return 0
+        val baseRel = normalizeRelative(relativeUnderLanXin)
+            ?: normalizeRelative(dir.name)
+            ?: return 0
+        var count = 0
+        dir.walkTopDown().forEach { child ->
+            if (!child.isFile || child.length() <= 0L) return@forEach
+            if (child.name.endsWith(".part")) return@forEach
+            val childRel = try {
+                val rootPath = dir.canonicalFile.path.trimEnd('/') + "/"
+                val filePath = child.canonicalFile.path
+                if (!filePath.startsWith(rootPath)) return@forEach
+                val sub = filePath.removePrefix(rootPath).trimStart('/')
+                if (sub.isBlank()) return@forEach
+                "$baseRel/$sub"
+            } catch (_: Exception) {
+                return@forEach
+            }
+            if (mirrorFile(context, treeUriString, child, childRel) != null) {
+                count++
+            }
+        }
+        return count
+    }
+
+    /**
+     * 在 SAF 树下创建相对路径文件并写入 [bytes]。
+     * 用于「主写 SAF」：授权成功后下载可直接落到公共树。
+     * @return 创建的 document Uri，失败 null
+     */
+    fun writeBytes(
+        context: Context,
+        treeUriString: String,
+        relativeUnderLanXin: String,
+        bytes: ByteArray,
+        mimeType: String? = null
+    ): String? {
+        if (bytes.isEmpty()) return null
+        if (!isContentUri(treeUriString)) return null
+        val rel = normalizeRelative(relativeUnderLanXin) ?: return null
+        val treeUri = Uri.parse(treeUriString.trim())
+        return try {
+            val parentDocId = ensureDirPath(
+                context,
+                treeUri,
+                rel.substringBeforeLast('/', missingDelimiterValue = "")
+            ) ?: DocumentsContract.getTreeDocumentId(treeUri)
+            val parentUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, parentDocId)
+            val displayName = rel.substringAfterLast('/')
+            val mime = mimeType ?: guessMime(displayName)
+            findChild(context, treeUri, parentDocId, displayName)?.let { existingId ->
+                val existing = DocumentsContract.buildDocumentUriUsingTree(treeUri, existingId)
+                runCatching { DocumentsContract.deleteDocument(context.contentResolver, existing) }
+            }
+            val created = DocumentsContract.createDocument(
+                context.contentResolver,
+                parentUri,
+                mime,
+                displayName
+            ) ?: return null
+            context.contentResolver.openOutputStream(created)?.use { out ->
+                out.write(bytes)
+            } ?: return null
+            created.toString()
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /**
+     * 纯 JVM 路径契约：从本地绝对路径 + lanXinDir 算出 SAF 镜像相对键。
+     * 单测 / 无 Context 场景复用。
+     */
+    fun mirrorRelativeKey(absolutePath: String, lanXinDir: File): String? =
+        relativeUnderLanXin(absolutePath, lanXinDir)
 
     /**
      * 把绝对路径收敛为相对 `LanXin/` 的键；不在 LanXin 下则返回 null。

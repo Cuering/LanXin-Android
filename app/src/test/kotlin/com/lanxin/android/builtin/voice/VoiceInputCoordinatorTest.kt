@@ -62,6 +62,31 @@ class VoiceInputCoordinatorTest {
     }
 
     @Test
+    fun `transcribePcm autoLoads when enabled but not ready`() = runBlocking {
+        // 开关开了但未手动 load → coordinator 调用前自动 load
+        val engine = StubAsrEngine(SherpaOnnxBridge())
+        val settings = FakeSettings(
+            AsrConfig(enabled = true, modelPath = "stub://demo", language = "zh")
+        )
+        assertFalse(engine.isReady)
+        val c = VoiceInputCoordinator(engine, settings, checker(MicPermissionState.GRANTED))
+        val audio = PcmAudioRecorder().recordStubPcm(durationMs = 100)
+        val result = c.transcribePcm(audio.pcm16leMono, audio.sampleRateHz)
+        assertTrue(result.isSuccess)
+        assertTrue(engine.isReady)
+    }
+
+    @Test
+    fun `transcribePcm fails with clear message when path empty`() = runBlocking {
+        val engine = StubAsrEngine(SherpaOnnxBridge())
+        val settings = FakeSettings(AsrConfig(enabled = true, modelPath = ""))
+        val c = VoiceInputCoordinator(engine, settings, checker(MicPermissionState.GRANTED))
+        val result = c.transcribePcm(ByteArray(16))
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull()!!.message!!.contains("路径为空"))
+    }
+
+    @Test
     fun `preflight blocks without mic`() = runBlocking {
         val engine = StubAsrEngine(SherpaOnnxBridge())
         val settings = FakeSettings(

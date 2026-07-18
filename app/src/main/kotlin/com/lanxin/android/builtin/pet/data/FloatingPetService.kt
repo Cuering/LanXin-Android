@@ -391,7 +391,10 @@ class FloatingPetService : Service() {
             val filesDir = applicationContext.filesDir
             val isDebug = (applicationContext.applicationInfo.flags and
                 android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
-            val openSourceBase = DebugAssetStorage.resolve(applicationContext).baseDir
+            val openSourceBase = DebugAssetStorage.resolve(
+                applicationContext,
+                pet.lanXinSafTreeUri
+            ).baseDir
             val installed = BuiltInLive2dAssets.ensureInstalled(applicationContext)
             val path = MeijuDebugPaths.resolveLive2dIfPresent(
                 filesDir = filesDir,

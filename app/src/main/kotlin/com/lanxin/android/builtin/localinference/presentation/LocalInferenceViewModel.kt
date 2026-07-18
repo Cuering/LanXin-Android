@@ -105,6 +105,36 @@ class LocalInferenceViewModel @Inject constructor(
             _uiState.update { it.copy(enabled = enabled) }
             if (!enabled) {
                 engine.unload()
+                refresh()
+                return@launch
+            }
+            // 开关打开 → 自动 load；路径缺失时明确提示（与 ASR 同契约）
+            val config = settings.getConfig()
+            if (config.modelPath.isBlank()) {
+                _uiState.update {
+                    it.copy(
+                        snackbarMessage =
+                            "已启用本地脑，但模型路径为空。请到桌宠设置「一键下载本地脑」" +
+                                "或导入 llm.mnn 所在目录后再试。"
+                    )
+                }
+                refresh()
+                return@launch
+            }
+            _uiState.update { it.copy(isBusy = true) }
+            val ok = engine.load(config)
+            _uiState.update {
+                it.copy(
+                    isBusy = false,
+                    engineState = engine.state.value,
+                    lastError = engine.lastError,
+                    snackbarMessage = if (ok) {
+                        "本地脑已启用并加载模型"
+                    } else {
+                        "本地脑已启用，但加载失败：${engine.lastError ?: "unknown"}。" +
+                            "请检查模型路径是否存在（如 LanXin/models/local-llm/light/）。"
+                    }
+                )
             }
             refresh()
         }

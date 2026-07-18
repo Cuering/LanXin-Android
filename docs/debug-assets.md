@@ -44,12 +44,34 @@
 
 | 优先级 | 路径 | 说明 |
 |:------:|------|------|
-| **1** | `{外部存储}/LanXin/` | 如 `/storage/emulated/0/LanXin/`；文件管理器易见 |
+| **1** | `{外部存储}/LanXin/` | 如 `/storage/emulated/0/LanXin/`；文件管理器易见（File 直写） |
 | 2 | `Android/data/com.lanxin.android/files/LanXin/` | 公共目录不可写时回退（`getExternalFilesDir`） |
+| **SAF** | 用户 OpenDocumentTree 授权的公共 `LanXin/` | 设置页「授权公共 LanXin」；**引擎仍写 File 路径**，下载完成后**镜像**到 SAF 树 |
 | 子目录 | `live2d/<模型名>/` · `asr/…` · `tts/…` · `models/local-llm/light/` | 相对 `LanXin/`；Live2D 以目录内 `*.model3.json` 为准 |
 | 兼容 | 历史 `filesDir/debug-assets/live2d/` | 仍可被路径解析与模型列表识别 |
 
-成功下载后 UI 展示「已保存到 <绝对路径>」。
+成功下载后 UI 展示「已保存到 <绝对路径>」；若走了回退且 SAF 可写，会追加镜像结果（成功/失败均可见，**禁止静默**）。
+
+#### SAF 授权与写入契约
+
+| 状态 | 下载主路径 | 公共目录 | UI |
+|------|-----------|---------|-----|
+| 公共 File 可写 | `{sdcard}/LanXin/` | 同左 | 显示真实公共路径 |
+| 回退 + **未**授权 SAF | `getExternalFilesDir()/LanXin/` | 无 | 「未授权」+ 私有路径 |
+| 回退 + SAF 可写 | 引擎仍写 App 私有 | **下载完成后镜像**到 SAF 树 | 「已授权可写 · 镜像…」；失败 snackbar 可见 |
+| 回退 + SAF 已授权但不可写 | App 私有 | 无镜像 | 「已授权但不可写」+ 提示重选 |
+| 清除授权 | 回退私有 | 停止镜像 | 「已清除」 |
+
+实现：`LanXinSafTree` · `DebugAssetStorage.shouldMirror` / `mirrorReadyPathToSaf` · `DesktopPetViewModel.grantLanXinSafTree`。
+
+#### 模型开关与路径
+
+| 能力 | 开关打开后 | 路径空/失效 |
+|------|-----------|------------|
+| ASR | **自动 `engine.load`**；调用前 `VoiceInputCoordinator` 也会 auto-load | 明确 snackbar：请一键下载/导入 |
+| 本地脑 | **自动 `engine.load`**；`DefaultLocalInferenceProvider` 调用前 load | 明确错误文案 |
+| TTS | 桌宠启用/会话时 load | 无路径仍可 stub 字幕 |
+| 路径解析 | 配置失效时探测 `openSourceBaseDir` 下 `LanXin/…` 并 **heal 回写** DataStore | 避免「开关开了找不到模型」 |
 
 
 实现要点：
@@ -58,7 +80,7 @@
 |------|-----|
 | Catalog / 镜像 | `DebugAssetCatalog` · `DebugAssetMirror` |
 | 下载 | `DebugAssetDownloader` + `AssetDownloadTransport` |
-| 落盘根 | `DebugAssetStorage`（公共 `LanXin/` → externalFiles 回退） |
+| 落盘根 | `DebugAssetStorage`（公共 `LanXin/` → externalFiles 回退；SAF 授权后镜像公共树） |
 | 传输 | `KtorAssetDownloadTransport`（OkHttp + IPv4 优先；connect 90s / socket 5min / request=`HttpTimeoutConfig.INFINITE_TIMEOUT_MS`，**禁止** `0`） |
 | 解压 | `ArchiveExtractor`（zip / tar.bz2 / tar.gz，防 zip-slip） |
 | DI | `PetModule` binds transport |

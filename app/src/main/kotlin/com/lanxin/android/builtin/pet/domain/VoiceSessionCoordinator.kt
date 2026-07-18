@@ -20,7 +20,9 @@ import com.lanxin.android.builtin.systemtools.domain.DeviceToolBridge
 import com.lanxin.android.builtin.systemtools.domain.DeviceToolInvocation
 import com.lanxin.android.builtin.systemtools.domain.DeviceToolOutcome
 import com.lanxin.android.builtin.systemtools.domain.DeviceToolTurn
+import com.lanxin.android.builtin.voice.domain.TtsConfig
 import com.lanxin.android.builtin.voice.domain.TtsEngine
+import com.lanxin.android.builtin.voice.domain.TtsSettings
 import com.lanxin.android.builtin.voice.domain.TtsSynthesizeRequest
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -53,6 +55,7 @@ import kotlinx.coroutines.sync.withLock
 class VoiceSessionCoordinator @Inject constructor(
     private val responder: PetChatResponder,
     private val ttsEngine: TtsEngine,
+    private val ttsSettings: TtsSettings,
     private val petSettings: PetSettings,
     private val deviceToolBridge: DeviceToolBridge
 ) {
@@ -140,12 +143,20 @@ class VoiceSessionCoordinator @Inject constructor(
         )
         _snapshot.value = snap
 
-        // TTS：未就绪时仍展示字幕气泡（M1 stub 可 auto-load）；绝不把标签念出来
+        // TTS：未就绪时用 DataStore 配置 auto-load（含 modelDir）；绝不把标签念出来
         if (!ttsEngine.isReady) {
             runCatching {
-                ttsEngine.load(
-                    com.lanxin.android.builtin.voice.domain.TtsConfig(enabled = true)
-                )
+                val stored = ttsSettings.getConfig()
+                val toLoad = if (stored.enabled) {
+                    stored
+                } else {
+                    // 会话需要发音时临时 enable；路径仍读 prefs / 下载结果
+                    stored.copy(enabled = true)
+                }
+                ttsEngine.load(toLoad)
+                if (!stored.enabled) {
+                    ttsSettings.setEnabled(true)
+                }
             }
         }
         val tts = runCatching {

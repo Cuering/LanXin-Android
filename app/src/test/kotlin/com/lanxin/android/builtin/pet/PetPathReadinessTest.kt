@@ -206,7 +206,7 @@ class PetPathReadinessTest {
     }
 
     @Test
-    fun release_live2dDefaultsToBuiltin_notOpenSourceAsr() {
+    fun release_live2dAndAsr_useOpenSourceWhenPresent() {
         val root = tmp.root
         val mao = File(root, DebugOpenSourcePaths.LIVE2D_MAO_MODEL3_REL)
         mao.parentFile!!.mkdirs()
@@ -222,12 +222,14 @@ class PetPathReadinessTest {
             asr = AsrConfig(),
             isDebug = false
         )
-        // Live2D：LanXin 开源包仍可被 resolveLive2d 命中（用户可能 adb push），
-        // 但无 files 时回落 logical；此处 LanXin 有文件 → 开源包路径
-        // 注意：priority 是 builtin installed → LanXin → logical
+        // Live2D：LanXin 开源包仍可被 resolveLive2d 命中
+        // ASR/TTS：release 也探测 openSource（用户一键下载到 externalFiles）
         assertEquals(mao.absolutePath, resolved.live2dModelPath)
-        assertEquals("", resolved.asrModelPath)
-        assertEquals(MeijuDebugPaths.ResourceSource.PLACEHOLDER, resolved.asrSource)
+        assertEquals(asrDir.absolutePath, resolved.asrModelPath)
+        assertEquals(
+            MeijuDebugPaths.ResourceSource.DEBUG_OPEN_SOURCE,
+            resolved.asrSource
+        )
     }
 
     @Test

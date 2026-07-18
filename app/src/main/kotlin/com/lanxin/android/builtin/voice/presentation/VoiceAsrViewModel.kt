@@ -109,6 +109,35 @@ class VoiceAsrViewModel @Inject constructor(
             _uiState.update { it.copy(enabled = enabled) }
             if (!enabled) {
                 engine.unload()
+                refresh()
+                return@launch
+            }
+            // 开关打开 → 自动 load；路径缺失时给出明确原因，不再「开了却不能调用」
+            val config = settings.getConfig()
+            if (config.modelPath.isBlank()) {
+                _uiState.update {
+                    it.copy(
+                        snackbarMessage =
+                            "已启用 ASR，但模型路径为空。请到桌宠设置「一键下载 ASR」或导入模型目录后再试。"
+                    )
+                }
+                refresh()
+                return@launch
+            }
+            _uiState.update { it.copy(isBusy = true) }
+            val ok = engine.load(config)
+            _uiState.update {
+                it.copy(
+                    isBusy = false,
+                    engineState = engine.state.value,
+                    lastError = engine.lastError,
+                    snackbarMessage = if (ok) {
+                        "ASR 已启用并加载模型"
+                    } else {
+                        "ASR 已启用，但加载失败：${engine.lastError ?: "unknown"}。" +
+                            "请检查模型路径是否存在。"
+                    }
+                )
             }
             refresh()
         }

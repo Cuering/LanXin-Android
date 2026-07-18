@@ -47,10 +47,31 @@ class DefaultLocalInferenceProvider @Inject constructor(
         systemPrompt: String?
     ): Flow<ApiState> = flow {
         val config = settings.getConfig()
+        if (!config.enabled) {
+            emit(
+                ApiState.Error(
+                    "本地推理未启用。请到「设置 → 本地推理」打开开关并加载模型。"
+                )
+            )
+            return@flow
+        }
+        if (config.modelPath.isBlank()) {
+            emit(
+                ApiState.Error(
+                    "本地脑模型路径为空。请到桌宠设置「一键下载本地脑」或导入模型目录。"
+                )
+            )
+            return@flow
+        }
         if (!engine.isReady) {
             val ok = engine.load(config)
             if (!ok) {
-                emit(ApiState.Error(engine.lastError ?: "local_engine_not_ready"))
+                emit(
+                    ApiState.Error(
+                        engine.lastError
+                            ?: "local_engine_not_ready：模型加载失败，请检查路径 ${config.modelPath}"
+                    )
+                )
                 return@flow
             }
         }

@@ -36,6 +36,7 @@ import com.lanxin.android.builtin.pet.domain.DebugOpenSourcePaths
 import com.lanxin.android.builtin.pet.domain.LanXinSafTree
 import com.lanxin.android.builtin.pet.domain.Live2dDisplayController
 import com.lanxin.android.builtin.pet.domain.Live2dModelCatalog
+import com.lanxin.android.builtin.pet.domain.MeijuDebugPaths
 import com.lanxin.android.builtin.pet.domain.MoodTagMapper
 import com.lanxin.android.builtin.pet.domain.PetExpressionController
 import com.lanxin.android.builtin.pet.domain.PetPathReadiness
@@ -221,7 +222,18 @@ class DesktopPetViewModel @Inject constructor(
                 tts = tts,
                 asr = asr,
                 isDebug = isDebugBuild,
-                openSourceBaseDir = storageRoot.baseDir
+                openSourceBaseDir = storageRoot.baseDir,
+                localLlmConfigured = local.modelPath
+            )
+            // 配置路径失效但开源包已下载：把解析到的真实路径回写 DataStore，
+            // 避免开关打开后引擎仍读空/失效路径
+            healModelPathsIfNeeded(
+                asrConfigured = asr.modelPath,
+                asrResolved = resolved.asrModelPath,
+                ttsConfigured = tts.modelDir.ifBlank { tts.modelPath },
+                ttsResolved = resolved.ttsModelDir,
+                llmConfigured = local.modelPath,
+                llmResolved = resolved.localLlmModelPath
             )
             val live2dCheck = PetPathReadiness.check(
                 PetPathReadiness.Kind.LIVE2D,
@@ -237,7 +249,7 @@ class DesktopPetViewModel @Inject constructor(
             )
             val llmCheck = PetPathReadiness.check(
                 PetPathReadiness.Kind.LOCAL_LLM,
-                local.modelPath
+                resolved.localLlmModelPath.ifBlank { local.modelPath }
             )
             val live2dDecision = Live2dDisplayController.decide(resolved.live2dModelPath)
             val can = OverlayPermissionHelper.canDrawOverlays(app)
@@ -304,11 +316,11 @@ class DesktopPetViewModel @Inject constructor(
                         ttsCheck,
                         llmCheck
                     ),
-                    localLlmPathConfigured = local.modelPath,
-                    localLlmReadyLabel = if (local.modelPath.isBlank()) {
-                        "未配置"
-                    } else {
-                        llmCheck.label
+                    localLlmPathConfigured = resolved.localLlmModelPath.ifBlank { local.modelPath },
+                    localLlmReadyLabel = when {
+                        resolved.localLlmModelPath.isBlank() && local.modelPath.isBlank() ->
+                            "未配置"
+                        else -> llmCheck.label
                     },
                     localLlmHint = DebugOpenSourcePaths.LOCAL_LLM_DEFAULT_HINT,
                     fetchScriptHint = DebugOpenSourcePaths.FETCH_SCRIPT_HINT,
@@ -782,24 +794,13 @@ class DesktopPetViewModel @Inject constructor(
                     }
                     is DebugAssetDownloadEvent.Completed -> {
                         onDownloadCompleted(kind, event.readyPath)
-                        // 若 File 回退且 SAF 可写，尽力镜像关键就绪路径到公共树
-                        if (storageRoot.usedFallback && storageRoot.safWritable) {
-                            runCatching {
-                                val ready = java.io.File(event.readyPath)
-                                val target = if (ready.isFile) ready else ready
-                                val rel = LanXinSafTree.relativeUnderLanXin(
-                                    target.absolutePath,
-                                    storageRoot.lanXinDir
-                                )
-                                if (rel != null) {
-                                    DebugAssetStorage.mirrorToSafIfNeeded(
-                                        app,
-                                        storageRoot,
-                                        if (target.isFile) target else target,
-                                        rel
-                                    )
-                                }
-                            }
+                        // 回退写 App 私有时：授权可写则镜像到公共树；结果可见，禁止静默
+                        val mirror = withContext(Dispatchers.IO) {
+                            DebugAssetStorage.mirrorReadyPathToSaf(
+                                app,
+                                storageRoot,
+                                event.readyPath
+                            )
                         }
                         val src = event.sourceLabel.ifBlank { event.mirror.name }
                         patchDownloadItem(kind) {
@@ -815,8 +816,16 @@ class DesktopPetViewModel @Inject constructor(
                         val where = event.readyPath
                         val fallbackNote = when {
                             !storageRoot.usedFallback -> ""
-                            storageRoot.safWritable -> "（引擎写 App 目录，已授权 SAF 公共树）"
-                            else -> "（公共目录不可写，已回退；可点「授权公共 LanXin」）"
+                            storageRoot.safWritable && mirror.success && mirror.attempted ->
+                                "；${mirror.message}"
+                            storageRoot.safWritable && mirror.attempted && !mirror.success ->
+                                "；${mirror.message}"
+                            storageRoot.safWritable ->
+                                "（引擎写 App 目录，已授权 SAF 公共树）"
+                            storageRoot.safGranted ->
+                                "（SAF 已授权但不可写；引擎写 App 私有）"
+                            else ->
+                                "（公共目录不可写，已回退；可点「授权公共 LanXin」）"
                         }
                         _uiState.update {
                             it.copy(
@@ -827,7 +836,8 @@ class DesktopPetViewModel @Inject constructor(
                                 safWritable = storageRoot.safWritable,
                                 safDisplayLabel = storageRoot.safDisplayLabel,
                                 safTreeUri = storageRoot.safTreeUri,
-                                snackbarMessage = "${kind.name} 已保存到 $where（源：$src）$fallbackNote"
+                                snackbarMessage =
+                                    "${kind.name} 已保存到 $where（源：$src）$fallbackNote"
                             )
                         }
                         refresh()
@@ -909,6 +919,41 @@ class DesktopPetViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 配置路径空/失效但解析到开源包真实路径时，回写 prefs。
+     * 解决：下载落在 App 私有，配置仍空或指到不存在的公共路径 → 开关开了也找不到。
+     */
+    private suspend fun healModelPathsIfNeeded(
+        asrConfigured: String,
+        asrResolved: String,
+        ttsConfigured: String,
+        ttsResolved: String,
+        llmConfigured: String,
+        llmResolved: String
+    ) {
+        if (asrResolved.isNotBlank() &&
+            asrResolved != asrConfigured.trim() &&
+            MeijuDebugPaths.pathExists(asrResolved) &&
+            (asrConfigured.isBlank() || !MeijuDebugPaths.pathExists(asrConfigured))
+        ) {
+            asrSettings.setModelPath(asrResolved)
+        }
+        if (ttsResolved.isNotBlank() &&
+            ttsResolved != ttsConfigured.trim() &&
+            MeijuDebugPaths.pathExists(ttsResolved) &&
+            (ttsConfigured.isBlank() || !MeijuDebugPaths.pathExists(ttsConfigured))
+        ) {
+            ttsSettings.setModelDir(ttsResolved)
+        }
+        if (llmResolved.isNotBlank() &&
+            llmResolved != llmConfigured.trim() &&
+            MeijuDebugPaths.pathExists(llmResolved) &&
+            (llmConfigured.isBlank() || !MeijuDebugPaths.pathExists(llmConfigured))
+        ) {
+            localInferenceSettings.setModelPath(llmResolved)
+        }
+    }
+
     private suspend fun onDownloadCompleted(kind: DebugAssetKind, readyPath: String) {
         when (kind) {
             DebugAssetKind.LIVE2D -> {
@@ -916,7 +961,12 @@ class DesktopPetViewModel @Inject constructor(
                 notifyLive2dReloadIfRunning()
             }
             DebugAssetKind.ASR -> asrSettings.setModelPath(readyPath)
-            DebugAssetKind.TTS -> ttsSettings.setModelDir(readyPath)
+            DebugAssetKind.TTS -> {
+                ttsSettings.setModelDir(readyPath)
+                if (ttsSettings.getConfig().enabled && !ttsEngine.isReady) {
+                    runCatching { ttsEngine.load(ttsSettings.getConfig()) }
+                }
+            }
             DebugAssetKind.LOCAL_LLM -> localInferenceSettings.setModelPath(readyPath)
         }
     }

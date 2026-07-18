@@ -81,6 +81,31 @@ class VoiceInputCoordinator @Inject constructor(
                 )
             )
         }
+        // 开关已开但未 load：调用前自动尝试加载（修复「开关开了却无法调用」）
+        if (!engine.isReady) {
+            if (config.modelPath.isBlank()) {
+                return Result.failure(
+                    IllegalStateException(
+                        "语音识别模型路径为空。请到设置下载/导入 ASR 模型后再试。"
+                    )
+                )
+            }
+            val loaded = runCatching { engine.load(config) }.getOrDefault(false)
+            if (!loaded && requireReady) {
+                return Result.failure(
+                    IllegalStateException(
+                        engine.lastError
+                            ?: MicPermissionGate.blockReason(
+                                permission = MicPermissionState.GRANTED,
+                                engineReady = false,
+                                enabled = true,
+                                requireMic = false
+                            )
+                            ?: "语音识别模型未就绪"
+                    )
+                )
+            }
+        }
         if (requireReady && !engine.isReady) {
             return Result.failure(
                 IllegalStateException(

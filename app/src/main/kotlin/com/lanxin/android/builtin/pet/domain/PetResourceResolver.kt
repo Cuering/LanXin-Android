@@ -33,13 +33,17 @@ object PetResourceResolver {
         val ttsModelDir: String,
         val ttsReferenceAudio: String,
         val asrModelPath: String,
+        val localLlmModelPath: String = "",
         val live2dSource: MeijuDebugPaths.ResourceSource,
         val ttsSource: MeijuDebugPaths.ResourceSource,
-        val asrSource: MeijuDebugPaths.ResourceSource
+        val asrSource: MeijuDebugPaths.ResourceSource,
+        val localLlmSource: MeijuDebugPaths.ResourceSource =
+            MeijuDebugPaths.ResourceSource.PLACEHOLDER
     ) {
         val live2dLabel: String get() = MeijuDebugPaths.sourceLabel(live2dSource)
         val ttsLabel: String get() = MeijuDebugPaths.sourceLabel(ttsSource)
         val asrLabel: String get() = MeijuDebugPaths.sourceLabel(asrSource)
+        val localLlmLabel: String get() = MeijuDebugPaths.sourceLabel(localLlmSource)
     }
 
     /**
@@ -47,6 +51,7 @@ object PetResourceResolver {
      * @param openSourceBaseDir 开源包 base（[DebugAssetStorage] 解析结果），默认 [filesDir]
      * @param isDebug debuggable；false 时不自动选用 LanXin 开源包 / meiju-ref（ASR/TTS）。
      *   Live2D 仍可回落到仓内官方 Sample。
+     * @param localLlmConfigured 本地脑 DataStore 路径（可空）
      */
     fun resolve(
         filesDir: File,
@@ -54,7 +59,8 @@ object PetResourceResolver {
         tts: TtsConfig,
         asr: AsrConfig,
         isDebug: Boolean,
-        openSourceBaseDir: File = filesDir
+        openSourceBaseDir: File = filesDir,
+        localLlmConfigured: String = ""
     ): ResolvedPaths {
         val live2dConfigured = pet.live2dModelPath
         val ttsDirConfigured = tts.modelDir.ifBlank { tts.modelPath }
@@ -69,42 +75,46 @@ object PetResourceResolver {
             allowMeijuRef = isDebug,
             openSourceBaseDir = openSourceBaseDir
         )
-        val ttsDir = if (isDebug) {
-            MeijuDebugPaths.resolveTtsModelDirIfPresent(
-                filesDir,
-                ttsDirConfigured,
-                openSourceBaseDir = openSourceBaseDir
-            )
-        } else {
-            ttsDirConfigured.trim()
-        }
+        // debug/release 均探测 openSource：用户下载到 externalFiles 后配置可空
+        val ttsDir = MeijuDebugPaths.resolveTtsModelDirIfPresent(
+            filesDir,
+            ttsDirConfigured,
+            openSourceBaseDir = openSourceBaseDir
+        )
         val ttsRef = if (isDebug) {
             MeijuDebugPaths.resolveTtsReferenceIfPresent(filesDir, ttsRefConfigured)
         } else {
             ttsRefConfigured.trim()
         }
-        val asrPath = if (isDebug) {
-            MeijuDebugPaths.resolveAsrIfPresent(
-                filesDir,
-                asrConfigured,
-                openSourceBaseDir = openSourceBaseDir
-            )
-        } else {
-            asrConfigured.trim()
-        }
+        val asrPath = MeijuDebugPaths.resolveAsrIfPresent(
+            filesDir,
+            asrConfigured,
+            openSourceBaseDir = openSourceBaseDir
+        )
+        val localLlm = MeijuDebugPaths.resolveLocalLlmIfPresent(
+            filesDir,
+            localLlmConfigured,
+            openSourceBaseDir = openSourceBaseDir
+        )
 
         return ResolvedPaths(
             live2dModelPath = live2d,
             ttsModelDir = ttsDir,
             ttsReferenceAudio = ttsRef,
             asrModelPath = asrPath,
+            localLlmModelPath = localLlm,
             live2dSource = MeijuDebugPaths.classifySource(isDebug, live2dConfigured, live2d),
             ttsSource = MeijuDebugPaths.classifySource(
                 isDebug,
                 ttsDirConfigured.ifBlank { ttsRefConfigured },
                 ttsDir.ifBlank { ttsRef }
             ),
-            asrSource = MeijuDebugPaths.classifySource(isDebug, asrConfigured, asrPath)
+            asrSource = MeijuDebugPaths.classifySource(isDebug, asrConfigured, asrPath),
+            localLlmSource = MeijuDebugPaths.classifySource(
+                isDebug,
+                localLlmConfigured,
+                localLlm
+            )
         )
     }
 }

@@ -80,4 +80,20 @@ class LanXinSafTreeTest {
         )
         assertNull(LanXinSafTree.resolveUnderLanXin("backgrounds/missing.jpg", lanXin))
     }
+
+    @Test
+    fun mirrorRelativeKey_matchesRelativeUnderLanXin() {
+        val lanXin = File(tmp.root, "LanXin").apply { mkdirs() }
+        val model = File(lanXin, "asr/zip/tokens.txt").apply {
+            parentFile?.mkdirs()
+            writeText("t")
+        }
+        assertEquals(
+            "asr/zip/tokens.txt",
+            LanXinSafTree.mirrorRelativeKey(model.absolutePath, lanXin)
+        )
+        assertNull(
+            LanXinSafTree.mirrorRelativeKey(File(tmp.root, "out.txt").absolutePath, lanXin)
+        )
+    }
 }
