@@ -36,6 +36,7 @@ import com.lanxin.android.R
 import com.lanxin.android.builtin.pet.domain.BuiltInLive2dAssets
 import com.lanxin.android.builtin.pet.domain.DebugAssetStorage
 import com.lanxin.android.builtin.pet.domain.Live2dDisplayController
+import com.lanxin.android.builtin.pet.domain.Live2dModel3Reader
 import com.lanxin.android.builtin.pet.domain.MeijuDebugPaths
 import com.lanxin.android.builtin.pet.domain.PetBridgeCommand
 import com.lanxin.android.builtin.pet.domain.PetBridgeMessage
@@ -278,7 +279,10 @@ class FloatingPetService : Service() {
                     else -> resolved
                 }
             }
-            val decision = Live2dDisplayController.decide(path)
+            val decision = Live2dModel3Reader.enrich(
+                applicationContext,
+                Live2dDisplayController.decide(path)
+            )
             lastLive2dDecision = decision
 
             // 兼容旧钩子
@@ -290,7 +294,7 @@ class FloatingPetService : Service() {
                 null
             )
 
-            // M2b 结构化推送
+            // M2b 结构化推送（含 model3 JSON Base64，避免 fetch file://）
             val encoded = desktopBridge?.encodeLoadLive2d(decision) ?: return@launch
             pushRawToWeb(encoded)
         }

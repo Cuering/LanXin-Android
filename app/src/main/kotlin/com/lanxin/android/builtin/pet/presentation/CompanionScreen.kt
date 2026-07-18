@@ -72,9 +72,11 @@ import com.lanxin.android.builtin.pet.data.DesktopPetBridge
 import com.lanxin.android.builtin.pet.domain.BuiltInLive2dAssets
 import com.lanxin.android.builtin.pet.domain.DebugAssetStorage
 import com.lanxin.android.builtin.pet.domain.Live2dDisplayController
+import com.lanxin.android.builtin.pet.domain.Live2dModel3Reader
 import com.lanxin.android.builtin.pet.domain.MeijuDebugPaths
 import com.lanxin.android.builtin.pet.domain.PetBridgeCommand
 import com.lanxin.android.builtin.pet.domain.PetBridgeMessage
+import com.lanxin.android.builtin.pet.domain.PetBridgeProtocol
 import com.lanxin.android.builtin.pet.domain.PetExpressionController
 import com.lanxin.android.builtin.pet.domain.PetSettings
 import com.lanxin.android.builtin.pet.domain.VoiceSessionCoordinator
@@ -383,7 +385,25 @@ class CompanionViewModel @Inject constructor(
                 // 全屏页忽略关闭悬浮语义
             }
             PetBridgeCommand.LIVE2D_STATUS -> {
-                // ignore
+                // HTML 实际渲染结果：若降级则同步底部状态，避免谎称 Live2D 壳
+                val mode = msg.payload[PetBridgeProtocol.KEY_LIVE2D_MODE].orEmpty()
+                val reason = msg.payload[PetBridgeProtocol.KEY_LIVE2D_REASON].orEmpty()
+                val label = when (mode.uppercase()) {
+                    "FALLBACK" -> "降级" + if (reason.isNotBlank()) "（$reason）" else ""
+                    "PLACEHOLDER" -> "占位"
+                    "LIVE2D_SHELL" -> lastDecision?.shortLabel ?: "Live2D 壳"
+                    else -> lastDecision?.shortLabel ?: mode.ifBlank { "未知" }
+                }
+                _uiState.update {
+                    // 保留「思考中/已回复」等瞬时状态
+                    if (it.busy || it.statusLine.startsWith("思考") || it.statusLine.startsWith("已回复") ||
+                        it.statusLine.startsWith("出错")
+                    ) {
+                        it
+                    } else {
+                        it.copy(statusLine = "显示：$label · 可直接打字（无需 ASR/TTS）")
+                    }
+                }
             }
             else -> Unit
         }
@@ -471,7 +491,10 @@ class CompanionViewModel @Inject constructor(
             }
         }
         modelPath = path
-        lastDecision = Live2dDisplayController.decide(path)
+        lastDecision = Live2dModel3Reader.enrich(
+            appContext,
+            Live2dDisplayController.decide(path)
+        )
         val label = lastDecision?.shortLabel ?: "内置"
         _uiState.update {
             it.copy(statusLine = "显示：$label · 可直接打字（无需 ASR/TTS）")

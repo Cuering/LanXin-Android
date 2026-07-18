@@ -16,6 +16,8 @@
 
 package com.lanxin.android.builtin.pet.domain
 
+import java.util.Base64
+
 /**
  * Bridge 协议编解码（纯逻辑，对齐妹居 DesktopPetBridge / AndroidVoiceBridge 概念命名）。
  *
@@ -46,6 +48,11 @@ object PetBridgeProtocol {
     const val KEY_LIVE2D_DIR_URL = "live2dDirUrl"
     const val KEY_LIVE2D_MODE = "live2dMode"
     const val KEY_LIVE2D_REASON = "live2dReason"
+    /**
+     * model3.json 的 Base64(UTF-8) 载荷，避免 WebView `fetch(file://)` 失败。
+     * NO_WRAP，可直接 atob。
+     */
+    const val KEY_LIVE2D_MODEL3_B64 = "live2dModel3B64"
 
     /** M2b 打磨：表情 / 口型 */
     const val KEY_EXPRESSION = "expression"
@@ -129,17 +136,36 @@ object PetBridgeProtocol {
         decision: Live2dDisplayController.Decision,
         timestampMs: Long = System.currentTimeMillis()
     ): PetBridgeMessage {
+        val payload = linkedMapOf(
+            KEY_LIVE2D_PATH to decision.model3Path,
+            KEY_LIVE2D_FILE_URL to decision.model3FileUrl,
+            KEY_LIVE2D_DIR_URL to decision.modelDirFileUrl,
+            KEY_LIVE2D_MODE to decision.mode.name,
+            KEY_LIVE2D_REASON to decision.reason
+        )
+        val json = decision.model3Json.trim()
+        if (json.isNotEmpty()) {
+            payload[KEY_LIVE2D_MODEL3_B64] = encodeModel3B64(json)
+        }
         return PetBridgeMessage(
             command = PetBridgeCommand.LOAD_LIVE2D,
-            payload = mapOf(
-                KEY_LIVE2D_PATH to decision.model3Path,
-                KEY_LIVE2D_FILE_URL to decision.model3FileUrl,
-                KEY_LIVE2D_DIR_URL to decision.modelDirFileUrl,
-                KEY_LIVE2D_MODE to decision.mode.name,
-                KEY_LIVE2D_REASON to decision.reason
-            ),
+            payload = payload,
             timestampMs = timestampMs
         )
+    }
+
+    /** model3 原文 → Base64（UTF-8，无换行）。 */
+    fun encodeModel3B64(model3Json: String): String {
+        return Base64.getEncoder().encodeToString(model3Json.toByteArray(Charsets.UTF_8))
+    }
+
+    /** Base64 → model3 原文；非法输入返回 null。 */
+    fun decodeModel3B64(b64: String): String? {
+        if (b64.isBlank()) return null
+        return runCatching {
+            String(Base64.getDecoder().decode(b64.trim()), Charsets.UTF_8)
+                .takeIf { it.isNotBlank() }
+        }.getOrNull()
     }
 
     /** Web → Native：显示状态回传。 */
