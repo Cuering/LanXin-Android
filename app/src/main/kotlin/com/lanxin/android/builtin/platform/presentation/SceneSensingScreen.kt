@@ -93,6 +93,11 @@ fun SceneSensingScreen(
     }
 
     fun startCapture() {
+        // 关/未同意绝不拉起相机（隐私 Gate）
+        if (!state.enabled || !state.consentGranted) {
+            viewModel.onPreviewCaptured(null, cameraGranted = false)
+            return
+        }
         val granted = ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.CAMERA

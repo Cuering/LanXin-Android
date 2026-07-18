@@ -157,6 +157,9 @@ class SceneSensingViewModel @Inject constructor(
             val config = settings.getConfig()
             val deny = SceneSensingGate.denyReason(config, cameraGranted)
             if (deny != null) {
+                if (bitmap != null && !bitmap.isRecycled) {
+                    runCatching { bitmap.recycle() }
+                }
                 _uiState.update {
                     it.copy(snackbarMessage = SceneSensingGate.blockMessage(deny))
                 }
