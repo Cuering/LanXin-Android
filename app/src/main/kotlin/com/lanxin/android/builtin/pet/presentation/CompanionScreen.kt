@@ -278,7 +278,8 @@ fun CompanionScreen(
                         cursorColor = Color(0xFFE85D8E),
                         focusedBorderColor = Color(0xFFE85D8E).copy(alpha = 0.5f),
                         unfocusedBorderColor = Color(0xFF5A2038).copy(alpha = 0.25f),
-                        placeholderColor = Color(0xFF5A2038).copy(alpha = 0.55f)
+                        focusedPlaceholderColor = Color(0xFF5A2038).copy(alpha = 0.55f),
+                        unfocusedPlaceholderColor = Color(0xFF5A2038).copy(alpha = 0.55f)
                     ),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                     keyboardActions = KeyboardActions(
