@@ -17,6 +17,8 @@ Notes for LanXin:
 - Runtime native libraries are packaged into the APK via the AAR (Gradle download at build time).
 - ASR model weights (ONNX / tokens) are NOT redistributed in this repository; users download
   them separately into LanXin/asr/ (see docs/voice-asr.md and docs/debug-assets.md).
-- Bundled ONNX Runtime inside the static-link AAR is used by sherpa-onnx ASR.
+- TTS model weights are also external: LanXin/tts/ (see docs/voice-tts.md). Matcha requires a
+  separate vocoder ONNX (e.g. vocos-22khz-univ.onnx) which is not committed.
+- Bundled ONNX Runtime inside the static-link AAR is used by sherpa-onnx ASR and OfflineTts.
   The app may also depend on Microsoft onnxruntime-android for embeddings; packaging
   pickFirsts handle duplicate libonnxruntime.so when both are present.

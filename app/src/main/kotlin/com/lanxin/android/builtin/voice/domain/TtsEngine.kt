@@ -21,10 +21,12 @@ import kotlinx.coroutines.flow.StateFlow
 /**
  * 语音合成（TTS）引擎抽象。
  *
- * M1：接口 + [com.lanxin.android.builtin.voice.data.StubTtsEngine]。
- * 后续 Bert-VITS2 / JNI 替换实现，不改 [VoiceSessionCoordinator]。
+ * 实现：Hilt → [com.lanxin.android.builtin.voice.data.SherpaTtsEngine]
+ * （native OfflineTts 可用则真合成；否则 / stub:// 降级）。
+ * 对照 [com.lanxin.android.builtin.voice.data.StubTtsEngine]（单测）。
+ * 会话层 [com.lanxin.android.builtin.pet.domain.VoiceSessionCoordinator] 不感知实现。
  *
- * 非目标（本阶段）：打包真实 so / 模型 / 参考 wav。
+ * 模型权重外置 `LanXin/tts/`；运行时 so 与 ASR 共用 sherpa-onnx AAR。
  */
 interface TtsEngine {
 

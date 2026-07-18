@@ -1,0 +1,103 @@
+# P1 离线 TTS：Sherpa OfflineTts 真引擎 / 单测 / 文档
+name: P1 TTS Native Verify
+
+on:
+  push:
+    branches: [main, 'feat/p1-tts*', 'feat/phase6*']
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/voice/**'
+      - 'app/src/test/kotlin/com/lanxin/android/builtin/voice/**'
+      - 'app/build.gradle.kts'
+      - 'app/libs/**'
+      - 'docs/voice-tts.md'
+      - 'builtin/voice/**'
+      - 'third_party/sherpa-onnx/**'
+      - 'ARCHITECTURE.md'
+      - '.github/workflows/p1-tts-native-verify.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/voice/**'
+      - 'app/src/test/kotlin/com/lanxin/android/builtin/voice/**'
+      - 'app/build.gradle.kts'
+      - 'app/libs/**'
+      - 'docs/voice-tts.md'
+      - 'builtin/voice/**'
+      - 'third_party/sherpa-onnx/**'
+      - 'ARCHITECTURE.md'
+      - '.github/workflows/p1-tts-native-verify.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: p1-tts-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: Offline TTS unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: gradle
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup local.properties and debug keystore
+        run: |
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+          rm -f debug-keystore.jks
+          keytool -genkeypair -v -keystore debug-keystore.jks -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Create assets model dir (models gitignored)
+        run: |
+          mkdir -p app/src/main/assets/models/gte-small
+          touch app/src/main/assets/models/gte-small/.gitkeep
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Download sherpa-onnx AAR
+        run: |
+          ./gradlew :app:downloadSherpaOnnxAar --no-daemon --stacktrace
+          test -f app/libs/sherpa-onnx-static-link-onnxruntime-1.13.4.aar
+          ls -lh app/libs/*.aar
+
+      - name: Run voice unit tests (ASR + TTS)
+        run: |
+          ./gradlew :app:testDebugUnitTest \
+            --tests "com.lanxin.android.builtin.voice.*" \
+            --no-daemon --stacktrace
+
+      - name: Surfaces and docs present
+        run: |
+          test -f docs/voice-tts.md
+          test -f builtin/voice/README.md
+          test -f third_party/sherpa-onnx/NOTICE
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/voice/domain/TtsEngine.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/voice/data/StubTtsEngine.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/voice/data/SherpaTtsEngine.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/voice/data/SherpaTtsBridge.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/voice/di/VoiceModule.kt
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/voice/StubTtsEngineTest.kt
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/voice/SherpaTtsEngineTest.kt
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/voice/SherpaTtsBridgeTest.kt
+          grep -E -n "interface TtsEngine|fun load|fun unload|fun synthesize|isReady|isAvailable" \
+            app/src/main/kotlin/com/lanxin/android/builtin/voice/domain/TtsEngine.kt
+          grep -E -n "SherpaTtsEngine|bindTtsEngine" \
+            app/src/main/kotlin/com/lanxin/android/builtin/voice/di/VoiceModule.kt
+          grep -E -n "OfflineTts|loadModel|isNativeAvailable|floatToPcm16le" \
+            app/src/main/kotlin/com/lanxin/android/builtin/voice/data/SherpaTtsBridge.kt
+          grep -E -n "downloadSherpaOnnxAar|sherpa-onnx" app/build.gradle.kts
+          grep -E -n "Apache|sherpa-onnx|TTS|OfflineTts" third_party/sherpa-onnx/NOTICE
+          grep -E -n "SherpaTtsEngine|OfflineTts|native_degraded|LanXin/tts" docs/voice-tts.md

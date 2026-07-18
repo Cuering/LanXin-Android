@@ -34,10 +34,11 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Sherpa-ONNX JNI 接入点。
+ * Sherpa-ONNX JNI 接入点（ASR）。
  *
  * - 运行时 so 由官方 AAR 打进 APK（见 app/libs + downloadSherpaOnnxAar）
- * - 模型权重外置：`LanXin/asr/<model-dir>/`（不进 git）
+ * - ASR 模型外置：`LanXin/asr/<model-dir>/`（不进 git）
+ * - TTS 见 [SherpaTtsBridge]（共用同一 `libsherpa-onnx-jni.so`）
  * - JVM 单测：无 so 时 [isNativeAvailable] 为 false；[loadModel]/[transcribe] 安全降级
  *
  * 支持目录布局：
@@ -71,7 +72,7 @@ class SherpaOnnxBridge @Inject constructor() {
      */
     fun isNativeAvailable(): Boolean = tryLoadNative()
 
-    fun nativeLoadError(): String? = nativeLoadError
+    fun nativeLoadError(): String? = companionNativeLoadError()
 
     fun currentMode(): Mode = mode
 
@@ -355,11 +356,15 @@ class SherpaOnnxBridge @Inject constructor() {
 
         /** 测试钩子：重置 load 状态（仅 JVM 单测使用）。 */
         @JvmStatic
-        internal fun resetNativeLoadStateForTests() {
+        fun resetNativeLoadStateForTests() {
             nativeLoadAttempted = false
             nativeOk = false
             nativeLoadError = null
         }
+
+        /** 供 [SherpaTtsBridge] 等读取最近一次 loadLibrary 错误。 */
+        @JvmStatic
+        fun companionNativeLoadError(): String? = nativeLoadError
 
         fun pcm16leToFloat(pcm16leMono: ByteArray): FloatArray {
             val n = pcm16leMono.size / 2
