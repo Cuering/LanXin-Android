@@ -245,7 +245,7 @@ fun SettingScreen(
 
             SettingItem(
                 title = "联网搜索",
-                description = "默认关；web_search（DDG + 可选备用）；开后 Agent 可见",
+                description = "默认关；web_search（DuckDuckGo）；开后 Agent 可见",
                 onItemClick = onNavigateToWebSearch,
                 showTrailingIcon = true,
                 showLeadingIcon = false
