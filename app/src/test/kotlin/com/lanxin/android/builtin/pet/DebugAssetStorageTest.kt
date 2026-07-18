@@ -115,8 +115,7 @@ class DebugAssetStorageTest {
                 baseRoot.copy(
                     usedFallback = true,
                     safWritable = true,
-                    safTreeUri =
-                        "content://com.android.externalstorage.documents/tree/primary%3ALanXin"
+                    safTreeUri = "content://com.android.externalstorage.documents/tree/primary%3ALanXin"
                 )
             )
         )
