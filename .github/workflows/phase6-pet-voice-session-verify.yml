@@ -3,7 +3,7 @@ name: Phase6 Pet Voice Session Verify
 
 on:
   push:
-    branches: [main, 'feat/phase6*', 'feat/m2b*', 'feat/vendor-live2d*', 'feat/app-inapp*']
+    branches: [main, 'feat/phase6*', 'feat/m2b*', 'feat/vendor-live2d*', 'feat/app-inapp*', 'feat/companion*', 'feat/bgm*']
     paths:
       - 'app/src/main/kotlin/com/lanxin/android/builtin/pet/**'
       - 'app/src/main/kotlin/com/lanxin/android/builtin/voice/**'

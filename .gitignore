@@ -79,4 +79,7 @@ app/src/debug/assets/vendor/*
 # common voice / live2d weight dumps (local only)
 *.wav
 *.mp3
+# whitelist tiny bundled BGM sample (CC0 generated)
+!app/src/main/assets/pet/music/
+!app/src/main/assets/pet/music/**
 **/sherpa-onnx-*-models/**
