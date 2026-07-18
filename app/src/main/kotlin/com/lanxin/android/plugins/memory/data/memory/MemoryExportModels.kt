@@ -63,6 +63,65 @@ enum class MemoryExportFormat {
 }
 
 /**
+ * P4：导出过滤条件（type / status / 创建时间范围）。
+ * 所有字段可选；null 或空白表示不过滤。
+ *
+ * 日期边界：
+ * - [createdAfterMs]：inclusive（createdAt >= after）
+ * - [createdBeforeMs]：inclusive（createdAt <= before）
+ */
+data class MemoryExportFilter(
+    val typeFilter: String? = null,
+    val statusFilter: String? = null,
+    val createdAfterMs: Long? = null,
+    val createdBeforeMs: Long? = null
+) {
+    val isEmpty: Boolean
+        get() = typeFilter.isNullOrBlank() &&
+            statusFilter.isNullOrBlank() &&
+            createdAfterMs == null &&
+            createdBeforeMs == null
+
+    fun describe(): String {
+        if (isEmpty) return "all"
+        val parts = mutableListOf<String>()
+        if (!typeFilter.isNullOrBlank()) parts += "type=$typeFilter"
+        if (!statusFilter.isNullOrBlank()) parts += "status=$statusFilter"
+        if (createdAfterMs != null) parts += "after=${formatFilterDay(createdAfterMs)}"
+        if (createdBeforeMs != null) parts += "before=${formatFilterDay(createdBeforeMs)}"
+        return parts.joinToString(", ")
+    }
+
+    companion object {
+        fun typeOnly(typeFilter: String?): MemoryExportFilter =
+            MemoryExportFilter(typeFilter = typeFilter)
+
+        /** 解析 YYYY-MM-DD 为当天 00:00:00.000（本地时区）。 */
+        fun parseDayStart(day: String?): Long? {
+            val raw = day?.trim().orEmpty()
+            if (raw.isEmpty()) return null
+            return runCatching {
+                val fmt = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+                    isLenient = false
+                }
+                fmt.parse(raw)?.time
+            }.getOrNull()
+        }
+
+        /** 解析 YYYY-MM-DD 为当天 23:59:59.999（本地时区）。 */
+        fun parseDayEnd(day: String?): Long? {
+            val start = parseDayStart(day) ?: return null
+            return start + 24L * 60L * 60L * 1000L - 1L
+        }
+
+        private fun formatFilterDay(millis: Long): String {
+            val fmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+            return fmt.format(Date(millis))
+        }
+    }
+}
+
+/**
  * P4：将记忆列表渲染为可读 Markdown。
  *
  * 分组规则：
@@ -91,12 +150,18 @@ object MemoryMarkdownExporter {
         memories: List<MemoryExportItem>,
         exportedAt: Long,
         typeFilter: String? = null
+    ): String = build(
+        memories = memories,
+        exportedAt = exportedAt,
+        filter = MemoryExportFilter.typeOnly(typeFilter)
+    )
+
+    fun build(
+        memories: List<MemoryExportItem>,
+        exportedAt: Long,
+        filter: MemoryExportFilter
     ): String {
-        val filtered = if (typeFilter.isNullOrBlank()) {
-            memories
-        } else {
-            memories.filter { matchesTypeFilter(it, typeFilter) }
-        }
+        val filtered = applyFilter(memories, filter)
 
         val stamp = formatTimestamp(exportedAt)
         val sb = StringBuilder()
@@ -105,9 +170,7 @@ object MemoryMarkdownExporter {
         sb.appendLine("- version: 1")
         sb.appendLine("- exportedAt: $stamp")
         sb.appendLine("- total: ${filtered.size}")
-        sb.appendLine(
-            "- filter: ${if (typeFilter.isNullOrBlank()) "all" else typeFilter}"
-        )
+        sb.appendLine("- filter: ${filter.describe()}")
         sb.appendLine()
 
         if (filtered.isEmpty()) {
@@ -149,6 +212,32 @@ object MemoryMarkdownExporter {
         return sb.toString()
     }
 
+    fun applyFilter(
+        memories: List<MemoryExportItem>,
+        filter: MemoryExportFilter
+    ): List<MemoryExportItem> {
+        if (filter.isEmpty) return memories
+        return memories.filter { matchesFilter(it, filter) }
+    }
+
+    fun matchesFilter(item: MemoryExportItem, filter: MemoryExportFilter): Boolean {
+        if (!filter.typeFilter.isNullOrBlank() &&
+            !matchesTypeFilter(item, filter.typeFilter)
+        ) {
+            return false
+        }
+        if (!filter.statusFilter.isNullOrBlank() &&
+            !matchesStatusFilter(item, filter.statusFilter)
+        ) {
+            return false
+        }
+        val after = filter.createdAfterMs
+        if (after != null && item.createdAt < after) return false
+        val before = filter.createdBeforeMs
+        if (before != null && item.createdAt > before) return false
+        return true
+    }
+
     /**
      * 过滤：
      * - 直接匹配 type
@@ -161,6 +250,23 @@ object MemoryMarkdownExporter {
         if (item.type.equals(key, ignoreCase = true)) return true
         if (item.lifecycle.equals(key, ignoreCase = true)) return true
         return resolveExportGroup(item).equals(key, ignoreCase = true)
+    }
+
+    /**
+     * status 过滤：
+     * - 精确匹配 active / archived / expired（大小写不敏感）
+     * - 逗号分隔多值 OR：`active,archived`
+     */
+    fun matchesStatusFilter(item: MemoryExportItem, statusFilter: String): Boolean {
+        val key = statusFilter.trim()
+        if (key.isEmpty()) return true
+        val allowed = key.split(',', '，', ';', '|')
+            .map { it.trim().lowercase(Locale.US) }
+            .filter { it.isNotEmpty() }
+            .toSet()
+        if (allowed.isEmpty()) return true
+        val status = item.status.trim().lowercase(Locale.US).ifEmpty { "active" }
+        return status in allowed
     }
 
     fun resolveExportGroup(item: MemoryExportItem): String {

@@ -83,6 +83,7 @@ fun MemoryScreen(
     val isImporting by viewModel.isImporting.collectAsStateWithLifecycle()
     val showImportStrategyDialog by viewModel.showImportStrategyDialog.collectAsStateWithLifecycle()
     val showExportFormatDialog by viewModel.showExportFormatDialog.collectAsStateWithLifecycle()
+    val exportStatusFilter by viewModel.exportStatusFilter.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
     // 两个 CreateDocument launcher：MIME 在 contract 构造时固定
@@ -360,6 +361,8 @@ fun MemoryScreen(
     if (showExportFormatDialog) {
         ExportFormatDialog(
             currentTypeFilter = selectedType,
+            currentStatusFilter = exportStatusFilter,
+            onStatusFilterChange = { viewModel.setExportStatusFilter(it) },
             onDismiss = { viewModel.cancelExportFormatDialog() },
             onConfirm = { format ->
                 launchExport(format)
@@ -371,6 +374,8 @@ fun MemoryScreen(
 @Composable
 private fun ExportFormatDialog(
     currentTypeFilter: String?,
+    currentStatusFilter: String?,
+    onStatusFilterChange: (String?) -> Unit,
     onDismiss: () -> Unit,
     onConfirm: (MemoryExportFormat) -> Unit
 ) {
@@ -380,6 +385,12 @@ private fun ExportFormatDialog(
     } else {
         MemoryType.displayName(currentTypeFilter)
     }
+    val statusOptions = listOf(
+        null to "全部状态",
+        "active" to "仅活跃",
+        "archived" to "仅归档",
+        "expired" to "仅过期"
+    )
 
     val options = listOf(
         MemoryExportFormat.JSON to ("JSON" to "机器可读，支持再导入"),
@@ -392,11 +403,34 @@ private fun ExportFormatDialog(
         text = {
             Column {
                 Text(
-                    text = "当前筛选：$filterLabel（导出时生效）",
+                    text = "类型筛选：$filterLabel（列表 FilterChip 生效）",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 12.dp)
+                    modifier = Modifier.padding(bottom = 8.dp)
                 )
+                Text(
+                    text = "状态筛选",
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    statusOptions.forEach { (value, label) ->
+                        val selectedStatus = currentStatusFilter == value ||
+                            (value == null && currentStatusFilter.isNullOrBlank())
+                        FilterChip(
+                            selected = selectedStatus,
+                            onClick = { onStatusFilterChange(value) },
+                            label = { Text(label) },
+                            colors = FilterChipDefaults.filterChipColors()
+                        )
+                    }
+                }
                 options.forEach { (format, labels) ->
                     val (title, subtitle) = labels
                     Row(
