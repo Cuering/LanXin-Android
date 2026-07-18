@@ -110,12 +110,14 @@ class DebugAssetStorageTest {
             )
         )
         // 仅：回退 + 可写 + 非空 tree → 放行镜像
+        val treeUri =
+            "content://com.android.externalstorage.documents/tree/primary%3ALanXin"
         assertTrue(
             shouldMirror(
                 baseRoot.copy(
                     usedFallback = true,
                     safWritable = true,
-                    safTreeUri = "content://com.android.externalstorage.documents/tree/primary%3ALanXin"
+                    safTreeUri = treeUri
                 )
             )
         )
