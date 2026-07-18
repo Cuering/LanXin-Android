@@ -29,7 +29,11 @@ interface AssetDownloadTransport {
     /**
      * 下载 [url] 到 [destFile]。
      *
-     * @param onProgress (downloaded, totalOr-1) — suspend 便于 UI 进度
+     * @param onProgress (downloaded, totalOr-1) — suspend 便于 UI 进度。
+     *   **可跨协程上下文调用**：实现方可在任意 Dispatcher / Undispatched 协程中
+     *   触发回调（例如 Ktor `withContext(IO)` 读通道时）。调用方（如
+     *   [DebugAssetDownloader]）须使用 `channelFlow`/`send` 等线程安全通道，
+     *   勿在 cold `flow` 的 `emit` 上直接桥接本回调。
      * @throws Exception 网络/HTTP 失败
      * @throws kotlinx.coroutines.CancellationException 取消
      */

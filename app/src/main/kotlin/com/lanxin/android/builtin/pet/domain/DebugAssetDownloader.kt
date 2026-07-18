@@ -25,7 +25,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -37,7 +37,9 @@ import kotlinx.coroutines.sync.withLock
  * - Live2D：jsDelivr → fastly → github-raw（单文件）；内置 Mao 优先，下载可选
  * - ASR / TTS：HF / hf-mirror 目录文件优先；GitHub release 归档回退
  * - LOCAL_LLM：ModelScope → hf-mirror → HuggingFace（MNN 运行时文件）
- * - 终端事件在 try/catch **之外** emit（Flow exception transparency）
+ * - 使用 [channelFlow] + [send]：transport 进度回调可在任意协程上下文触发
+ *   （Ktor `withContext`/Undispatched），避免 cold `flow` 的 emit 上下文不变量崩溃
+ * - 终端事件在 try/catch **之外** send（禁止 catch 内 send/emit）
  */
 @Singleton
 class DebugAssetDownloader @Inject constructor(
@@ -87,28 +89,37 @@ class DebugAssetDownloader @Inject constructor(
         }
     }
 
+    /**
+     * 下载并安装 [kind]；进度以 [DebugAssetDownloadEvent] 流式上报。
+     *
+     * 使用 [channelFlow]：`send` 可从任意协程上下文安全调用（含 transport 进度回调
+     * 所在的 Undispatched / withContext 协程），不再受 cold `flow` emit 上下文约束。
+     * 终端事件（Completed / Failed / Cancelled）一律在 try/catch **之外** send，
+     * 避免 Flow exception transparency 违规。
+     */
     fun download(
         baseDir: File,
         kind: DebugAssetKind,
         preferredMirror: DebugAssetMirror
-    ): Flow<DebugAssetDownloadEvent> = flow {
-        emit(DebugAssetDownloadEvent.Started)
+    ): Flow<DebugAssetDownloadEvent> = channelFlow {
+        send(DebugAssetDownloadEvent.Started)
         val job = currentCoroutineContext()[Job]
         activeJob = job
+        // 记录终端结果，catch 内不 send（Flow exception transparency）
         var terminal: DebugAssetDownloadEvent? = null
         try {
             mutex.withLock {
                 val used = when (kind) {
                     DebugAssetKind.LIVE2D -> installLive2d(baseDir, preferredMirror) { event ->
-                        emit(event)
+                        send(event)
                     }
                     DebugAssetKind.ASR, DebugAssetKind.TTS ->
                         installAsrOrTts(baseDir, kind, preferredMirror) { event ->
-                            emit(event)
+                            send(event)
                         }
                     DebugAssetKind.LOCAL_LLM ->
                         installLocalLlm(baseDir, preferredMirror) { event ->
-                            emit(event)
+                            send(event)
                         }
                 }
                 val path = readyPath(baseDir, kind)
@@ -132,6 +143,7 @@ class DebugAssetDownloader @Inject constructor(
                 }
             }
         } catch (_: CancellationException) {
+            // 不 rethrow：UI collect 正常收 Cancelled；不在 catch 内 send
             terminal = DebugAssetDownloadEvent.Cancelled
         } catch (t: Throwable) {
             val attempted = (t as? MultiSourceFailure)?.attempted.orEmpty()
@@ -143,7 +155,8 @@ class DebugAssetDownloader @Inject constructor(
         } finally {
             if (activeJob === job) activeJob = null
         }
-        terminal?.let { emit(it) }
+        // 正常路径 send 终端事件（在 catch 块外）
+        terminal?.let { send(it) }
     }.flowOn(Dispatchers.IO)
 
     private data class UsedSource(
