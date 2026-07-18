@@ -232,7 +232,11 @@
       var mouthAnimating = false;
       var musicBeat = 0;
       var musicBeatEnabled = true;
+      // 双级平滑 + 显示值限斜率，避免 Visualizer 尖峰导致剧抖
       var musicBeatSmoothed = 0;
+      var musicBeatDisplay = 0;
+      // 慢舞相位（与 breathT 解耦，更低频率）
+      var dancePhase = 0;
 
       // Cubism / Pixi runtime
       var pixiApp = null;
@@ -432,11 +436,11 @@
           pixiApp.view.style.width = '100%';
           pixiApp.view.style.height = '100%';
           pixiApp.view.style.display = 'block';
-          // ticker: mouth + beat sway
+          // ticker: mouth + soft dance（慢慢跳舞，禁止剧抖）
           pixiApp.ticker.add(function () {
             breathT += 1;
-            musicBeatSmoothed = musicBeatSmoothed * 0.88 + musicBeat * 0.12;
-            if (!musicBeatEnabled) musicBeatSmoothed *= 0.9;
+            dancePhase += 1;
+            advanceMusicBeatSmooth();
             tickCubismFrame();
           });
           cubismReady = true;
@@ -483,19 +487,79 @@
         }
       }
 
+      /**
+       * 节拍强平滑：EMA(0.96) + 每帧限斜率(0.012) + 绝对限幅。
+       * 关闭跟随节奏时归零，不残留附加晃动。
+       */
+      function advanceMusicBeatSmooth() {
+        if (!musicBeatEnabled) {
+          musicBeat = 0;
+          musicBeatSmoothed *= 0.88;
+          if (musicBeatSmoothed < 0.002) musicBeatSmoothed = 0;
+          musicBeatDisplay *= 0.88;
+          if (musicBeatDisplay < 0.002) musicBeatDisplay = 0;
+          return musicBeatDisplay;
+        }
+        var target = Math.max(0, Math.min(1, musicBeat));
+        // 强 EMA：更慢跟上尖峰
+        musicBeatSmoothed = musicBeatSmoothed * 0.96 + target * 0.04;
+        // 限斜率：约 60fps 下从 0→1 至少 ~1.4s，视觉上柔和
+        var delta = musicBeatSmoothed - musicBeatDisplay;
+        var maxStep = 0.012;
+        if (delta > maxStep) delta = maxStep;
+        if (delta < -maxStep) delta = -maxStep;
+        musicBeatDisplay += delta;
+        if (musicBeatDisplay < 0) musicBeatDisplay = 0;
+        if (musicBeatDisplay > 1) musicBeatDisplay = 1;
+        return musicBeatDisplay;
+      }
+
+      /** 慢舞偏移：低频正弦 × 节拍包络；位移/旋转/缩放脉冲均小。 */
+      function softDanceOffset(beat) {
+        var b = Math.max(0, Math.min(1, beat || 0));
+        // 极慢相位：~0.17Hz 主摆 + 更弱副摆
+        var p = dancePhase * 0.018;
+        var p2 = dancePhase * 0.011;
+        // 限幅：X≤2.8px Y≤2.0px rot≤0.018 rad scalePulse≤0.014
+        var swayX = (Math.sin(p) * 1.6 + Math.sin(p2) * 0.7) * (0.25 + b * 0.75);
+        var swayY = (Math.cos(p * 0.85) * 1.1 - Math.sin(p2 * 1.2) * 0.4) * (0.2 + b * 0.8)
+          - b * 0.9;
+        var rot = Math.sin(p * 0.75) * 0.006 + Math.sin(p2) * b * 0.01;
+        var scalePulse = Math.sin(p * 0.9) * 0.004 + b * 0.01;
+        // 二次限幅保险
+        if (swayX > 2.8) swayX = 2.8;
+        if (swayX < -2.8) swayX = -2.8;
+        if (swayY > 2.0) swayY = 2.0;
+        if (swayY < -2.0) swayY = -2.0;
+        if (rot > 0.018) rot = 0.018;
+        if (rot < -0.018) rot = -0.018;
+        if (scalePulse > 0.014) scalePulse = 0.014;
+        if (scalePulse < -0.006) scalePulse = -0.006;
+        return { x: swayX, y: swayY, rot: rot, scalePulse: scalePulse };
+      }
+
       function tickCubismFrame() {
         if (!live2dModel) return;
         try {
-          var beat = musicBeatEnabled ? musicBeatSmoothed : 0;
-          var breath = Math.sin(breathT * 0.04) * 0.015;
+          // 静置：仅极轻呼吸；关跟随节奏：无附加晃动
+          var beat = musicBeatEnabled ? musicBeatDisplay : 0;
+          var breath = Math.sin(breathT * 0.028) * 0.008;
           var base = live2dModel.__baseScale || (live2dModel.scale && live2dModel.scale.x) || 1;
-          var s = base * (1 + breath + beat * 0.04);
-          if (live2dModel.scale) live2dModel.scale.set(s);
           var bx = live2dModel.__baseX != null ? live2dModel.__baseX : live2dModel.x;
           var by = live2dModel.__baseY != null ? live2dModel.__baseY : live2dModel.y;
-          live2dModel.x = bx + Math.sin(breathT * 0.06) * 2 + Math.sin(breathT * 0.11) * beat * 5;
-          live2dModel.y = by + Math.cos(breathT * 0.05) * 1.2 - beat * 3;
-          live2dModel.rotation = Math.sin(breathT * 0.05) * 0.015 + Math.sin(breathT * 0.09) * beat * 0.05;
+          var ox = 0, oy = Math.sin(breathT * 0.028) * 0.35, orot = Math.sin(breathT * 0.02) * 0.003;
+          var scaleMul = 1 + breath;
+          if (musicBeatEnabled && beat > 0.001) {
+            var d = softDanceOffset(beat);
+            ox = d.x;
+            oy = d.y + Math.sin(breathT * 0.028) * 0.25;
+            orot = d.rot;
+            scaleMul = 1 + breath + d.scalePulse;
+          }
+          if (live2dModel.scale) live2dModel.scale.set(base * scaleMul);
+          live2dModel.x = bx + ox;
+          live2dModel.y = by + oy;
+          live2dModel.rotation = orot;
 
           // lip sync ParamMouthOpenY
           var mOpen = mouthAnimating
@@ -544,12 +608,20 @@
       function drawShellFrame(ctx, w, h, phase, t, textures) {
         ctx.clearRect(0, 0, w, h);
         var ui = PHASE_UI[phase] || PHASE_UI.IDLE;
-        var breath = Math.sin(t * 0.04) * 0.02;
-        var beat = musicBeatEnabled ? musicBeatSmoothed : 0;
-        var scale = 1 + breath + beat * 0.045;
-        var swayX = Math.sin(t * 0.06) * 2 + Math.sin(t * 0.11) * beat * 6;
-        var swayY = Math.cos(t * 0.05) * 1.5 - beat * 4;
-        var rot = Math.sin(t * 0.05) * 0.02 + Math.sin(t * 0.09) * beat * 0.06;
+        // 静置极轻呼吸；开跟随节奏时 softDanceOffset 慢舞
+        var breath = Math.sin(t * 0.028) * 0.01;
+        var beat = musicBeatEnabled ? musicBeatDisplay : 0;
+        var scale = 1 + breath;
+        var swayX = 0;
+        var swayY = Math.sin(t * 0.028) * 0.4;
+        var rot = Math.sin(t * 0.02) * 0.004;
+        if (musicBeatEnabled && beat > 0.001) {
+          var d = softDanceOffset(beat);
+          swayX = d.x;
+          swayY = d.y + Math.sin(t * 0.028) * 0.25;
+          rot = d.rot;
+          scale = 1 + breath + d.scalePulse;
+        }
         ctx.save();
         ctx.translate(w / 2 + swayX, h / 2 + 8 + swayY);
         ctx.rotate(rot);
@@ -622,8 +694,8 @@
         resizeCanvas();
         function tick() {
           breathT += 1;
-          musicBeatSmoothed = musicBeatSmoothed * 0.88 + musicBeat * 0.12;
-          if (!musicBeatEnabled) musicBeatSmoothed *= 0.9;
+          dancePhase += 1;
+          advanceMusicBeatSmooth();
           // 偶发旋转/键盘弹起后容器尺寸变化
           if (breathT % 30 === 0) {
             var sz = stageSize();
@@ -889,11 +961,16 @@
           var rawLv = parseFloat(map.beatLevel);
           if (!isFinite(rawLv)) rawLv = 0;
           if (rawLv > 1.0001) rawLv = rawLv / 100;
+          // 仅更新目标值；帧循环里 advanceMusicBeatSmooth 做强平滑+限斜率
           musicBeat = Math.max(0, Math.min(1, rawLv));
           if (map.beatEnabled != null) {
             musicBeatEnabled = String(map.beatEnabled).toLowerCase() !== 'false';
           }
-          if (!musicBeatEnabled) musicBeat = 0;
+          if (!musicBeatEnabled) {
+            musicBeat = 0;
+            musicBeatSmoothed = 0;
+            musicBeatDisplay = 0;
+          }
         }
         if (cmd === 'SET_PET_STATE' && map.phase) setPhase(map.phase);
         if (cmd === 'SET_EXPRESSION' || map.expression) {
@@ -993,6 +1070,8 @@
         mouthAnimating = false;
         musicBeat = 0;
         musicBeatSmoothed = 0;
+        musicBeatDisplay = 0;
+        dancePhase = 0;
         if (mouthEl) mouthEl.classList.remove('anim');
         if (hideTimer) clearTimeout(hideTimer);
         hideBubble();

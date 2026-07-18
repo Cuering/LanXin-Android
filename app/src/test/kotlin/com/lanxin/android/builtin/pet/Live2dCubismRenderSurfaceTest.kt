@@ -58,6 +58,23 @@ class Live2dCubismRenderSurfaceTest {
     }
 
     @Test
+    fun desktopPetHtml_softMusicDance_notViolentSway() {
+        val html = assetFile("pet/desktop-pet.html").readText()
+        // 慢舞路径：强平滑 + 限斜率 + softDanceOffset
+        assertTrue(html.contains("advanceMusicBeatSmooth"))
+        assertTrue(html.contains("softDanceOffset"))
+        assertTrue(html.contains("musicBeatDisplay"))
+        assertTrue(html.contains("tickCubismFrame"))
+        // 禁止旧的剧烈 beat 位移系数（* beat * 5/6）
+        assertFalse(html.contains("beat * 5"))
+        assertFalse(html.contains("beat * 6"))
+        assertFalse(html.contains("beat * 0.05"))
+        // 限幅常量存在
+        assertTrue(html.contains("2.8") || html.contains("maxStep"))
+        assertTrue(html.contains("0.012") || html.contains("0.018"))
+    }
+
+    @Test
     fun desktopPetHtml_fullscreenStage_noCardWindow() {
         val html = assetFile("pet/desktop-pet.html").readText()
         // 全屏舞台：#stage / #live2d-shell 铺满，去掉小窗尺寸与白框

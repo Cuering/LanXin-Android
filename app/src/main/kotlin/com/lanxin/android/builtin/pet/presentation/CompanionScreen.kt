@@ -664,6 +664,10 @@ class CompanionViewModel @Inject constructor(
     @Volatile
     private var beatSwayEnabled: Boolean = true
 
+    /** WebView beat 推送限频：约 12Hz，避免每帧 evaluateJavascript 造成剧抖。 */
+    private var lastBeatPushMs: Long = 0L
+    private var lastPushedBeatLevel: Float = -1f
+
     private var musicPlayer: CompanionMusicPlayer? = null
 
     private fun player(): CompanionMusicPlayer {
@@ -674,6 +678,14 @@ class CompanionViewModel @Inject constructor(
             onBeat = { level ->
                 lastBeatLevel = level
                 if (!beatSwayEnabled) return@CompanionMusicPlayer
+                val now = System.currentTimeMillis()
+                // 限频 ~12Hz；幅度变化极小则跳过
+                val elapsed = now - lastBeatPushMs
+                val delta = kotlin.math.abs(level - lastPushedBeatLevel)
+                if (elapsed < 80L && delta < 0.03f) return@CompanionMusicPlayer
+                if (elapsed < 40L) return@CompanionMusicPlayer
+                lastBeatPushMs = now
+                lastPushedBeatLevel = level
                 _uiState.update {
                     it.copy(
                         beatLevel = level,
@@ -838,7 +850,10 @@ class CompanionViewModel @Inject constructor(
             player().setBeatEnabled(enabled)
             if (!enabled) {
                 lastBeatLevel = 0f
+                lastPushedBeatLevel = 0f
             }
+            // 开关切换立即推一次（关=0），不受限频阻塞
+            lastBeatPushMs = 0L
             _uiState.update {
                 it.copy(
                     musicBeatSway = enabled,
