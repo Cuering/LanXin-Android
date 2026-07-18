@@ -122,12 +122,10 @@ data class DesktopPetUiState(
     /** 实际落盘根（LanXin）绝对路径，下载成功后展示给用户。 */
     val downloadRootPath: String = "",
     val downloadRootFallback: Boolean = false,
-
-    /** Live2D 可切换模型列表（内置 + LanXin/live2d/*）。 */
+    /** Live2D 可切换模型列表（内置 Mao 与 LanXin/live2d 下各模型）。 */
     val live2dModels: List<Live2dModelCatalog.ModelEntry> = emptyList(),
     val live2dCurrentName: String = Live2dModelCatalog.BUILTIN_DISPLAY_NAME,
-
-    /** 文件管理器提示：`…/LanXin/live2d`。 */
+    /** 文件管理器提示：LanXin/live2d 绝对路径。 */
     val live2dDirHint: String = ""
 )
 
