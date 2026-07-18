@@ -126,6 +126,19 @@ class Live2dCubismRenderSurfaceTest {
     }
 
     @Test
+    fun desktopPetHtml_compactOverlay_containFullBody() {
+        val html = assetFile("pet/desktop-pet.html").readText()
+        // 悬浮小窗：isCompact → contain，避免 1.18 放大裁切帽/脚
+        assertTrue(html.contains("isCompact"))
+        assertTrue(html.contains("w <= 280") || html.contains("h <= 360"))
+        assertTrue(html.contains("0.90") || html.contains("w * 0.90"))
+        assertTrue(html.contains("usableH"))
+        // 全屏分支仍保留放大构图
+        assertTrue(html.contains("h * 0.62") || html.contains("0.62"))
+        assertTrue(html.contains("1.18"))
+    }
+
+    @Test
     fun nativeDecision_stillShellMode_webReportsReal() {
         // Native 侧就绪仍为 LIVE2D_SHELL；Web 成功后回传 LIVE2D_REAL
         val f = File.createTempFile("Mao", ".model3.json")
