@@ -66,6 +66,16 @@ object PetBridgeProtocol {
     const val KEY_BEAT_LEVEL = "beatLevel"
     const val KEY_BEAT_ENABLED = "beatEnabled"
 
+    /** PLAY_MOTION：组名 Idle|TapBody；可选 index */
+    const val KEY_MOTION_GROUP = "motionGroup"
+    const val KEY_MOTION_INDEX = "motionIndex"
+
+    /** MODEL_TAPPED：hit 区域名 Head|Body|stage */
+    const val KEY_HIT_AREA = "hitArea"
+
+    /** Cubism 官方 exp 名（exp_01…），随 SET_EXPRESSION 可选附带 */
+    const val KEY_CUBISM_EXPRESSION = "cubismExpression"
+
     fun encode(message: PetBridgeMessage): String {
         val lines = mutableListOf<String>()
         lines += "$KEY_COMMAND=${message.command.name}"
@@ -114,7 +124,8 @@ object PetBridgeProtocol {
                 KEY_MOUTH_OPEN to PetExpressionController.mouthOpenWire(pose.mouthOpen),
                 KEY_MOUTH_ANIM to pose.mouthAnimating.toString(),
                 KEY_EXPRESSION_LABEL to pose.shortLabel,
-                KEY_EXPRESSION_EMOJI to pose.emoji
+                KEY_EXPRESSION_EMOJI to pose.emoji,
+                KEY_CUBISM_EXPRESSION to PetExpressionController.cubismExpressionName(pose.expression)
             ),
             timestampMs = timestampMs
         )
@@ -203,8 +214,43 @@ object PetBridgeProtocol {
                 KEY_MOUTH_OPEN to PetExpressionController.mouthOpenWire(pose.mouthOpen),
                 KEY_MOUTH_ANIM to pose.mouthAnimating.toString(),
                 KEY_EXPRESSION_LABEL to pose.shortLabel,
-                KEY_EXPRESSION_EMOJI to pose.emoji
+                KEY_EXPRESSION_EMOJI to pose.emoji,
+                KEY_CUBISM_EXPRESSION to PetExpressionController.cubismExpressionName(pose.expression)
             ),
+            timestampMs = timestampMs
+        )
+    }
+
+    /**
+     * Native → Web：播放 Mao 官方 motion 组。
+     *
+     * @param group [MaoOfficialMotionCatalog.GROUP_IDLE] 或 [MaoOfficialMotionCatalog.GROUP_TAP_BODY]
+     * @param index 组内序号；null 则 Web 侧随机/轮询
+     */
+    fun playMotionMessage(
+        group: String,
+        index: Int? = null,
+        timestampMs: Long = System.currentTimeMillis()
+    ): PetBridgeMessage {
+        val payload = linkedMapOf(KEY_MOTION_GROUP to group)
+        if (index != null) {
+            payload[KEY_MOTION_INDEX] = index.toString()
+        }
+        return PetBridgeMessage(
+            command = PetBridgeCommand.PLAY_MOTION,
+            payload = payload,
+            timestampMs = timestampMs
+        )
+    }
+
+    /** Web → Native：模型点触回传。 */
+    fun modelTappedMessage(
+        hitArea: String = "Body",
+        timestampMs: Long = System.currentTimeMillis()
+    ): PetBridgeMessage {
+        return PetBridgeMessage(
+            command = PetBridgeCommand.MODEL_TAPPED,
+            payload = mapOf(KEY_HIT_AREA to hitArea),
             timestampMs = timestampMs
         )
     }

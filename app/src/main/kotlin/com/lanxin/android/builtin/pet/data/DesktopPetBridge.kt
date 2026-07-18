@@ -123,6 +123,13 @@ class DesktopPetBridge(
         return lastOutbound
     }
 
+    /** Native → Web：播放官方 motion（Idle / TapBody）。 */
+    fun encodePlayMotion(group: String, index: Int? = null): String {
+        val msg = PetBridgeProtocol.playMotionMessage(group, index)
+        lastOutbound = PetBridgeProtocol.encode(msg)
+        return lastOutbound
+    }
+
     companion object {
         const val JS_NAME = "DesktopPetBridge"
     }

@@ -21,27 +21,42 @@ package com.lanxin.android.builtin.pet.domain
  *
  * WebView 占位 / Live2D 壳 / Cubism 真渲染共用同一套语义。
  * P3：Cubism 侧映射 ParamMouthOpenY + expression；失败仍降级壳。
+ * 官方 Mao exp/motion 全量映射见 [MaoOfficialMotionCatalog]。
  */
 object PetExpressionController {
 
-    /** 桌宠表情档位（Web / Bridge 线格式用 name）。 */
+    /**
+     * 桌宠表情档位（Web / Bridge 线格式用 name）。
+     *
+     * 相位主映射 01–05；扩展 06–08 用于闲置变体 / 点触 / 音乐高潮。
+     * Cubism 文件名见 [MaoOfficialMotionCatalog.expressionFileFor]。
+     */
     enum class Expression {
-        /** 闲置微笑 */
+        /** 闲置微笑 → exp_01 */
         IDLE_SMILE,
 
-        /** 在听 */
+        /** 在听 → exp_02 */
         LISTENING,
 
-        /** 思考 */
+        /** 思考 → exp_03 */
         THINKING,
 
-        /** 说话 */
+        /** 说话 → exp_04 */
         SPEAKING,
 
-        /** 出错 / 抱歉 */
+        /** 出错 / 抱歉 → exp_05 */
         APOLOGY,
 
-        /** 降级提示态（资源缺失时仍可表达相位） */
+        /** 闲置随机变体 → exp_06 */
+        IDLE_VARIANT_A,
+
+        /** 点触后短表情 → exp_07 */
+        TAP_REACTION,
+
+        /** 音乐高潮弱表情 → exp_08 */
+        MUSIC_PEAK,
+
+        /** 降级提示态（资源缺失时仍可表达相位）→ exp_01 */
         FALLBACK_NEUTRAL
     }
 
@@ -121,6 +136,40 @@ object PetExpressionController {
     /** 线格式：固定两位小数，便于 Web 解析。 */
     fun mouthOpenWire(value: Float): String =
         "%.2f".format(value.coerceIn(0f, 1f))
+
+    /** Cubism exp 文件名（exp_01…exp_08），供 Bridge / 单测。 */
+    fun cubismExpressionName(expression: Expression): String =
+        MaoOfficialMotionCatalog.expressionFileFor(expression)
+
+    /**
+     * 闲置随机变体 pose（exp_06）；口型仍闭嘴。
+     * Web 侧在 IDLE 长闲时偶发切换。
+     */
+    fun idleVariantPose(): Pose = Pose(
+        expression = Expression.IDLE_VARIANT_A,
+        mouthOpen = 0f,
+        mouthAnimating = false,
+        shortLabel = "闲变",
+        emoji = "😌"
+    )
+
+    /** 点触反应表情（exp_07）。 */
+    fun tapReactionPose(): Pose = Pose(
+        expression = Expression.TAP_REACTION,
+        mouthOpen = 0f,
+        mouthAnimating = false,
+        shortLabel = "点触",
+        emoji = "✨"
+    )
+
+    /** 音乐高潮弱表情（exp_08）。 */
+    fun musicPeakPose(): Pose = Pose(
+        expression = Expression.MUSIC_PEAK,
+        mouthOpen = 0f,
+        mouthAnimating = false,
+        shortLabel = "律动",
+        emoji = "🎵"
+    )
 
     fun guideForMissingResources(
         live2dReady: Boolean,

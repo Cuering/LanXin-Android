@@ -87,12 +87,18 @@ jobs:
           test -f app/src/main/assets/pet/live2d/Mao/Mao.model3.json
           test -f app/src/main/assets/pet/live2d/Mao/Mao.moc3
           test -f app/src/main/kotlin/com/lanxin/android/builtin/pet/domain/Live2dDisplayController.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/pet/domain/MaoOfficialMotionCatalog.kt
           test -f app/src/test/kotlin/com/lanxin/android/builtin/pet/Live2dCubismRenderSurfaceTest.kt
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/pet/MaoOfficialMotionCatalogTest.kt
           grep -E -n "LIVE2D_REAL|Live2DModel|live2dcubismcore|cubism4" \
             app/src/main/assets/pet/desktop-pet.html
-          grep -E -n "Cubism|LIVE2D_REAL|pixi-live2d" docs/live2d-cubism-render.md
+          grep -E -n "CUBISM_EXP_MAP|playMotionGroup|__lanxinMaoCatalog|TapBody" \
+            app/src/main/assets/pet/desktop-pet.html
+          grep -E -n "Cubism|LIVE2D_REAL|pixi-live2d|MaoOfficial|TapBody|exp_0" docs/live2d-cubism-render.md
           grep -E -n "Cubism|LIVE2D_REAL|P3" docs/meiju-style-pet.md ARCHITECTURE.md || true
           grep -E -n "LIVE2D_SHELL|LIVE2D_REAL|cubism_ok" \
             app/src/test/kotlin/com/lanxin/android/builtin/pet/Live2dCubismRenderSurfaceTest.kt
+          grep -E -n "exp_01|TapBody|PLAY_MOTION|MaoOfficial" \
+            app/src/test/kotlin/com/lanxin/android/builtin/pet/MaoOfficialMotionCatalogTest.kt
           # 运行时引擎必须仓内，禁止 workflow 内 curl 大模型
           ! grep -E "curl.*CubismWebSamples|curl.*\\.moc3" .github/workflows/p3-live2d-cubism-verify.yml | grep -v "grep -E" || true
