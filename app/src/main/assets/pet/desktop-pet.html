@@ -237,6 +237,15 @@
       var musicBeatDisplay = 0;
       // 慢舞相位（与 breathT 解耦，更低频率）
       var dancePhase = 0;
+      // Cubism 参数轻舞显示值（EMA 平滑，停音乐回中立不跳变）
+      var danceAngleX = 0;
+      var danceAngleY = 0;
+      var danceAngleZ = 0;
+      var danceBodyX = 0;
+      var danceBodyY = 0;
+      var danceBreath = 0.5;
+      var danceShoulderL = 0;
+      var danceShoulderR = 0;
 
       // Cubism / Pixi runtime
       var pixiApp = null;
@@ -578,20 +587,60 @@
       }
 
       /**
-       * 慢舞偏移：低频正弦 × 弱节拍包络。
-       * 只动 x/y/rotation；scalePulse ≡ 0（音乐跟随禁止任何缩放）。
-       * 限幅：X≤1.5px Y≤1.0px rot≤0.01
+       * Cubism 参数轻舞（人物自身律动，非整模贴纸晃）。
+       * 低频正弦 × 弱节拍包络；幅度很小、强平滑。
+       * 返回角度/身体/呼吸目标值；scalePulse 恒 0。
+       * 限幅：AngleX/Y ≤ 6, AngleZ ≤ 4, Body ≤ 3, Breath 0..1
        */
-      function softDanceOffset(beat) {
+      function softDanceCubismParams(beat) {
         var b = Math.max(0, Math.min(1, beat || 0));
         // 极慢相位：~0.12Hz 主摆 + 更弱副摆
+        var p = dancePhase * 0.012;
+        var p2 = dancePhase * 0.007;
+        var amp = 0.18 + b * 0.55;
+        // 头部小幅侧身/点头/歪头
+        var angleX = (Math.sin(p) * 4.2 + Math.sin(p2) * 1.4) * amp;
+        var angleY = (Math.cos(p * 0.85) * 2.6 - Math.sin(p2 * 1.1) * 0.9) * amp;
+        var angleZ = (Math.sin(p * 0.7) * 2.0 + Math.sin(p2) * b * 1.2) * amp;
+        // 身体更弱
+        var bodyX = (Math.sin(p * 0.9) * 1.8 + Math.sin(p2 * 0.8) * 0.6) * amp * 0.55;
+        var bodyY = (Math.cos(p * 0.65) * 1.0) * amp * 0.4;
+        // 慢呼吸：0.35~0.75，节拍略加重
+        var breath = 0.45 + Math.sin(breathT * 0.028) * 0.18 + b * 0.12;
+        // scalePulse 必须恒 0：音乐轻舞禁止缩放
+        var scalePulse = 0;
+        if (angleX > 6) angleX = 6;
+        if (angleX < -6) angleX = -6;
+        if (angleY > 6) angleY = 6;
+        if (angleY < -6) angleY = -6;
+        if (angleZ > 4) angleZ = 4;
+        if (angleZ < -4) angleZ = -4;
+        if (bodyX > 3) bodyX = 3;
+        if (bodyX < -3) bodyX = -3;
+        if (bodyY > 3) bodyY = 3;
+        if (bodyY < -3) bodyY = -3;
+        if (breath < 0) breath = 0;
+        if (breath > 1) breath = 1;
+        return {
+          angleX: angleX,
+          angleY: angleY,
+          angleZ: angleZ,
+          bodyX: bodyX,
+          bodyY: bodyY,
+          breath: breath,
+          scalePulse: scalePulse
+        };
+      }
+
+      /** 旧 shell 画布仍可用的极弱像素偏移（仅 shell fallback，不碰 Cubism 容器） */
+      function softDanceOffset(beat) {
+        var b = Math.max(0, Math.min(1, beat || 0));
         var p = dancePhase * 0.012;
         var p2 = dancePhase * 0.007;
         var swayX = (Math.sin(p) * 0.9 + Math.sin(p2) * 0.35) * (0.2 + b * 0.55);
         var swayY = (Math.cos(p * 0.85) * 0.55 - Math.sin(p2 * 1.1) * 0.2) * (0.15 + b * 0.55)
           - b * 0.35;
         var rot = Math.sin(p * 0.7) * 0.004 + Math.sin(p2) * b * 0.004;
-        // scalePulse 必须恒 0：音乐轻舞禁止缩放，杜绝「放大↔正常」闪烁
         var scalePulse = 0;
         if (swayX > 1.5) swayX = 1.5;
         if (swayX < -1.5) swayX = -1.5;
@@ -602,35 +651,110 @@
         return { x: swayX, y: swayY, rot: rot, scalePulse: scalePulse };
       }
 
+      function getCubismCore() {
+        if (!live2dModel) return null;
+        try {
+          var core = live2dModel.internalModel && live2dModel.internalModel.coreModel;
+          if (core && typeof core.setParameterValueById === 'function') return core;
+        } catch (e) {}
+        return null;
+      }
+
+      /**
+       * 安全写 Cubism 参数：有则设，无则跳过（不同模型参数集不同）。
+       * weight 用于停音乐时平滑回中立（0=中立，1=目标）。
+       */
+      function setCubismParam(id, value, weight) {
+        var core = getCubismCore();
+        if (!core) return false;
+        try {
+          var w = weight == null ? 1 : weight;
+          if (w < 0) w = 0;
+          if (w > 1) w = 1;
+          var v = value * w;
+          core.setParameterValueById(id, v);
+          return true;
+        } catch (e) {
+          return false;
+        }
+      }
+
+      function applyCubismSoftDance(beat) {
+        // 目标：音乐时 softDanceCubismParams；停/关跟随 → 角度/身体/肩回 0，呼吸保留极弱
+        var active = musicBeatEnabled && beat > 0.001;
+        var target = active
+          ? softDanceCubismParams(beat)
+          : {
+              angleX: 0, angleY: 0, angleZ: 0,
+              bodyX: 0, bodyY: 0,
+              breath: 0.45 + Math.sin(breathT * 0.022) * 0.12,
+              scalePulse: 0
+            };
+        var tShL = 0, tShR = 0;
+        if (active) {
+          tShL = Math.sin(dancePhase * 0.01) * 0.08 * (0.2 + beat * 0.5);
+          tShR = -tShL * 0.7;
+        }
+        // 强 EMA：停音乐平滑回中立，不跳变
+        var a = active ? 0.08 : 0.06;
+        danceAngleX += (target.angleX - danceAngleX) * a;
+        danceAngleY += (target.angleY - danceAngleY) * a;
+        danceAngleZ += (target.angleZ - danceAngleZ) * a;
+        danceBodyX += (target.bodyX - danceBodyX) * a;
+        danceBodyY += (target.bodyY - danceBodyY) * a;
+        danceBreath += (target.breath - danceBreath) * 0.05;
+        danceShoulderL += (tShL - danceShoulderL) * a;
+        danceShoulderR += (tShR - danceShoulderR) * a;
+        // 接近 0 时钳死，避免浮点残留
+        if (!active) {
+          if (Math.abs(danceAngleX) < 0.02) danceAngleX = 0;
+          if (Math.abs(danceAngleY) < 0.02) danceAngleY = 0;
+          if (Math.abs(danceAngleZ) < 0.02) danceAngleZ = 0;
+          if (Math.abs(danceBodyX) < 0.02) danceBodyX = 0;
+          if (Math.abs(danceBodyY) < 0.02) danceBodyY = 0;
+          if (Math.abs(danceShoulderL) < 0.005) danceShoulderL = 0;
+          if (Math.abs(danceShoulderR) < 0.005) danceShoulderR = 0;
+        }
+        // 写 Cubism 参数（有则设，无则跳过）
+        setCubismParam('ParamAngleX', danceAngleX, 1);
+        setCubismParam('ParamAngleY', danceAngleY, 1);
+        setCubismParam('ParamAngleZ', danceAngleZ, 1);
+        setCubismParam('ParamBodyAngleX', danceBodyX, 1);
+        setCubismParam('ParamBodyAngleY', danceBodyY, 1);
+        setCubismParam('ParamBreath', danceBreath, 1);
+        setCubismParam('ParamLeftShoulderUp', danceShoulderL, 1);
+        setCubismParam('ParamRightShoulderUp', danceShoulderR, 1);
+        return target;
+      }
+
+      function lockModelTransform() {
+        if (!live2dModel) return;
+        var base = live2dModel.__baseScale;
+        if (base == null || !isFinite(base) || base <= 0) {
+          base = 1;
+          live2dModel.__baseScale = base;
+        }
+        var bx = live2dModel.__baseX != null ? live2dModel.__baseX : live2dModel.x;
+        var by = live2dModel.__baseY != null ? live2dModel.__baseY : live2dModel.y;
+        // 容器 transform 锁定：scale 固定 base，x/y 固定 base，rotation 恒 0
+        // 音乐时禁止再写 live2dModel.x/y/rotation 做贴纸晃
+        if (live2dModel.scale) live2dModel.scale.set(base, base);
+        live2dModel.x = bx;
+        live2dModel.y = by;
+        if (live2dModel.rotation != null) live2dModel.rotation = 0;
+      }
+
       function tickCubismFrame() {
         if (!live2dModel) return;
         try {
-          // scale 恒定 = __baseScale；音乐跟随彻底禁止改 scale（scalePulse≡0，无 scale 呼吸）
-          // 只写 x/y/rotation；layout 只更新 base，不与 tick 交替抢 scale
-          var beat = musicBeatEnabled ? musicBeatDisplay : 0;
-          var base = live2dModel.__baseScale;
-          if (base == null || !isFinite(base) || base <= 0) {
-            base = 1;
-            live2dModel.__baseScale = base;
-          }
-          var bx = live2dModel.__baseX != null ? live2dModel.__baseX : live2dModel.x;
-          var by = live2dModel.__baseY != null ? live2dModel.__baseY : live2dModel.y;
-          // 位移-only 轻呼吸（不改 scale）
-          var ox = 0, oy = Math.sin(breathT * 0.022) * 0.25, orot = Math.sin(breathT * 0.016) * 0.002;
-          if (musicBeatEnabled && beat > 0.001) {
-            var d = softDanceOffset(beat);
-            ox = d.x;
-            oy = d.y + Math.sin(breathT * 0.022) * 0.15;
-            orot = d.rot;
-            // d.scalePulse 恒 0，禁止参与 scale
-          }
-          // 恒定 base：不乘 breath / scalePulse，杜绝放大↔正常闪烁
-          if (live2dModel.scale) live2dModel.scale.set(base, base);
-          live2dModel.x = bx + ox;
-          live2dModel.y = by + oy;
-          live2dModel.rotation = orot;
+          // 1) 锁定容器 transform（禁止整模 x/y/rot/scale 贴纸晃）
+          lockModelTransform();
 
-          // lip sync ParamMouthOpenY
+          // 2) Cubism 参数轻舞：人物自身侧身/呼吸/律动
+          var beat = musicBeatEnabled ? musicBeatDisplay : 0;
+          applyCubismSoftDance(beat);
+
+          // 3) lip sync ParamMouthOpenY
           var mOpen = mouthAnimating
             ? (0.25 + 0.45 * (0.5 + 0.5 * Math.sin(breathT * 0.35)))
             : Math.max(0, Math.min(1, mouthOpen));
@@ -641,13 +765,10 @@
       function setMouthOpen(value) {
         if (!live2dModel) return;
         try {
-          var core = live2dModel.internalModel && live2dModel.internalModel.coreModel;
-          if (core && typeof core.setParameterValueById === 'function') {
+          var core = getCubismCore();
+          if (core) {
             core.setParameterValueById('ParamMouthOpenY', value);
             return;
-          }
-          if (live2dModel.internalModel && live2dModel.internalModel.motionManager) {
-            // ignore
           }
         } catch (e) {}
       }
