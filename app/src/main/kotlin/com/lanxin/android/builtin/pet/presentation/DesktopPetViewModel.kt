@@ -122,9 +122,11 @@ data class DesktopPetUiState(
     /** 实际落盘根（LanXin）绝对路径，下载成功后展示给用户。 */
     val downloadRootPath: String = "",
     val downloadRootFallback: Boolean = false,
+
     /** Live2D 可切换模型列表（内置 + LanXin/live2d/*）。 */
     val live2dModels: List<Live2dModelCatalog.ModelEntry> = emptyList(),
     val live2dCurrentName: String = Live2dModelCatalog.BUILTIN_DISPLAY_NAME,
+
     /** 文件管理器提示：`…/LanXin/live2d`。 */
     val live2dDirHint: String = ""
 )
@@ -388,13 +390,14 @@ class DesktopPetViewModel @Inject constructor(
         val hint = _uiState.value.live2dDirHint.ifBlank {
             "LanXin/live2d/"
         }
+        val message = buildString {
+            append("请在文件管理器中打开：")
+            append(hint)
+            append('\n')
+            append("每个模型一个文件夹，内含 *.model3.json。导入或下载后会出现在此列表。")
+        }
         _uiState.update {
-            it.copy(
-                snackbarMessage =
-                    "请在文件管理器中打开：$hint
-" +
-                        "每个模型一个文件夹，内含 *.model3.json。导入或下载后会出现在此列表。"
-            )
+            it.copy(snackbarMessage = message)
         }
     }
 

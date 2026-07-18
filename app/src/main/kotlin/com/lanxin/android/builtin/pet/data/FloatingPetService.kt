@@ -358,6 +358,7 @@ class FloatingPetService : Service() {
     companion object {
         const val ACTION_STOP = "com.lanxin.android.pet.STOP"
         const val ACTION_DEMO_ROUND = "com.lanxin.android.pet.DEMO_ROUND"
+
         /** 设置页切换模型后立即重新 LOAD_LIVE2D。 */
         const val ACTION_RELOAD_LIVE2D = "com.lanxin.android.pet.RELOAD_LIVE2D"
         const val CHANNEL_ID = "lanxin_desktop_pet"

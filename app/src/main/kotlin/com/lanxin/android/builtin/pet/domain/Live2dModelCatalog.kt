@@ -204,12 +204,14 @@ object Live2dModelCatalog {
             ?: error("未找到 *.model3.json")
         // 模型根：优先 model3 的父目录（完整资源通常同级）
         val modelRoot = model3.parentFile ?: sourceDir
-        val baseName = preferredName?.let { PathImportHelper.sanitizeFileName(it) }
+        val rawBase = preferredName
             ?.takeIf { it.isNotBlank() }
             ?: modelRoot.name.takeIf { it.isNotBlank() && it != "import" }
-            ?: model3.name.removeSuffix(".model3.json").removeSuffix(".model3")
+            ?: model3.name
+                .removeSuffix(".model3.json")
+                .removeSuffix(".model3")
                 .ifBlank { "model" }
-            .let { PathImportHelper.sanitizeFileName(it) }
+        val baseName = PathImportHelper.sanitizeFileName(rawBase)
 
         val uniqueName = uniqueDirName(live2dRoot(lanXinDir), baseName)
         val destRoot = File(live2dRoot(lanXinDir), uniqueName)
