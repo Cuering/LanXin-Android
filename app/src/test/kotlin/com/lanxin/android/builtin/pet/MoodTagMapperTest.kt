@@ -28,6 +28,25 @@ class MoodTagMapperTest {
             MoodTagMapper.stripTags("前[[mood=sorry]]后")
         )
         assertEquals("plain", MoodTagMapper.stripTags("plain"))
+        // 任意 [[…]] 均剥离（防御 pet 扩展标签 / 脏标签）
+        assertEquals(
+            "干净",
+            MoodTagMapper.stripTags("[[pet exp=exp_07]]干净[[mood=bogus]]")
+        )
+        assertEquals(
+            "嗨",
+            MoodTagMapper.stripTags("[[pet:joy]]\n嗨")
+        )
+    }
+
+    @Test
+    fun `compatible pet colon and pet mood tags`() {
+        val a = MoodTagMapper.match("[[pet:joy]]耶")
+        assertNotNull(a)
+        assertEquals("mood:joy", a!!.ruleId)
+        val b = MoodTagMapper.match("[[pet mood=sorry]]抱歉")
+        assertNotNull(b)
+        assertEquals("mood:sorry", b!!.ruleId)
     }
 
     @Test

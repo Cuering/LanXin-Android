@@ -47,6 +47,7 @@ import com.lanxin.android.builtin.voice.data.StubTtsEngine
 import com.lanxin.android.builtin.voice.domain.TtsConfig
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -222,5 +223,16 @@ class VoiceSessionCoordinatorTest {
         val r = c.runRound(VoiceSessionInput("测试", isStub = true))
         assertEquals("自定义回复", r.replyText)
         assertEquals("自定义回复", r.subtitle)
+    }
+
+    @Test
+    fun `mood tags stripped from TTS result and final snapshot`() = runBlocking {
+        val c = coordinator(responder = FixedResponder("[[mood=joy]]\n今天真开心"))
+        val r = c.runRound(VoiceSessionInput("测试", isStub = true))
+        assertEquals("今天真开心", r.replyText)
+        assertEquals("今天真开心", r.subtitle)
+        assertFalse(r.replyText.contains("[["))
+        assertFalse(c.current().replyText.contains("[["))
+        assertFalse(c.current().subtitle.contains("[["))
     }
 }

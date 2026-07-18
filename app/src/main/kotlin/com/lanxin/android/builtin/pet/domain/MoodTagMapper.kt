@@ -26,9 +26,10 @@ package com.lanxin.android.builtin.pet.domain
  * - 生成侧只允许 [ALLOWED_MOODS] 内的值
  *
  * ## 标签语法
- * - `[[mood=joy]]`（大小写不敏感）
+ * - 主协议：`[[mood=joy]]`（大小写不敏感）
+ * - 兼容：`[[pet mood=joy]]` / `[[pet:joy]]`
  * - 同文多标签时取 **首个合法** mood
- * - 气泡展示前用 [stripTags] 剥离全部标签
+ * - 气泡 / TTS / 历史展示前用 [stripTags] 剥离全部标签
  *
  * ## mood → 资源对照（仅现有）
  * | mood | Expression | exp | Motion |
@@ -61,10 +62,19 @@ object MoodTagMapper {
         "tap"
     )
 
+    /**
+     * 匹配三类隐藏标签（仅用于 [match] 解析）：
+     * - `[[mood=joy]]`
+     * - `[[pet mood=joy]]`
+     * - `[[pet:joy]]`
+     */
     private val TAG_REGEX = Regex(
-        """\[\[\s*mood\s*=\s*([a-zA-Z_]+)\s*]]""",
+        """\[\[\s*(?:pet\s+)?mood\s*=\s*([a-zA-Z_]+)\s*]]|\[\[\s*pet\s*:\s*([a-zA-Z_]+)\s*]]""",
         RegexOption.IGNORE_CASE
     )
+
+    /** 展示路径：任意 `[[…]]` 均剥（防御扩展标签 / 脏标签 / 非法 mood）。 */
+    private val ANY_BRACKET_TAG_REGEX = Regex("""\[\[[^\]]*]]""")
 
     /**
      * 别名 → canonical。仅归一字符串，映射结果仍落 [ALLOWED_MOODS]。
@@ -170,12 +180,12 @@ object MoodTagMapper {
         return if (canonical in DEFS) canonical else null
     }
 
-    /** 剥离全部 `[[mood=…]]`，压缩多余空白，供气泡展示。 */
+    /** 剥离全部 `[[…]]` 隐藏标签，压缩多余空白，供气泡 / TTS / 历史展示。 */
     fun stripTags(text: String): String {
         if (text.isEmpty() || !text.contains("[[", ignoreCase = false)) {
             return text
         }
-        return TAG_REGEX.replace(text, " ")
+        return ANY_BRACKET_TAG_REGEX.replace(text, " ")
             .replace(Regex("""[ \t]{2,}"""), " ")
             .replace(Regex(""" *\n *"""), "\n")
             .trim()
@@ -189,7 +199,10 @@ object MoodTagMapper {
         if (text.isBlank()) return null
         val found = TAG_REGEX.findAll(text)
         for (m in found) {
-            val raw = m.groupValues.getOrNull(1) ?: continue
+            val raw = m.groupValues.getOrNull(1)
+                ?.takeIf { it.isNotBlank() }
+                ?: m.groupValues.getOrNull(2)
+                ?: continue
             val mood = normalize(raw) ?: continue
             val def = DEFS[mood] ?: continue
             // 与关键词路径一致：校验 motion 合法

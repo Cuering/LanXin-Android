@@ -63,7 +63,8 @@ IDLE → LISTENING → THINKING → SPEAKING → IDLE
 - 命中后覆盖 `SET_EXPRESSION`（exp_01…08）+ 可选 `PLAY_MOTION`（Idle / TapBody）
 - mood：smile / listen / think / speak / sorry / idle / joy / music / tap（+ 少量别名）
 - 关键词：apology / joy / music / tap_invite / think_tone / greeting / sad / idle_variant
-- 气泡 `stripTags` 后再展示；接线悬浮层 / 陪伴页 / 设置页表情标签
+- 气泡 / TTS / 历史 `stripTags`；接线悬浮层 / 陪伴页 / 设置页
+- 提示词：正文前可加 `[[mood=…]]`（仅允许表内 mood），本地脑/云端同协议
 - 同一 `roundId:ruleId` 只推一次 motion，防 snapshot 重复 collect 连播
 
 ## 3. M2a 交付

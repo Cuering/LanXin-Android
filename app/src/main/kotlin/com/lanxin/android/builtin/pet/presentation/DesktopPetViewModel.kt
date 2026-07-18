@@ -173,11 +173,12 @@ class DesktopPetViewModel @Inject constructor(
                     )
                 }.getOrDefault(Live2dDisplayController.Live2dDisplayMode.PLACEHOLDER)
                 val phasePose = PetExpressionController.poseFor(snap.phase, mode)
-                val rawBubble = snap.subtitle.ifBlank { snap.replyText }
+                // 匹配优先 replyText（SPEAKING 期可能含 mood 标签）
+                val rawForMatch = snap.replyText.ifBlank { snap.subtitle }
                 val pose = TextExpressionMotionMapper.overlaySpeakingPose(
                     phasePose,
                     snap.phase,
-                    rawBubble
+                    rawForMatch
                 )
                 val displayReply = MoodTagMapper.stripTags(snap.replyText)
                 val displaySubtitle = MoodTagMapper.stripTags(snap.subtitle)
@@ -245,7 +246,7 @@ class DesktopPetViewModel @Inject constructor(
             val pose = TextExpressionMotionMapper.overlaySpeakingPose(
                 phasePose,
                 snap.phase,
-                snap.subtitle.ifBlank { snap.replyText }
+                snap.replyText.ifBlank { snap.subtitle }
             )
             val guide = PetExpressionController.guideForMissingResources(
                 live2dReady = live2dCheck.ready,

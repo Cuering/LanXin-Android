@@ -66,4 +66,14 @@ class PersonaMoodFormatterTest {
         assertFalse(result.contains("\n\n\n"))
         assertTrue(result.contains("user: u"))
     }
+
+    @Test
+    fun `appendPetMoodTagInstruction injects once`() {
+        val once = PersonaMoodFormatter.appendPetMoodTagInstruction("你是兰心")
+        assertTrue(once.contains(PersonaMoodFormatter.PET_MOOD_TAG_SECTION_HEADER))
+        assertTrue(once.contains("[[mood=joy]]"))
+        assertTrue(once.contains("smile, listen, think"))
+        val twice = PersonaMoodFormatter.appendPetMoodTagInstruction(once)
+        assertEquals(once, twice)
+    }
 }

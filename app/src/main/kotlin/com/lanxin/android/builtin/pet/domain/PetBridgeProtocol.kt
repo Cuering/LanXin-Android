@@ -107,13 +107,16 @@ object PetBridgeProtocol {
             Live2dDisplayController.Live2dDisplayMode.PLACEHOLDER
     ): PetBridgeMessage {
         val pose = PetExpressionController.poseFor(snapshot.phase, displayMode)
+        // 线协议展示字段一律剥 [[mood=]]，匹配用本地 snapshot.replyText
+        val wireReply = MoodTagMapper.stripTags(snapshot.replyText)
+        val wireSubtitle = MoodTagMapper.stripTags(snapshot.subtitle)
         return PetBridgeMessage(
             command = PetBridgeCommand.SESSION_STATE,
             payload = mapOf(
                 KEY_PHASE to snapshot.phase.name,
                 KEY_ASR to snapshot.asrText,
-                KEY_REPLY to snapshot.replyText,
-                KEY_SUBTITLE to snapshot.subtitle,
+                KEY_REPLY to wireReply,
+                KEY_SUBTITLE to wireSubtitle,
                 KEY_ERROR to (snapshot.lastError.orEmpty()),
                 KEY_ROUND to snapshot.roundId.toString(),
                 KEY_EXPRESSION to pose.expression.name,
@@ -128,9 +131,10 @@ object PetBridgeProtocol {
     }
 
     fun showBubbleMessage(text: String, timestampMs: Long = System.currentTimeMillis()): PetBridgeMessage {
+        val clean = MoodTagMapper.stripTags(text)
         return PetBridgeMessage(
             command = PetBridgeCommand.SHOW_BUBBLE,
-            payload = mapOf(KEY_BUBBLE to text, KEY_SUBTITLE to text),
+            payload = mapOf(KEY_BUBBLE to clean, KEY_SUBTITLE to clean),
             timestampMs = timestampMs
         )
     }

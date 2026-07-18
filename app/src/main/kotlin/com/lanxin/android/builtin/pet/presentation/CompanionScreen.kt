@@ -980,6 +980,7 @@ class CompanionViewModel @Inject constructor(
                     source = "companion_text"
                 )
             )
+            // VoiceSessionResult 已 strip；气泡 / lastReply 不进标签
             val reply = MoodTagMapper.stripTags(
                 result.subtitle.ifBlank { result.replyText }
             )
@@ -1176,12 +1177,14 @@ class CompanionViewModel @Inject constructor(
         val mode = lastDecision?.mode
             ?: Live2dDisplayController.Live2dDisplayMode.PLACEHOLDER
         val phasePose = PetExpressionController.poseFor(snap.phase, mode)
-        val bubble = snap.subtitle.ifBlank { snap.replyText }
+        // 匹配用 raw（含 mood 标签）；lastReply 同 raw 作会话外兜底
+        val rawForMatch = snap.replyText
+            .ifBlank { snap.subtitle }
             .ifBlank { _uiState.value.lastReply }
         val pose = TextExpressionMotionMapper.overlaySpeakingPose(
             phasePose,
             snap.phase,
-            bubble
+            rawForMatch
         )
         return bridge.encodeExpression(pose, snap.phase)
     }
@@ -1189,10 +1192,11 @@ class CompanionViewModel @Inject constructor(
     fun encodePlayMotionRaw(): String? {
         val snap = sessionCoordinator.current()
         if (snap.phase != VoiceSessionPhase.SPEAKING) return null
-        val bubble = snap.subtitle.ifBlank { snap.replyText }
+        val rawForMatch = snap.replyText
+            .ifBlank { snap.subtitle }
             .ifBlank { _uiState.value.lastReply }
-        if (bubble.isBlank()) return null
-        val match = TextExpressionMotionMapper.match(bubble) ?: return null
+        if (rawForMatch.isBlank()) return null
+        val match = TextExpressionMotionMapper.match(rawForMatch) ?: return null
         val group = match.motionGroup ?: return null
         return bridge.encodePlayMotion(group, match.motionIndex)
     }

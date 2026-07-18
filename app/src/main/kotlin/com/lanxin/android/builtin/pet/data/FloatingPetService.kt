@@ -436,17 +436,20 @@ class FloatingPetService : Service() {
         val encoded = desktopBridge?.encodeSession(snap, displayMode = mode) ?: return
         pushRawToWeb(encoded)
         // 相位默认 pose；SPEAKING 时用 mood 标签 / 关键词叠加表情/动作
+        // 匹配优先 replyText（可能含 [[mood=]]）；气泡用剥标签后文本
         val phasePose = PetExpressionController.poseFor(snap.phase, mode)
-        val rawBubble = snap.subtitle.ifBlank { snap.replyText }
-        val displayBubble = MoodTagMapper.stripTags(rawBubble)
+        val rawForMatch = snap.replyText.ifBlank { snap.subtitle }
+        val displayBubble = MoodTagMapper.stripTags(
+            snap.subtitle.ifBlank { snap.replyText }
+        )
         val pose = TextExpressionMotionMapper.overlaySpeakingPose(
             phasePose,
             snap.phase,
-            rawBubble
+            rawForMatch
         )
         desktopBridge?.encodeExpression(pose, snap.phase)?.let { pushRawToWeb(it) }
-        if (snap.phase == VoiceSessionPhase.SPEAKING && rawBubble.isNotBlank()) {
-            val match = TextExpressionMotionMapper.match(rawBubble)
+        if (snap.phase == VoiceSessionPhase.SPEAKING && rawForMatch.isNotBlank()) {
+            val match = TextExpressionMotionMapper.match(rawForMatch)
             val group = match?.motionGroup
             if (match != null && group != null) {
                 val key = "${snap.roundId}:${match.ruleId}"
