@@ -5,6 +5,7 @@ import org.gradle.kotlin.dsl.aboutLibraries
 import org.gradle.kotlin.dsl.configure
 import java.net.URI
 import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
 plugins {
     alias(libs.plugins.android.application)
@@ -64,12 +65,14 @@ val downloadSherpaOnnxAar by tasks.registering {
             try {
                 logger.lifecycle("Downloading sherpa-onnx AAR from $url")
                 URI(url).toURL().openStream().use { input ->
-                    Files.copy(input, sherpaAarLocal.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+                    Files.copy(input, sherpaAarLocal.toPath(), StandardCopyOption.REPLACE_EXISTING)
                 }
                 require(sherpaAarLocal.isFile && sherpaAarLocal.length() > 1_000_000L) {
                     "Downloaded AAR too small: ${sherpaAarLocal.length()}"
                 }
-                logger.lifecycle("sherpa-onnx AAR ready: ${sherpaAarLocal} (${sherpaAarLocal.length()} bytes)")
+                logger.lifecycle(
+                    "sherpa-onnx AAR ready: $sherpaAarLocal (${sherpaAarLocal.length()} bytes)"
+                )
                 return@doLast
             } catch (e: Exception) {
                 lastError = e
