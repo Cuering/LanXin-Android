@@ -493,6 +493,54 @@ class DebugAssetDownloaderTest {
     }
 
     @Test
+    fun localLlm_resume_skipsAlreadyDownloadedFiles() = runTest {
+        val baseDir = tmp.newFolder("base-llm-resume")
+        val staging = File(baseDir, "LanXin/.tmp/mf-modelscope-staging")
+        // 预置部分已下完的小文件（模拟断点后续传）
+        for (rel in listOf("config.json", "configuration.json", "llm_config.json")) {
+            val f = File(staging, rel)
+            f.parentFile?.mkdirs()
+            f.writeText("pre-$rel")
+        }
+        val transport = object : AssetDownloadTransport {
+            val downloaded = mutableListOf<String>()
+            override suspend fun downloadToFile(
+                url: String,
+                destFile: File,
+                onProgress: suspend (Long, Long) -> Unit
+            ) {
+                downloaded += destFile.name
+                destFile.parentFile?.mkdirs()
+                destFile.writeText("new-${destFile.name}")
+                onProgress(1, 1)
+            }
+
+            override suspend fun openStream(url: String): InputStream =
+                ByteArrayInputStream(ByteArray(0))
+        }
+        val downloader = DebugAssetDownloader(transport)
+        val events = downloader.download(
+            baseDir,
+            DebugAssetKind.LOCAL_LLM,
+            DebugAssetMirror.MIRROR_CDN
+        ).toList()
+        val completed = events.filterIsInstance<DebugAssetDownloadEvent.Completed>().single()
+        assertEquals(DebugAssetKind.LOCAL_LLM, completed.kind)
+        assertTrue(downloader.isReady(baseDir, DebugAssetKind.LOCAL_LLM))
+        // 已预置的三个文件不应再请求
+        assertFalse(transport.downloaded.contains("config.json"))
+        assertFalse(transport.downloaded.contains("configuration.json"))
+        assertFalse(transport.downloaded.contains("llm_config.json"))
+        assertTrue(transport.downloaded.contains("llm.mnn"))
+        assertTrue(transport.downloaded.contains("llm.mnn.weight"))
+        assertTrue(
+            events.any {
+                it is DebugAssetDownloadEvent.Progress && it.phase == "resuming"
+            }
+        )
+    }
+
+    @Test
     fun compactTimeoutMessage_stripsUrlKeepsFile() {
         val raw =
             "Connect timeout has expired " +

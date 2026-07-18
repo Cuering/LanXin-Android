@@ -130,6 +130,7 @@ bash scripts/download-debug-tts.sh
 | 一键下载落盘 | `LanXin/models/local-llm/light/`（含 `llm.mnn` / `llm.mnn.weight` / tokenizer 等） |
 | 源序 | ModelScope（含 www）→ hf-mirror → HuggingFace |
 | 下载超时 | 独立 `KtorAssetDownloadTransport`：connect 60s / socket 5min / request 无限 |
+| 可恢复 | `*.part` + HTTP `Range` 续传；超时/断连自动重试（最多 3 次）；多文件跳过已下完项 |
 | 失败提示 | 各源错误聚合；可 Wi‑Fi 重试或电脑放到 `LanXin/models/local-llm/light/` |
 
 详见 [`local-inference.md`](./local-inference.md)。

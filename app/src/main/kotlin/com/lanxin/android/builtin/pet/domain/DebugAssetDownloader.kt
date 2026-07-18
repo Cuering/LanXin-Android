@@ -264,8 +264,7 @@ class DebugAssetDownloader @Inject constructor(
             } catch (t: Throwable) {
                 lastError = t
                 errorsBySource += source.label to shortError(t)
-                // 失败源清理 staging，避免脏半成品影响下一源
-                cleanupMultiFileStaging(baseDir, source.label)
+                // 保留 staging/.part：用户重试同源可续传；各源目录按 label 隔离
             }
         }
         throw MultiSourceFailure(errorsBySource, lastError)
@@ -295,7 +294,6 @@ class DebugAssetDownloader @Inject constructor(
             } catch (t: Throwable) {
                 lastError = t
                 errorsBySource += source.label to shortError(t)
-                cleanupMultiFileStaging(baseDir, source.label)
             }
         }
 
@@ -317,16 +315,12 @@ class DebugAssetDownloader @Inject constructor(
         throw MultiSourceFailure(errorsBySource, lastError)
     }
 
-    private fun cleanupMultiFileStaging(baseDir: File, sourceLabel: String) {
-        val staging = File(
-            baseDir,
-            "${DebugOpenSourcePaths.ROOT_DIR}/.tmp/mf-$sourceLabel-staging"
-        )
-        if (staging.exists()) {
-            runCatching { staging.deleteRecursively() }
-        }
-    }
-
+    /**
+     * 多文件安装：可恢复。
+     * - 已完整落盘的文件跳过；
+     * - 失败保留 staging 与 `*.part`（transport Range 续传）；
+     * - 成功后迁入目标目录并清理 staging。
+     */
     private suspend fun installMultiFileSource(
         baseDir: File,
         source: DebugAssetCatalog.MultiFileSource,
@@ -336,71 +330,89 @@ class DebugAssetDownloader @Inject constructor(
             baseDir,
             "${DebugOpenSourcePaths.ROOT_DIR}/.tmp/mf-${source.label}-staging"
         )
-        if (staging.exists()) staging.deleteRecursively()
         staging.mkdirs()
 
-        try {
-            val files = source.relativeFiles
-            var done = 0
-            for (rel in files) {
-                currentCoroutineContext().ensureActive()
-                val url = "${source.baseUrl.trimEnd('/')}/$rel"
-                val dest = File(staging, rel)
-                dest.parentFile?.mkdirs()
-                transport.downloadToFile(url, dest) { downloaded, total ->
-                    val filePct = if (total > 0) {
-                        ((downloaded * 100) / total).toInt().coerceIn(0, 100)
-                    } else {
-                        0
-                    }
-                    val overall = ((done * 100) + filePct) / files.size
-                    emit(
-                        DebugAssetDownloadEvent.Progress(
-                            downloadedBytes = done.toLong() + 1,
-                            totalBytes = files.size.toLong(),
-                            percent = overall.coerceIn(0, 90),
-                            mirror = source.mirror,
-                            phase = "downloading",
-                            sourceLabel = source.label
-                        )
-                    )
-                }
-                if (!dest.isFile || dest.length() <= 0L) {
-                    throw IllegalStateException("空文件 $rel @ ${source.label}")
-                }
+        val files = source.relativeFiles
+        var done = 0
+        // 统计已就绪文件，进度起点不为 0
+        for (rel in files) {
+            val existing = File(staging, rel)
+            if (existing.isFile && existing.length() > 0L) done++
+        }
+        val alreadyDone = done
+        done = 0
+        for (rel in files) {
+            currentCoroutineContext().ensureActive()
+            val dest = File(staging, rel)
+            dest.parentFile?.mkdirs()
+            if (dest.isFile && dest.length() > 0L) {
                 done++
-            }
-
-            emit(
-                DebugAssetDownloadEvent.Progress(
-                    downloadedBytes = files.size.toLong(),
-                    totalBytes = files.size.toLong(),
-                    percent = 95,
-                    mirror = source.mirror,
-                    phase = "extracting",
-                    sourceLabel = source.label
+                val overall = (done * 100) / files.size
+                emit(
+                    DebugAssetDownloadEvent.Progress(
+                        downloadedBytes = done.toLong(),
+                        totalBytes = files.size.toLong(),
+                        percent = overall.coerceIn(0, 90),
+                        mirror = source.mirror,
+                        phase = if (alreadyDone > 0) "resuming" else "downloading",
+                        sourceLabel = source.label
+                    )
                 )
-            )
+                continue
+            }
+            val url = "${source.baseUrl.trimEnd('/')}/$rel"
+            transport.downloadToFile(url, dest) { downloaded, total ->
+                val filePct = if (total > 0) {
+                    ((downloaded * 100) / total).toInt().coerceIn(0, 100)
+                } else {
+                    0
+                }
+                val overall = ((done * 100) + filePct) / files.size
+                emit(
+                    DebugAssetDownloadEvent.Progress(
+                        downloadedBytes = done.toLong() + 1,
+                        totalBytes = files.size.toLong(),
+                        percent = overall.coerceIn(0, 90),
+                        mirror = source.mirror,
+                        phase = "downloading",
+                        sourceLabel = source.label
+                    )
+                )
+            }
+            if (!dest.isFile || dest.length() <= 0L) {
+                throw IllegalStateException("空文件 $rel @ ${source.label}")
+            }
+            done++
+        }
 
-            val target = File(baseDir, source.modelDirRel)
-            if (target.exists()) target.deleteRecursively()
-            target.parentFile?.mkdirs()
-            if (!staging.renameTo(target)) {
-                staging.copyRecursively(target, overwrite = true)
-                staging.deleteRecursively()
-            }
-            val ok = when {
-                source.modelDirRel.contains("local-llm") ->
-                    DebugOpenSourcePaths.isLocalLlmDirReady(target)
-                else -> DebugOpenSourcePaths.isModelDirReady(target)
-            }
-            if (!ok) {
-                throw IllegalStateException("多文件安装后目录未就绪：${target.absolutePath}")
-            }
-        } catch (t: Throwable) {
-            // 失败即清 staging，换源重试时不留半成品
-            runCatching { staging.deleteRecursively() }
-            throw t
+        emit(
+            DebugAssetDownloadEvent.Progress(
+                downloadedBytes = files.size.toLong(),
+                totalBytes = files.size.toLong(),
+                percent = 95,
+                mirror = source.mirror,
+                phase = "extracting",
+                sourceLabel = source.label
+            )
+        )
+
+        val target = File(baseDir, source.modelDirRel)
+        if (target.exists()) target.deleteRecursively()
+        target.parentFile?.mkdirs()
+        // 迁入前去掉残留 .part
+        staging.walkTopDown().filter { it.isFile && it.name.endsWith(".part") }
+            .forEach { runCatching { it.delete() } }
+        if (!staging.renameTo(target)) {
+            staging.copyRecursively(target, overwrite = true)
+            staging.deleteRecursively()
+        }
+        val ok = when {
+            source.modelDirRel.contains("local-llm") ->
+                DebugOpenSourcePaths.isLocalLlmDirReady(target)
+            else -> DebugOpenSourcePaths.isModelDirReady(target)
+        }
+        if (!ok) {
+            throw IllegalStateException("多文件安装后目录未就绪：${target.absolutePath}")
         }
     }
 
@@ -420,7 +432,7 @@ class DebugAssetDownloader @Inject constructor(
             .substringBefore('?')
         val archive = File(tmp, archiveName)
         try {
-            if (archive.exists()) archive.delete()
+            // 保留 .part / 已下字节，由 transport Range 续传
             transport.downloadToFile(candidate.url, archive) { downloaded, total ->
                 val pct = if (total > 0) {
                     ((downloaded * 85) / total).toInt().coerceIn(0, 85)

@@ -17,12 +17,15 @@
 package com.lanxin.android.builtin.pet
 
 import com.lanxin.android.builtin.pet.data.KtorAssetDownloadTransport
+import java.io.File
+import java.net.SocketTimeoutException
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 下载专用超时：不复用 API 默认短超时。
+ * 下载专用超时 + 可恢复：不复用 API 默认短超时。
  * connect ≥ 30s；socket 长空闲；request=0 禁用（大文件靠进度 + 取消）。
  */
 class KtorAssetDownloadTransportTest {
@@ -46,5 +49,44 @@ class KtorAssetDownloadTransportTest {
             0L,
             KtorAssetDownloadTransport.REQUEST_TIMEOUT_MS
         )
+    }
+
+    @Test
+    fun resume_partFile_sidecarName() {
+        val dest = File("/tmp/LanXin/models/local-llm/light/llm.mnn.weight")
+        val part = KtorAssetDownloadTransport.partFile(dest)
+        assertEquals("llm.mnn.weight.part", part.name)
+        assertEquals(dest.parentFile, part.parentFile)
+    }
+
+    @Test
+    fun retryPolicy_timeoutsAreRetryable_http403Not() {
+        assertTrue(KtorAssetDownloadTransport.isRetryable(SocketTimeoutException("read")))
+        assertTrue(
+            KtorAssetDownloadTransport.isRetryable(
+                IllegalStateException("Connect timeout has expired")
+            )
+        )
+        assertTrue(
+            KtorAssetDownloadTransport.isRetryable(
+                IllegalStateException("下载失败 HTTP 503")
+            )
+        )
+        assertTrue(
+            KtorAssetDownloadTransport.isRetryable(
+                IllegalStateException("下载失败 HTTP 429")
+            )
+        )
+        assertFalse(
+            KtorAssetDownloadTransport.isRetryable(
+                IllegalStateException("下载失败 HTTP 403")
+            )
+        )
+        assertFalse(
+            KtorAssetDownloadTransport.isRetryable(
+                IllegalStateException("下载失败 HTTP 404")
+            )
+        )
+        assertTrue(KtorAssetDownloadTransport.MAX_ATTEMPTS >= 3)
     }
 }
