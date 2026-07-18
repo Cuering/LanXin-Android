@@ -89,7 +89,9 @@ data class PetConfig(
     val autoListen: Boolean = false,
     val live2dModelPath: String = "",
     /** 背景音乐时 Live2D/壳是否跟随节拍轻晃。默认开。 */
-    val musicBeatSway: Boolean = true
+    val musicBeatSway: Boolean = true,
+    /** 悬浮窗位置（px，Gravity.TOP|START）；未保存时 [OverlayPosition.UNSET]。 */
+    val overlayPosition: OverlayPosition = OverlayPosition()
 )
 
 /**
@@ -102,6 +104,8 @@ interface PetSettings {
     suspend fun setAutoListen(autoListen: Boolean)
     suspend fun setLive2dModelPath(path: String?)
     suspend fun setMusicBeatSway(enabled: Boolean)
+    /** 持久化悬浮窗位置（拖拽松手后写入）。 */
+    suspend fun setOverlayPosition(x: Int, y: Int)
 }
 
 /**

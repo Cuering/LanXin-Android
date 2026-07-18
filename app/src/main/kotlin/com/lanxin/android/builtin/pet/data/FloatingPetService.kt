@@ -27,6 +27,8 @@ import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
 import android.view.Gravity
+import android.view.MotionEvent
+import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -38,6 +40,8 @@ import com.lanxin.android.builtin.pet.domain.DebugAssetStorage
 import com.lanxin.android.builtin.pet.domain.Live2dDisplayController
 import com.lanxin.android.builtin.pet.domain.Live2dModel3Reader
 import com.lanxin.android.builtin.pet.domain.MeijuDebugPaths
+import com.lanxin.android.builtin.pet.domain.OverlayPosition
+import com.lanxin.android.builtin.pet.domain.OverlayPositionMath
 import com.lanxin.android.builtin.pet.domain.PetBridgeCommand
 import com.lanxin.android.builtin.pet.domain.PetBridgeMessage
 import com.lanxin.android.builtin.pet.domain.PetExpressionController
@@ -72,6 +76,7 @@ class FloatingPetService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var windowManager: WindowManager? = null
     private var webView: WebView? = null
+    private var layoutParams: WindowManager.LayoutParams? = null
     private var desktopBridge: DesktopPetBridge? = null
     private var voiceBridge: AndroidVoiceBridge? = null
     private var sessionCollectJob: Job? = null
@@ -146,18 +151,31 @@ class FloatingPetService : Service() {
             @Suppress("DEPRECATION")
             WindowManager.LayoutParams.TYPE_PHONE
         }
+        val winW = dp(OVERLAY_WIDTH_DP)
+        val winH = dp(OVERLAY_HEIGHT_DP)
+        val metrics = resources.displayMetrics
+        // 先落默认位置，再异步恢复 DataStore 记忆，避免主线程 runBlocking
+        val initial = OverlayPositionMath.defaultPosition(
+            screenWidthPx = metrics.widthPixels,
+            screenHeightPx = metrics.heightPixels,
+            windowWidthPx = winW,
+            windowHeightPx = winH,
+            density = metrics.density
+        )
         val params = WindowManager.LayoutParams(
-            dp(180),
-            dp(240),
+            winW,
+            winH,
             type,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = Gravity.TOP or Gravity.END
-            x = dp(12)
-            y = dp(120)
+            // TOP|START + 绝对 x/y，便于拖拽与持久化（避免 END 镜像坐标）
+            gravity = Gravity.TOP or Gravity.START
+            x = initial.x
+            y = initial.y
         }
+        layoutParams = params
 
         desktopBridge = DesktopPetBridge { msg -> handleBridgeMessage(msg) }
         voiceBridge = AndroidVoiceBridge(
@@ -195,10 +213,110 @@ class FloatingPetService : Service() {
                     pushSessionToWeb()
                 }
             }
+            setupDrag(this, params)
             loadUrl(ASSET_URL)
         }
         windowManager?.addView(webView, params)
         scope.launch { petSettings.setOverlayRunning(true) }
+        // 异步恢复上次拖拽位置（有则覆盖默认）
+        scope.launch {
+            val saved = runCatching { petSettings.getConfig().overlayPosition }
+                .getOrDefault(OverlayPosition())
+            if (!saved.isSet) return@launch
+            val m = resources.displayMetrics
+            val lp = layoutParams ?: return@launch
+            val restored = OverlayPositionMath.resolveInitial(
+                saved = saved,
+                screenWidthPx = m.widthPixels,
+                screenHeightPx = m.heightPixels,
+                windowWidthPx = lp.width,
+                windowHeightPx = lp.height,
+                density = m.density
+            )
+            lp.x = restored.x
+            lp.y = restored.y
+            val view = webView ?: return@launch
+            runCatching { windowManager?.updateViewLayout(view, lp) }
+        }
+    }
+
+    /**
+     * 悬浮窗拖拽：超过 touchSlop 后跟手更新 LayoutParams；
+     * UP/CANCEL 时 clamp 并写入 DataStore。轻点仍交给 WebView 控件。
+     */
+    private fun setupDrag(view: WebView, params: WindowManager.LayoutParams) {
+        val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
+        var downRawX = 0f
+        var downRawY = 0f
+        var startX = 0
+        var startY = 0
+        var dragging = false
+
+        view.setOnTouchListener { v, event ->
+            val lp = layoutParams ?: params
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    downRawX = event.rawX
+                    downRawY = event.rawY
+                    startX = lp.x
+                    startY = lp.y
+                    dragging = false
+                    false
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = event.rawX - downRawX
+                    val dy = event.rawY - downRawY
+                    if (!dragging &&
+                        OverlayPositionMath.exceedsTouchSlop(dx, dy, touchSlop)
+                    ) {
+                        dragging = true
+                    }
+                    if (dragging) {
+                        val metrics = resources.displayMetrics
+                        val next = OverlayPositionMath.clamp(
+                            x = startX + dx.toInt(),
+                            y = startY + dy.toInt(),
+                            windowWidthPx = lp.width,
+                            windowHeightPx = lp.height,
+                            screenWidthPx = metrics.widthPixels,
+                            screenHeightPx = metrics.heightPixels
+                        )
+                        lp.x = next.x
+                        lp.y = next.y
+                        runCatching { windowManager?.updateViewLayout(v, lp) }
+                        true
+                    } else {
+                        false
+                    }
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (dragging) {
+                        val metrics = resources.displayMetrics
+                        val finalPos = OverlayPositionMath.clamp(
+                            x = lp.x,
+                            y = lp.y,
+                            windowWidthPx = lp.width,
+                            windowHeightPx = lp.height,
+                            screenWidthPx = metrics.widthPixels,
+                            screenHeightPx = metrics.heightPixels
+                        )
+                        lp.x = finalPos.x
+                        lp.y = finalPos.y
+                        runCatching { windowManager?.updateViewLayout(v, lp) }
+                        scope.launch(Dispatchers.IO) {
+                            runCatching {
+                                petSettings.setOverlayPosition(finalPos.x, finalPos.y)
+                            }
+                        }
+                        dragging = false
+                        true
+                    } else {
+                        false
+                    }
+                }
+                else -> false
+            }
+        }
     }
 
     private fun detachOverlay() {
@@ -217,6 +335,7 @@ class FloatingPetService : Service() {
         webView?.stopLoading()
         webView?.destroy()
         webView = null
+        layoutParams = null
         windowManager = null
         desktopBridge = null
         voiceBridge = null
@@ -368,6 +487,8 @@ class FloatingPetService : Service() {
         const val CHANNEL_ID = "lanxin_desktop_pet"
         const val NOTIFICATION_ID = 64061
         const val ASSET_URL = "file:///android_asset/pet/desktop-pet.html"
+        const val OVERLAY_WIDTH_DP = 180
+        const val OVERLAY_HEIGHT_DP = 240
 
         fun start(context: Context) {
             val i = Intent(context, FloatingPetService::class.java)
