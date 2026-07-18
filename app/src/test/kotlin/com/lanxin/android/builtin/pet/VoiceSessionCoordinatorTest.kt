@@ -72,6 +72,12 @@ class VoiceSessionCoordinatorTest {
         override suspend fun setOverlayPosition(x: Int, y: Int) {
             config = config.copy(overlayPosition = OverlayPosition(x, y))
         }
+        override suspend fun setCompanionBackground(presetId: String, customPath: String?) {
+            config = config.copy(
+                companionBgPresetId = presetId,
+                companionBgCustomPath = customPath ?: config.companionBgCustomPath
+            )
+        }
     }
 
     private class FixedResponder(
