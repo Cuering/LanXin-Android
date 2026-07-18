@@ -174,14 +174,24 @@
     }
     button:active { transform: scale(.96); }
     button.danger { background: rgba(180, 30, 50, .85); }
-    /* 小窗悬浮场景才露出控件 */
-    @media (max-width: 200px), (max-height: 280px) {
-      #controls { display: flex; }
+    /* 小窗悬浮场景才露出控件；与 isCompact 阈值对齐 */
+    @media (max-width: 280px), (max-height: 360px) {
+      #controls {
+        display: flex;
+        bottom: 6px;
+        gap: 6px;
+      }
+      #controls button {
+        padding: 5px 10px;
+        font-size: 11px;
+      }
       #avatar {
         width: 110px; height: 130px;
         transform: none;
       }
-      #bubble { top: 4%; font-size: 12px; }
+      #bubble { top: 4%; font-size: 12px; max-width: 92%; }
+      /* 角标避开底栏按钮 */
+      #live2d-badge { bottom: 36px; }
     }
   </style>
 </head>
@@ -506,6 +516,8 @@
        * - 永远用未缩放原生尺寸（缓存 __nativeModelW/H），禁止用动画 scale 回写
        * - layout 完成后 tick 独占 scale/x/y/rot；动画期间勿与 tick 交替写 scale
        * - force=true：加载后一次 / 真·显著尺寸变化；否则 no-op
+       * - 小窗（悬浮层）：contain 全身可见，避开底栏按钮
+       * - 大屏（全屏陪伴）：略放大 + 居中偏下（桌宠构图）
        */
       function layoutLive2dModel(force) {
         if (!live2dModel || !pixiApp) return;
@@ -529,13 +541,28 @@
               __nativeModelH = mh;
             }
           }
-          var scale = Math.min((w * 1.18) / mw, (h * 1.08) / mh);
-          if (!isFinite(scale) || scale <= 0) scale = 0.22;
-          scale = scale * 1.05;
+          // 悬浮窗 ~200×280：contain；全屏陪伴：cover-ish 放大构图
+          var isCompact = w <= 280 || h <= 360;
+          var scale;
+          var baseY;
+          if (isCompact) {
+            // 预留底栏「语音/关闭」约 14% 高度，整模 fit 进剩余区域
+            var usableH = h * 0.86;
+            scale = Math.min((w * 0.90) / mw, (usableH * 0.94) / mh);
+            if (!isFinite(scale) || scale <= 0) scale = 0.15;
+            // 垂直中心落在可用区中部（略偏上，给帽/脚留边）
+            baseY = usableH * 0.50;
+          } else {
+            // 全屏桌宠构图：更大 scale，角色居中偏下
+            scale = Math.min((w * 1.18) / mw, (h * 1.08) / mh);
+            if (!isFinite(scale) || scale <= 0) scale = 0.22;
+            scale = scale * 1.05;
+            baseY = h * 0.62;
+          }
           // layout 只写 base，并立刻落到 scale；之后动画帧由 tick 独占
           live2dModel.__baseScale = scale;
           live2dModel.__baseX = w / 2;
-          live2dModel.__baseY = h * 0.62;
+          live2dModel.__baseY = baseY;
           if (live2dModel.scale) live2dModel.scale.set(scale, scale);
           live2dModel.anchor && live2dModel.anchor.set && live2dModel.anchor.set(0.5, 0.5);
           live2dModel.x = live2dModel.__baseX;
