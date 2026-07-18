@@ -35,3 +35,8 @@ bash scripts/vendor-live2d-mao.sh
 
 - [`debug-assets.md`](./debug-assets.md) — ASR/TTS 与可选脚本
 - [`meiju-style-pet.md`](./meiju-style-pet.md) — 桌宠主线
+
+
+## P3 渲染
+
+Mao 由 `desktop-pet.html` 经 **Cubism Core** 真渲染（`LIVE2D_REAL`）。运行时 JS 见 `assets/pet/lib/`；说明见 [`live2d-cubism-render.md`](./live2d-cubism-render.md)。

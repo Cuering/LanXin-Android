@@ -18,8 +18,10 @@ Phase 6 主线：**M1 ✅** 骨架 · **M2a ✅** 路径就绪 · **M2b ✅** Li
 - ✅ Debug 资源脚本：`scripts/fetch-debug-assets.sh` / `download-debug-assets.sh`（ASR/TTS / 自定义覆盖）
 - ✅ **M2a**：`PetPathReadiness` + 设置页「已就绪 / 未就绪」+ 本地脑 1.5B 键说明
 - ✅ **M2b**：`Live2dDisplayController` + WebView 渲染壳 + 缺资源 fallback
+- ✅ **P3**：Cubism Core 真 load moc3（见 `docs/live2d-cubism-render.md`）
 - ✅ **M2b 打磨**：`PetExpressionController` + `SET_EXPRESSION` + 口型动画 + 停止复位会话
-- 🔜 M2c sherpa 可 load · M3 真 TTS · M4 合规 L2D · M5 场景
+- ✅ **P3 Cubism 真渲染**：`assets/pet/lib/` + `LIVE2D_REAL`（失败降级壳）
+- 🔜 M4 合规自有 L2D · M5 场景
 
 ## 入口
 

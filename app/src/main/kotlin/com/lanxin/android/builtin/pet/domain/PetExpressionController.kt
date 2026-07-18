@@ -19,8 +19,8 @@ package com.lanxin.android.builtin.pet.domain
 /**
  * M2b 打磨：会话相位 → 表情 / 口型表现（纯逻辑，可单测）。
  *
- * 不依赖 Cubism Core；WebView 占位与 Live2D 壳共用同一套语义。
- * 真 moc3 表情/口型同步属 M3+；本阶段保证 **VoiceSession 状态可见于形象**。
+ * WebView 占位 / Live2D 壳 / Cubism 真渲染共用同一套语义。
+ * P3：Cubism 侧映射 ParamMouthOpenY + expression；失败仍降级壳。
  */
 object PetExpressionController {
 

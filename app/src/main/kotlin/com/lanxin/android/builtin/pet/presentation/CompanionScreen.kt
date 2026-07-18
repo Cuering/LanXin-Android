@@ -711,6 +711,7 @@ class CompanionViewModel @Inject constructor(
                 val label = when (mode.uppercase()) {
                     "FALLBACK" -> "降级" + if (reason.isNotBlank()) "（$reason）" else ""
                     "PLACEHOLDER" -> "占位"
+                    "LIVE2D_REAL" -> lastDecision?.shortLabel ?: "Live2D Cubism"
                     "LIVE2D_SHELL" -> lastDecision?.shortLabel ?: "Live2D 壳"
                     else -> lastDecision?.shortLabel ?: mode.ifBlank { "未知" }
                 }

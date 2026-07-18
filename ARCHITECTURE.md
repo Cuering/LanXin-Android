@@ -22,6 +22,7 @@
 > - Phase 6 主线 M2a：资源路径就绪 + 设置体验 + fetch 脚本指引 ✅（#49）
 > - Phase 6 主线 M2b：Live2D 真显示壳（model3 + 降级）✅（#57）
 > - Phase 6 主线 M2b 打磨：会话表情/口型 + 缺资源引导 + 悬浮生命周期 ✅（`feat/m2b-pet-expression-polish`）
+> - Phase 6 **P3**：Live2D Cubism 真渲染进 APK（Cubism Core + pixi-live2d-display，失败降级壳）✅（`feat/p3-live2d-real-render`）
 > - Phase 7.1：系统工具骨架 ✅（#52）——DeviceTool + Gate + stub + 设置总开关；**陪伴操控一体**
 > - Phase 7.2：闹钟 Intent 真启动 + 日历读/写 ✅（#53）——SET_ALARM/SHOW_ALARMS startActivity + Instances + INSERT Intent + 确认流
 > - Phase 7.3：应用内笔记 Room CRUD + SAF 导出/导入 ✅（#54）
