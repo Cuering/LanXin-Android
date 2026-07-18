@@ -19,6 +19,11 @@
 -keep class ai.onnxruntime.** { *; }
 -dontwarn ai.onnxruntime.**
 
+# sherpa-onnx (JNI + Kotlin API in official AAR)
+-keep class com.k2fsa.sherpa.onnx.** { *; }
+-keepclassmembers class com.k2fsa.sherpa.onnx.** { *; }
+-dontwarn com.k2fsa.sherpa.onnx.**
+
 # ObjectBox
 -keep class io.objectbox.** { *; }
 -keep class com.lanxin.android.builtin.knowledge.data.** { *; }

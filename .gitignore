@@ -46,6 +46,9 @@ app/src/main/assets/models/**
 **/models/offline-asr/**
 **/sherpa-onnx-models/**
 libs/sherpa-onnx/**
+# Prebuilt AAR downloaded at build time (see app/libs/README.md)
+app/libs/*.aar
+!app/libs/README.md
 
 # Desktop pet commercial / large assets (never commit Meiju dumps)
 **/models/tts/**

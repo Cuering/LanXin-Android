@@ -1,14 +1,18 @@
-# Phase 6.4 离线 ASR 骨架：接口 / stub / 权限门控 / 配置
+# Phase 6.4 / P0 离线 ASR：stub + Sherpa 真引擎骨架 / 单测 / 文档
 name: Phase6.4 Offline ASR Verify
 
 on:
   push:
-    branches: [main, 'feat/phase6*']
+    branches: [main, 'feat/phase6*', 'feat/p0-sherpa*']
     paths:
       - 'app/src/main/kotlin/com/lanxin/android/builtin/voice/**'
       - 'app/src/test/kotlin/com/lanxin/android/builtin/voice/**'
+      - 'app/src/androidTest/kotlin/com/lanxin/android/builtin/voice/**'
+      - 'app/build.gradle.kts'
+      - 'app/libs/**'
       - 'docs/voice-asr.md'
       - 'builtin/voice/**'
+      - 'third_party/sherpa-onnx/**'
       - 'ARCHITECTURE.md'
       - '.github/workflows/phase6-4-offline-asr-verify.yml'
   pull_request:
@@ -16,8 +20,12 @@ on:
     paths:
       - 'app/src/main/kotlin/com/lanxin/android/builtin/voice/**'
       - 'app/src/test/kotlin/com/lanxin/android/builtin/voice/**'
+      - 'app/src/androidTest/kotlin/com/lanxin/android/builtin/voice/**'
+      - 'app/build.gradle.kts'
+      - 'app/libs/**'
       - 'docs/voice-asr.md'
       - 'builtin/voice/**'
+      - 'third_party/sherpa-onnx/**'
       - 'ARCHITECTURE.md'
       - '.github/workflows/phase6-4-offline-asr-verify.yml'
   workflow_dispatch:
@@ -30,7 +38,7 @@ jobs:
   unit-tests:
     name: Offline ASR unit tests
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
 
     steps:
       - uses: actions/checkout@v4
@@ -61,6 +69,12 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      - name: Download sherpa-onnx AAR
+        run: |
+          ./gradlew :app:downloadSherpaOnnxAar --no-daemon --stacktrace
+          test -f app/libs/sherpa-onnx-static-link-onnxruntime-1.13.4.aar
+          ls -lh app/libs/*.aar
+
       - name: Run offline ASR unit tests
         run: |
           ./gradlew :app:testDebugUnitTest \
@@ -71,26 +85,21 @@ jobs:
         run: |
           test -f docs/voice-asr.md
           test -f builtin/voice/README.md
+          test -f third_party/sherpa-onnx/NOTICE
           test -f app/src/main/kotlin/com/lanxin/android/builtin/voice/domain/AsrEngine.kt
-          test -f app/src/main/kotlin/com/lanxin/android/builtin/voice/domain/AsrSettings.kt
-          test -f app/src/main/kotlin/com/lanxin/android/builtin/voice/domain/MicPermissionGate.kt
-          test -f app/src/main/kotlin/com/lanxin/android/builtin/voice/domain/VoiceInputCoordinator.kt
           test -f app/src/main/kotlin/com/lanxin/android/builtin/voice/data/StubAsrEngine.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/voice/data/SherpaAsrEngine.kt
           test -f app/src/main/kotlin/com/lanxin/android/builtin/voice/data/SherpaOnnxBridge.kt
-          test -f app/src/main/kotlin/com/lanxin/android/builtin/voice/data/AsrPreferences.kt
-          test -f app/src/main/kotlin/com/lanxin/android/builtin/voice/data/PcmAudioRecorder.kt
           test -f app/src/main/kotlin/com/lanxin/android/builtin/voice/di/VoiceModule.kt
           test -f app/src/test/kotlin/com/lanxin/android/builtin/voice/StubAsrEngineTest.kt
-          test -f app/src/test/kotlin/com/lanxin/android/builtin/voice/MicPermissionGateTest.kt
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/voice/SherpaAsrEngineTest.kt
           grep -E -n "interface AsrEngine|fun load|fun unload|fun transcribe|streamPartial|isReady|isAvailable" \
             app/src/main/kotlin/com/lanxin/android/builtin/voice/domain/AsrEngine.kt
-          grep -E -n "offline_asr_enabled|offline_asr_model_path|offline_asr_language" \
-            app/src/main/kotlin/com/lanxin/android/builtin/voice/data/AsrPreferences.kt
-          grep -E -n "SherpaOnnxBridge|System.loadLibrary|validateModelPath" \
+          grep -E -n "SherpaAsrEngine|bindAsrEngine" \
+            app/src/main/kotlin/com/lanxin/android/builtin/voice/di/VoiceModule.kt
+          grep -E -n "System.loadLibrary|loadModel|isNativeAvailable|tryLoadNative" \
             app/src/main/kotlin/com/lanxin/android/builtin/voice/data/SherpaOnnxBridge.kt
+          grep -E -n "downloadSherpaOnnxAar|sherpa-onnx" app/build.gradle.kts
           grep -E -n "RECORD_AUDIO" app/src/main/AndroidManifest.xml
-          grep -E -n "OFFLINE_ASR|VoiceAsrScreen" \
-            app/src/main/kotlin/com/lanxin/android/presentation/common/Route.kt \
-            app/src/main/kotlin/com/lanxin/android/presentation/common/NavigationGraph.kt
-          grep -E -n "6\\.4|离线语音|ASR|Sherpa|voice" ARCHITECTURE.md
-          grep -E -n "StubAsrEngine|SherpaOnnxBridge|能力边界|不在后台" docs/voice-asr.md
+          grep -E -n "Apache|sherpa-onnx" third_party/sherpa-onnx/NOTICE
+          grep -E -n "SherpaAsrEngine|static-link|downloadSherpaOnnxAar|native_degraded" docs/voice-asr.md

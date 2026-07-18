@@ -3,6 +3,9 @@
 import com.android.build.api.dsl.ApplicationExtension
 import org.gradle.kotlin.dsl.aboutLibraries
 import org.gradle.kotlin.dsl.configure
+import java.net.URI
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
 plugins {
     alias(libs.plugins.android.application)
@@ -15,6 +18,81 @@ plugins {
     alias(libs.plugins.auto.license)
     alias(libs.plugins.objectbox)
     id("org.jetbrains.kotlin.plugin.serialization") version "2.3.21"
+}
+
+// ---------------------------------------------------------------------------
+// P0: sherpa-onnx Android 运行时 AAR（构建期下载，不进 git）
+// 默认 static-link-onnxruntime，减少与 ORT Mobile 的 so 分片依赖。
+// 覆盖: SHERPA_ONNX_AAR=本地路径 或 SHERPA_ONNX_AAR_URL=下载 URL
+// ---------------------------------------------------------------------------
+val sherpaOnnxVersion = "1.13.4"
+val sherpaAarFileName = "sherpa-onnx-static-link-onnxruntime-$sherpaOnnxVersion.aar"
+val sherpaAarLocal = layout.projectDirectory.file("libs/$sherpaAarFileName").asFile
+val sherpaDefaultUrl =
+    "https://github.com/k2-fsa/sherpa-onnx/releases/download/v$sherpaOnnxVersion/$sherpaAarFileName"
+// 国内 / 弱网 CI 可走镜像；官方 URL 优先，失败回退
+val sherpaMirrorUrl =
+    "https://ghfast.top/https://github.com/k2-fsa/sherpa-onnx/releases/download/v$sherpaOnnxVersion/$sherpaAarFileName"
+
+val downloadSherpaOnnxAar by tasks.registering {
+    group = "lanxin"
+    description = "Download sherpa-onnx Android AAR into app/libs (not committed)"
+    outputs.file(sherpaAarLocal)
+    onlyIf {
+        val override = System.getenv("SHERPA_ONNX_AAR")
+        if (!override.isNullOrBlank()) {
+            val src = file(override)
+            if (src.isFile && src.length() > 1_000_000L) {
+                if (src.absolutePath != sherpaAarLocal.absolutePath) {
+                    sherpaAarLocal.parentFile.mkdirs()
+                    src.copyTo(sherpaAarLocal, overwrite = true)
+                }
+                return@onlyIf false
+            }
+        }
+        !(sherpaAarLocal.isFile && sherpaAarLocal.length() > 1_000_000L)
+    }
+    doLast {
+        sherpaAarLocal.parentFile.mkdirs()
+        val envUrl = System.getenv("SHERPA_ONNX_AAR_URL")
+        val urls = buildList {
+            if (!envUrl.isNullOrBlank()) add(envUrl)
+            add(sherpaDefaultUrl)
+            add(sherpaMirrorUrl)
+        }
+        var lastError: Exception? = null
+        for (url in urls) {
+            try {
+                logger.lifecycle("Downloading sherpa-onnx AAR from $url")
+                URI(url).toURL().openStream().use { input ->
+                    Files.copy(input, sherpaAarLocal.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                }
+                require(sherpaAarLocal.isFile && sherpaAarLocal.length() > 1_000_000L) {
+                    "Downloaded AAR too small: ${sherpaAarLocal.length()}"
+                }
+                logger.lifecycle(
+                    "sherpa-onnx AAR ready: $sherpaAarLocal (${sherpaAarLocal.length()} bytes)"
+                )
+                return@doLast
+            } catch (e: Exception) {
+                lastError = e
+                logger.warn("Failed $url: ${e.message}")
+                sherpaAarLocal.delete()
+            }
+        }
+        throw GradleException(
+            "Unable to download sherpa-onnx AAR. Set SHERPA_ONNX_AAR or SHERPA_ONNX_AAR_URL. Last error: ${lastError?.message}"
+        )
+    }
+}
+
+// 在配置期若本地已有 AAR 则直接用；否则 preBuild 会下载
+val sherpaAarForCompile: File = when {
+    !System.getenv("SHERPA_ONNX_AAR").isNullOrBlank() &&
+        file(System.getenv("SHERPA_ONNX_AAR")!!).isFile ->
+        file(System.getenv("SHERPA_ONNX_AAR")!!)
+    sherpaAarLocal.isFile && sherpaAarLocal.length() > 1_000_000L -> sherpaAarLocal
+    else -> sherpaAarLocal
 }
 
 extensions.configure<ApplicationExtension> {
@@ -31,6 +109,10 @@ extensions.configure<ApplicationExtension> {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
+        }
+        // 真机为主；保留 x86_64 供模拟器 / CI 体积可控
+        ndk {
+            abiFilters += listOf("arm64-v8a", "x86_64")
         }
     }
 
@@ -77,10 +159,32 @@ extensions.configure<ApplicationExtension> {
             excludes += "META-INF/INDEX.LIST"
             excludes += "META-INF/io.netty.versions.properties"
         }
+        jniLibs {
+            // onnxruntime-android 与 sherpa AAR 可能各带 libonnxruntime.so
+            pickFirsts += setOf(
+                "lib/arm64-v8a/libonnxruntime.so",
+                "lib/x86_64/libonnxruntime.so",
+                "lib/armeabi-v7a/libonnxruntime.so",
+                "lib/x86/libonnxruntime.so"
+            )
+        }
     }
     testOptions {
         // JVM 单测对 android.* 方法返回默认值，避免 Log 等未 mock 导致失败
         unitTests.isReturnDefaultValues = true
+    }
+}
+
+// 保证 preBuild / 编译前 AAR 就绪
+tasks.named("preBuild").configure { dependsOn(downloadSherpaOnnxAar) }
+afterEvaluate {
+    listOf(
+        "compileDebugKotlin",
+        "compileReleaseKotlin",
+        "compileDebugUnitTestKotlin",
+        "compileReleaseUnitTestKotlin"
+    ).forEach { name ->
+        tasks.findByName(name)?.dependsOn(downloadSherpaOnnxAar)
     }
 }
 
@@ -154,6 +258,14 @@ dependencies {
 
     // ONNX Runtime Mobile（GTE-small 推理）
     implementation(libs.onnxruntime.android)
+
+    // sherpa-onnx ASR 运行时（AAR 构建期下载到 app/libs）
+    if (sherpaAarForCompile.isFile && sherpaAarForCompile.length() > 1_000_000L) {
+        implementation(files(sherpaAarForCompile))
+    } else {
+        // 配置期尚无文件时仍声明 files 路径；download 任务在 preBuild 填充
+        implementation(files(sherpaAarLocal))
+    }
 
     // ObjectBox VectorDB（HNSW 向量检索）
     // objectbox 插件会自动添加 objectbox-processor 到 kapt
