@@ -259,7 +259,8 @@ fun CompanionScreen(
         }
 
         // 场景识别会话反馈（可选轻量文案，不绑 Live2D）
-        if (!state.sceneFeedback.isNullOrBlank()) {
+        val sceneFeedbackLine = state.sceneFeedback
+        if (!sceneFeedbackLine.isNullOrBlank()) {
             Surface(
                 modifier = Modifier
                     .align(Alignment.TopStart)
@@ -271,7 +272,7 @@ fun CompanionScreen(
                 tonalElevation = 0.dp
             ) {
                 Text(
-                    text = state.sceneFeedback,
+                    text = sceneFeedbackLine,
                     style = MaterialTheme.typography.labelSmall,
                     color = Color.White,
                     maxLines = 1,
