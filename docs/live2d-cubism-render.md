@@ -47,7 +47,6 @@ WebView  file:///android_asset/pet/desktop-pet.html
 | N→W | `LOAD_LIVE2D` | `live2dMode=LIVE2D_SHELL` 表示 model3 就绪；Web 优先真 Cubism |
 | W→N | `LIVE2D_STATUS` | `live2dMode=LIVE2D_REAL` / `LIVE2D_SHELL` / `FALLBACK` / `PLACEHOLDER` |
 | N→W | `SET_EXPRESSION` | 映射 exp + `ParamMouthOpenY`（真渲染）/ canvas 嘴（壳） |
-| N→W | `SET_MUSIC_BEAT` | 节拍轻晃（真渲染 scale/x/y 与壳共用语义） |
 
 Native 枚举仍以 `LIVE2D_SHELL` 表示「可加载」；**真渲染成功与否以 Web 回传 `LIVE2D_REAL` 为准**。
 

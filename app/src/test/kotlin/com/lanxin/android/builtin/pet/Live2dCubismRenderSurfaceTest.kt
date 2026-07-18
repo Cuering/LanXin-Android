@@ -54,32 +54,27 @@ class Live2dCubismRenderSurfaceTest {
         assertTrue(html.contains("LIVE2D_SHELL"))
         assertTrue(html.contains("cubism_load_fail") || html.contains("activateShellFallback"))
         assertTrue(html.contains("__lanxinPetTeardown"))
-        assertTrue(html.contains("SET_MUSIC_BEAT") || html.contains("beatLevel"))
+        assertTrue(html.contains("lockModelTransform"))
     }
 
     @Test
-    fun desktopPetHtml_softMusicDance_usesCubismParamsNotContainerSway() {
+    fun desktopPetHtml_noMusicBeatFollow_keepsTransformLockAndMouth() {
         val html = assetFile("pet/desktop-pet.html").readText()
-        // 慢舞路径：强平滑 + Cubism 参数轻舞（人物自身律动）
-        assertTrue(html.contains("advanceMusicBeatSmooth"))
-        assertTrue(html.contains("softDanceCubismParams"))
-        assertTrue(html.contains("applyCubismSoftDance"))
+        // 已移除跟随节奏 / softDance / SET_MUSIC_BEAT
+        assertFalse(html.contains("SET_MUSIC_BEAT"))
+        assertFalse(html.contains("softDanceCubismParams"))
+        assertFalse(html.contains("applyCubismSoftDance"))
+        assertFalse(html.contains("advanceMusicBeatSmooth"))
+        assertFalse(html.contains("musicBeatEnabled"))
+        assertFalse(html.contains("softDanceOffset"))
+        // 保留 transform 锁定与口型 / tick
         assertTrue(html.contains("lockModelTransform"))
-        assertTrue(html.contains("musicBeatDisplay"))
         assertTrue(html.contains("tickCubismFrame"))
-        // Cubism 参数：角度 / 身体 / 呼吸
-        assertTrue(html.contains("ParamAngleX"))
-        assertTrue(html.contains("ParamAngleY"))
-        assertTrue(html.contains("ParamAngleZ"))
-        assertTrue(html.contains("ParamBodyAngleX"))
-        assertTrue(html.contains("ParamBodyAngleY"))
-        assertTrue(html.contains("ParamBreath"))
-        // 禁止旧的剧烈 beat 位移系数（* beat * 5/6）
+        assertTrue(html.contains("ParamMouthOpenY") || html.contains("setMouthOpen"))
+        // 禁止旧的剧烈 beat 位移系数
         assertFalse(html.contains("beat * 5"))
         assertFalse(html.contains("beat * 6"))
         assertFalse(html.contains("beat * 0.05"))
-        // scalePulse 恒 0
-        assertTrue(html.contains("var scalePulse = 0") || html.contains("scalePulse = 0"))
     }
 
     @Test
@@ -94,8 +89,8 @@ class Live2dCubismRenderSurfaceTest {
         // 键盘高度下降：skip layout
         assertTrue(html.contains("__lastFullLayoutH"))
         assertTrue(html.contains("0.92"))
-        // soft dance 禁止缩放脉冲
-        assertTrue(html.contains("var scalePulse = 0"))
+        // 无 soft dance 缩放脉冲
+        assertFalse(html.contains("1 + breath + d.scalePulse"))
     }
 
     @Test
@@ -106,21 +101,12 @@ class Live2dCubismRenderSurfaceTest {
         assertTrue(html.contains("__baseScale"))
         assertTrue(html.contains("__baseX"))
         assertTrue(html.contains("__baseY"))
-        // tick 不再用 softDanceOffset 写 live2dModel.x/y/rotation 做整模晃
-        // （softDanceOffset 仅保留给 shell canvas fallback）
-        assertTrue(html.contains("softDanceOffset"))
         assertTrue(html.contains("drawShellFrame"))
-        // scalePulse 恒 0；禁止 scale 脉冲乘回 scale
-        assertTrue(html.contains("var scalePulse = 0"))
+        // 无整模贴纸晃 / 音乐律动
+        assertFalse(html.contains("softDanceOffset"))
         assertFalse(html.contains("1 + breath + d.scalePulse"))
-        // Cubism 参数限幅存在（稳定版：Angle ≤ 3, Body ≤ 1.5）
-        assertTrue(html.contains("angleX > 3") || html.contains("if (angleX > 3)"))
-        assertTrue(html.contains("bodyX > 1.5") || html.contains("if (bodyX > 1.5)"))
-        // 默认关闭跟随节奏
-        assertTrue(
-            html.contains("var musicBeatEnabled = false") ||
-                html.contains("musicBeatEnabled = false")
-        )
+        assertFalse(html.contains("musicBeatEnabled"))
+        assertFalse(html.contains("SET_MUSIC_BEAT"))
     }
 
     @Test

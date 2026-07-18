@@ -88,8 +88,6 @@ data class PetConfig(
     val overlayRunning: Boolean = false,
     val autoListen: Boolean = false,
     val live2dModelPath: String = "",
-    /** 背景音乐时 Live2D 是否用 Cubism 参数轻舞。默认关（真机开着曾不稳，需显式打开）。 */
-    val musicBeatSway: Boolean = false,
     /** 悬浮窗位置（px，Gravity.TOP|START）；未保存时 [OverlayPosition.UNSET]。 */
     val overlayPosition: OverlayPosition = OverlayPosition()
 )
@@ -103,7 +101,6 @@ interface PetSettings {
     suspend fun setOverlayRunning(running: Boolean)
     suspend fun setAutoListen(autoListen: Boolean)
     suspend fun setLive2dModelPath(path: String?)
-    suspend fun setMusicBeatSway(enabled: Boolean)
 
     /** 持久化悬浮窗位置（拖拽松手后写入）。 */
     suspend fun setOverlayPosition(x: Int, y: Int)
@@ -143,9 +140,6 @@ enum class PetBridgeCommand {
 
     /** Native → Web：表情 / 口型姿态（M2b 打磨，随会话相位）。 */
     SET_EXPRESSION,
-
-    /** Native → Web：背景音乐节拍能量 0..1（壳层轻晃）。 */
-    SET_MUSIC_BEAT,
 
     /** Native → Web：播放官方 motion 组（Idle / TapBody）。 */
     PLAY_MOTION,

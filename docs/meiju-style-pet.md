@@ -47,7 +47,7 @@ IDLE → LISTENING → THINKING → SPEAKING → IDLE
 - 右下角半透明 🎵；面板：播放/暂停、上一/下一、音量、导入、扫描
 - 目录：`LanXin/music/`（与 live2d/asr/tts 同根）
 - 内置 CC0 `test-loop.wav`（`BuiltInMusicAssets.ensureTestTrackInstalled`）
-- MediaPlayer + Visualizer → bridge `SET_MUSIC_BEAT` → 壳层轻晃
+- MediaPlayer 播放列表（无节拍跟随 / Visualizer）
 
 ## 3. M2a 交付
 

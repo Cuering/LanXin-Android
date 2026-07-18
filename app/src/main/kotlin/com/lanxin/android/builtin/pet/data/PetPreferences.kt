@@ -49,7 +49,6 @@ class PetPreferences @Inject constructor(
     private val overlayKey = booleanPreferencesKey(KEY_OVERLAY_RUNNING)
     private val autoListenKey = booleanPreferencesKey(KEY_AUTO_LISTEN)
     private val live2dPathKey = stringPreferencesKey(KEY_LIVE2D_MODEL_PATH)
-    private val musicBeatSwayKey = booleanPreferencesKey(KEY_MUSIC_BEAT_SWAY)
     private val overlayXKey = intPreferencesKey(KEY_OVERLAY_X)
     private val overlayYKey = intPreferencesKey(KEY_OVERLAY_Y)
 
@@ -60,7 +59,6 @@ class PetPreferences @Inject constructor(
             overlayRunning = prefs[overlayKey] ?: false,
             autoListen = prefs[autoListenKey] ?: false,
             live2dModelPath = prefs[live2dPathKey].orEmpty(),
-            musicBeatSway = prefs[musicBeatSwayKey] ?: false,
             overlayPosition = OverlayPosition(
                 x = prefs[overlayXKey] ?: OverlayPosition.UNSET,
                 y = prefs[overlayYKey] ?: OverlayPosition.UNSET
@@ -90,10 +88,6 @@ class PetPreferences @Inject constructor(
         }
     }
 
-    override suspend fun setMusicBeatSway(enabled: Boolean) {
-        dataStore.edit { it[musicBeatSwayKey] = enabled }
-    }
-
     override suspend fun setOverlayPosition(x: Int, y: Int) {
         dataStore.edit {
             it[overlayXKey] = x
@@ -108,9 +102,6 @@ class PetPreferences @Inject constructor(
 
         /** 与产品决策对齐的公开键名。 */
         const val KEY_LIVE2D_MODEL_PATH = "live2d_model_path"
-
-        /** 跟随音乐节拍晃动。 */
-        const val KEY_MUSIC_BEAT_SWAY = "desktop_pet_music_beat_sway"
 
         const val KEY_OVERLAY_X = "desktop_pet_overlay_x"
         const val KEY_OVERLAY_Y = "desktop_pet_overlay_y"
