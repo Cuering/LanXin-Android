@@ -104,6 +104,7 @@ interface PetSettings {
     suspend fun setAutoListen(autoListen: Boolean)
     suspend fun setLive2dModelPath(path: String?)
     suspend fun setMusicBeatSway(enabled: Boolean)
+
     /** 持久化悬浮窗位置（拖拽松手后写入）。 */
     suspend fun setOverlayPosition(x: Int, y: Int)
 }
