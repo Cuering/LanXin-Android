@@ -56,6 +56,7 @@ class CompanionMusicPlayer(
     private val released = AtomicBoolean(false)
     private var beatEnabled = true
     private var startedAtMs = 0L
+
     /** 0..1 媒体音量（MediaPlayer 左右声道）。 */
     private var volume01: Float = 0.7f
 
