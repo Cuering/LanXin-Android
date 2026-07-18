@@ -155,7 +155,7 @@ builtin/voice/        ASR + TtsEngine / StubTtsEngine
 
 ### 9.3 非目标（M2b）
 
-- 完整 Cubism Core / 口型同步（M3）
+- ~~完整 Cubism Core~~ → **P3 已落地**（见 §11）
 - 妹居商业 moc3 / 资源入库
 - 重做 VoiceSession
 - CI 下载大模型
@@ -176,6 +176,15 @@ builtin/voice/        ASR + TtsEngine / StubTtsEngine
 
 ### 10.3 非目标
 
-- Cubism Core 真表情参数 / 音素级口型（M3）
+- 音素级口型（后续）
 - 下大模型、妹居资源入库
 - 重做 VoiceSession / Chat
+
+## 11. P3 Cubism 真渲染
+
+- 仓内 `assets/pet/lib/`：Cubism Core + PixiJS 6 + pixi-live2d-display cubism4
+- `desktop-pet.html`：`LOAD_LIVE2D` → **LIVE2D_REAL**（`Live2DModel.from`）→ 失败 **LIVE2D_SHELL** 纹理壳 → 再失败占位
+- 表情 / 口型：`SET_EXPRESSION` → exp + `ParamMouthOpenY`；BGM 节拍轻晃保留
+- 模型仍外置 `LanXin/live2d/` + 内置 Mao 兜底；大资源不进 git
+- 文档：[`live2d-cubism-render.md`](./live2d-cubism-render.md)
+- CI：`.github/workflows/p3-live2d-cubism-verify.yml`

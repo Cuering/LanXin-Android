@@ -103,6 +103,15 @@
       display: block;
       background: transparent;
     }
+    #pixi-host {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: none;
+      z-index: 1;
+    }
+    #pixi-host.active { display: block; }
     #live2d-badge {
       position: absolute;
       left: 6px; bottom: 6px;
@@ -113,6 +122,7 @@
       padding: 2px 6px;
       border-radius: 999px;
       pointer-events: none;
+      z-index: 4;
     }
     #mode-tag {
       position: absolute;
@@ -141,7 +151,6 @@
     }
     button:active { transform: scale(.96); }
     button.danger { background: rgba(180, 30, 50, .85); }
-    /* 全屏陪伴页放大（悬浮小窗仍走窄尺寸） */
     @media (min-width: 280px) and (min-height: 420px) {
       #root { justify-content: center; padding-bottom: 12px; }
       #stage { width: min(72vw, 320px); height: min(78vw, 360px); }
@@ -165,7 +174,8 @@
         <div id="mouth" aria-hidden="true"></div>
         <div id="status">闲置</div>
       </div>
-      <div id="live2d-shell" title="LanXin Live2D Shell">
+      <div id="live2d-shell" title="LanXin Live2D">
+        <div id="pixi-host"></div>
         <canvas id="live2d-canvas" width="280" height="320"></canvas>
         <div id="live2d-badge">Live2D</div>
       </div>
@@ -175,6 +185,10 @@
       <button id="btn-close" class="danger" type="button">关闭</button>
     </div>
   </div>
+  <!-- P3: Cubism Core + Pixi + pixi-live2d-display cubism4（仓内 assets，离线可用） -->
+  <script src="lib/live2dcubismcore.min.js"></script>
+  <script src="lib/pixi.min.js"></script>
+  <script src="lib/cubism4.min.js"></script>
   <script>
     (function () {
       var bubble = document.getElementById('bubble');
@@ -183,7 +197,9 @@
       var avatar = document.getElementById('avatar');
       var shell = document.getElementById('live2d-shell');
       var canvas = document.getElementById('live2d-canvas');
+      var pixiHost = document.getElementById('pixi-host');
       var modeTag = document.getElementById('mode-tag');
+      var badge = document.getElementById('live2d-badge');
       var hideTimer = null;
       var displayMode = 'PLACEHOLDER';
       var lastPhase = 'IDLE';
@@ -197,6 +213,13 @@
       var musicBeatEnabled = true;
       var musicBeatSmoothed = 0;
 
+      // Cubism / Pixi runtime
+      var pixiApp = null;
+      var live2dModel = null;
+      var cubismReady = false;
+      var loadToken = 0;
+      var engineAvailable = false;
+
       var PHASE_UI = {
         IDLE:      { face: '😊', label: '闲置', tint: '#ffb7c5' },
         LISTENING: { face: '👂', label: '在听…', tint: '#9ad0ff' },
@@ -205,15 +228,28 @@
         ERROR:     { face: '😅', label: '出错了', tint: '#ff9a9a' }
       };
 
+      function detectEngine() {
+        try {
+          engineAvailable = !!(
+            window.Live2DCubismCore &&
+            window.PIXI &&
+            PIXI.live2d &&
+            typeof PIXI.live2d.Live2DModel === 'function'
+          );
+        } catch (e) {
+          engineAvailable = false;
+        }
+        return engineAvailable;
+      }
+
       function setPhase(phase) {
         lastPhase = phase || 'IDLE';
         var ui = PHASE_UI[lastPhase] || PHASE_UI.IDLE;
         face.textContent = ui.face;
         statusEl.textContent = ui.label;
-        if (displayMode === 'LIVE2D_SHELL') {
-          modeTag.textContent = 'L2D·' + ui.label;
+        if (displayMode === 'LIVE2D_REAL' || displayMode === 'LIVE2D_SHELL') {
+          modeTag.textContent = (displayMode === 'LIVE2D_REAL' ? 'Cubism·' : 'L2D·') + ui.label;
         }
-        // 默认按相位推导表情（Native SET_EXPRESSION 可覆盖）
         applyExpressionFromPhase(lastPhase);
       }
 
@@ -246,6 +282,7 @@
             mouthEl.style.height = h + 'px';
           }
         }
+        applyCubismExpression(lastExpression, mouthOpen, mouthAnimating);
       }
 
       function showBubble(text) {
@@ -279,6 +316,8 @@
 
       function showPlaceholder(reason, forcedMode) {
         stopShellAnim();
+        destroyCubismModel();
+        hidePixiHost();
         shell.classList.remove('active');
         avatar.classList.remove('hidden');
         var r = String(reason || '');
@@ -288,6 +327,7 @@
           r.indexOf('invalid') >= 0 ||
           r.indexOf('fail') >= 0;
         modeTag.textContent = isFallback ? '降级' : '占位';
+        if (badge) badge.textContent = '占位';
         reportStatus(isFallback ? 'FALLBACK' : 'PLACEHOLDER', r);
       }
 
@@ -298,10 +338,179 @@
         }
       }
 
+      function hidePixiHost() {
+        if (pixiHost) pixiHost.classList.remove('active');
+        if (canvas) canvas.style.display = 'block';
+      }
+
+      function showPixiHost() {
+        if (pixiHost) pixiHost.classList.add('active');
+        if (canvas) canvas.style.display = 'none';
+      }
+
+      function destroyCubismModel() {
+        try {
+          if (live2dModel) {
+            if (pixiApp && pixiApp.stage) {
+              try { pixiApp.stage.removeChild(live2dModel); } catch (e1) {}
+            }
+            try {
+              if (typeof live2dModel.destroy === 'function') live2dModel.destroy({ children: true });
+            } catch (e2) {}
+          }
+        } catch (e) {}
+        live2dModel = null;
+      }
+
+      function destroyPixiApp() {
+        destroyCubismModel();
+        try {
+          if (pixiApp) {
+            try { pixiApp.ticker.stop(); } catch (e0) {}
+            try {
+              if (pixiApp.view && pixiApp.view.parentNode) {
+                pixiApp.view.parentNode.removeChild(pixiApp.view);
+              }
+            } catch (e1) {}
+            try { pixiApp.destroy(true, { children: true, texture: false, baseTexture: false }); } catch (e2) {}
+          }
+        } catch (e) {}
+        pixiApp = null;
+        cubismReady = false;
+      }
+
+      function ensurePixiApp() {
+        if (pixiApp) return pixiApp;
+        if (!detectEngine()) return null;
+        var w = pixiHost.clientWidth || shell.clientWidth || 140;
+        var h = pixiHost.clientHeight || shell.clientHeight || 160;
+        var dpr = Math.min(window.devicePixelRatio || 1, 2);
+        try {
+          pixiApp = new PIXI.Application({
+            width: Math.max(64, w),
+            height: Math.max(64, h),
+            backgroundAlpha: 0,
+            antialias: true,
+            autoDensity: true,
+            resolution: dpr,
+            powerPreference: 'high-performance'
+          });
+          pixiHost.innerHTML = '';
+          pixiHost.appendChild(pixiApp.view);
+          pixiApp.view.style.width = '100%';
+          pixiApp.view.style.height = '100%';
+          pixiApp.view.style.display = 'block';
+          // ticker: mouth + beat sway
+          pixiApp.ticker.add(function () {
+            breathT += 1;
+            musicBeatSmoothed = musicBeatSmoothed * 0.88 + musicBeat * 0.12;
+            if (!musicBeatEnabled) musicBeatSmoothed *= 0.9;
+            tickCubismFrame();
+          });
+          cubismReady = true;
+          return pixiApp;
+        } catch (e) {
+          console.warn('[LanXin Pet] PIXI.Application fail', e);
+          pixiApp = null;
+          cubismReady = false;
+          return null;
+        }
+      }
+
+      function resizePixi() {
+        if (!pixiApp) return;
+        var w = pixiHost.clientWidth || shell.clientWidth || 140;
+        var h = pixiHost.clientHeight || shell.clientHeight || 160;
+        try {
+          pixiApp.renderer.resize(Math.max(64, w), Math.max(64, h));
+          layoutLive2dModel();
+        } catch (e) {}
+      }
+
+      function layoutLive2dModel() {
+        if (!live2dModel || !pixiApp) return;
+        try {
+          var w = pixiApp.renderer.width / (pixiApp.renderer.resolution || 1);
+          var h = pixiApp.renderer.height / (pixiApp.renderer.resolution || 1);
+          // 以模型 bounds 适配 stage
+          var bounds = live2dModel.getBounds ? live2dModel.getBounds(true) : null;
+          var mw = (bounds && bounds.width) || live2dModel.width || 1;
+          var mh = (bounds && bounds.height) || live2dModel.height || 1;
+          var scale = Math.min((w * 0.92) / mw, (h * 0.96) / mh);
+          if (!isFinite(scale) || scale <= 0) scale = 0.15;
+          live2dModel.scale.set(scale);
+          live2dModel.anchor && live2dModel.anchor.set && live2dModel.anchor.set(0.5, 0.5);
+          live2dModel.x = w / 2;
+          live2dModel.y = h * 0.55;
+          live2dModel.__baseScale = scale;
+          live2dModel.__baseX = live2dModel.x;
+          live2dModel.__baseY = live2dModel.y;
+        } catch (e) {
+          console.warn('[LanXin Pet] layout fail', e);
+        }
+      }
+
+      function tickCubismFrame() {
+        if (!live2dModel) return;
+        try {
+          var beat = musicBeatEnabled ? musicBeatSmoothed : 0;
+          var breath = Math.sin(breathT * 0.04) * 0.015;
+          var base = live2dModel.__baseScale || (live2dModel.scale && live2dModel.scale.x) || 1;
+          var s = base * (1 + breath + beat * 0.04);
+          if (live2dModel.scale) live2dModel.scale.set(s);
+          var bx = live2dModel.__baseX != null ? live2dModel.__baseX : live2dModel.x;
+          var by = live2dModel.__baseY != null ? live2dModel.__baseY : live2dModel.y;
+          live2dModel.x = bx + Math.sin(breathT * 0.06) * 2 + Math.sin(breathT * 0.11) * beat * 5;
+          live2dModel.y = by + Math.cos(breathT * 0.05) * 1.2 - beat * 3;
+          live2dModel.rotation = Math.sin(breathT * 0.05) * 0.015 + Math.sin(breathT * 0.09) * beat * 0.05;
+
+          // lip sync ParamMouthOpenY
+          var mOpen = mouthAnimating
+            ? (0.25 + 0.45 * (0.5 + 0.5 * Math.sin(breathT * 0.35)))
+            : Math.max(0, Math.min(1, mouthOpen));
+          setMouthOpen(mOpen);
+        } catch (e) {}
+      }
+
+      function setMouthOpen(value) {
+        if (!live2dModel) return;
+        try {
+          var core = live2dModel.internalModel && live2dModel.internalModel.coreModel;
+          if (core && typeof core.setParameterValueById === 'function') {
+            core.setParameterValueById('ParamMouthOpenY', value);
+            return;
+          }
+          if (live2dModel.internalModel && live2dModel.internalModel.motionManager) {
+            // ignore
+          }
+        } catch (e) {}
+      }
+
+      function applyCubismExpression(expression, open, anim) {
+        if (!live2dModel) return;
+        try {
+          // 尝试按 phase 映射官方 exp
+          var map = {
+            IDLE_SMILE: 'exp_01',
+            LISTENING: 'exp_02',
+            THINKING: 'exp_03',
+            SPEAKING: 'exp_04',
+            APOLOGY: 'exp_05',
+            FALLBACK_NEUTRAL: 'exp_01'
+          };
+          var name = map[expression] || 'exp_01';
+          if (typeof live2dModel.expression === 'function') {
+            try { live2dModel.expression(name); } catch (e1) {
+              try { live2dModel.expression(0); } catch (e2) {}
+            }
+          }
+          if (!anim) setMouthOpen(open || 0);
+        } catch (e) {}
+      }
+
       function drawShellFrame(ctx, w, h, phase, t, textures) {
         ctx.clearRect(0, 0, w, h);
         var ui = PHASE_UI[phase] || PHASE_UI.IDLE;
-        // idle 轻呼吸 + 有音乐时加强节奏感（勿暴力乱抖）
         var breath = Math.sin(t * 0.04) * 0.02;
         var beat = musicBeatEnabled ? musicBeatSmoothed : 0;
         var scale = 1 + breath + beat * 0.045;
@@ -313,7 +522,6 @@
         ctx.rotate(rot);
         ctx.scale(scale, scale);
 
-        // soft body glow
         var g = ctx.createRadialGradient(0, 10, 10, 0, 0, Math.min(w, h) * 0.48);
         g.addColorStop(0, ui.tint);
         g.addColorStop(1, 'rgba(255,255,255,0)');
@@ -323,7 +531,6 @@
         ctx.fill();
 
         if (textures && textures.length) {
-          // stack first few textures centered (Mao often has body/face layers)
           for (var i = 0; i < Math.min(textures.length, 3); i++) {
             var img = textures[i];
             if (!img || !img.complete || !img.naturalWidth) continue;
@@ -336,7 +543,6 @@
             ctx.drawImage(img, -dw / 2, -dh / 2 + 4, dw, dh);
           }
         } else {
-          // geometric avatar when textures not yet loaded
           ctx.fillStyle = ui.tint;
           ctx.beginPath();
           ctx.ellipse(0, 10, 42, 56, 0, 0, Math.PI * 2);
@@ -348,7 +554,6 @@
           ctx.fillText(ui.face, 0, 0);
         }
 
-        // mouth oval (session-driven; SPEAKING animates)
         var mOpen = mouthAnimating ? (0.25 + 0.45 * (0.5 + 0.5 * Math.sin(t * 0.35))) : mouthOpen;
         ctx.globalAlpha = 0.9;
         ctx.fillStyle = 'rgba(60, 15, 30, 0.75)';
@@ -356,7 +561,6 @@
         ctx.ellipse(0, 28, 12, 4 + mOpen * 10, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // phase ring
         ctx.globalAlpha = 0.85;
         ctx.strokeStyle = 'rgba(255,255,255,0.75)';
         ctx.lineWidth = 3;
@@ -368,6 +572,7 @@
 
       function startShellAnim(textures) {
         stopShellAnim();
+        hidePixiHost();
         var ctx = canvas.getContext('2d');
         if (!ctx) return;
         var dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -377,7 +582,6 @@
         canvas.height = Math.floor(cssH * dpr);
         function tick() {
           breathT += 1;
-          // 节拍平滑衰减，避免停播后突然定住
           musicBeatSmoothed = musicBeatSmoothed * 0.88 + musicBeat * 0.12;
           if (!musicBeatEnabled) musicBeatSmoothed *= 0.9;
           drawShellFrame(ctx, canvas.width, canvas.height, lastPhase, breathT, textures);
@@ -418,18 +622,15 @@
         });
       }
 
-      /** Base64 → UTF-8 字符串（优先 atob，兼容 Android WebView）。 */
       function decodeModel3B64(b64) {
         if (!b64) return null;
         try {
           var bin = atob(String(b64).replace(/\s+/g, ''));
-          // 处理 UTF-8 multi-byte
           if (typeof TextDecoder !== 'undefined') {
             var bytes = new Uint8Array(bin.length);
             for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
             return new TextDecoder('utf-8').decode(bytes);
           }
-          // fallback latin1-ish
           try {
             return decodeURIComponent(escape(bin));
           } catch (e2) {
@@ -451,17 +652,24 @@
         }
       }
 
-      function finishShellWithJson(json, dirUrl) {
+      function finishShellWithJson(json, dirUrl, reasonSuffix) {
         loadTexturesFromModel3(json, dirUrl, function (textures) {
           startShellAnim(textures);
-          reportStatus('LIVE2D_SHELL', textures.length ? 'textures_ok' : 'textures_empty_geom');
+          var reason = textures.length
+            ? ('textures_ok' + (reasonSuffix ? '_' + reasonSuffix : ''))
+            : ('textures_empty_geom' + (reasonSuffix ? '_' + reasonSuffix : ''));
+          reportStatus('LIVE2D_SHELL', reason);
+          modeTag.textContent = reasonSuffix ? 'L2D·壳' : 'Live2D 壳';
+          if (badge) badge.textContent = '壳';
           if (!textures.length) {
             modeTag.textContent = 'L2D·几何';
           }
         });
       }
 
-      function activateLive2dShell(meta) {
+      function activateShellFallback(meta, reason) {
+        destroyCubismModel();
+        hidePixiHost();
         var fileUrl = meta.live2dFileUrl || '';
         var dirUrl = meta.live2dDirUrl || '';
         var model3B64 = meta.live2dModel3B64 || '';
@@ -469,45 +677,133 @@
         if (model3B64) {
           injectedJson = parseModel3Json(decodeModel3B64(model3B64));
         }
-        // Native 注入成功：完全不依赖 fetch(file://)
-        if (injectedJson) {
-          shell.classList.add('active');
-          avatar.classList.add('hidden');
-          modeTag.textContent = 'Live2D 壳';
-          displayMode = 'LIVE2D_SHELL';
-          startShellAnim([]);
-          finishShellWithJson(injectedJson, dirUrl);
-          return;
-        }
-        if (!fileUrl) {
-          showPlaceholder('live2d_file_url_empty', 'FALLBACK');
-          return;
-        }
         shell.classList.add('active');
         avatar.classList.add('hidden');
         modeTag.textContent = 'Live2D 壳';
         displayMode = 'LIVE2D_SHELL';
         startShellAnim([]);
-
-        // 回退：fetch model3（部分机型 file:// 可能失败）
+        if (injectedJson) {
+          finishShellWithJson(injectedJson, dirUrl, reason || 'cubism_fallback');
+          return;
+        }
+        if (!fileUrl) {
+          showPlaceholder(reason || 'live2d_file_url_empty', 'FALLBACK');
+          return;
+        }
         fetch(fileUrl)
           .then(function (r) {
             if (!r.ok) throw new Error('http_' + r.status);
             return r.json();
           })
           .then(function (json) {
-            finishShellWithJson(json, dirUrl);
+            finishShellWithJson(json, dirUrl, reason || 'cubism_fallback');
           })
           .catch(function (err) {
-            showPlaceholder('live2d_load_fail', 'FALLBACK');
+            showPlaceholder(reason || 'live2d_load_fail', 'FALLBACK');
             showBubble('Live2D 加载失败，已降级');
             console.warn('[LanXin Pet] Live2D shell fallback', err);
           });
       }
 
+      function tryPlayIdleMotion() {
+        if (!live2dModel) return;
+        try {
+          if (typeof live2dModel.motion === 'function') {
+            // Mao Idle group
+            live2dModel.motion('Idle').catch(function () {});
+          }
+        } catch (e) {}
+      }
+
+      function loadCubismModel(modelUrl, token) {
+        return new Promise(function (resolve, reject) {
+          if (!detectEngine()) {
+            reject(new Error('engine_unavailable'));
+            return;
+          }
+          var app = ensurePixiApp();
+          if (!app) {
+            reject(new Error('pixi_app_fail'));
+            return;
+          }
+          showPixiHost();
+          resizePixi();
+          var Live2DModel = PIXI.live2d.Live2DModel;
+          // 避免预载全部 motion 占内存
+          var opts = {};
+          try {
+            if (PIXI.live2d.MotionPreloadStrategy) {
+              opts.motionPreload = PIXI.live2d.MotionPreloadStrategy.IDLE;
+            }
+          } catch (e0) {}
+          Live2DModel.from(modelUrl, opts)
+            .then(function (model) {
+              if (token !== loadToken) {
+                try { model.destroy({ children: true }); } catch (e) {}
+                reject(new Error('stale_load'));
+                return;
+              }
+              destroyCubismModel();
+              live2dModel = model;
+              try {
+                model.interactive = false;
+                model.buttonMode = false;
+              } catch (e1) {}
+              app.stage.addChild(model);
+              layoutLive2dModel();
+              tryPlayIdleMotion();
+              applyCubismExpression(lastExpression, mouthOpen, mouthAnimating);
+              resolve(model);
+            })
+            .catch(function (err) {
+              reject(err || new Error('from_fail'));
+            });
+        });
+      }
+
+      function activateCubismReal(meta) {
+        var fileUrl = meta.live2dFileUrl || '';
+        var dirUrl = meta.live2dDirUrl || '';
+        if (!fileUrl) {
+          showPlaceholder('live2d_file_url_empty', 'FALLBACK');
+          return;
+        }
+        if (!detectEngine()) {
+          activateShellFallback(meta, 'cubism_engine_missing');
+          return;
+        }
+
+        shell.classList.add('active');
+        avatar.classList.add('hidden');
+        modeTag.textContent = 'Cubism…';
+        if (badge) badge.textContent = 'Cubism';
+        displayMode = 'LIVE2D_REAL';
+        stopShellAnim();
+
+        var token = ++loadToken;
+        loadCubismModel(fileUrl, token)
+          .then(function () {
+            if (token !== loadToken) return;
+            modeTag.textContent = 'Cubism·' + ((PHASE_UI[lastPhase] || PHASE_UI.IDLE).label);
+            if (badge) badge.textContent = 'Cubism';
+            reportStatus('LIVE2D_REAL', 'cubism_ok');
+          })
+          .catch(function (err) {
+            if (token !== loadToken) return;
+            console.warn('[LanXin Pet] Cubism real load fail → shell', err);
+            activateShellFallback(meta, 'cubism_load_fail');
+            // 不弹泡打扰；仅 console
+          });
+      }
+
+      function activateLive2dShell(meta) {
+        // P3：优先真 Cubism；失败 → 纹理壳 → 占位
+        activateCubismReal(meta);
+      }
+
       function applyLoadLive2d(map) {
         var mode = (map.live2dMode || map.mode || '').toUpperCase();
-        if (mode === 'LIVE2D_SHELL') {
+        if (mode === 'LIVE2D_SHELL' || mode === 'LIVE2D_REAL') {
           activateLive2dShell({
             live2dFileUrl: map.live2dFileUrl || '',
             live2dDirUrl: map.live2dDirUrl || '',
@@ -541,7 +837,6 @@
         if (cmd === 'SET_MUSIC_BEAT' || map.beatLevel != null) {
           var rawLv = parseFloat(map.beatLevel);
           if (!isFinite(rawLv)) rawLv = 0;
-          // 兼容 0..100 整型
           if (rawLv > 1.0001) rawLv = rawLv / 100;
           musicBeat = Math.max(0, Math.min(1, rawLv));
           if (map.beatEnabled != null) {
@@ -560,12 +855,13 @@
           });
           if (map.phase) {
             lastPhase = map.phase;
-            if (displayMode === 'LIVE2D_SHELL') {
+            if (displayMode === 'LIVE2D_REAL') {
+              modeTag.textContent = 'Cubism·' + (map.expressionLabel || map.phase);
+            } else if (displayMode === 'LIVE2D_SHELL') {
               modeTag.textContent = 'L2D·' + (map.expressionLabel || map.phase);
             }
           }
         }
-        // SESSION_STATE 也可自带 expression 字段
         if (cmd === 'SESSION_STATE' && map.expression) {
           applyExpression({
             expression: map.expression,
@@ -577,19 +873,16 @@
         }
       }
 
-      // Native → Web
       window.onNativePetMessage = function (raw) {
         try { parseNativeMessage(raw); } catch (e) {}
       };
 
-      // 兼容 M1/M2a：仅推路径字符串
       window.onLive2dModelPath = function (path) {
         try {
           if (!path) {
             showPlaceholder('path_empty');
             return;
           }
-          // 路径字符串 alone 时先标 shell 意图，完整决策走 LOAD_LIVE2D
           modeTag.textContent = '路径已推';
         } catch (e) {}
       };
@@ -618,7 +911,6 @@
         });
       });
 
-      // 轮询状态（桥接就绪后）
       setInterval(function () {
         safeCall(function () {
           if (window.AndroidVoiceBridge && AndroidVoiceBridge.getPhase) {
@@ -629,8 +921,14 @@
         });
       }, 1200);
 
+      window.addEventListener('resize', function () {
+        if (pixiApp) resizePixi();
+      });
+
       window.__lanxinPetTeardown = function () {
+        loadToken += 1;
         stopShellAnim();
+        destroyPixiApp();
         mouthAnimating = false;
         musicBeat = 0;
         musicBeatSmoothed = 0;
@@ -639,14 +937,23 @@
         hideBubble();
       };
 
+      // 探测引擎，供单测/调试
+      window.__lanxinLive2dEngine = {
+        detect: detectEngine,
+        isReal: function () { return displayMode === 'LIVE2D_REAL' && !!live2dModel; },
+        mode: function () { return displayMode; }
+      };
+
       setPhase('IDLE');
       showPlaceholder('boot');
+      detectEngine();
 
-      // Debug: 真 Live2D model3 需自备；见 docs/debug-assets.md
-      // bash scripts/download-debug-live2d.sh  → live2d_model_path
       if (!window.__LANXIN_LIVE2D_HINT__) {
         window.__LANXIN_LIVE2D_HINT__ = true;
-        console.info('[LanXin Pet] M2b+expression: LOAD_LIVE2D(+model3B64 inject) + SET_EXPRESSION/mouth; docs/debug-assets.md');
+        console.info(
+          '[LanXin Pet] P3 Cubism real: engine=' + engineAvailable +
+          ' LOAD_LIVE2D → LIVE2D_REAL|SHELL|FALLBACK; lib/ cubismcore+pixi+cubism4'
+        );
       }
     })();
   </script>

@@ -19,14 +19,15 @@ package com.lanxin.android.builtin.pet.domain
 import java.io.File
 
 /**
- * M2b Live2D 显示模式决策（纯逻辑，可单测）。
+ * Live2D 显示模式决策（纯逻辑，可单测）。
  *
  * - 路径未就绪 → [Live2dDisplayMode.PLACEHOLDER]
- * - model3 可读且结构合理 → [Live2dDisplayMode.LIVE2D_SHELL]（WebView 渲染壳）
+ * - model3 可读且结构合理 → [Live2dDisplayMode.LIVE2D_SHELL]
+ *   （Native 侧就绪信号；Web 优先 Cubism 真渲染 → `LIVE2D_REAL`，失败降级纹理壳）
  * - 配置了路径但无效 / 解析失败 → [Live2dDisplayMode.FALLBACK]
  *
  * 官方 Sample Mao 已进 APK assets；运行时拷到 filesDir 后 WebView 用 file://。
- * 完整 Cubism Core 渲染属后续增强，本阶段保证「有路径就进壳，失败降级」。
+ * P3：`desktop-pet.html` 加载仓内 Cubism Core + pixi-live2d-display，真 load moc3。
  */
 object Live2dDisplayController {
 
@@ -34,7 +35,10 @@ object Live2dDisplayController {
         /** 无路径 / 未配置：emoji 占位。 */
         PLACEHOLDER,
 
-        /** model3 就绪：WebView Live2D 渲染壳。 */
+        /**
+         * model3 就绪：交给 WebView。
+         * Web 侧优先 Cubism 真渲染（回传 LIVE2D_REAL），失败再纹理壳（仍为 LIVE2D_SHELL）。
+         */
         LIVE2D_SHELL,
 
         /** 路径无效或 model3 不可用：降级占位 + 错误提示。 */
@@ -103,7 +107,7 @@ object Live2dDisplayController {
                 model3FileUrl = "file:///android_asset/${BuiltInLive2dAssets.MODEL3_ASSET}",
                 modelDirFileUrl = "file:///android_asset/${BuiltInLive2dAssets.ASSET_ROOT}/",
                 reason = "live2d_builtin_asset",
-                shortLabel = "Live2D 壳（内置）"
+                shortLabel = "Live2D Cubism（内置）"
             )
         }
 
@@ -135,7 +139,7 @@ object Live2dDisplayController {
             model3FileUrl = toFileUrl(file),
             modelDirFileUrl = toFileUrl(file.parentFile),
             reason = "live2d_shell_ready",
-            shortLabel = "Live2D 壳"
+            shortLabel = "Live2D Cubism"
         )
     }
 
@@ -171,7 +175,7 @@ object Live2dDisplayController {
 
     fun readinessDetailForMode(mode: Live2dDisplayMode): String = when (mode) {
         Live2dDisplayMode.PLACEHOLDER -> "未配置 model3 → 占位显示"
-        Live2dDisplayMode.LIVE2D_SHELL -> "Live2D model3 就绪（渲染壳）"
+        Live2dDisplayMode.LIVE2D_SHELL -> "Live2D model3 就绪（Cubism 真渲染 / 失败降级壳）"
         Live2dDisplayMode.FALLBACK -> "路径/模型不可用 → 降级占位"
     }
 }

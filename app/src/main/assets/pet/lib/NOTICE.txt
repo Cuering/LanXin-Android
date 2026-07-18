@@ -1,0 +1,31 @@
+LanXin desktop-pet Web Live2D runtime (P3)
+==========================================
+
+Bundled under app/src/main/assets/pet/lib/ for offline WebView rendering.
+
+1) live2dcubismcore.min.js
+   Live2D Cubism Core (Redistributable Code)
+   https://www.live2d.com/en/download/cubism-sdk/download-web/
+   License: Live2D Proprietary Software License / Redistributable terms
+   https://www.live2d.com/eula/live2d-proprietary-software-license-agreement_en.html
+
+2) pixi.min.js
+   PixiJS v6.5.10
+   https://github.com/pixijs/pixijs
+   License: MIT
+
+3) cubism4.min.js
+   pixi-live2d-display (Cubism 4 build) v0.4.0
+   https://github.com/guansss/pixi-live2d-display
+   License: MIT
+
+Model sample (Mao) remains under assets/pet/live2d/Mao/ with Live2D Sample Data Terms.
+
+Do not replace these with commercial Meiju / unauthorized binaries.
+Re-fetch:
+  curl -L -o live2dcubismcore.min.js \
+    https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js
+  curl -L -o pixi.min.js \
+    https://cdn.jsdelivr.net/npm/pixi.js@6.5.10/dist/browser/pixi.min.js
+  curl -L -o cubism4.min.js \
+    https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/cubism4.min.js

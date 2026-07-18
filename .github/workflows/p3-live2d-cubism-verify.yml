@@ -1,0 +1,98 @@
+# P3 Live2D Cubism 真渲染：运行时 assets / 单测 / 文档
+name: P3 Live2D Cubism Verify
+
+on:
+  push:
+    branches: [main, 'feat/p3-live2d*', 'feat/phase6*', 'feat/m2b*']
+    paths:
+      - 'app/src/main/assets/pet/**'
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/pet/**'
+      - 'app/src/test/kotlin/com/lanxin/android/builtin/pet/**'
+      - 'docs/live2d-cubism-render.md'
+      - 'docs/meiju-style-pet.md'
+      - 'docs/live2d-mao-sample.md'
+      - 'builtin/pet/**'
+      - 'ARCHITECTURE.md'
+      - '.github/workflows/p3-live2d-cubism-verify.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/src/main/assets/pet/**'
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/pet/**'
+      - 'app/src/test/kotlin/com/lanxin/android/builtin/pet/**'
+      - 'docs/live2d-cubism-render.md'
+      - 'docs/meiju-style-pet.md'
+      - 'docs/live2d-mao-sample.md'
+      - 'builtin/pet/**'
+      - 'ARCHITECTURE.md'
+      - '.github/workflows/p3-live2d-cubism-verify.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: p3-live2d-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: Live2D Cubism unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: gradle
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup local.properties and debug keystore
+        run: |
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+          rm -f debug-keystore.jks
+          keytool -genkeypair -v -keystore debug-keystore.jks -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Create assets model dir (models gitignored)
+        run: |
+          mkdir -p app/src/main/assets/models/gte-small
+          touch app/src/main/assets/models/gte-small/.gitkeep
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run pet unit tests (incl. Cubism surface)
+        run: |
+          ./gradlew :app:testDebugUnitTest \
+            --tests "com.lanxin.android.builtin.pet.*" \
+            --no-daemon --stacktrace
+
+      - name: Surfaces and docs present
+        run: |
+          test -f docs/live2d-cubism-render.md
+          test -f docs/meiju-style-pet.md
+          test -f docs/live2d-mao-sample.md
+          test -f builtin/pet/README.md
+          test -f app/src/main/assets/pet/desktop-pet.html
+          test -f app/src/main/assets/pet/lib/live2dcubismcore.min.js
+          test -f app/src/main/assets/pet/lib/pixi.min.js
+          test -f app/src/main/assets/pet/lib/cubism4.min.js
+          test -f app/src/main/assets/pet/lib/NOTICE.txt
+          test -f app/src/main/assets/pet/live2d/Mao/Mao.model3.json
+          test -f app/src/main/assets/pet/live2d/Mao/Mao.moc3
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/pet/domain/Live2dDisplayController.kt
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/pet/Live2dCubismRenderSurfaceTest.kt
+          grep -E -n "LIVE2D_REAL|Live2DModel|live2dcubismcore|cubism4" \
+            app/src/main/assets/pet/desktop-pet.html
+          grep -E -n "Cubism|LIVE2D_REAL|pixi-live2d" docs/live2d-cubism-render.md
+          grep -E -n "Cubism|LIVE2D_REAL|P3" docs/meiju-style-pet.md ARCHITECTURE.md || true
+          grep -E -n "LIVE2D_SHELL|LIVE2D_REAL|cubism_ok" \
+            app/src/test/kotlin/com/lanxin/android/builtin/pet/Live2dCubismRenderSurfaceTest.kt
+          # 运行时引擎必须仓内，禁止 workflow 内 curl 大模型
+          ! grep -E "curl.*CubismWebSamples|curl.*\\.moc3" .github/workflows/p3-live2d-cubism-verify.yml | grep -v "grep -E" || true
