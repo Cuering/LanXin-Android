@@ -17,6 +17,7 @@
 package com.lanxin.android.builtin.capabilities.data
 
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -43,12 +44,11 @@ import kotlinx.coroutines.flow.first
  * 智能能力总配置（DataStore）。
  *
  * 键前缀 `smart_capabilities_`。
- * 首次 [getConfig]/[ensureMigrated] 时从旧模块键迁移：
- * - 从未配置 → 新默认（语音/搜索/系统工具/设备感知 ON）
- * - 用户曾显式关 → 保留
- * - 本地脑/场景不抬 ON
+ * - v1：从旧模块键抬默认 / 保留显式关
+ * - v2：折叠为助手工具 / 位置与周边聚合键；任一项曾关 → 组关
+ * - 导航 / 导游：独立键，默认 OFF，不参与 v2 聚合
  *
- * 子开关写入时同步回写旧模块键，保证细页与 Gate 一致。
+ * 聚合开关写入时同步回写旧模块键，保证细页与 Gate 一致。
  */
 @Singleton
 class SmartCapabilitiesPreferences @Inject constructor(
@@ -58,14 +58,19 @@ class SmartCapabilitiesPreferences @Inject constructor(
     private val masterKey = booleanPreferencesKey(KEY_MASTER)
     private val localKey = booleanPreferencesKey(KEY_LOCAL_INFERENCE)
     private val voiceKey = booleanPreferencesKey(KEY_VOICE)
+    private val assistantToolsKey = booleanPreferencesKey(KEY_ASSISTANT_TOOLS)
+    private val locationAroundKey = booleanPreferencesKey(KEY_LOCATION_AROUND)
+    private val navigateKey = booleanPreferencesKey(KEY_NAVIGATE)
+    private val guideKey = booleanPreferencesKey(KEY_GUIDE)
+    private val sceneKey = booleanPreferencesKey(KEY_SCENE_VISION)
+    private val migratedV1Key = booleanPreferencesKey(KEY_MIGRATED_V1)
+    private val migratedV2Key = booleanPreferencesKey(KEY_MIGRATED_V2)
+
+    // v1 细项键：迁移读源；v2 后与聚合键保持同步
     private val systemToolsKey = booleanPreferencesKey(KEY_SYSTEM_TOOLS)
     private val webSearchKey = booleanPreferencesKey(KEY_WEB_SEARCH)
     private val deviceSensingKey = booleanPreferencesKey(KEY_DEVICE_SENSING)
     private val locationKey = booleanPreferencesKey(KEY_LOCATION)
-    private val navigateKey = booleanPreferencesKey(KEY_NAVIGATE)
-    private val guideKey = booleanPreferencesKey(KEY_GUIDE)
-    private val sceneKey = booleanPreferencesKey(KEY_SCENE_VISION)
-    private val migratedKey = booleanPreferencesKey(KEY_MIGRATED_V1)
 
     private val migrateMutex = Mutex()
     private val migratedOnce = AtomicBoolean(false)
@@ -73,85 +78,140 @@ class SmartCapabilitiesPreferences @Inject constructor(
     override suspend fun ensureMigrated() {
         if (migratedOnce.get()) {
             val prefs = dataStore.data.first()
-            if (prefs[migratedKey] == true) return
+            if (prefs[migratedV1Key] == true && prefs[migratedV2Key] == true) return
         }
         migrateMutex.withLock {
             val prefs = dataStore.data.first()
-            if (prefs[migratedKey] == true) {
+            val hasV1 = prefs[migratedV1Key] == true
+            val hasV2 = prefs[migratedV2Key] == true
+            if (hasV1 && hasV2) {
                 migratedOnce.set(true)
                 return
             }
-            val legacy = SmartCapabilitiesMigration.LegacyCapabilitySnapshot(
-                webSearch = prefs[booleanPreferencesKey(WebSearchPreferences.KEY_ENABLED)],
-                deviceSensing = prefs[booleanPreferencesKey(DeviceSensingPreferences.KEY_ENABLED)],
-                systemToolsMaster = prefs[booleanPreferencesKey(SystemToolsPreferences.KEY_MASTER)],
-                voiceAsr = prefs[booleanPreferencesKey(AsrPreferences.KEY_ENABLED)],
-                voiceTts = prefs[booleanPreferencesKey(TtsPreferences.KEY_ENABLED)],
-                localInference = prefs[booleanPreferencesKey(LocalInferencePreferences.KEY_ENABLED)],
-                sceneVision = prefs[booleanPreferencesKey(SceneSensingPreferences.KEY_ENABLED)]
-            )
-            val resolved = SmartCapabilitiesMigration.buildConfig(legacy)
-            dataStore.edit { e ->
-                e[masterKey] = resolved.masterEnabled
-                e[localKey] = resolved.localInferenceEnabled
-                e[voiceKey] = resolved.voiceEnabled
-                e[systemToolsKey] = resolved.systemToolsEnabled
-                e[webSearchKey] = resolved.webSearchEnabled
-                e[deviceSensingKey] = resolved.deviceSensingEnabled
-                e[locationKey] = resolved.locationEnabled
-                e[navigateKey] = resolved.navigateEnabled
-                e[guideKey] = resolved.guideEnabled
-                e[sceneKey] = resolved.sceneVisionEnabled
-                e[migratedKey] = true
-                // 回写旧模块键：从未配置的抬到新默认；显式值已等于 resolved
-                e[booleanPreferencesKey(WebSearchPreferences.KEY_ENABLED)] = resolved.webSearchEnabled
-                e[booleanPreferencesKey(DeviceSensingPreferences.KEY_ENABLED)] =
-                    resolved.deviceSensingEnabled
-                e[booleanPreferencesKey(SystemToolsPreferences.KEY_MASTER)] =
-                    resolved.systemToolsEnabled
-                // 系统工具子项：若 master 被抬 ON 且子项从未写，一并抬 ON（写仍确认）
-                if (resolved.systemToolsEnabled) {
-                    val cal = booleanPreferencesKey(SystemToolsPreferences.KEY_CALENDAR)
-                    val alarm = booleanPreferencesKey(SystemToolsPreferences.KEY_ALARM)
-                    val notes = booleanPreferencesKey(SystemToolsPreferences.KEY_NOTES)
-                    val userFile = booleanPreferencesKey(SystemToolsPreferences.KEY_USER_FILE)
-                    if (prefs[cal] == null) e[cal] = true
-                    if (prefs[alarm] == null) e[alarm] = true
-                    if (prefs[notes] == null) e[notes] = true
-                    if (prefs[userFile] == null) e[userFile] = true
-                }
-                e[booleanPreferencesKey(AsrPreferences.KEY_ENABLED)] = resolved.voiceEnabled
-                e[booleanPreferencesKey(TtsPreferences.KEY_ENABLED)] = resolved.voiceEnabled
-                // 本地脑 / 场景：仅当 resolved 为 true 才写 true；否则不强制写 false 覆盖用户后续
-                // 但为一致性：若 legacy null 保持 false 写入
-                e[booleanPreferencesKey(LocalInferencePreferences.KEY_ENABLED)] =
-                    resolved.localInferenceEnabled
-                e[booleanPreferencesKey(SceneSensingPreferences.KEY_ENABLED)] =
-                    resolved.sceneVisionEnabled
+            if (!hasV1) {
+                runV1Migration(prefs)
+            }
+            // v1 后可能刚写入，重读
+            val afterV1 = dataStore.data.first()
+            if (afterV1[migratedV2Key] != true) {
+                runV2Migration(afterV1)
             }
             migratedOnce.set(true)
         }
     }
 
+    private suspend fun runV1Migration(prefs: Preferences) {
+        val legacy = SmartCapabilitiesMigration.LegacyCapabilitySnapshot(
+            webSearch = prefs[booleanPreferencesKey(WebSearchPreferences.KEY_ENABLED)],
+            deviceSensing = prefs[booleanPreferencesKey(DeviceSensingPreferences.KEY_ENABLED)],
+            systemToolsMaster = prefs[booleanPreferencesKey(SystemToolsPreferences.KEY_MASTER)],
+            voiceAsr = prefs[booleanPreferencesKey(AsrPreferences.KEY_ENABLED)],
+            voiceTts = prefs[booleanPreferencesKey(TtsPreferences.KEY_ENABLED)],
+            localInference = prefs[booleanPreferencesKey(LocalInferencePreferences.KEY_ENABLED)],
+            sceneVision = prefs[booleanPreferencesKey(SceneSensingPreferences.KEY_ENABLED)],
+            location = prefs[booleanPreferencesKey(LocationPreferences.KEY_ENABLED)]
+        )
+        val resolved = SmartCapabilitiesMigration.buildConfig(legacy)
+        dataStore.edit { e ->
+            writeResolved(e, prefs, resolved)
+        }
+    }
+
+    private suspend fun runV2Migration(prefs: Preferences) {
+        val resolved = SmartCapabilitiesMigration.collapseToV2(
+            masterEnabled = prefs[masterKey] ?: SmartCapabilitiesConfig.DEFAULT_MASTER,
+            localInferenceEnabled = prefs[localKey]
+                ?: SmartCapabilitiesConfig.DEFAULT_LOCAL_INFERENCE,
+            voiceEnabled = prefs[voiceKey] ?: SmartCapabilitiesConfig.DEFAULT_VOICE,
+            systemTools = prefs[systemToolsKey]
+                ?: prefs[booleanPreferencesKey(SystemToolsPreferences.KEY_MASTER)],
+            webSearch = prefs[webSearchKey]
+                ?: prefs[booleanPreferencesKey(WebSearchPreferences.KEY_ENABLED)],
+            deviceSensing = prefs[deviceSensingKey]
+                ?: prefs[booleanPreferencesKey(DeviceSensingPreferences.KEY_ENABLED)],
+            location = prefs[locationKey]
+                ?: prefs[booleanPreferencesKey(LocationPreferences.KEY_ENABLED)],
+            sceneVisionEnabled = prefs[sceneKey]
+                ?: SmartCapabilitiesConfig.DEFAULT_SCENE_VISION,
+            existingAssistantTools = prefs[assistantToolsKey],
+            existingLocationAround = prefs[locationAroundKey],
+            navigateEnabled = prefs[navigateKey] ?: SmartCapabilitiesConfig.DEFAULT_NAVIGATE,
+            guideEnabled = prefs[guideKey] ?: SmartCapabilitiesConfig.DEFAULT_GUIDE
+        )
+        dataStore.edit { e ->
+            writeResolved(e, prefs, resolved)
+        }
+    }
+
+    private fun writeResolved(
+        e: MutablePreferences,
+        prefs: Preferences,
+        resolved: SmartCapabilitiesConfig
+    ) {
+        e[masterKey] = resolved.masterEnabled
+        e[localKey] = resolved.localInferenceEnabled
+        e[voiceKey] = resolved.voiceEnabled
+        e[assistantToolsKey] = resolved.assistantToolsEnabled
+        e[locationAroundKey] = resolved.locationAroundEnabled
+        e[navigateKey] = resolved.navigateEnabled
+        e[guideKey] = resolved.guideEnabled
+        e[sceneKey] = resolved.sceneVisionEnabled
+        e[migratedV1Key] = true
+        e[migratedV2Key] = true
+
+        // 细项键与旧模块键与聚合同步
+        e[systemToolsKey] = resolved.assistantToolsEnabled
+        e[webSearchKey] = resolved.assistantToolsEnabled
+        e[deviceSensingKey] = resolved.assistantToolsEnabled
+        e[locationKey] = resolved.locationAroundEnabled
+
+        e[booleanPreferencesKey(WebSearchPreferences.KEY_ENABLED)] =
+            resolved.assistantToolsEnabled
+        e[booleanPreferencesKey(DeviceSensingPreferences.KEY_ENABLED)] =
+            resolved.assistantToolsEnabled
+        e[booleanPreferencesKey(SystemToolsPreferences.KEY_MASTER)] =
+            resolved.assistantToolsEnabled
+        if (resolved.assistantToolsEnabled) {
+            val cal = booleanPreferencesKey(SystemToolsPreferences.KEY_CALENDAR)
+            val alarm = booleanPreferencesKey(SystemToolsPreferences.KEY_ALARM)
+            val notes = booleanPreferencesKey(SystemToolsPreferences.KEY_NOTES)
+            val userFile = booleanPreferencesKey(SystemToolsPreferences.KEY_USER_FILE)
+            if (prefs[cal] == null) e[cal] = true
+            if (prefs[alarm] == null) e[alarm] = true
+            if (prefs[notes] == null) e[notes] = true
+            if (prefs[userFile] == null) e[userFile] = true
+        }
+        e[booleanPreferencesKey(AsrPreferences.KEY_ENABLED)] = resolved.voiceEnabled
+        e[booleanPreferencesKey(TtsPreferences.KEY_ENABLED)] = resolved.voiceEnabled
+        e[booleanPreferencesKey(LocalInferencePreferences.KEY_ENABLED)] =
+            resolved.localInferenceEnabled
+        e[booleanPreferencesKey(SceneSensingPreferences.KEY_ENABLED)] =
+            resolved.sceneVisionEnabled
+        e[booleanPreferencesKey(LocationPreferences.KEY_ENABLED)] =
+            resolved.locationAroundEnabled
+    }
+
     override suspend fun getConfig(): SmartCapabilitiesConfig {
         ensureMigrated()
         val prefs = dataStore.data.first()
+        val assistant = prefs[assistantToolsKey]
+            ?: prefs[systemToolsKey]
+            ?: SmartCapabilitiesConfig.DEFAULT_ASSISTANT_TOOLS
+        val locationAround = prefs[locationAroundKey]
+            ?: prefs[locationKey]
+            ?: SmartCapabilitiesConfig.DEFAULT_LOCATION_AROUND
         return SmartCapabilitiesConfig(
             masterEnabled = prefs[masterKey] ?: SmartCapabilitiesConfig.DEFAULT_MASTER,
             localInferenceEnabled = prefs[localKey]
                 ?: SmartCapabilitiesConfig.DEFAULT_LOCAL_INFERENCE,
             voiceEnabled = prefs[voiceKey] ?: SmartCapabilitiesConfig.DEFAULT_VOICE,
-            systemToolsEnabled = prefs[systemToolsKey]
-                ?: SmartCapabilitiesConfig.DEFAULT_SYSTEM_TOOLS,
-            webSearchEnabled = prefs[webSearchKey]
-                ?: SmartCapabilitiesConfig.DEFAULT_WEB_SEARCH,
-            deviceSensingEnabled = prefs[deviceSensingKey]
-                ?: SmartCapabilitiesConfig.DEFAULT_DEVICE_SENSING,
-            locationEnabled = prefs[locationKey] ?: SmartCapabilitiesConfig.DEFAULT_LOCATION,
+            assistantToolsEnabled = assistant,
+            locationAroundEnabled = locationAround,
             navigateEnabled = prefs[navigateKey] ?: SmartCapabilitiesConfig.DEFAULT_NAVIGATE,
             guideEnabled = prefs[guideKey] ?: SmartCapabilitiesConfig.DEFAULT_GUIDE,
             sceneVisionEnabled = prefs[sceneKey] ?: SmartCapabilitiesConfig.DEFAULT_SCENE_VISION,
-            migratedV1 = prefs[migratedKey] ?: false
+            migratedV1 = prefs[migratedV1Key] ?: false,
+            migratedV2 = prefs[migratedV2Key] ?: false
         )
     }
 
@@ -173,19 +233,22 @@ class SmartCapabilitiesPreferences @Inject constructor(
                     e[booleanPreferencesKey(AsrPreferences.KEY_ENABLED)] = enabled
                     e[booleanPreferencesKey(TtsPreferences.KEY_ENABLED)] = enabled
                 }
-                SmartCapabilityId.SYSTEM_TOOLS -> {
-                    e[systemToolsKey] = enabled
-                    e[booleanPreferencesKey(SystemToolsPreferences.KEY_MASTER)] = enabled
-                }
-                SmartCapabilityId.WEB_SEARCH -> {
-                    e[webSearchKey] = enabled
-                    e[booleanPreferencesKey(WebSearchPreferences.KEY_ENABLED)] = enabled
-                }
+                SmartCapabilityId.ASSISTANT_TOOLS,
+                SmartCapabilityId.SYSTEM_TOOLS,
+                SmartCapabilityId.WEB_SEARCH,
                 SmartCapabilityId.DEVICE_SENSING -> {
+                    // 聚合：一组开关同步三模块
+                    e[assistantToolsKey] = enabled
+                    e[systemToolsKey] = enabled
+                    e[webSearchKey] = enabled
                     e[deviceSensingKey] = enabled
+                    e[booleanPreferencesKey(SystemToolsPreferences.KEY_MASTER)] = enabled
+                    e[booleanPreferencesKey(WebSearchPreferences.KEY_ENABLED)] = enabled
                     e[booleanPreferencesKey(DeviceSensingPreferences.KEY_ENABLED)] = enabled
                 }
+                SmartCapabilityId.LOCATION_AROUND,
                 SmartCapabilityId.LOCATION -> {
+                    e[locationAroundKey] = enabled
                     e[locationKey] = enabled
                     e[booleanPreferencesKey(LocationPreferences.KEY_ENABLED)] = enabled
                 }
@@ -196,7 +259,6 @@ class SmartCapabilitiesPreferences @Inject constructor(
                     e[guideKey] = enabled
                 }
                 SmartCapabilityId.SCENE_VISION -> {
-                    // 与 SceneSensingPreferences.setEnabled 一致：无 consent 不可写 true
                     val consent = e[
                         booleanPreferencesKey(SceneSensingPreferences.KEY_CONSENT)
                     ] ?: false
@@ -212,13 +274,18 @@ class SmartCapabilitiesPreferences @Inject constructor(
         const val KEY_MASTER = "smart_capabilities_master"
         const val KEY_LOCAL_INFERENCE = "smart_capabilities_local_inference"
         const val KEY_VOICE = "smart_capabilities_voice"
-        const val KEY_SYSTEM_TOOLS = "smart_capabilities_system_tools"
-        const val KEY_WEB_SEARCH = "smart_capabilities_web_search"
-        const val KEY_DEVICE_SENSING = "smart_capabilities_device_sensing"
-        const val KEY_LOCATION = "smart_capabilities_location"
+        const val KEY_ASSISTANT_TOOLS = "smart_capabilities_assistant_tools"
+        const val KEY_LOCATION_AROUND = "smart_capabilities_location_around"
         const val KEY_NAVIGATE = "smart_capabilities_navigate"
         const val KEY_GUIDE = "smart_capabilities_guide"
         const val KEY_SCENE_VISION = "smart_capabilities_scene_vision"
         const val KEY_MIGRATED_V1 = "smart_capabilities_migrated_v1"
+        const val KEY_MIGRATED_V2 = "smart_capabilities_migrated_v2"
+
+        // 兼容细项键（v1）
+        const val KEY_SYSTEM_TOOLS = "smart_capabilities_system_tools"
+        const val KEY_WEB_SEARCH = "smart_capabilities_web_search"
+        const val KEY_DEVICE_SENSING = "smart_capabilities_device_sensing"
+        const val KEY_LOCATION = "smart_capabilities_location"
     }
 }

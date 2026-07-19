@@ -58,8 +58,12 @@ class SystemToolsPlugin @Inject constructor(
 
     private val gate = DeviceToolGate(
         configProvider = { settings.getConfig() },
+        // 主开关 + 助手工具组（ASSISTANT_TOOLS 聚合系统工具）
         smartMasterProvider = {
-            runCatching { smartCapabilitiesSettings.getConfig().masterEnabled }.getOrDefault(true)
+            runCatching {
+                val c = smartCapabilitiesSettings.getConfig()
+                c.masterEnabled && c.assistantToolsEnabled
+            }.getOrDefault(true)
         }
     )
 

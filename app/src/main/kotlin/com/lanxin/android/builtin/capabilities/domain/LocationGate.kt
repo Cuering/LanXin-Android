@@ -24,7 +24,8 @@ import kotlinx.serialization.json.put
 /**
  * 位置门闸（纯逻辑，可单测）。
  *
- * prefs 开 = smart.master && smart.locationEnabled && location.enabled
+ * prefs 开 = smart.master && smart.locationAroundEnabled && location.enabled
+ * （locationEnabled 为兼容属性，等同 locationAroundEnabled）
  * 可用 = prefs 开 && permissionGranted
  * 不后台持续定位；权限仅在 tool 用时检查。
  */
@@ -37,7 +38,7 @@ object LocationGate {
      * prefs 层是否允许（不含运行时权限）。
      */
     fun isPrefsOpen(smart: SmartCapabilitiesConfig, location: LocationConfig): Boolean =
-        smart.masterEnabled && smart.locationEnabled && location.enabled
+        smart.masterEnabled && smart.locationAroundEnabled && location.enabled
 
     fun canUse(
         smart: SmartCapabilitiesConfig,
@@ -62,7 +63,7 @@ object LocationGate {
         if (!isPrefsOpen(smart, location)) {
             return buildJsonObject {
                 put("ok", false)
-                put("error", "位置能力已关闭（设置 → 智能能力 → 位置）")
+                put("error", "位置能力已关闭（设置 → 智能能力 → 位置与周边）")
                 put("code", DENIED_CODE)
             }
         }
