@@ -1,0 +1,95 @@
+# Chat silent crash guard: send path try/catch + user-visible errors
+name: Chat Silent Crash Verify
+
+on:
+  push:
+    branches: [main, 'fix/chat-silent-crash*']
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/**'
+      - 'app/src/test/kotlin/com/lanxin/android/presentation/ui/chat/**'
+      - 'app/src/main/kotlin/com/lanxin/android/plugin/PluginManager.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/plugin/ToolCallEngine.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/util/AssistantMessageUtils.kt'
+      - '.github/workflows/chat-silent-crash-verify.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/**'
+      - 'app/src/test/kotlin/com/lanxin/android/presentation/ui/chat/**'
+      - 'app/src/main/kotlin/com/lanxin/android/plugin/PluginManager.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/plugin/ToolCallEngine.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/util/AssistantMessageUtils.kt'
+      - '.github/workflows/chat-silent-crash-verify.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: chat-silent-crash-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: Chat silent-crash unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: gradle
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup local.properties and debug keystore
+        run: |
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+          rm -f debug-keystore.jks
+          keytool -genkeypair -v -keystore debug-keystore.jks -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Create assets model dir (models gitignored)
+        run: |
+          mkdir -p app/src/main/assets/models/gte-small
+          touch app/src/main/assets/models/gte-small/.gitkeep
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run chat silent-crash / send-failure unit tests
+        run: |
+          ./gradlew :app:testDebugUnitTest \
+            --tests "com.lanxin.android.presentation.ui.chat.ChatSendFailureLogicTest" \
+            --tests "com.lanxin.android.presentation.ui.chat.ChatViewModelRetryTest" \
+            --tests "com.lanxin.android.util.ApiStateFlowExtensionsTest" \
+            --tests "com.lanxin.android.util.AssistantMessageUtilsTest" \
+            --tests "com.lanxin.android.builtin.navigate.NavigateDomainTest" \
+            --tests "com.lanxin.android.builtin.capabilities.SmartCapabilitiesTest" \
+            --no-daemon --stacktrace
+
+      - name: Guardrails present (no silent rethrow after catch in runChatWithTools)
+        run: |
+          test -f app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/ChatSendFailureLogic.kt
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path("app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/ChatViewModel.kt").read_text()
+          assert "surfaceSendFailure" in text, "missing surfaceSendFailure"
+          assert "ChatSendFailureLogic" in text, "missing ChatSendFailureLogic"
+          # 禁止 catch(Throwable) 后无条件 throw t（CancellationException 除外）
+          import re
+          bad = re.search(
+              r"catch \(t: Throwable\) \{\s*recordedError = true\s*throw t\s*\}",
+              text,
+          )
+          assert bad is None, "found silent rethrow pattern in catch"
+          # 关键路径 catch 后必须 surface
+          assert "phase = \"runChatWithTools\"" in text
+          print("guardrails ok")
+          PY
+          grep -n "ConcurrentHashMap" \
+            app/src/main/kotlin/com/lanxin/android/plugin/PluginManager.kt

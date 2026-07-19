@@ -44,6 +44,8 @@ import com.lanxin.android.util.handleStates
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
+import com.lanxin.android.util.buildAssistantErrorContent
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -182,24 +184,29 @@ class ChatViewModel @Inject constructor(
     }
 
     fun askQuestion() {
-        val questionText = question.text.toString()
-        val hasReadyAttachments = _selectedAttachments.value.any { it.status == ChatAttachmentDraft.Status.Ready }
-        val hasPreparingAttachments = _selectedAttachments.value.any { it.status == ChatAttachmentDraft.Status.Preparing }
-        if (questionText.isBlank() && !hasReadyAttachments && !hasPreparingAttachments) return
-        if (_selectedAttachments.value.any { it.status == ChatAttachmentDraft.Status.Failed }) {
-            _attachmentNotice.update { "Remove failed attachments before sending." }
-            return
-        }
+        try {
+            val questionText = question.text.toString()
+            val hasReadyAttachments = _selectedAttachments.value.any { it.status == ChatAttachmentDraft.Status.Ready }
+            val hasPreparingAttachments = _selectedAttachments.value.any { it.status == ChatAttachmentDraft.Status.Preparing }
+            if (questionText.isBlank() && !hasReadyAttachments && !hasPreparingAttachments) return
+            if (_selectedAttachments.value.any { it.status == ChatAttachmentDraft.Status.Failed }) {
+                _attachmentNotice.update { "Remove failed attachments before sending." }
+                return
+            }
 
-        if (hasPreparingAttachments) {
-            pendingQuestionText = questionText
-            question.clearText()
-            _loadingStates.update { List(enabledPlatformsInChat.size) { LoadingState.Loading } }
-            trySendPendingQuestionIfReady()
-            return
-        }
+            if (hasPreparingAttachments) {
+                pendingQuestionText = questionText
+                question.clearText()
+                _loadingStates.update { List(enabledPlatformsInChat.size) { LoadingState.Loading } }
+                trySendPendingQuestionIfReady()
+                return
+            }
 
-        sendQuestion(questionText, _selectedAttachments.value)
+            sendQuestion(questionText, _selectedAttachments.value)
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            surfaceSendFailure(t, phase = "askQuestion")
+        }
     }
 
     /**
@@ -358,39 +365,54 @@ class ChatViewModel @Inject constructor(
     }
 
     fun retryChat(turnIndex: Int, platformIndex: Int) {
-        if (turnIndex !in _groupedMessages.value.assistantMessages.indices) return
-        if (platformIndex >= enabledPlatformsInChat.size || platformIndex < 0) return
-        val platform = _enabledPlatformsInApp.value.firstOrNull { it.uid == enabledPlatformsInChat[platformIndex] } ?: return
-        val platformWithChatModel = resolvePlatformModel(platform)
-        val revisionToAppendOnSuccess = _groupedMessages.value.assistantMessages
-            .getOrNull(turnIndex)
-            ?.getOrNull(platformIndex)
-            ?.snapshotLatestAssistantRevision(currentTimeStamp)
-        _loadingStates.update { it.toMutableList().apply { this[platformIndex] = LoadingState.Loading } }
-        _groupedMessages.update {
-            updateAssistantSlot(
-                groupedMessages = it,
-                turnIndex = turnIndex,
-                platformIndex = platformIndex
-            ) { currentMessage ->
-                createRetryAssistantMessage(
-                    currentMessage = currentMessage,
-                    chatId = chatRoomId,
-                    platformUid = platformWithChatModel.uid
-                )
+        try {
+            if (turnIndex !in _groupedMessages.value.assistantMessages.indices) return
+            if (platformIndex >= enabledPlatformsInChat.size || platformIndex < 0) return
+            val platform = _enabledPlatformsInApp.value.firstOrNull { it.uid == enabledPlatformsInChat[platformIndex] } ?: return
+            val platformWithChatModel = resolvePlatformModel(platform)
+            val revisionToAppendOnSuccess = _groupedMessages.value.assistantMessages
+                .getOrNull(turnIndex)
+                ?.getOrNull(platformIndex)
+                ?.snapshotLatestAssistantRevision(currentTimeStamp)
+            _loadingStates.update { it.toMutableList().apply { this[platformIndex] = LoadingState.Loading } }
+            _groupedMessages.update {
+                updateAssistantSlot(
+                    groupedMessages = it,
+                    turnIndex = turnIndex,
+                    platformIndex = platformIndex
+                ) { currentMessage ->
+                    createRetryAssistantMessage(
+                        currentMessage = currentMessage,
+                        chatId = chatRoomId,
+                        platformUid = platformWithChatModel.uid
+                    )
+                }
             }
-        }
 
-        viewModelScope.launch {
-            val retryContext = groupedMessagesThroughTurn(_groupedMessages.value, turnIndex)
-            runChatWithTools(
-                userMessages = retryContext.userMessages,
-                assistantMessages = retryContext.assistantMessages,
-                platform = platformWithChatModel,
-                turnIndex = turnIndex,
-                platformIndex = platformIndex,
-                revisionToAppendOnSuccess = revisionToAppendOnSuccess
-            )
+            viewModelScope.launch {
+                try {
+                    val retryContext = groupedMessagesThroughTurn(_groupedMessages.value, turnIndex)
+                    runChatWithTools(
+                        userMessages = retryContext.userMessages,
+                        assistantMessages = retryContext.assistantMessages,
+                        platform = platformWithChatModel,
+                        turnIndex = turnIndex,
+                        platformIndex = platformIndex,
+                        revisionToAppendOnSuccess = revisionToAppendOnSuccess
+                    )
+                } catch (t: Throwable) {
+                    if (t is CancellationException) throw t
+                    surfaceSendFailure(
+                        t,
+                        phase = "retryChat",
+                        turnIndex = turnIndex,
+                        platformIndex = platformIndex
+                    )
+                }
+            }
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            surfaceSendFailure(t, phase = "retryChat.setup", turnIndex = turnIndex, platformIndex = platformIndex)
         }
     }
 
@@ -624,21 +646,64 @@ class ChatViewModel @Inject constructor(
     }
 
     private fun completeChat() {
-        _loadingStates.update { List(enabledPlatformsInChat.size) { LoadingState.Loading } }
-        val turnIndex = _groupedMessages.value.assistantMessages.lastIndex
+        try {
+            if (enabledPlatformsInChat.isEmpty() || enabledPlatformsInChat.all { it.isBlank() }) {
+                surfaceSendFailure(
+                    IllegalStateException("当前会话没有可用模型平台"),
+                    phase = "completeChat"
+                )
+                return
+            }
+            _loadingStates.update { List(enabledPlatformsInChat.size) { LoadingState.Loading } }
+            val turnIndex = _groupedMessages.value.assistantMessages.lastIndex
+            if (turnIndex < 0) {
+                surfaceSendFailure(
+                    IllegalStateException("消息列表尚未就绪，请重试"),
+                    phase = "completeChat"
+                )
+                return
+            }
 
-        enabledPlatformsInChat.forEachIndexed { idx, platformUid ->
-            val platform = _enabledPlatformsInApp.value.firstOrNull { it.uid == platformUid } ?: return@forEachIndexed
-            val platformWithChatModel = resolvePlatformModel(platform)
-            viewModelScope.launch {
-                runChatWithTools(
-                    userMessages = _groupedMessages.value.userMessages,
-                    assistantMessages = _groupedMessages.value.assistantMessages,
-                    platform = platformWithChatModel,
-                    turnIndex = turnIndex,
-                    platformIndex = idx
+            var launched = 0
+            enabledPlatformsInChat.forEachIndexed { idx, platformUid ->
+                if (platformUid.isBlank()) return@forEachIndexed
+                val platform = _enabledPlatformsInApp.value.firstOrNull { it.uid == platformUid }
+                if (platform == null) {
+                    // 平台列表尚未加载完时不硬崩：提示并复位 loading
+                    return@forEachIndexed
+                }
+                val platformWithChatModel = resolvePlatformModel(platform)
+                launched += 1
+                viewModelScope.launch {
+                    try {
+                        runChatWithTools(
+                            userMessages = _groupedMessages.value.userMessages,
+                            assistantMessages = _groupedMessages.value.assistantMessages,
+                            platform = platformWithChatModel,
+                            turnIndex = turnIndex,
+                            platformIndex = idx
+                        )
+                    } catch (t: Throwable) {
+                        if (t is CancellationException) throw t
+                        surfaceSendFailure(
+                            t,
+                            phase = "completeChat.launch",
+                            turnIndex = turnIndex,
+                            platformIndex = idx
+                        )
+                    }
+                }
+            }
+            if (launched == 0) {
+                // 平台配置还在加载：复位 loading，给出可见提示，避免假死/静默
+                surfaceSendFailure(
+                    IllegalStateException("模型平台尚未就绪，请稍后再发"),
+                    phase = "completeChat.noPlatform"
                 )
             }
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            surfaceSendFailure(t, phase = "completeChat")
         }
     }
 
@@ -658,56 +723,58 @@ class ChatViewModel @Inject constructor(
         platformIndex: Int,
         revisionToAppendOnSuccess: com.lanxin.android.plugins.chat.data.entity.AssistantRevision? = null
     ) {
-        val baseSystemPrompt = resolveSystemPrompt(platform.systemPrompt)
-        val filteredTools = resolvePersonaFilteredTools()
-        val allowedToolNames = filteredTools.allowedNames
-        val platformWithTools = platform.copy(
-            systemPrompt = toolCallEngine.mergeSystemPrompt(
-                existing = baseSystemPrompt,
-                tools = filteredTools.tools
-            )
-        )
-
-        // 仅主平台（index 0）驱动状态文案与引用，避免多平台互相覆盖
-        if (platformIndex == 0) {
-            setTurnPhase(turnIndex, ChatGenerationPhase.PREPARING)
-        }
-
-        var workingUserMessages = injectMemoryIntoLastUserMessage(
-            userMessages = userMessages,
-            turnIndex = turnIndex,
-            updateUx = platformIndex == 0
-        )
-        // Phase 6.3：首轮 needsTools=false（保留 preferLocal/离线本地）；
-        // 仅当模型产出 tool_call 进入工具循环后，才强制 need_tools_cloud。
-        // 有注册工具 ≠ 本轮「需要」工具；否则 preferLocal 在有网时永远失效。
-        val routeDecision = runCatching {
-            inferenceRouteCoordinator.decide(needsTools = false)
-        }.getOrNull()
-        val useLocalGeneration =
-            routeDecision != null && ChatLocalFallback.isLocalGeneration(routeDecision)
-        if (platformIndex == 0) {
-            setTurnPhase(
-                turnIndex,
-                if (useLocalGeneration) {
-                    ChatGenerationPhase.GENERATING_LOCAL
-                } else {
-                    ChatGenerationPhase.GENERATING
-                }
-            )
-        }
-        var workingAssistantMessages = assistantMessages
-        // 本地不做 tool_call：路由到本地时跳过工具循环
-        var remainingRounds = if (useLocalGeneration) 0 else MAX_TOOL_ROUNDS
-        var pendingRevision = revisionToAppendOnSuccess
         val turnStartMs = System.currentTimeMillis()
+        var workingUserMessages = userMessages
+        var workingAssistantMessages = assistantMessages
         var lastAssistantText = ""
         var recordedError = false
-        var markedStreamStart = false
-        // 工具 follow-up 轮：强制 needsTools → 云端
-        var needsToolsForRoute = false
 
         try {
+            val baseSystemPrompt = resolveSystemPrompt(platform.systemPrompt)
+            val filteredTools = resolvePersonaFilteredTools()
+            val allowedToolNames = filteredTools.allowedNames
+            val platformWithTools = platform.copy(
+                systemPrompt = toolCallEngine.mergeSystemPrompt(
+                    existing = baseSystemPrompt,
+                    tools = filteredTools.tools
+                )
+            )
+
+            // 仅主平台（index 0）驱动状态文案与引用，避免多平台互相覆盖
+            if (platformIndex == 0) {
+                setTurnPhase(turnIndex, ChatGenerationPhase.PREPARING)
+            }
+
+            workingUserMessages = injectMemoryIntoLastUserMessage(
+                userMessages = userMessages,
+                turnIndex = turnIndex,
+                updateUx = platformIndex == 0
+            )
+            // Phase 6.3：首轮 needsTools=false（保留 preferLocal/离线本地）；
+            // 仅当模型产出 tool_call 进入工具循环后，才强制 need_tools_cloud。
+            // 有注册工具 ≠ 本轮「需要」工具；否则 preferLocal 在有网时永远失效。
+            val routeDecision = runCatching {
+                inferenceRouteCoordinator.decide(needsTools = false)
+            }.getOrNull()
+            val useLocalGeneration =
+                routeDecision != null && ChatLocalFallback.isLocalGeneration(routeDecision)
+            if (platformIndex == 0) {
+                setTurnPhase(
+                    turnIndex,
+                    if (useLocalGeneration) {
+                        ChatGenerationPhase.GENERATING_LOCAL
+                    } else {
+                        ChatGenerationPhase.GENERATING
+                    }
+                )
+            }
+            // 本地不做 tool_call：路由到本地时跳过工具循环
+            var remainingRounds = if (useLocalGeneration) 0 else MAX_TOOL_ROUNDS
+            var pendingRevision = revisionToAppendOnSuccess
+            var markedStreamStart = false
+            // 工具 follow-up 轮：强制 needsTools → 云端
+            var needsToolsForRoute = false
+
             while (true) {
                 chatRepository.completeChat(
                     workingUserMessages,
@@ -744,10 +811,15 @@ class ChatViewModel @Inject constructor(
 
                 if (remainingRounds <= 0) break
 
-                val toolRound = toolCallEngine.processAssistantReply(
-                    assistantText = assistantText,
-                    allowedToolNames = allowedToolNames
-                ) ?: break
+                val toolRound = runCatching {
+                    toolCallEngine.processAssistantReply(
+                        assistantText = assistantText,
+                        allowedToolNames = allowedToolNames
+                    )
+                }.getOrElse { toolErr ->
+                    android.util.Log.w("ChatViewModel", "processAssistantReply failed", toolErr)
+                    null
+                } ?: break
 
                 if (platformIndex == 0) {
                     setTurnPhase(turnIndex, ChatGenerationPhase.CALLING_TOOLS)
@@ -816,8 +888,22 @@ class ChatViewModel @Inject constructor(
                 }
             }
         } catch (t: Throwable) {
+            if (t is CancellationException) throw t
             recordedError = true
-            throw t
+            // 绝不再 throw：viewModelScope 未捕获异常会杀死进程，UI 无 toast
+            surfaceSendFailure(
+                t,
+                phase = "runChatWithTools",
+                turnIndex = turnIndex,
+                platformIndex = platformIndex
+            )
+            lastAssistantText = _groupedMessages.value
+                .assistantMessages
+                .getOrNull(turnIndex)
+                ?.getOrNull(platformIndex)
+                ?.content
+                .orEmpty()
+                .ifBlank { lastAssistantText }
         } finally {
             recordChatTurnStats(
                 platform = platform,
@@ -839,9 +925,55 @@ class ChatViewModel @Inject constructor(
                     )
                 )
             }
-            _loadingStates.update {
-                it.toMutableList().apply { this[platformIndex] = LoadingState.Idle }
+            _loadingStates.update { states ->
+                if (platformIndex !in states.indices) {
+                    List(enabledPlatformsInChat.size.coerceAtLeast(1)) { LoadingState.Idle }
+                } else {
+                    states.toMutableList().apply { this[platformIndex] = LoadingState.Idle }
+                }
             }
+        }
+    }
+
+    /**
+     * 发送/生成失败的统一出口：写助手气泡错误 + Toast 提示，**不**再向外抛。
+     * 防止协程未捕获异常导致进程静默退出、界面无任何反馈。
+     */
+    private fun surfaceSendFailure(
+        t: Throwable,
+        phase: String,
+        turnIndex: Int? = null,
+        platformIndex: Int? = null
+    ) {
+        val message = ChatSendFailureLogic.userVisibleMessage(t)
+        android.util.Log.e("ChatViewModel", "chat send failed at $phase", t)
+
+        val resolvedTurn = turnIndex
+            ?: _groupedMessages.value.assistantMessages.lastIndex.takeIf { it >= 0 }
+        val resolvedPlatform = platformIndex ?: 0
+
+        if (resolvedTurn != null && resolvedTurn >= 0) {
+            _groupedMessages.update { grouped ->
+                updateAssistantSlot(
+                    groupedMessages = grouped,
+                    turnIndex = resolvedTurn,
+                    platformIndex = resolvedPlatform
+                ) { current ->
+                    current.copy(
+                        content = buildAssistantErrorContent(current.content, message),
+                        createdAt = currentTimeStamp
+                    )
+                }
+            }
+        }
+
+        _attachmentNotice.update { ChatSendFailureLogic.toastMessage(message) }
+        _loadingStates.update { states ->
+            ChatSendFailureLogic.nextLoadingStates(
+                current = states,
+                platformIndex = resolvedPlatform,
+                platformCount = enabledPlatformsInChat.size
+            )
         }
     }
 
@@ -947,65 +1079,74 @@ class ChatViewModel @Inject constructor(
      * - **不**因此把 needsTools 置 true（首轮仍 preferLocal）
      */
     private suspend fun resolvePersonaFilteredTools(): PersonaFilteredTools {
-        val smartConfig = runCatching { smartCapabilitiesSettings.getConfig() }
-            .getOrDefault(com.lanxin.android.builtin.capabilities.domain.SmartCapabilitiesConfig())
-        val master = smartConfig.masterEnabled
-        val webSearchConfig = runCatching { webSearchSettings.getConfig() }
-            .getOrDefault(com.lanxin.android.builtin.platform.domain.WebSearchConfig())
-        val deviceSensingConfig = runCatching { deviceSensingSettings.getConfig() }
-            .getOrDefault(com.lanxin.android.builtin.platform.domain.DeviceSensingConfig())
-        val locationConfig = runCatching { locationSettings.getConfig() }
-            .getOrDefault(com.lanxin.android.builtin.capabilities.domain.LocationConfig())
-        val afterWebSearch = com.lanxin.android.builtin.platform.domain.WebSearchGate.filterTools(
-            tools = toolCallEngine.getRegisteredTools(),
-            config = webSearchConfig,
-            masterEnabled = master && smartConfig.webSearchEnabled
-        )
-        val afterDevice = com.lanxin.android.builtin.platform.domain.DeviceSensingGate.filterTools(
-            tools = afterWebSearch,
-            config = deviceSensingConfig,
-            masterEnabled = master && smartConfig.deviceSensingEnabled
-        )
-        val afterLocation = com.lanxin.android.builtin.capabilities.domain.LocationGate.filterTools(
-            tools = afterDevice,
-            smart = smartConfig,
-            location = locationConfig
-        )
-        val locationPrefsOpen = com.lanxin.android.builtin.capabilities.domain.LocationGate.isPrefsOpen(
-            smartConfig,
-            locationConfig
-        )
-        val webOn = com.lanxin.android.builtin.platform.domain.WebSearchGate.isEnabled(
-            webSearchConfig,
-            master && smartConfig.webSearchEnabled
-        )
-        val gatedTools = com.lanxin.android.builtin.navigate.domain.NavigateGate.filterTools(
-            tools = afterLocation,
-            masterEnabled = master,
-            locationPrefsOpen = locationPrefsOpen,
-            webSearchEnabled = webOn
-        )
-        val persona = runCatching { personaRepository.getCurrent() }.getOrNull()
-        if (persona == null || (persona.tools == null && persona.skills == null)) {
-            // 无人格限制：仅从 prompt 去掉关着的门闸工具；执行侧 PlatformPlugin 再拦一次
-            return PersonaFilteredTools(
-                tools = gatedTools,
-                allowedNames = null
+        return runCatching {
+            val smartConfig = runCatching { smartCapabilitiesSettings.getConfig() }
+                .getOrDefault(com.lanxin.android.builtin.capabilities.domain.SmartCapabilitiesConfig())
+            val master = smartConfig.masterEnabled
+            val webSearchConfig = runCatching { webSearchSettings.getConfig() }
+                .getOrDefault(com.lanxin.android.builtin.platform.domain.WebSearchConfig())
+            val deviceSensingConfig = runCatching { deviceSensingSettings.getConfig() }
+                .getOrDefault(com.lanxin.android.builtin.platform.domain.DeviceSensingConfig())
+            val locationConfig = runCatching { locationSettings.getConfig() }
+                .getOrDefault(com.lanxin.android.builtin.capabilities.domain.LocationConfig())
+            // 快照：避免插件热加载时 ConcurrentModification 把发送打崩
+            val registeredTools = runCatching {
+                toolCallEngine.getRegisteredTools()
+            }.getOrDefault(emptyList())
+            val afterWebSearch = com.lanxin.android.builtin.platform.domain.WebSearchGate.filterTools(
+                tools = registeredTools,
+                config = webSearchConfig,
+                masterEnabled = master && smartConfig.webSearchEnabled
             )
+            val afterDevice = com.lanxin.android.builtin.platform.domain.DeviceSensingGate.filterTools(
+                tools = afterWebSearch,
+                config = deviceSensingConfig,
+                masterEnabled = master && smartConfig.deviceSensingEnabled
+            )
+            val afterLocation = com.lanxin.android.builtin.capabilities.domain.LocationGate.filterTools(
+                tools = afterDevice,
+                smart = smartConfig,
+                location = locationConfig
+            )
+            val locationPrefsOpen = com.lanxin.android.builtin.capabilities.domain.LocationGate.isPrefsOpen(
+                smartConfig,
+                locationConfig
+            )
+            val webOn = com.lanxin.android.builtin.platform.domain.WebSearchGate.isEnabled(
+                webSearchConfig,
+                master && smartConfig.webSearchEnabled
+            )
+            val gatedTools = com.lanxin.android.builtin.navigate.domain.NavigateGate.filterTools(
+                tools = afterLocation,
+                masterEnabled = master,
+                locationPrefsOpen = locationPrefsOpen,
+                webSearchEnabled = webOn
+            )
+            val persona = runCatching { personaRepository.getCurrent() }.getOrNull()
+            if (persona == null || (persona.tools == null && persona.skills == null)) {
+                // 无人格限制：仅从 prompt 去掉关着的门闸工具；执行侧 PlatformPlugin 再拦一次
+                return@runCatching PersonaFilteredTools(
+                    tools = gatedTools,
+                    allowedNames = null
+                )
+            }
+            val knownSkills = runCatching {
+                skillEngine.getSkills().map { it.name }.toSet()
+            }.getOrDefault(emptySet())
+            val filtered = PersonaCapabilityFilter.filterTools(
+                tools = gatedTools,
+                allowedTools = persona.tools,
+                allowedSkills = persona.skills,
+                knownSkillNames = knownSkills
+            )
+            PersonaFilteredTools(
+                tools = filtered,
+                allowedNames = filtered.map { it.name }.toSet()
+            )
+        }.getOrElse { t ->
+            android.util.Log.w("ChatViewModel", "resolvePersonaFilteredTools failed, continue without tools", t)
+            PersonaFilteredTools(tools = emptyList(), allowedNames = null)
         }
-        val knownSkills = runCatching {
-            skillEngine.getSkills().map { it.name }.toSet()
-        }.getOrDefault(emptySet())
-        val filtered = PersonaCapabilityFilter.filterTools(
-            tools = gatedTools,
-            allowedTools = persona.tools,
-            allowedSkills = persona.skills,
-            knownSkillNames = knownSkills
-        )
-        return PersonaFilteredTools(
-            tools = filtered,
-            allowedNames = filtered.map { it.name }.toSet()
-        )
     }
 
     private data class PersonaFilteredTools(
@@ -1236,16 +1377,21 @@ class ChatViewModel @Inject constructor(
     }
 
     private fun sendQuestion(questionText: String, attachments: List<ChatAttachmentDraft>) {
-        MessageV2(
-            chatId = chatRoomId,
-            content = questionText,
-            attachments = attachments.mapNotNull { it.attachment },
-            platformType = null,
-            createdAt = currentTimeStamp
-        ).let { addMessage(it) }
-        question.clearText()
-        clearSelectedFiles()
-        completeChat()
+        try {
+            MessageV2(
+                chatId = chatRoomId,
+                content = questionText,
+                attachments = attachments.mapNotNull { it.attachment },
+                platformType = null,
+                createdAt = currentTimeStamp
+            ).let { addMessage(it) }
+            question.clearText()
+            clearSelectedFiles()
+            completeChat()
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            surfaceSendFailure(t, phase = "sendQuestion")
+        }
     }
 
     private fun rejectDraftAttachment(
@@ -1348,7 +1494,16 @@ class ChatViewModel @Inject constructor(
                 if (chatRoomId == 0) {
                     ChatRoomV2(id = 0, title = "Untitled Chat", enabledPlatform = enabledPlatformsInChat)
                 } else {
-                    chatRepository.fetchChatListV2().first { it.id == chatRoomId }
+                    runCatching {
+                        chatRepository.fetchChatListV2().first { it.id == chatRoomId }
+                    }.getOrElse { t ->
+                        android.util.Log.w("ChatViewModel", "fetchChatRoom failed for id=$chatRoomId", t)
+                        ChatRoomV2(
+                            id = chatRoomId,
+                            title = "Untitled Chat",
+                            enabledPlatform = enabledPlatformsInChat
+                        )
+                    }
                 }
             }
         }
