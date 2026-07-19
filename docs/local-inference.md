@@ -104,11 +104,14 @@ ChatRepositoryImpl.completeChat(..., needsTools)
 
 ## 产品方案（已定）
 
-### 总开关
+### 总开关（产品硬约束）
 
-- `local_inference_enabled` **默认 `false`**
-- 关闭：不加载 native/so、不占模型内存、不初始化引擎
-- 开启：才 load 模型；关闭时立即 unload
+- **保留独立开关**，勿与其它「智能能力」合并或删除
+- `local_inference_enabled` **默认 `false`**（**不**抬成默认 ON）
+- 关闭：不加载 native/so、不占模型内存、不初始化引擎；关闭时立即 unload
+- 开启 + 路径/资源就绪：设置页 **自动 `engine.load`**；对话路径 `DefaultLocalInferenceProvider` 调用前也会 auto-load
+- 路径空 / load 失败：明确 snackbar 或 `ApiState.Error`（引导一键下载/导入）
+- 路径回落 / heal：桌宠设置 `healModelPathsIfNeeded` 探测 `LanXin/models/local-llm/light/` 并回写 DataStore
 
 ### 模型分档（用户自备路径，不进插件市场）
 
@@ -239,3 +242,13 @@ docs/local-inference.md   ← 本文
   --tests "com.lanxin.android.builtin.localinference.*" \
   --tests "com.lanxin.android.data.repository.ChatRepositoryImplTest"
 ```
+
+覆盖要点（#106 本地脑链路）：
+
+| 用例 | 断言 |
+|------|------|
+| `LocalInferenceConfigTest` / `DefaultLocalInferenceProviderTest` | **默认 `enabled=false`** |
+| `DefaultLocalInferenceProviderTest` · disabled | 明确「未启用」错误，不 load |
+| 同上 · path empty | 明确「路径为空」 |
+| 同上 · enabled + stub path | **auto-load** → Success |
+| `StubLocalLlmEngineTest` / `MnnLocalLlmEngineTest` | load 契约（disabled / empty / ready） |

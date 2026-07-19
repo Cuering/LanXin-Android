@@ -74,12 +74,18 @@ App **自动创建**统一 `LanXin/` 目录树（启动/进入资源设置时 `D
 
 #### 模型开关与路径
 
-| 能力 | 开关打开后 | 路径空/失效 |
-|------|-----------|------------|
-| ASR | **自动 `engine.load`**；调用前 `VoiceInputCoordinator` 也会 auto-load | 明确 snackbar：请一键下载/导入 |
-| 本地脑 | **自动 `engine.load`**；`DefaultLocalInferenceProvider` 调用前 load | 明确错误文案 |
-| TTS | 桌宠启用/会话时 load | 无路径仍可 stub 字幕 |
-| 路径解析 | 配置失效时探测 `openSourceBaseDir` 下 `LanXin/…` 并 **heal 回写** DataStore | 避免「开关开了找不到模型」 |
+| 能力 | 默认 | 开关打开后 | 路径空/失效 |
+|------|------|-----------|------------|
+| ASR | **OFF** | **自动 `engine.load`**；调用前 `VoiceInputCoordinator` 也会 auto-load | 明确 snackbar：请一键下载/导入 |
+| **本地脑** | **OFF**（**保留独立开关**，不抬默认 ON、不合并掉） | **自动 `engine.load`**；`DefaultLocalInferenceProvider` 调用前也会 load | 明确错误文案（路径空/load 失败） |
+| TTS | **OFF** | 桌宠启用/会话时 load | 无路径仍可 stub 字幕 |
+| 路径解析 | — | 配置失效时探测 `openSourceBaseDir` 下 `LanXin/…` 并 **heal 回写** DataStore | 避免「开关开了找不到模型」 |
+
+**本地脑产品约束（收口 #106）**：
+
+1. **保留独立开关** `local_inference_enabled`（设置页「本地推理」），后续智能能力整合也**勿合并/勿删除**。
+2. **默认关**：与「其它能力大多可默认开」区分；未显式打开时不 load native、不占模型内存。
+3. **打开可 load**：开关 ON + 路径/资源就绪 → `engine.load` 真生效；路径空 / load 失败有明确提示；路径回落 + heal 仍保留。
 
 
 实现要点：
@@ -156,12 +162,14 @@ bash scripts/download-debug-tts.sh
 
 | Key | 说明 |
 |-----|------|
-| `local_inference_model_path` | 默认选型 **Qwen2.5-1.5B-Instruct**（MNN 量化） |
+| `local_inference_enabled` | **默认 `false`**；独立开关，打开后 auto-load |
+| `local_inference_model_path` | 默认选型 **Qwen2.5-1.5B-Instruct**（MNN 量化）；可空直至下载/导入 |
 | 一键下载落盘 | `LanXin/models/local-llm/light/`（含 `llm.mnn` / `llm.mnn.weight` / tokenizer 等） |
 | 源序 | ModelScope（含 www）→ hf-mirror → HuggingFace |
 | 下载超时 | 独立 `KtorAssetDownloadTransport`（OkHttp）：connect 90s / socket 5min / request=`INFINITE_TIMEOUT_MS`（**禁止** `0`，Ktor 3.5 会直接抛并被误标 Timeout） |
 | 可恢复 | `*.part` + HTTP `Range` 续传；超时/断连自动重试（最多 3 次）；多文件跳过已下完项 |
 | 失败提示 | 各源错误聚合；可 Wi‑Fi 重试或电脑放到 `LanXin/models/local-llm/light/` |
+| 开关行为 | ON → `LocalInferenceViewModel.setEnabled` / Provider 调用前 `engine.load`；路径空 snackbar/Error；路径失效由桌宠设置 `healModelPathsIfNeeded` 回写 |
 
 详见 [`local-inference.md`](./local-inference.md)。
 
