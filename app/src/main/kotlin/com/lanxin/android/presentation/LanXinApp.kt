@@ -78,7 +78,7 @@ class LanXinApp : Application(), Configuration.Provider {
         // 再按 Claw 配置同步常驻（默认关，不拉服务）
         appScope.launch {
             runCatching { smartCapabilitiesSettings.ensureMigrated() }
-                .onFailure { log.warn("smart capabilities migrate: ${it.message}") }
+                .onFailure { log.warning("smart capabilities migrate: ${it.message}") }
             pluginManager.loadAll()
             val dynamic = pluginManager.discoverAndLoadDynamicPlugins()
             if (dynamic.total > 0) {

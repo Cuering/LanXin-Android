@@ -44,7 +44,10 @@ class DeviceToolBridge @Inject constructor(
     private val intentResolver: DeviceToolIntentResolver
 ) {
 
-    private val gate = DeviceToolGate { settings.getConfig() }
+    // named：避免 trailing lambda 绑到最后的 smartMasterProvider
+    private val gate = DeviceToolGate(
+        configProvider = { settings.getConfig() }
+    )
 
     fun listToolNames(): Set<String> = registry.names()
 
