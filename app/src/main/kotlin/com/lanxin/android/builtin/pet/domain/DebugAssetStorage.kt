@@ -23,7 +23,10 @@ import java.io.File
 /**
  * Debug 资源落盘根目录解析。
  *
- * 优先公共共享存储下的 `LanXin/`（文件管理器易见），
+ * **自动建统一可访问目录**：解析时确保 `LanXin/` 与标准子目录
+ *（live2d / asr / tts / models / backgrounds / music）存在，文件管理器可直接打开。
+ *
+ * 优先公共共享存储下的 `LanXin/`（或 `Documents/LanXin/`），
  * 写失败时回退到 `getExternalFilesDir()/LanXin/`（仍比内部 filesDir 更易访问）。
  *
  * 不申请 MANAGE_EXTERNAL_STORAGE；仅最小必要尝试 + 优雅回退。
@@ -32,6 +35,7 @@ import java.io.File
  * **必须**把下载结果镜像到公共树，失败要可见，避免 UI 显示「已授权」却只落私有目录。
  *
  * @see LanXinSafTree
+ * @see docs/debug-assets.md
  */
 object DebugAssetStorage {
 
@@ -55,7 +59,9 @@ object DebugAssetStorage {
         /**
          * 最近一次镜像结果说明（成功/失败/跳过）；供 UI snackbar 展示，避免静默。
          */
-        val lastMirrorNote: String = ""
+        val lastMirrorNote: String = "",
+        /** 已确保的标准子目录个数（相对 [lanXinDir]）。 */
+        val structureDirCount: Int = 0
     ) {
         /** 公共 File 可写，或 SAF 树可写。 */
         val publicWritable: Boolean get() = !usedFallback || safWritable
@@ -66,35 +72,42 @@ object DebugAssetStorage {
     }
 
     /**
-     * 解析下载根。
+     * 解析下载根，并 **自动创建** `LanXin/` 标准子目录。
      * - 优先：`Environment.getExternalStorageDirectory()/LanXin`（File 直写）
+     * - 其次：`…/Documents/LanXin`（标准文档树，文件管理器更易发现）
      * - 回退：`context.getExternalFilesDir(null)/LanXin`
      * - 再回退：`context.filesDir/LanXin`（极少）
      * - 叠加：DataStore 中的 SAF 树 Uri（[LanXinSafTree.PREFS_KEY] 由调用方传入）
+     * - 若 SAF 可写：同步在公共树下创建同样子目录骨架
      *
      * 注意：SAF 授权**不会**把 [baseDir] 改成 content Uri（引擎要 File 路径），
      * 但 [shouldMirrorToSaf] 为 true 时下载完成后必须镜像到公共树。
      */
     fun resolve(context: Context, safTreeUri: String? = null): Root {
         val probe = LanXinSafTree.probe(context, safTreeUri)
-        val publicBase = Environment.getExternalStorageDirectory()
-        if (publicBase != null) {
-            val publicLanXin = File(publicBase, DebugOpenSourcePaths.ROOT_DIR)
-            if (ensureWritableDir(publicLanXin)) {
+
+        // 公共 File 候选：根 LanXin → Documents/LanXin
+        for (candidate in publicLanXinCandidates()) {
+            if (ensureWritableDir(candidate.lanXinDir)) {
+                val structureCount = ensureLanXinStructure(candidate.lanXinDir)
+                // SAF 可写时也在公共树建骨架（用户文件管理器看到空目录即可知布局）
+                if (probe.writable) {
+                    LanXinSafTree.ensureStructure(context, probe.treeUri)
+                }
                 return Root(
-                    baseDir = publicBase,
-                    lanXinDir = publicLanXin,
+                    baseDir = candidate.baseDir,
+                    lanXinDir = candidate.lanXinDir,
                     usedFallback = false,
-                    // 公共 File 可写：展示真实公共路径；SAF 仅作补充标记
                     displayPath = if (probe.writable) {
-                        "${publicLanXin.absolutePath}（公共可写）"
+                        "${candidate.lanXinDir.absolutePath}（公共可写）"
                     } else {
-                        publicLanXin.absolutePath
+                        candidate.lanXinDir.absolutePath
                     },
                     safTreeUri = probe.treeUri,
                     safGranted = probe.granted,
                     safWritable = probe.writable,
-                    safDisplayLabel = probe.displayLabel
+                    safDisplayLabel = probe.displayLabel,
+                    structureDirCount = structureCount
                 )
             }
         }
@@ -103,13 +116,18 @@ object DebugAssetStorage {
         if (externalFiles != null) {
             val fallbackLanXin = File(externalFiles, DebugOpenSourcePaths.ROOT_DIR)
             if (ensureWritableDir(fallbackLanXin)) {
+                val structureCount = ensureLanXinStructure(fallbackLanXin)
+                if (probe.writable) {
+                    LanXinSafTree.ensureStructure(context, probe.treeUri)
+                }
                 // 授权可写时明确告知：引擎写 App 私有，完成后会镜像到公共树
                 val display = when {
                     probe.writable ->
                         "引擎：${fallbackLanXin.absolutePath} → 镜像公共 ${probe.displayLabel}"
                     probe.granted ->
                         "引擎：${fallbackLanXin.absolutePath}（SAF 已授权但不可写：${probe.displayLabel}）"
-                    else -> fallbackLanXin.absolutePath
+                    else ->
+                        "${fallbackLanXin.absolutePath}（公共不可写，已自动建 App 内 LanXin/ 骨架；可授权公共目录）"
                 }
                 return Root(
                     baseDir = externalFiles,
@@ -119,7 +137,8 @@ object DebugAssetStorage {
                     safTreeUri = probe.treeUri,
                     safGranted = probe.granted,
                     safWritable = probe.writable,
-                    safDisplayLabel = probe.displayLabel
+                    safDisplayLabel = probe.displayLabel,
+                    structureDirCount = structureCount
                 )
             }
         }
@@ -127,6 +146,10 @@ object DebugAssetStorage {
         val internalBase = context.filesDir
         val last = File(internalBase, DebugOpenSourcePaths.ROOT_DIR)
         last.mkdirs()
+        val structureCount = ensureLanXinStructure(last)
+        if (probe.writable) {
+            LanXinSafTree.ensureStructure(context, probe.treeUri)
+        }
         val display = when {
             probe.writable ->
                 "引擎：${last.absolutePath} → 镜像公共 ${probe.displayLabel}"
@@ -140,20 +163,71 @@ object DebugAssetStorage {
             safTreeUri = probe.treeUri,
             safGranted = probe.granted,
             safWritable = probe.writable,
-            safDisplayLabel = probe.displayLabel
+            safDisplayLabel = probe.displayLabel,
+            structureDirCount = structureCount
         )
     }
 
-    /** 单测 / 无 Context：直接把 [baseDir] 当作下载 base。 */
+    /** 单测 / 无 Context：直接把 [baseDir] 当作下载 base，并建标准子目录。 */
     fun fromBaseDir(baseDir: File): Root {
         val lanXin = File(baseDir, DebugOpenSourcePaths.ROOT_DIR)
         lanXin.mkdirs()
+        val structureCount = ensureLanXinStructure(lanXin)
         return Root(
             baseDir = baseDir,
             lanXinDir = lanXin,
             usedFallback = false,
-            displayPath = lanXin.absolutePath
+            displayPath = lanXin.absolutePath,
+            structureDirCount = structureCount
         )
+    }
+
+    /**
+     * 确保 `LanXin/` 下标准子目录存在（幂等）。
+     * @return 成功存在的子目录个数
+     */
+    fun ensureLanXinStructure(lanXinDir: File): Int {
+        if (!lanXinDir.exists() && !lanXinDir.mkdirs()) return 0
+        if (!lanXinDir.isDirectory) return 0
+        var count = 0
+        for (rel in DebugOpenSourcePaths.STANDARD_SUBDIRS) {
+            val dir = File(lanXinDir, rel)
+            try {
+                if (dir.isDirectory || dir.mkdirs()) {
+                    count++
+                }
+            } catch (_: Throwable) {
+                // 单目录失败不阻断其它
+            }
+        }
+        return count
+    }
+
+    /**
+     * 公共 File 候选（按优先级）：
+     * 1. `{external}/LanXin` → baseDir=external，relativeReadyPath=`LanXin/...`
+     * 2. `{external}/Documents/LanXin` → baseDir=Documents，relative 同为 `LanXin/...`
+     *
+     * [PublicCandidate.baseDir] 始终是 `LanXin` 的父目录，保证
+     * `File(baseDir, "LanXin/asr/…")` 与 [lanXinDir] 一致。
+     */
+    data class PublicCandidate(val baseDir: File, val lanXinDir: File)
+
+    fun publicLanXinCandidates(
+        externalRoot: File? = Environment.getExternalStorageDirectory()
+    ): List<PublicCandidate> {
+        if (externalRoot == null) return emptyList()
+        val rootName = DebugOpenSourcePaths.ROOT_DIR
+        val direct = PublicCandidate(
+            baseDir = externalRoot,
+            lanXinDir = File(externalRoot, rootName)
+        )
+        val documents = File(externalRoot, Environment.DIRECTORY_DOCUMENTS)
+        val underDocs = PublicCandidate(
+            baseDir = documents,
+            lanXinDir = File(documents, rootName)
+        )
+        return listOf(direct, underDocs)
     }
 
     /**

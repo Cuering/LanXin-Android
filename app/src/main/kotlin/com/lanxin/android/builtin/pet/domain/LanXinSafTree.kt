@@ -43,7 +43,8 @@ object LanXinSafTree {
 
     /** 用户提示：在系统文件选择器中创建/选中 LanXin 文件夹。 */
     const val GRANT_HINT =
-        "请选择或新建「LanXin」文件夹并允许访问；之后下载/背景可同步到公共目录。"
+        "请选择或新建「LanXin」文件夹并允许访问；App 会自动建 live2d/asr/tts/models 等子目录，" +
+            "之后下载与相关资源都落在该树下（文件管理器可见）。"
 
     data class Probe(
         val granted: Boolean,
@@ -196,6 +197,26 @@ object LanXinSafTree {
         } catch (_: Exception) {
             null
         }
+    }
+
+    /**
+     * 在 SAF 树根下创建标准子目录骨架（live2d / asr / tts / models…）。
+     * 用户授权后即可在文件管理器看到统一 `LanXin/` 布局；幂等。
+     * @return 成功确保的子目录个数
+     */
+    fun ensureStructure(context: Context, treeUriString: String?): Int {
+        if (!isContentUri(treeUriString)) return 0
+        val treeUri = Uri.parse(treeUriString!!.trim())
+        var count = 0
+        for (rel in DebugOpenSourcePaths.STANDARD_SUBDIRS) {
+            try {
+                val id = ensureDirPath(context, treeUri, rel)
+                if (id != null) count++
+            } catch (_: Exception) {
+                // 单目录失败不阻断
+            }
+        }
+        return count
     }
 
     /**

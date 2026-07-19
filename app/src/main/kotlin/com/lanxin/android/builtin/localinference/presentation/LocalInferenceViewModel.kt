@@ -114,8 +114,8 @@ class LocalInferenceViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         snackbarMessage =
-                            "已启用本地脑，但模型路径为空。请到桌宠设置「一键下载本地脑」" +
-                                "或导入 llm.mnn 所在目录后再试。"
+                        "已启用本地脑，但模型路径为空。请到桌宠设置「一键下载本地脑」" +
+                            "或导入 llm.mnn 所在目录后再试。"
                     )
                 }
                 refresh()

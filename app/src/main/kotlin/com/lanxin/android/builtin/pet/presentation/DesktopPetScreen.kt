@@ -406,7 +406,7 @@ fun DesktopPetScreen(
                                 state.safWritable ->
                                     append(
                                         "已授权可写 · ${state.safDisplayLabel.ifBlank { "LanXin" }}" +
-                                            "（下载完成后同步到此）"
+                                            "（已建 live2d/asr/tts/models 骨架；下载完成后同步）"
                                     )
                                 state.safGranted ->
                                     append(
@@ -414,7 +414,10 @@ fun DesktopPetScreen(
                                             "（请重新选择可写的 LanXin 文件夹）"
                                     )
                                 else ->
-                                    append("未授权（下载落 App 私有；授权后可同步到公共目录）")
+                                    append(
+                                        "未授权（App 已自动建私有 LanXin/ 骨架；" +
+                                            "点下方授权公共 LanXin 后可在文件管理器看到模型）"
+                                    )
                             }
                         },
                         style = MaterialTheme.typography.bodySmall,

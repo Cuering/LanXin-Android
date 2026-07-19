@@ -96,4 +96,19 @@ class LanXinSafTreeTest {
             LanXinSafTree.mirrorRelativeKey(File(tmp.root, "out.txt").absolutePath, lanXin)
         )
     }
+
+    @Test
+    fun ensureStructure_blankUriReturnsZero() {
+        // 无 Context 的门控：非 content Uri 直接 0（不触 DocumentsContract）
+        // 此处只验 isContentUri 契约与 STANDARD_SUBDIRS 非空
+        assertFalse(LanXinSafTree.isContentUri(null))
+        assertFalse(LanXinSafTree.isContentUri(""))
+        assertTrue(com.lanxin.android.builtin.pet.domain.DebugOpenSourcePaths.STANDARD_SUBDIRS.isNotEmpty())
+        assertTrue(
+            com.lanxin.android.builtin.pet.domain.DebugOpenSourcePaths.STANDARD_SUBDIRS.contains("live2d")
+        )
+        assertTrue(
+            com.lanxin.android.builtin.pet.domain.DebugOpenSourcePaths.STANDARD_SUBDIRS.contains("models/local-llm/light")
+        )
+    }
 }

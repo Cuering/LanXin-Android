@@ -37,6 +37,28 @@ object DebugOpenSourcePaths {
     /** 历史落盘目录名（兼容旧路径识别）。 */
     const val LEGACY_ROOT_DIR = "debug-assets"
 
+    /**
+     * 统一资源子目录（相对 [ROOT_DIR]）。
+     * App 启动 / 进入资源设置时会自动创建，便于文件管理器直接看到模型与相关资源。
+     *
+     * 布局：
+     * ```
+     * LanXin/
+     *   live2d/   asr/   tts/   models/local-llm/light/
+     *   backgrounds/   music/
+     * ```
+     */
+    val STANDARD_SUBDIRS: List<String> = listOf(
+        "live2d",
+        "asr",
+        "tts",
+        "models",
+        "models/local-llm",
+        "models/local-llm/light",
+        "backgrounds",
+        "music"
+    )
+
     /** Live2D Mao model3（download-debug-live2d 默认大小写 Mao）。 */
     const val LIVE2D_MAO_MODEL3_REL = "$ROOT_DIR/live2d/Mao/Mao.model3.json"
 

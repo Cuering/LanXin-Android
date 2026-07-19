@@ -686,7 +686,7 @@ class DesktopPetViewModel @Inject constructor(
 
     /**
      * 用户 OpenDocumentTree 授权公共 LanXin 目录。
-     * 持久化读+写权限并写入 DataStore。
+     * 持久化读+写权限、写入 DataStore，并在树下自动创建标准子目录骨架。
      */
     fun grantLanXinSafTree(treeUriString: String) {
         viewModelScope.launch {
@@ -703,11 +703,28 @@ class DesktopPetViewModel @Inject constructor(
             val probe = withContext(Dispatchers.IO) {
                 LanXinSafTree.probe(app, treeUriString)
             }
+            // 授权成功后立刻在公共树建 live2d/asr/tts/models… 骨架
+            val structureCount = if (probe.writable) {
+                withContext(Dispatchers.IO) {
+                    LanXinSafTree.ensureStructure(app, treeUriString)
+                }
+            } else {
+                0
+            }
+            // 同步确保引擎 File 根下的骨架（回退路径）
+            withContext(Dispatchers.IO) {
+                val root = DebugAssetStorage.resolve(app, treeUriString)
+                DebugAssetStorage.ensureLanXinStructure(root.lanXinDir)
+            }
             petSettings.setLanXinSafTreeUri(treeUriString.trim())
             refresh()
             val msg = when {
-                probe.writable -> "已授权公共目录：${probe.displayLabel}"
-                else -> "已保存授权，但当前不可写：${probe.displayLabel}。请确认选中的是 LanXin 文件夹"
+                probe.writable && structureCount > 0 ->
+                    "已授权公共目录：${probe.displayLabel}，并建好 $structureCount 个子目录（文件管理器可见）"
+                probe.writable ->
+                    "已授权公共目录：${probe.displayLabel}"
+                else ->
+                    "已保存授权，但当前不可写：${probe.displayLabel}。请确认选中的是 LanXin 文件夹"
             }
             _uiState.update { it.copy(snackbarMessage = msg) }
         }
@@ -837,7 +854,7 @@ class DesktopPetViewModel @Inject constructor(
                                 safDisplayLabel = storageRoot.safDisplayLabel,
                                 safTreeUri = storageRoot.safTreeUri,
                                 snackbarMessage =
-                                    "${kind.name} 已保存到 $where（源：$src）$fallbackNote"
+                                "${kind.name} 已保存到 $where（源：$src）$fallbackNote"
                             )
                         }
                         refresh()

@@ -56,11 +56,49 @@ class DebugAssetStorageTest {
         assertTrue(root.publicWritable)
         assertFalse(root.shouldMirrorToSaf)
         assertFalse(DebugAssetStorage.shouldMirror(root))
+        // 自动建标准子目录
+        assertTrue(root.structureDirCount >= DebugOpenSourcePaths.STANDARD_SUBDIRS.size)
+        for (rel in DebugOpenSourcePaths.STANDARD_SUBDIRS) {
+            assertTrue(
+                "missing subdir $rel",
+                File(root.lanXinDir, rel).isDirectory
+            )
+        }
 
         val probe = File(root.lanXinDir, "probe.txt")
         probe.writeText("ok")
         assertTrue(probe.isFile)
         assertEquals("ok", probe.readText())
+    }
+
+    @Test
+    fun ensureLanXinStructure_idempotentAndCreatesAll() {
+        val lanXin = tmp.newFolder("LanXin")
+        val first = DebugAssetStorage.ensureLanXinStructure(lanXin)
+        assertEquals(DebugOpenSourcePaths.STANDARD_SUBDIRS.size, first)
+        val second = DebugAssetStorage.ensureLanXinStructure(lanXin)
+        assertEquals(DebugOpenSourcePaths.STANDARD_SUBDIRS.size, second)
+        assertTrue(File(lanXin, "live2d").isDirectory)
+        assertTrue(File(lanXin, "asr").isDirectory)
+        assertTrue(File(lanXin, "tts").isDirectory)
+        assertTrue(File(lanXin, "models/local-llm/light").isDirectory)
+        assertTrue(File(lanXin, "backgrounds").isDirectory)
+        assertTrue(File(lanXin, "music").isDirectory)
+    }
+
+    @Test
+    fun publicLanXinCandidates_rootThenDocuments() {
+        val external = tmp.newFolder("emulated0")
+        val candidates = DebugAssetStorage.publicLanXinCandidates(external)
+        assertEquals(2, candidates.size)
+        assertEquals(File(external, "LanXin").absolutePath, candidates[0].lanXinDir.absolutePath)
+        assertEquals(external.absolutePath, candidates[0].baseDir.absolutePath)
+        val docs = File(external, "Documents")
+        assertEquals(File(docs, "LanXin").absolutePath, candidates[1].lanXinDir.absolutePath)
+        assertEquals(docs.absolutePath, candidates[1].baseDir.absolutePath)
+        // relativeReadyPath 契约：baseDir + LanXin/... == lanXinDir 下
+        val ready = File(candidates[0].baseDir, "LanXin/asr/x")
+        assertTrue(ready.path.startsWith(candidates[0].lanXinDir.path))
     }
 
     /**

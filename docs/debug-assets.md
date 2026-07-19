@@ -42,27 +42,35 @@
 
 ### 落盘路径（用户可访问）
 
+App **自动创建**统一 `LanXin/` 目录树（启动/进入资源设置时 `DebugAssetStorage.resolve`），
+用户不必手建文件夹；模型 / ASR / TTS / 本地脑 / 背景 / 音乐都落在该树下。
+
 | 优先级 | 路径 | 说明 |
 |:------:|------|------|
 | **1** | `{外部存储}/LanXin/` | 如 `/storage/emulated/0/LanXin/`；文件管理器易见（File 直写） |
+| **1b** | `{外部存储}/Documents/LanXin/` | 根 `LanXin` 不可写时尝试标准文档树 |
 | 2 | `Android/data/com.lanxin.android/files/LanXin/` | 公共目录不可写时回退（`getExternalFilesDir`） |
-| **SAF** | 用户 OpenDocumentTree 授权的公共 `LanXin/` | 设置页「授权公共 LanXin」；**引擎仍写 File 路径**，下载完成后**镜像**到 SAF 树 |
-| 子目录 | `live2d/<模型名>/` · `asr/…` · `tts/…` · `models/local-llm/light/` | 相对 `LanXin/`；Live2D 以目录内 `*.model3.json` 为准 |
+| **SAF** | 用户 OpenDocumentTree 授权的公共 `LanXin/` | 设置页「授权公共 LanXin」；**引擎仍写 File 路径**，下载完成后**镜像**到 SAF 树；授权时同步建子目录骨架 |
+| 子目录 | `live2d/` · `asr/` · `tts/` · `models/local-llm/light/` · `backgrounds/` · `music/` | 相对 `LanXin/`；Live2D 以目录内 `*.model3.json` 为准 |
 | 兼容 | 历史 `filesDir/debug-assets/live2d/` | 仍可被路径解析与模型列表识别 |
 
 成功下载后 UI 展示「已保存到 <绝对路径>」；若走了回退且 SAF 可写，会追加镜像结果（成功/失败均可见，**禁止静默**）。
+
+文件管理器打开路径示例：`内部存储/LanXin/` 或 `内部存储/Documents/LanXin/`，可见 `live2d` / `asr` / `tts` / `models` 等空目录（下载后才有文件）。
 
 #### SAF 授权与写入契约
 
 | 状态 | 下载主路径 | 公共目录 | UI |
 |------|-----------|---------|-----|
-| 公共 File 可写 | `{sdcard}/LanXin/` | 同左 | 显示真实公共路径 |
-| 回退 + **未**授权 SAF | `getExternalFilesDir()/LanXin/` | 无 | 「未授权」+ 私有路径 |
-| 回退 + SAF 可写 | 引擎仍写 App 私有 | **下载完成后镜像**到 SAF 树 | 「已授权可写 · 镜像…」；失败 snackbar 可见 |
+| 公共 File 可写 | `{sdcard}/LanXin/` 或 `Documents/LanXin/` | 同左；**自动建子目录** | 显示真实公共路径 |
+| 回退 + **未**授权 SAF | `getExternalFilesDir()/LanXin/`（已自动建骨架） | 无 | 「未授权」+ 私有路径；引导授权公共 `LanXin` |
+| 回退 + SAF 可写 | 引擎仍写 App 私有 | **下载完成后镜像**到 SAF 树；授权时已建子目录 | 「已授权可写 · 镜像…」；失败 snackbar 可见 |
 | 回退 + SAF 已授权但不可写 | App 私有 | 无镜像 | 「已授权但不可写」+ 提示重选 |
 | 清除授权 | 回退私有 | 停止镜像 | 「已清除」 |
 
-实现：`LanXinSafTree` · `DebugAssetStorage.shouldMirror` / `mirrorReadyPathToSaf` · `DesktopPetViewModel.grantLanXinSafTree`。
+**禁止**静默只写私有却显示「已授权公共」。
+
+实现：`DebugOpenSourcePaths.STANDARD_SUBDIRS` · `DebugAssetStorage.ensureLanXinStructure` / `publicLanXinCandidates` · `LanXinSafTree.ensureStructure` · `shouldMirror` / `mirrorReadyPathToSaf` · `DesktopPetViewModel.grantLanXinSafTree`。
 
 #### 模型开关与路径
 

@@ -118,7 +118,7 @@ class VoiceAsrViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         snackbarMessage =
-                            "已启用 ASR，但模型路径为空。请到桌宠设置「一键下载 ASR」或导入模型目录后再试。"
+                        "已启用 ASR，但模型路径为空。请到桌宠设置「一键下载 ASR」或导入模型目录后再试。"
                     )
                 }
                 refresh()
