@@ -350,4 +350,8 @@
     <string name="model_list_error_no_models">No models returned</string>
     <string name="model_list_error_empty_body">Empty response body</string>
     <string name="model_list_error_network">Network error (URL / connectivity)</string>
+    <string name="chat_mic_start">Start voice input</string>
+    <string name="chat_mic_stop">Stop listening</string>
+    <string name="chat_mic_listening">Listening… tap mic to stop</string>
+    <string name="chat_mic_transcribing">Transcribing…</string>
 </resources>

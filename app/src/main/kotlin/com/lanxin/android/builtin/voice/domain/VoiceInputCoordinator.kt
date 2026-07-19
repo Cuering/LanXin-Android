@@ -24,8 +24,8 @@ import javax.inject.Singleton
  *
  * 边界：只产出文本，交给现有发送消息链路；不实现 tool_call，不阻塞 ChatRouter。
  *
- * Phase 6.4 P0：提供 [transcribePcm] 与 [previewStatus]；
- * Chat「按住说话」UI 可后置，通过本 API 接入。
+ * Phase 6.4 P0：提供 [transcribePcm] 与 [previewStatus]。
+ * Chat 麦克风听写通过 [ChatMicSession] 接入本 API（转写填入输入框，不自动发送）。
  */
 @Singleton
 class VoiceInputCoordinator @Inject constructor(

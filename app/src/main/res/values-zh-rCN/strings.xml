@@ -282,4 +282,8 @@
     <string name="model_list_error_no_models">未返回任何模型</string>
     <string name="model_list_error_empty_body">响应体为空</string>
     <string name="model_list_error_network">网络错误（URL / 连通性）</string>
+    <string name="chat_mic_start">开始语音输入</string>
+    <string name="chat_mic_stop">停止听写</string>
+    <string name="chat_mic_listening">正在听写…再点麦克风结束</string>
+    <string name="chat_mic_transcribing">识别中…</string>
 </resources>

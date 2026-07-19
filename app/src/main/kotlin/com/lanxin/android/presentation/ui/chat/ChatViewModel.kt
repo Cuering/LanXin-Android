@@ -17,6 +17,8 @@ import com.lanxin.android.builtin.statistics.domain.ChatTurnStatEvent
 import com.lanxin.android.builtin.statistics.domain.ProviderStat
 import com.lanxin.android.builtin.statistics.domain.StatisticsRepository
 import com.lanxin.android.builtin.unifiedsearch.domain.UnifiedSearchService
+import com.lanxin.android.builtin.voice.domain.ChatMicSession
+import com.lanxin.android.builtin.voice.domain.ChatMicUiState
 import com.lanxin.android.data.repository.SettingRepository
 import com.lanxin.android.plugin.ToolCallEngine
 import com.lanxin.android.plugin.ToolDef
@@ -44,6 +46,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -66,7 +69,8 @@ class ChatViewModel @Inject constructor(
     private val skillEngine: SkillEngine,
     private val inferenceRouteCoordinator: InferenceRouteCoordinator,
     private val webSearchSettings: com.lanxin.android.builtin.platform.domain.WebSearchSettings,
-    private val deviceSensingSettings: com.lanxin.android.builtin.platform.domain.DeviceSensingSettings
+    private val deviceSensingSettings: com.lanxin.android.builtin.platform.domain.DeviceSensingSettings,
+    private val chatMicSession: ChatMicSession
 ) : ViewModel() {
     sealed class LoadingState {
         data object Idle : LoadingState()
@@ -123,6 +127,9 @@ class ChatViewModel @Inject constructor(
     val enabledPlatformsInApp = _enabledPlatformsInApp.asStateFlow()
 
     val question = TextFieldState()
+
+    /** 主聊天麦克风听写 UI（复用 Voice/ASR 链路）。 */
+    val chatMicUiState: StateFlow<ChatMicUiState> = chatMicSession.uiState
 
     private val _selectedAttachments = MutableStateFlow(listOf<ChatAttachmentDraft>())
     val selectedAttachments = _selectedAttachments.asStateFlow()
@@ -213,8 +220,65 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 主聊天麦克风：点一下开录，再点停录并转写填入输入框（不自动发送）。
+     */
+    fun onMicClick() {
+        viewModelScope.launch {
+            chatMicSession.onMicClick { text ->
+                appendDictationToInput(text)
+            }
+        }
+    }
+
+    /**
+     * RECORD_AUDIO 运行时权限结果。
+     */
+    fun onMicPermissionResult(granted: Boolean, permanentlyDenied: Boolean = false) {
+        viewModelScope.launch {
+            chatMicSession.onPermissionResult(
+                granted = granted,
+                permanentlyDenied = permanentlyDenied
+            ) { text ->
+                appendDictationToInput(text)
+            }
+        }
+    }
+
+    fun clearMicSnackbar() {
+        chatMicSession.clearSnackbar()
+    }
+
+    fun consumeMicPermissionRequest() {
+        chatMicSession.consumePermissionRequest()
+    }
+
+    /** 离开页面时停麦释放资源。 */
+    fun cancelMicSession() {
+        viewModelScope.launch {
+            chatMicSession.cancel()
+        }
+    }
+
+    /**
+     * 转写结果填入输入框：已有文本则追加空格/换行，不自动发送。
+     */
+    private fun appendDictationToInput(text: String) {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return
+        val existing = question.text.toString()
+        val merged = when {
+            existing.isBlank() -> trimmed
+            existing.endsWith("\n") || existing.endsWith(" ") -> existing + trimmed
+            else -> "$existing $trimmed"
+        }
+        question.setTextAndPlaceCursorAtEnd(merged)
+    }
+
     override fun onCleared() {
         AttachmentPayloadCache.clear()
+        // 尽力释放麦；cancel 是 suspend，fire-and-forget 用 NonCancellable 不必要
+        // ChatScreen DisposableEffect 也会 cancel
         super.onCleared()
     }
 

@@ -1,0 +1,105 @@
+# Chat 输入区麦克风听写：ASR 门控 / 权限 / 转写填入
+name: Chat Mic Dictation Verify
+
+on:
+  push:
+    branches: [main, 'feat/chat-mic*']
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/voice/**'
+      - 'app/src/test/kotlin/com/lanxin/android/builtin/voice/**'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/**'
+      - 'app/src/main/res/values/strings.xml'
+      - 'app/src/main/res/values-zh-rCN/strings.xml'
+      - '.github/workflows/chat-mic-dictation-verify.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/voice/**'
+      - 'app/src/test/kotlin/com/lanxin/android/builtin/voice/**'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/**'
+      - 'app/src/main/res/values/strings.xml'
+      - 'app/src/main/res/values-zh-rCN/strings.xml'
+      - '.github/workflows/chat-mic-dictation-verify.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: chat-mic-dictation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: Chat mic unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: gradle
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup local.properties and debug keystore
+        run: |
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+          rm -f debug-keystore.jks
+          keytool -genkeypair -v -keystore debug-keystore.jks -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Create assets model dir (models gitignored)
+        run: |
+          mkdir -p app/src/main/assets/models/gte-small
+          touch app/src/main/assets/models/gte-small/.gitkeep
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Download sherpa-onnx AAR
+        run: |
+          ./gradlew :app:downloadSherpaOnnxAar --no-daemon --stacktrace
+          test -f app/libs/sherpa-onnx-static-link-onnxruntime-1.13.4.aar
+
+      - name: Run chat mic / ASR unit tests
+        run: |
+          ./gradlew :app:testDebugUnitTest \
+            --tests "com.lanxin.android.builtin.voice.ChatMicSessionTest" \
+            --tests "com.lanxin.android.builtin.voice.PcmAudioRecorderTest" \
+            --tests "com.lanxin.android.builtin.voice.VoiceInputCoordinatorTest" \
+            --tests "com.lanxin.android.builtin.voice.MicPermissionGateTest" \
+            --no-daemon --stacktrace
+
+      - name: Surfaces present
+        run: |
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/voice/domain/ChatMicSession.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/voice/domain/ChatMicModels.kt
+          grep -E -n "onMicClick|chatMicUiState|ChatMicSession" \
+            app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/ChatViewModel.kt
+          grep -E -n "ChatInputBox|onMicClick|Icons.Filled.Mic|chat_mic_" \
+            app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/ChatScreen.kt
+          grep -E -n "startRecording|stopRecording|forceStubHardware" \
+            app/src/main/kotlin/com/lanxin/android/builtin/voice/data/PcmAudioRecorder.kt
+          grep -E -n "chat_mic_start|chat_mic_listening" app/src/main/res/values/strings.xml
+          grep -E -n "RECORD_AUDIO" app/src/main/AndroidManifest.xml
+
+      - name: Compile Debug (catch ChatViewModel Hilt wiring)
+        run: |
+          ./gradlew :app:compileDebugKotlin --no-daemon --stacktrace
+
+      - name: Assemble Debug APK
+        run: |
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Upload debug APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-apk-chat-mic-${{ github.sha }}
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
