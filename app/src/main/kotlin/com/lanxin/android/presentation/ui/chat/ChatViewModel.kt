@@ -269,8 +269,7 @@ class ChatViewModel @Inject constructor(
         val existing = question.text.toString()
         val merged = when {
             existing.isBlank() -> trimmed
-            existing.endsWith("
-") || existing.endsWith(" ") -> existing + trimmed
+            existing.endsWith("\n") || existing.endsWith(" ") -> existing + trimmed
             else -> "$existing $trimmed"
         }
         question.setTextAndPlaceCursorAtEnd(merged)
