@@ -79,9 +79,11 @@ class GuideDomainTest {
     @Test
     fun `nav handoff detects intent`() {
         assertTrue(GuideNavHandoff.wantsNavigation("带我去那里"))
-        assertTrue(GuideNavHandoff.wantsNavigation("怎么走过去"))
-        assertTrue(GuideNavHandoff.wantsNavigation("open navigation please"))
+        assertTrue(GuideNavHandoff.wantsNavigation("怎么走"))
+        assertTrue(GuideNavHandoff.wantsNavigation("please navigate there"))
+        assertTrue(GuideNavHandoff.wantsNavigation("open navigation"))
         assertFalse(GuideNavHandoff.wantsNavigation("这是什么建筑"))
+        assertFalse(GuideNavHandoff.wantsNavigation("讲讲历史"))
         assertFalse(GuideNavHandoff.wantsNavigation(""))
     }
 

@@ -23,23 +23,22 @@ package com.lanxin.android.builtin.guide.domain
  */
 object GuideNavHandoff {
 
-    private val NAV_INTENT = listOf(
+    private val NAV_INTENT_ZH = listOf(
         "导航", "带我去", "怎么走", "路线", "带路",
-        "去这里", "到这里", "走过去", "送我去", "开导航",
-        "navigate", "directions", "how to get"
+        "去这里", "到这里", "走过去", "送我去", "开导航"
+    )
+
+    private val NAV_INTENT_EN = listOf(
+        "navigate", "navigation", "directions", "how to get"
     )
 
     /** 用户问题是否像「要去某地」。 */
     fun wantsNavigation(userText: String): Boolean {
-        val t = userText.trim().lowercase()
-        if (t.isEmpty()) return false
-        return NAV_INTENT.any { key ->
-            if (key.any { it.code > 127 }) {
-                userText.contains(key)
-            } else {
-                t.contains(key)
-            }
-        }
+        val raw = userText.trim()
+        if (raw.isEmpty()) return false
+        if (NAV_INTENT_ZH.any { raw.contains(it) }) return true
+        val t = raw.lowercase()
+        return NAV_INTENT_EN.any { t.contains(it) }
     }
 
     /**
