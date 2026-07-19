@@ -2,6 +2,7 @@
 
 > **状态：V1 已实现（提问抓帧 + 多模态接线）** · 分支 `feat/companion-vision-explain`  
 > **产品归属：导游 Guide**（`docs/guide.md`），**不是**导航 Navigate（`docs/navigate.md`）。两模块拆开，勿揉成 ScenicGuide。  
+> **Guide V1**：位置增强（last known）+ 导航互跳提示见 `GuideLocationContext` / `GuideNavHandoff`。  
 > **勿与 #99 混淆。** #99（`docs/scene-sensing.md`）= 默认关 + 确认 Gate + **单次手动拍照** + 本地颜色启发式 → 换背景/mood。  
 > **本 epic** = 打开摄像头后**边看边讲**，桌宠/兰心根据画面内容结合用户提问讲解；落在**全屏陪伴**里。
 

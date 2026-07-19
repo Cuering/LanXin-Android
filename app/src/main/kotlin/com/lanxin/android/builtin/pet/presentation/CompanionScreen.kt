@@ -130,7 +130,18 @@ import com.lanxin.android.builtin.pet.domain.MoodTagMapper
 import com.lanxin.android.builtin.pet.domain.PetExpressionController
 import com.lanxin.android.builtin.pet.domain.PetSettings
 import com.lanxin.android.builtin.pet.domain.TextExpressionMotionMapper
+import com.lanxin.android.builtin.capabilities.domain.LocationSettings
+import com.lanxin.android.builtin.capabilities.domain.SmartCapabilitiesSettings
+import com.lanxin.android.builtin.capabilities.tools.LocationTool
+import com.lanxin.android.builtin.guide.domain.GuideGate
+import com.lanxin.android.builtin.guide.domain.GuideLocationContext
+import com.lanxin.android.builtin.guide.domain.GuideNavHandoff
+import com.lanxin.android.builtin.guide.domain.GuidePromptBuilder
 import com.lanxin.android.builtin.pet.domain.VisionExplainClient
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import com.lanxin.android.builtin.pet.domain.VisionExplainResult
 import com.lanxin.android.builtin.pet.domain.VisionModelCapability
 import com.lanxin.android.builtin.pet.domain.VoiceSessionCoordinator
@@ -998,6 +1009,9 @@ class CompanionViewModel @Inject constructor(
     private val petSettings: PetSettings,
     private val sceneSensingSettings: SceneSensingSettings,
     private val visionExplainClient: VisionExplainClient,
+    private val smartCapabilitiesSettings: SmartCapabilitiesSettings,
+    private val locationSettings: LocationSettings,
+    private val locationTool: LocationTool,
     @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context
 ) : ViewModel() {
 
@@ -1260,20 +1274,25 @@ class CompanionViewModel @Inject constructor(
     }
 
     /**
-     * 抓帧 → vision 讲解；能力不足时返回明确文案（禁止假装本地 VLM）。
-     * 帧仅内存，用完即丢。
+     * 抓帧 → vision 讲解（导游 Guide V1：可选位置增强 + 导航互跳提示）。
+     * 能力不足时返回明确文案（禁止假装本地 VLM）。帧仅内存，用完即丢。
      */
     private suspend fun explainWithFrame(
         question: String,
         holder: CompanionFrameHolder?
     ): String {
+        val locationSnippet = resolveGuideLocationSnippet()
+        val enrichedQuestion = GuidePromptBuilder.buildExplainQuestion(
+            userQuestion = question,
+            locationSnippet = locationSnippet
+        )
         val cap = visionExplainClient.resolveCapability()
         if (!cap.available) {
             // 无 vision：友好提示 + 仍可用 stub 闲聊（不注入假画面描述）
             val stub = runCatching {
                 sessionCoordinator.runRound(
                     VoiceSessionInput(
-                        asrText = question,
+                        asrText = enrichedQuestion,
                         isStub = true,
                         source = "companion_text_no_vision"
                     )
@@ -1283,11 +1302,12 @@ class CompanionViewModel @Inject constructor(
                 MoodTagMapper.stripTags(it.subtitle.ifBlank { it.replyText })
             }.orEmpty()
             val notice = cap.message.ifBlank { VisionModelCapability.MSG_NO_VISION }
-            return if (chat.isBlank()) {
+            val raw = if (chat.isBlank()) {
                 "[[mood=think]]\n$notice"
             } else {
                 "[[mood=think]]\n$notice\n\n$chat"
             }
+            return GuideNavHandoff.appendIfNeeded(raw, question)
         }
         val bmp = holder?.snapshotCopy()
         if (bmp == null) {
@@ -1303,11 +1323,33 @@ class CompanionViewModel @Inject constructor(
         if (frame == null) {
             return "[[mood=sorry]]\n${VisionModelCapability.MSG_CAPTURE_FAILED}"
         }
-        return when (val r = visionExplainClient.explain(question, frame)) {
+        val reply = when (val r = visionExplainClient.explain(enrichedQuestion, frame)) {
             is VisionExplainResult.Ok -> r.replyText
             is VisionExplainResult.Unavailable -> "[[mood=think]]\n${r.userMessage}"
             is VisionExplainResult.Error -> "[[mood=sorry]]\n${r.userMessage}"
         }
+        return GuideNavHandoff.appendIfNeeded(reply, question)
+    }
+
+    /**
+     * 导游位置增强：主开关 + 位置 prefs 开且有权限时读 last known；失败静默（讲解仍可进行）。
+     */
+    private suspend fun resolveGuideLocationSnippet(): String {
+        return runCatching {
+            val master = smartCapabilitiesSettings.getConfig().masterEnabled
+            val locOpen = locationSettings.getConfig().enabled
+            if (!GuideGate.canAugmentWithLocation(master, locOpen)) return@runCatching ""
+            if (!locationTool.hasPermission()) return@runCatching ""
+            val json = locationTool.readOnce()
+            val ok = json["ok"]?.jsonPrimitive?.booleanOrNull == true
+            if (!ok) return@runCatching ""
+            val lat = json["latitude"]?.jsonPrimitive?.doubleOrNull
+            val lon = json["longitude"]?.jsonPrimitive?.doubleOrNull
+            val acc = json["accuracy_m"]?.jsonPrimitive?.doubleOrNull
+            val provider = json["provider"]?.jsonPrimitive?.contentOrNull
+            val fix = GuideLocationContext.fromMap(lat, lon, acc, provider)
+            GuideLocationContext.snippetOrEmpty(fix)
+        }.getOrDefault("")
     }
 
     fun toggleMusic() {
