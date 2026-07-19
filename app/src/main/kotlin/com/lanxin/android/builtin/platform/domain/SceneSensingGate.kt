@@ -32,8 +32,12 @@ object SceneSensingGate {
     const val DENIED_NO_CAMERA = "scene_sensing_no_camera"
 
     /** 是否允许识别（开关 + 同意 + 相机权限）。 */
-    fun canCapture(config: SceneSensingConfig, cameraGranted: Boolean): Boolean {
-        return config.enabled && config.consentGranted && cameraGranted
+    fun canCapture(
+        config: SceneSensingConfig,
+        cameraGranted: Boolean,
+        masterEnabled: Boolean = true
+    ): Boolean {
+        return masterEnabled && config.enabled && config.consentGranted && cameraGranted
     }
 
     /**
@@ -47,7 +51,12 @@ object SceneSensingGate {
     /**
      * 执行前检查；允许时返回 null，拒绝时返回稳定 code。
      */
-    fun denyReason(config: SceneSensingConfig, cameraGranted: Boolean): String? {
+    fun denyReason(
+        config: SceneSensingConfig,
+        cameraGranted: Boolean,
+        masterEnabled: Boolean = true
+    ): String? {
+        if (!masterEnabled) return DENIED_DISABLED
         if (!config.enabled) return DENIED_DISABLED
         if (!config.consentGranted) return DENIED_NO_CONSENT
         if (!cameraGranted) return DENIED_NO_CAMERA
@@ -58,7 +67,7 @@ object SceneSensingGate {
     fun blockMessage(code: String?): String? = when (code) {
         null -> null
         DENIED_DISABLED ->
-            "场景识别已关闭。请到「设置 → 场景识别」开启（默认关）。"
+            "场景识别已关闭。请到「设置 → 智能能力 → 场景视觉」开启（默认关）。"
         DENIED_NO_CONSENT ->
             "尚未确认隐私说明。请在设置页阅读并同意后再开启。"
         DENIED_NO_CAMERA ->

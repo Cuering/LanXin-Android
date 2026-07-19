@@ -8,6 +8,7 @@ import com.lanxin.android.builtin.scheduler.di.SchedulerPluginRegistration
 import com.lanxin.android.builtin.statistics.di.StatisticsPluginRegistration
 import com.lanxin.android.core.log.LogManager
 import com.lanxin.android.plugin.PluginManager
+import com.lanxin.android.builtin.capabilities.domain.SmartCapabilitiesSettings
 import com.lanxin.android.plugin.claw.data.ClawResidentController
 import com.lanxin.android.plugins.chat.di.ChatPluginRegistration
 import com.lanxin.android.plugins.logger.di.LoggerPluginRegistration
@@ -61,6 +62,9 @@ class LanXinApp : Application(), Configuration.Provider {
     @Inject
     lateinit var clawResidentController: ClawResidentController
 
+    @Inject
+    lateinit var smartCapabilitiesSettings: SmartCapabilitiesSettings
+
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     override fun onCreate() {
@@ -73,6 +77,8 @@ class LanXinApp : Application(), Configuration.Provider {
         // 异步：加载编译期插件 + 扫描 filesDir/plugin-packages 动态插件
         // 再按 Claw 配置同步常驻（默认关，不拉服务）
         appScope.launch {
+            runCatching { smartCapabilitiesSettings.ensureMigrated() }
+                .onFailure { log.warn("smart capabilities migrate: ${it.message}") }
             pluginManager.loadAll()
             val dynamic = pluginManager.discoverAndLoadDynamicPlugins()
             if (dynamic.total > 0) {

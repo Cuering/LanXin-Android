@@ -23,17 +23,25 @@ package com.lanxin.android.builtin.systemtools.domain
  * 真机权限（Calendar 等）在具体 Gateway 内再检查；此处不绑定 Android API。
  */
 class DeviceToolGate(
-    private val configProvider: suspend () -> SystemToolsConfig
+    private val configProvider: suspend () -> SystemToolsConfig,
+    /** 智能能力主开关；默认 true 兼容旧调用 */
+    private val smartMasterProvider: suspend () -> Boolean = { true }
 ) {
 
     suspend fun evaluate(
         tool: DeviceTool,
         confirmed: Boolean
     ): DeviceToolOutcome? {
+        if (!smartMasterProvider()) {
+            return DeviceToolOutcome.Denied(
+                reason = "智能能力主开关已关闭（设置 → 智能能力）",
+                code = "smart_master_disabled"
+            )
+        }
         val config = configProvider()
         if (!config.masterEnabled) {
             return DeviceToolOutcome.Denied(
-                reason = "系统能力总开关已关闭（设置 → 系统能力）",
+                reason = "系统能力总开关已关闭（设置 → 智能能力 → 系统工具）",
                 code = "master_disabled"
             )
         }

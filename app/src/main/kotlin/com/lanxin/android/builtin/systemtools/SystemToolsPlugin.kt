@@ -20,6 +20,7 @@ import com.lanxin.android.builtin.systemtools.data.DeviceToolRegistry
 import com.lanxin.android.builtin.systemtools.domain.DeviceToolGate
 import com.lanxin.android.builtin.systemtools.domain.DeviceToolIds
 import com.lanxin.android.builtin.systemtools.domain.DeviceToolOutcome
+import com.lanxin.android.builtin.capabilities.domain.SmartCapabilitiesSettings
 import com.lanxin.android.builtin.systemtools.domain.SystemToolsSettings
 import com.lanxin.android.plugin.LanXinPlugin
 import com.lanxin.android.plugin.PluginContext
@@ -45,16 +46,22 @@ import kotlinx.serialization.json.put
 @Singleton
 class SystemToolsPlugin @Inject constructor(
     private val registry: DeviceToolRegistry,
-    private val settings: SystemToolsSettings
+    private val settings: SystemToolsSettings,
+    private val smartCapabilitiesSettings: SmartCapabilitiesSettings
 ) : LanXinPlugin {
 
     override val id = "lanxin.systemtools"
     override val name = "系统能力"
     override val version = "0.5.0"
     override val description =
-        "日历/闹钟/笔记/用户文件 + DeviceToolBridge 对话/桌宠一体（Phase 7.5，默认关，写/删需确认）"
+        "日历/闹钟/笔记/用户文件 + DeviceToolBridge 对话/桌宠一体（Phase 7.5，默认随智能能力 ON，写/删需确认）"
 
-    private val gate = DeviceToolGate { settings.getConfig() }
+    private val gate = DeviceToolGate(
+        configProvider = { settings.getConfig() },
+        smartMasterProvider = {
+            runCatching { smartCapabilitiesSettings.getConfig().masterEnabled }.getOrDefault(true)
+        }
+    )
 
     override suspend fun onLoad(context: PluginContext) {
         register(

@@ -91,7 +91,7 @@ class InferenceRouteCoordinator @Inject constructor(
          * 无网且本地不可用时的用户可见错误（Chat 层展示）。
          */
         const val OFFLINE_LOCAL_UNAVAILABLE_MESSAGE =
-            "当前无网络，且本地推理不可用。请到「设置 → 本地推理」打开开关、填写模型路径并加载模型后再试。"
+            "当前无网络，且本地推理不可用。请到「设置 → 智能能力 → 本地推理」打开开关、填写模型路径并加载模型后再试。"
 
         /**
          * 路由完全不可用时的兜底文案。

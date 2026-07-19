@@ -32,25 +32,41 @@ object WebSearchGate {
 
     const val DENIED_CODE = "web_search_disabled"
 
-    fun isEnabled(config: WebSearchConfig): Boolean = config.enabled
+    fun isEnabled(config: WebSearchConfig, masterEnabled: Boolean = true): Boolean =
+        masterEnabled && config.enabled
 
     /**
      * 从工具列表中按开关过滤 [WebSearchConfig.TOOL_NAME]。
      * 其它工具原样返回。
+     * @param masterEnabled 智能能力主开关；关则一律移除
      */
-    fun filterTools(tools: List<ToolDef>, config: WebSearchConfig): List<ToolDef> {
-        if (config.enabled) return tools
+    fun filterTools(
+        tools: List<ToolDef>,
+        config: WebSearchConfig,
+        masterEnabled: Boolean = true
+    ): List<ToolDef> {
+        if (isEnabled(config, masterEnabled)) return tools
         return tools.filter { it.name != WebSearchConfig.TOOL_NAME }
     }
 
     /**
      * 执行前检查；允许时返回 null，拒绝时返回 JSON 错误体。
      */
-    fun denyIfDisabled(config: WebSearchConfig): JsonObject? {
-        if (config.enabled) return null
+    fun denyIfDisabled(
+        config: WebSearchConfig,
+        masterEnabled: Boolean = true
+    ): JsonObject? {
+        if (isEnabled(config, masterEnabled)) return null
         return buildJsonObject {
             put("ok", false)
-            put("error", "联网搜索已关闭（设置 → 联网搜索）")
+            put(
+                "error",
+                if (!masterEnabled) {
+                    "智能能力主开关已关闭（设置 → 智能能力）"
+                } else {
+                    "联网搜索已关闭（设置 → 智能能力 → 联网搜索）"
+                }
+            )
             put("code", DENIED_CODE)
         }
     }

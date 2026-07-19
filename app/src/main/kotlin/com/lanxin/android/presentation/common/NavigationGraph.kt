@@ -41,6 +41,7 @@ import com.lanxin.android.builtin.pet.presentation.DesktopPetScreen
 import com.lanxin.android.builtin.systemtools.presentation.SystemToolsScreen
 import com.lanxin.android.builtin.platform.presentation.DeviceSensingScreen
 import com.lanxin.android.builtin.platform.presentation.SceneSensingScreen
+import com.lanxin.android.builtin.capabilities.presentation.SmartCapabilitiesScreen
 import com.lanxin.android.builtin.platform.presentation.WebSearchScreen
 import com.lanxin.android.builtin.voice.presentation.VoiceAsrScreen
 import com.lanxin.android.plugin.claw.presentation.ClawHostScreen
@@ -77,6 +78,7 @@ fun SetupNavGraph(navController: NavHostController) {
         unifiedSearchScreenNavigation(navController)
         pluginManagerScreenNavigation(navController)
         pluginMarketScreenNavigation(navController)
+        smartCapabilitiesScreenNavigation(navController)
         localInferenceScreenNavigation(navController)
         offlineAsrScreenNavigation(navController)
         desktopPetScreenNavigation(navController)
@@ -102,6 +104,21 @@ fun NavGraphBuilder.pluginMarketScreenNavigation(navController: NavHostControlle
     composable(Route.PLUGIN_MARKET) {
         PluginMarketScreen(
             onBackAction = { navController.navigateUp() }
+        )
+    }
+}
+
+
+fun NavGraphBuilder.smartCapabilitiesScreenNavigation(navController: NavHostController) {
+    composable(Route.SMART_CAPABILITIES) {
+        SmartCapabilitiesScreen(
+            onBackAction = { navController.navigateUp() },
+            onNavigateToLocalInference = { navController.navigate(Route.LOCAL_INFERENCE) },
+            onNavigateToVoice = { navController.navigate(Route.OFFLINE_ASR) },
+            onNavigateToSystemTools = { navController.navigate(Route.SYSTEM_TOOLS) },
+            onNavigateToWebSearch = { navController.navigate(Route.WEB_SEARCH) },
+            onNavigateToDeviceSensing = { navController.navigate(Route.DEVICE_SENSING) },
+            onNavigateToSceneVision = { navController.navigate(Route.SCENE_SENSING) }
         )
     }
 }
@@ -496,14 +513,17 @@ fun NavGraphBuilder.settingNavigation(navController: NavHostController) {
                 onNavigateToUnifiedSearch = { navController.navigate(Route.UNIFIED_SEARCH) },
                 onNavigateToPluginManager = { navController.navigate(Route.PLUGIN_MANAGER) },
                 onNavigateToPluginMarket = { navController.navigate(Route.PLUGIN_MARKET) },
+                onNavigateToSmartCapabilities = {
+                    navController.navigate(Route.SMART_CAPABILITIES)
+                },
+                onNavigateToDesktopPet = { navController.navigate(Route.DESKTOP_PET) },
+                onNavigateToClawHost = { navController.navigate(Route.CLAW_HOST) },
                 onNavigateToLocalInference = { navController.navigate(Route.LOCAL_INFERENCE) },
                 onNavigateToOfflineAsr = { navController.navigate(Route.OFFLINE_ASR) },
-                onNavigateToDesktopPet = { navController.navigate(Route.DESKTOP_PET) },
                 onNavigateToSystemTools = { navController.navigate(Route.SYSTEM_TOOLS) },
                 onNavigateToWebSearch = { navController.navigate(Route.WEB_SEARCH) },
                 onNavigateToDeviceSensing = { navController.navigate(Route.DEVICE_SENSING) },
-                onNavigateToSceneSensing = { navController.navigate(Route.SCENE_SENSING) },
-                onNavigateToClawHost = { navController.navigate(Route.CLAW_HOST) }
+                onNavigateToSceneSensing = { navController.navigate(Route.SCENE_SENSING) }
             )
         }
         composable(Route.ADD_PLATFORM) {

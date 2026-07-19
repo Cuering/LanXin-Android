@@ -74,14 +74,16 @@ fun SettingScreen(
     onNavigateToUnifiedSearch: () -> Unit = {},
     onNavigateToPluginManager: () -> Unit = {},
     onNavigateToPluginMarket: () -> Unit = {},
+    onNavigateToSmartCapabilities: () -> Unit = {},
+    onNavigateToDesktopPet: () -> Unit = {},
+    onNavigateToClawHost: () -> Unit = {},
+    // 旧入口保留：redirect 用（高级细页仍可直达）
     onNavigateToLocalInference: () -> Unit = {},
     onNavigateToOfflineAsr: () -> Unit = {},
-    onNavigateToDesktopPet: () -> Unit = {},
     onNavigateToSystemTools: () -> Unit = {},
     onNavigateToWebSearch: () -> Unit = {},
     onNavigateToDeviceSensing: () -> Unit = {},
-    onNavigateToSceneSensing: () -> Unit = {},
-    onNavigateToClawHost: () -> Unit = {}
+    onNavigateToSceneSensing: () -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
     val scrollBehavior = pinnedExitUntilCollapsedScrollBehavior(
@@ -212,58 +214,17 @@ fun SettingScreen(
             )
 
             SettingItem(
-                title = "本地推理",
-                description = "默认关；0.5B/1.5B 或 7B Q4；无 tool_call，记忆/KB 注入",
-                onItemClick = onNavigateToLocalInference,
-                showTrailingIcon = true,
-                showLeadingIcon = false
-            )
-
-            SettingItem(
-                title = "离线语音识别",
-                description = "默认关；Sherpa-ONNX 骨架；试转写走 stub，不偷偷录音",
-                onItemClick = onNavigateToOfflineAsr,
+                title = "智能能力",
+                description = "主开关默认开；语音/搜索/系统工具/设备感知/位置；本地推理与场景视觉默认关",
+                onItemClick = onNavigateToSmartCapabilities,
                 showTrailingIcon = true,
                 showLeadingIcon = false
             )
 
             SettingItem(
                 title = "桌宠 / 语音陪伴",
-                description = "全屏陪伴 + 悬浮窗；内置 Live2D；ASR/TTS 可一键下载到 LanXin/",
+                description = "全屏陪伴 + 悬浮窗（默认关）；内置 Live2D；ASR/TTS 可一键下载到 LanXin/",
                 onItemClick = onNavigateToDesktopPet,
-                showTrailingIcon = true,
-                showLeadingIcon = false
-            )
-
-
-            SettingItem(
-                title = "系统能力",
-                description = "默认关；日历 / 闹钟 Intent / 笔记 / 用户文件；写操作需确认",
-                onItemClick = onNavigateToSystemTools,
-                showTrailingIcon = true,
-                showLeadingIcon = false
-            )
-
-            SettingItem(
-                title = "联网搜索",
-                description = "默认关；web_search（DuckDuckGo）；开后 Agent 可见",
-                onItemClick = onNavigateToWebSearch,
-                showTrailingIcon = true,
-                showLeadingIcon = false
-            )
-
-            SettingItem(
-                title = "设备感知",
-                description = "默认关；system_info（型号/网络/电量）；开后 Agent 可见",
-                onItemClick = onNavigateToDeviceSensing,
-                showTrailingIcon = true,
-                showLeadingIcon = false
-            )
-
-            SettingItem(
-                title = "场景识别",
-                description = "默认关；摄像头快照→本地场景→现有陪伴背景/mood；需确认",
-                onItemClick = onNavigateToSceneSensing,
                 showTrailingIcon = true,
                 showLeadingIcon = false
             )

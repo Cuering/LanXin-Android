@@ -21,6 +21,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.lanxin.android.builtin.capabilities.data.SmartCapabilitiesPreferences
 import com.lanxin.android.builtin.voice.domain.TtsConfig
 import com.lanxin.android.builtin.voice.domain.TtsSettings
 import javax.inject.Inject
@@ -62,7 +63,10 @@ class TtsPreferences @Inject constructor(
     }
 
     override suspend fun setEnabled(enabled: Boolean) {
-        dataStore.edit { it[enabledKey] = enabled }
+        dataStore.edit {
+            it[enabledKey] = enabled
+            it[booleanPreferencesKey(SmartCapabilitiesPreferences.KEY_VOICE)] = enabled
+        }
     }
 
     override suspend fun setModelPath(path: String?) {

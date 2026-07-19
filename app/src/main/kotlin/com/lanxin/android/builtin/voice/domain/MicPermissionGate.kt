@@ -61,7 +61,7 @@ object MicPermissionGate {
         requireMic: Boolean = true
     ): String? {
         if (!enabled) {
-            return "离线语音识别未启用。请到「设置 → 离线语音识别」打开开关。"
+            return "语音能力未启用。请到「设置 → 智能能力 → 语音能力」打开开关。"
         }
         if (!engineReady) {
             return "语音识别模型未就绪。请确认：① 开关已开；② 已下载/导入 ASR 模型；" +

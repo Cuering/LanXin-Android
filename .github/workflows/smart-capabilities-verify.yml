@@ -1,0 +1,49 @@
+name: Smart Capabilities Module Verify
+on:
+  pull_request:
+    paths:
+      - "app/src/main/kotlin/com/lanxin/android/builtin/capabilities/**"
+      - "app/src/test/kotlin/com/lanxin/android/builtin/capabilities/**"
+      - "app/src/main/kotlin/com/lanxin/android/builtin/platform/domain/WebSearchGate.kt"
+      - "app/src/main/kotlin/com/lanxin/android/builtin/platform/domain/DeviceSensingGate.kt"
+      - "app/src/main/kotlin/com/lanxin/android/builtin/systemtools/domain/DeviceToolGate.kt"
+      - "app/src/main/kotlin/com/lanxin/android/presentation/ui/setting/SettingScreen.kt"
+      - "app/src/main/kotlin/com/lanxin/android/presentation/common/NavigationGraph.kt"
+      - "app/src/main/kotlin/com/lanxin/android/presentation/common/Route.kt"
+      - ".github/workflows/smart-capabilities-verify.yml"
+  push:
+    branches: [main, "feat/capability-module-defaults"]
+    paths:
+      - "app/src/main/kotlin/com/lanxin/android/builtin/capabilities/**"
+      - "app/src/test/kotlin/com/lanxin/android/builtin/capabilities/**"
+
+jobs:
+  unit-and-compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Unit tests (smart capabilities + related gates)
+        run: |
+          ./gradlew :app:testDebugUnitTest \
+            --tests "com.lanxin.android.builtin.capabilities.SmartCapabilitiesTest" \
+            --tests "com.lanxin.android.builtin.platform.WebSearchGateTest" \
+            --tests "com.lanxin.android.builtin.platform.DeviceSensingGateTest" \
+            --tests "com.lanxin.android.builtin.systemtools.SystemToolsConfigTest" \
+            --tests "com.lanxin.android.builtin.localinference.LocalInferenceConfigTest"
+      - name: Compile debug
+        run: ./gradlew :app:compileDebugKotlin
+      - name: Assemble debug APK
+        run: ./gradlew :app:assembleDebug
+      - name: Upload Debug APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lanxin-debug-apk-smart-capabilities
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: warn
