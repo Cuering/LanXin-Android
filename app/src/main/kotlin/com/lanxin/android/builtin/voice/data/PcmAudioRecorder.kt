@@ -16,6 +16,7 @@
 
 package com.lanxin.android.builtin.voice.data
 
+import android.annotation.SuppressLint
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
@@ -101,7 +102,9 @@ class PcmAudioRecorder @Inject constructor() {
      * 开始录音（真机 AudioRecord，或 stub 硬件路径）。
      *
      * 调用前须已获 RECORD_AUDIO。重复 start 返回 failure。
+     * 权限由 ChatMicSession / MicPermissionGate 显式校验；lint 无法跨层分析。
      */
+    @SuppressLint("MissingPermission")
     suspend fun startRecording(
         sampleRateHz: Int = AsrConfig.DEFAULT_SAMPLE_RATE_HZ
     ): Result<Unit> = withContext(Dispatchers.IO) {
@@ -291,7 +294,15 @@ class PcmAudioRecorder @Inject constructor() {
         const val DEFAULT_STUB_DURATION_MS = 500L
         const val MAX_RECORD_MS = 60_000L
 
-        val DEFAULT_AUDIO_RECORD_FACTORY: (Int, Int) -> AudioRecord? = { rate, bufferSize ->
+        val DEFAULT_AUDIO_RECORD_FACTORY: (Int, Int) -> AudioRecord? =
+            { rate, bufferSize -> createDefaultAudioRecord(rate, bufferSize) }
+
+        /**
+         * 创建默认 AudioRecord。
+         * RECORD_AUDIO 由 MicPermissionGate / UI 在 [startRecording] 前校验。
+         */
+        @SuppressLint("MissingPermission")
+        private fun createDefaultAudioRecord(rate: Int, bufferSize: Int): AudioRecord =
             AudioRecord(
                 MediaRecorder.AudioSource.VOICE_RECOGNITION,
                 rate,
@@ -299,6 +310,5 @@ class PcmAudioRecorder @Inject constructor() {
                 AudioFormat.ENCODING_PCM_16BIT,
                 bufferSize
             )
-        }
     }
 }
