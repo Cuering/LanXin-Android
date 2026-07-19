@@ -981,15 +981,21 @@ class ChatViewModel @Inject constructor(
         )
         val gatedTools = com.lanxin.android.builtin.navigate.domain.NavigateGate.filterTools(
             tools = afterLocation,
+            pluginEnabled = smartConfig.navigateEnabled,
             masterEnabled = master,
             locationPrefsOpen = locationPrefsOpen,
             webSearchEnabled = webOn
+        )
+        val afterGuide = com.lanxin.android.builtin.guide.domain.GuideGate.filterTools(
+            tools = gatedTools,
+            pluginEnabled = smartConfig.guideEnabled,
+            masterEnabled = master
         )
         val persona = runCatching { personaRepository.getCurrent() }.getOrNull()
         if (persona == null || (persona.tools == null && persona.skills == null)) {
             // 无人格限制：仅从 prompt 去掉关着的门闸工具；执行侧 PlatformPlugin 再拦一次
             return PersonaFilteredTools(
-                tools = gatedTools,
+                tools = afterGuide,
                 allowedNames = null
             )
         }
@@ -997,7 +1003,7 @@ class ChatViewModel @Inject constructor(
             skillEngine.getSkills().map { it.name }.toSet()
         }.getOrDefault(emptySet())
         val filtered = PersonaCapabilityFilter.filterTools(
-            tools = gatedTools,
+            tools = afterGuide,
             allowedTools = persona.tools,
             allowedSkills = persona.skills,
             knownSkillNames = knownSkills

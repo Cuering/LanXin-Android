@@ -50,8 +50,12 @@ class SmartCapabilitiesTest {
         assertTrue(c.webSearchEnabled)
         assertTrue(c.deviceSensingEnabled)
         assertTrue(c.locationEnabled)
+        assertFalse(c.navigateEnabled)
+        assertFalse(c.guideEnabled)
         assertFalse(c.sceneVisionEnabled)
         assertFalse(c.migratedV1)
+        assertFalse(SmartCapabilitiesConfig.DEFAULT_NAVIGATE)
+        assertFalse(SmartCapabilitiesConfig.DEFAULT_GUIDE)
     }
 
     @Test

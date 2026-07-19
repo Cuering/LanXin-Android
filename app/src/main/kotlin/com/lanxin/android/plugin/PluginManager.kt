@@ -124,10 +124,13 @@ class PluginManager @Inject constructor(
     /**
      * 注册一个插件（非挂起，可在 DI @Provides 中调用）。
      * 默认视为编译期插件（builtin / 源码 plugins）。
+     *
+     * @param defaultEnabled 首次落盘默认是否启用；false 时 plugin-state 写 false，loadAll 跳过 onLoad
      */
-    fun register(plugin: LanXinPlugin): PluginManager {
+    fun register(plugin: LanXinPlugin, defaultEnabled: Boolean = true): PluginManager {
         plugins[plugin.id] = plugin
         compiledIds.add(plugin.id)
+        stateStore.ensureDefault(plugin.id, defaultEnabled)
         return this
     }
 

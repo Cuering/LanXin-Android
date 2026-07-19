@@ -21,6 +21,9 @@ import androidx.lifecycle.viewModelScope
 import com.lanxin.android.builtin.capabilities.domain.SmartCapabilitiesConfig
 import com.lanxin.android.builtin.capabilities.domain.SmartCapabilitiesSettings
 import com.lanxin.android.builtin.capabilities.domain.SmartCapabilityId
+import com.lanxin.android.builtin.guide.domain.GuideConfig
+import com.lanxin.android.builtin.navigate.domain.NavigateConfig
+import com.lanxin.android.plugin.PluginManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,6 +41,8 @@ data class SmartCapabilitiesUiState(
     val webSearchEnabled: Boolean = true,
     val deviceSensingEnabled: Boolean = true,
     val locationEnabled: Boolean = true,
+    val navigateEnabled: Boolean = false,
+    val guideEnabled: Boolean = false,
     val sceneVisionEnabled: Boolean = false,
     val summary: String = "",
     val advancedExpanded: Boolean = false,
@@ -46,7 +51,8 @@ data class SmartCapabilitiesUiState(
 
 @HiltViewModel
 class SmartCapabilitiesViewModel @Inject constructor(
-    private val settings: SmartCapabilitiesSettings
+    private val settings: SmartCapabilitiesSettings,
+    private val pluginManager: PluginManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SmartCapabilitiesUiState())
@@ -63,6 +69,13 @@ class SmartCapabilitiesViewModel @Inject constructor(
                 settings.ensureMigrated()
                 settings.getConfig()
             }.onSuccess { cfg ->
+                // 设置页镜像 → PluginManager（默认 OFF 插件开后才 onLoad 注册工具）
+                runCatching {
+                    pluginManager.setEnabled(NavigateConfig.PLUGIN_ID, cfg.navigateEnabled)
+                }
+                runCatching {
+                    pluginManager.setEnabled(GuideConfig.PLUGIN_ID, cfg.guideEnabled)
+                }
                 _uiState.update { cfg.toUi() }
             }.onFailure { e ->
                 _uiState.update {
@@ -90,6 +103,13 @@ class SmartCapabilitiesViewModel @Inject constructor(
     fun setChild(id: SmartCapabilityId, enabled: Boolean) {
         viewModelScope.launch {
             settings.setChildEnabled(id, enabled)
+            when (id) {
+                SmartCapabilityId.NAVIGATE ->
+                    runCatching { pluginManager.setEnabled(NavigateConfig.PLUGIN_ID, enabled) }
+                SmartCapabilityId.GUIDE ->
+                    runCatching { pluginManager.setEnabled(GuideConfig.PLUGIN_ID, enabled) }
+                else -> Unit
+            }
             refresh()
         }
     }
@@ -111,6 +131,8 @@ class SmartCapabilitiesViewModel @Inject constructor(
         webSearchEnabled = webSearchEnabled,
         deviceSensingEnabled = deviceSensingEnabled,
         locationEnabled = locationEnabled,
+        navigateEnabled = navigateEnabled,
+        guideEnabled = guideEnabled,
         sceneVisionEnabled = sceneVisionEnabled,
         summary = summaryLine(),
         advancedExpanded = _uiState.value.advancedExpanded

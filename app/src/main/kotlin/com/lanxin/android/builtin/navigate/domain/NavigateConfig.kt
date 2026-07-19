@@ -17,15 +17,27 @@
 package com.lanxin.android.builtin.navigate.domain
 
 /**
- * 导航 Navigate（V1）工具名与默认参数。
+ * 导航 Navigate 插件配置常量。
  *
- * 职责：附近 POI + 外链导航 + 酒店价联网摘要。独立于导游 Guide，不揉成 ScenicGuide。
+ * 形态：独立 [com.lanxin.android.builtin.navigate.NavigatePlugin]（编译期插件，挂 PluginManager）。
+ * **默认关闭**（[DEFAULT_ENABLED]=false）：未开时不向 Agent 暴露工具、不主动要定位、不调 Overpass/外链。
+ * 与导游 Guide 拆开，不揉成 ScenicGuide。
+ *
  * 不做：自研 turn-by-turn、后台轨迹、无 consent 摄像头。
  */
 object NavigateConfig {
+    /** 插件 id（PluginManager / plugin-state） */
+    const val PLUGIN_ID = "lanxin.navigate"
+
+    /** 插件与智能能力子开关默认均关闭 */
+    const val DEFAULT_ENABLED = false
+
     const val NEARBY_POI_TOOL = "nearby_poi"
     const val OPEN_NAVIGATION_TOOL = "open_navigation"
     const val HOTEL_PRICE_TOOL = "hotel_price_lookup"
+
+    /** DataStore 键（智能能力子开关） */
+    const val PREF_KEY_ENABLED = "navigate_plugin_enabled"
 
     /** 默认搜索半径（米） */
     const val DEFAULT_RADIUS_M = 800

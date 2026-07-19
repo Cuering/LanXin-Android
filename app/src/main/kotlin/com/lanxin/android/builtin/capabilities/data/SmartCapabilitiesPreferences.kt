@@ -62,6 +62,8 @@ class SmartCapabilitiesPreferences @Inject constructor(
     private val webSearchKey = booleanPreferencesKey(KEY_WEB_SEARCH)
     private val deviceSensingKey = booleanPreferencesKey(KEY_DEVICE_SENSING)
     private val locationKey = booleanPreferencesKey(KEY_LOCATION)
+    private val navigateKey = booleanPreferencesKey(KEY_NAVIGATE)
+    private val guideKey = booleanPreferencesKey(KEY_GUIDE)
     private val sceneKey = booleanPreferencesKey(KEY_SCENE_VISION)
     private val migratedKey = booleanPreferencesKey(KEY_MIGRATED_V1)
 
@@ -97,6 +99,8 @@ class SmartCapabilitiesPreferences @Inject constructor(
                 e[webSearchKey] = resolved.webSearchEnabled
                 e[deviceSensingKey] = resolved.deviceSensingEnabled
                 e[locationKey] = resolved.locationEnabled
+                e[navigateKey] = resolved.navigateEnabled
+                e[guideKey] = resolved.guideEnabled
                 e[sceneKey] = resolved.sceneVisionEnabled
                 e[migratedKey] = true
                 // 回写旧模块键：从未配置的抬到新默认；显式值已等于 resolved
@@ -144,6 +148,8 @@ class SmartCapabilitiesPreferences @Inject constructor(
             deviceSensingEnabled = prefs[deviceSensingKey]
                 ?: SmartCapabilitiesConfig.DEFAULT_DEVICE_SENSING,
             locationEnabled = prefs[locationKey] ?: SmartCapabilitiesConfig.DEFAULT_LOCATION,
+            navigateEnabled = prefs[navigateKey] ?: SmartCapabilitiesConfig.DEFAULT_NAVIGATE,
+            guideEnabled = prefs[guideKey] ?: SmartCapabilitiesConfig.DEFAULT_GUIDE,
             sceneVisionEnabled = prefs[sceneKey] ?: SmartCapabilitiesConfig.DEFAULT_SCENE_VISION,
             migratedV1 = prefs[migratedKey] ?: false
         )
@@ -183,6 +189,12 @@ class SmartCapabilitiesPreferences @Inject constructor(
                     e[locationKey] = enabled
                     e[booleanPreferencesKey(LocationPreferences.KEY_ENABLED)] = enabled
                 }
+                SmartCapabilityId.NAVIGATE -> {
+                    e[navigateKey] = enabled
+                }
+                SmartCapabilityId.GUIDE -> {
+                    e[guideKey] = enabled
+                }
                 SmartCapabilityId.SCENE_VISION -> {
                     // 与 SceneSensingPreferences.setEnabled 一致：无 consent 不可写 true
                     val consent = e[
@@ -204,6 +216,8 @@ class SmartCapabilitiesPreferences @Inject constructor(
         const val KEY_WEB_SEARCH = "smart_capabilities_web_search"
         const val KEY_DEVICE_SENSING = "smart_capabilities_device_sensing"
         const val KEY_LOCATION = "smart_capabilities_location"
+        const val KEY_NAVIGATE = "smart_capabilities_navigate"
+        const val KEY_GUIDE = "smart_capabilities_guide"
         const val KEY_SCENE_VISION = "smart_capabilities_scene_vision"
         const val KEY_MIGRATED_V1 = "smart_capabilities_migrated_v1"
     }
