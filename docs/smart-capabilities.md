@@ -87,3 +87,12 @@ app/src/main/kotlin/com/lanxin/android/builtin/capabilities/
 
 - 新：`Route.SMART_CAPABILITIES`
 - 旧细页（本地推理 / ASR / 系统工具 / 搜索 / 设备感知 / 场景）仍可从高级入口进入
+
+## 7. 与导游 / 导航（拆开）
+
+| 模块 | 文档 | 与本页关系 |
+|------|------|------------|
+| **导航 Navigate** | `docs/navigate.md` | 复用 **位置** + **联网搜索** + 外链 Intent；可选后续增加「导航/周边」分项，**不要**并进场景视觉 |
+| **导游 Guide** | `docs/guide.md` | 复用 **场景视觉** / 陪伴「看世界」；位置仅作讲解增强 |
+
+设置、默认开关、PR 描述均按两模块拆开，禁止 monolithic「实时向导」大开关。

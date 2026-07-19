@@ -21,6 +21,11 @@ import com.lanxin.android.builtin.capabilities.domain.LocationGate
 import com.lanxin.android.builtin.capabilities.domain.LocationSettings
 import com.lanxin.android.builtin.capabilities.domain.SmartCapabilitiesSettings
 import com.lanxin.android.builtin.capabilities.tools.LocationTool
+import com.lanxin.android.builtin.navigate.domain.NavigateConfig
+import com.lanxin.android.builtin.navigate.domain.NavigateGate
+import com.lanxin.android.builtin.navigate.tools.HotelPriceTool
+import com.lanxin.android.builtin.navigate.tools.NearbyPoiTool
+import com.lanxin.android.builtin.navigate.tools.OpenNavigationTool
 import com.lanxin.android.builtin.platform.domain.DeviceSensingConfig
 import com.lanxin.android.builtin.platform.domain.DeviceSensingGate
 import com.lanxin.android.builtin.platform.domain.DeviceSensingSettings
@@ -43,6 +48,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
@@ -56,6 +62,7 @@ import kotlinx.serialization.json.put
  * - file_read / file_write / file_list
  * - web_search（受联网搜索 + 智能能力主开关；默认随迁移 ON）
  * - get_location（受位置 + 主开关；默认 ON，按需权限，不持续定位）
+ * - nearby_poi / open_navigation / hotel_price_lookup（导航 Navigate V1；主开关 + 位置 + 联网）
  * - app_intent
  *
  * 仅封装适合在 Android 端执行的能力。
@@ -72,14 +79,17 @@ class PlatformPlugin @Inject constructor(
     private val deviceSensingSettings: DeviceSensingSettings,
     private val smartCapabilitiesSettings: SmartCapabilitiesSettings,
     private val locationSettings: LocationSettings,
-    private val locationTool: LocationTool
+    private val locationTool: LocationTool,
+    private val nearbyPoiTool: NearbyPoiTool,
+    private val openNavigationTool: OpenNavigationTool,
+    private val hotelPriceTool: HotelPriceTool
 ) : LanXinPlugin {
 
     override val id = "lanxin.platform"
     override val name = "手机平台工具"
-    override val version = "1.4.0"
+    override val version = "1.5.0"
     override val description =
-        "Android 专属能力：剪贴板、已安装应用、设备感知、本地文件、联网搜索、位置（按需权限）、Intent 唤起"
+        "Android 专属能力：剪贴板、已安装应用、设备感知、本地文件、联网搜索、位置、导航 Navigate（附近POI/外链导航/酒店价；与导游拆开）、Intent 唤起"
 
     override suspend fun onLoad(context: PluginContext) {
         context.registerTool(
@@ -363,6 +373,183 @@ class PlatformPlugin @Inject constructor(
 
         context.registerTool(
             ToolDef(
+                name = NavigateConfig.NEARBY_POI_TOOL,
+                description = "查附近 POI：洗手间/出口/电梯/餐饮/酒店/ATM/药店/停车场；需位置+联网；返回距离/方向粗估与 opening_hours；不做室内逐步导航",
+                parameters = buildJsonObject {
+                    put("type", "object")
+                    put(
+                        "properties",
+                        buildJsonObject {
+                            put(
+                                "category",
+                                stringProp(
+                                    "类别：restroom/exit/elevator/dining/hotel/atm/pharmacy/parking 或中文「洗手间」「出口」等"
+                                )
+                            )
+                            put("latitude", numberProp("纬度；缺省则用 get_location 最近位置"))
+                            put("longitude", numberProp("经度；缺省则用 get_location 最近位置"))
+                            put("radius_m", intProp("搜索半径米，默认 800，上限 3000"))
+                            put("limit", intProp("最多条数，默认 5，上限 15"))
+                        }
+                    )
+                    put("required", buildJsonArray { add(JsonPrimitive("category")) })
+                },
+                handler = { args ->
+                    runCatching {
+                        val smart = runCatching {
+                            smartCapabilitiesSettings.getConfig()
+                        }.getOrDefault(
+                            com.lanxin.android.builtin.capabilities.domain.SmartCapabilitiesConfig()
+                        )
+                        val locCfg = locationSettings.getConfig()
+                        val webCfg = webSearchSettings.getConfig()
+                        val locationPrefs = LocationGate.isPrefsOpen(smart, locCfg)
+                        val webOn = WebSearchGate.isEnabled(
+                            webCfg,
+                            smart.masterEnabled && smart.webSearchEnabled
+                        )
+                        NavigateGate.denyPoiIfDisabled(
+                            masterEnabled = smart.masterEnabled,
+                            locationPrefsOpen = locationPrefs,
+                            webSearchEnabled = webOn
+                        )?.let { return@runCatching it }
+
+                        val category = args.string("category") ?: error("category 必填")
+                        val coords = resolveCoords(
+                            latArg = args.double("latitude"),
+                            lonArg = args.double("longitude")
+                        )
+                        if (!coords.ok) return@runCatching coords.error!!
+                        nearbyPoiTool.search(
+                            categoryRaw = category,
+                            lat = coords.lat,
+                            lon = coords.lon,
+                            radiusM = args.int("radius_m") ?: NavigateConfig.DEFAULT_RADIUS_M,
+                            limit = args.int("limit") ?: NavigateConfig.DEFAULT_LIMIT
+                        )
+                    }.toToolResult()
+                }
+            )
+        )
+
+        context.registerTool(
+            ToolDef(
+                name = NavigateConfig.OPEN_NAVIGATION_TOOL,
+                description = "一键调起系统/高德/百度/Google 外链导航到目标坐标；App 内不做 turn-by-turn",
+                parameters = buildJsonObject {
+                    put("type", "object")
+                    put(
+                        "properties",
+                        buildJsonObject {
+                            put("latitude", numberProp("目的地纬度"))
+                            put("longitude", numberProp("目的地经度"))
+                            put("name", stringProp("目的地名称，可选"))
+                            put(
+                                "provider",
+                                stringProp("auto/amap/baidu/google/geo，默认 auto")
+                            )
+                            put(
+                                "mode",
+                                stringProp("walk/drive/transit/ride，默认 walk")
+                            )
+                        }
+                    )
+                    put(
+                        "required",
+                        buildJsonArray {
+                            add(JsonPrimitive("latitude"))
+                            add(JsonPrimitive("longitude"))
+                        }
+                    )
+                },
+                handler = { args ->
+                    runCatching {
+                        val master = runCatching {
+                            smartCapabilitiesSettings.getConfig().masterEnabled
+                        }.getOrDefault(true)
+                        NavigateGate.denyNavIfDisabled(master)?.let {
+                            return@runCatching it
+                        }
+                        val lat = args.double("latitude") ?: error("latitude 必填")
+                        val lon = args.double("longitude") ?: error("longitude 必填")
+                        openNavigationTool.open(
+                            lat = lat,
+                            lon = lon,
+                            name = args.string("name"),
+                            provider = args.string("provider"),
+                            mode = args.string("mode")
+                        )
+                    }.toToolResult()
+                }
+            )
+        )
+
+        context.registerTool(
+            ToolDef(
+                name = NavigateConfig.HOTEL_PRICE_TOOL,
+                description = "联网检索酒店/房间价位摘要；价格供参考、以平台实时为准；需位置门闸+联网搜索",
+                parameters = buildJsonObject {
+                    put("type", "object")
+                    put(
+                        "properties",
+                        buildJsonObject {
+                            put("query", stringProp("酒店名或「附近酒店 价位」等关键词"))
+                            put("latitude", numberProp("可选，辅助「附近」检索"))
+                            put("longitude", numberProp("可选，辅助「附近」检索"))
+                            put("limit", intProp("摘要条数，默认 6"))
+                        }
+                    )
+                    put("required", buildJsonArray { add(JsonPrimitive("query")) })
+                },
+                handler = { args ->
+                    runCatching {
+                        val smart = runCatching {
+                            smartCapabilitiesSettings.getConfig()
+                        }.getOrDefault(
+                            com.lanxin.android.builtin.capabilities.domain.SmartCapabilitiesConfig()
+                        )
+                        val locCfg = locationSettings.getConfig()
+                        val webCfg = webSearchSettings.getConfig()
+                        val locationPrefs = LocationGate.isPrefsOpen(smart, locCfg)
+                        val webOn = WebSearchGate.isEnabled(
+                            webCfg,
+                            smart.masterEnabled && smart.webSearchEnabled
+                        )
+                        NavigateGate.denyPoiIfDisabled(
+                            masterEnabled = smart.masterEnabled,
+                            locationPrefsOpen = locationPrefs,
+                            webSearchEnabled = webOn
+                        )?.let { return@runCatching it }
+
+                        val query = args.string("query") ?: error("query 必填")
+                        val lat = args.double("latitude")
+                        val lon = args.double("longitude")
+                        // 未传坐标时尽量补当前位置（失败则仅用 query）
+                        val (useLat, useLon) = if (lat != null && lon != null) {
+                            lat to lon
+                        } else {
+                            val once = if (locationTool.hasPermission()) {
+                                locationTool.readOnce()
+                            } else {
+                                null
+                            }
+                            val olat = once?.get("latitude")?.jsonPrimitive?.doubleOrNull
+                            val olon = once?.get("longitude")?.jsonPrimitive?.doubleOrNull
+                            olat to olon
+                        }
+                        hotelPriceTool.lookup(
+                            query = query,
+                            lat = useLat,
+                            lon = useLon,
+                            limit = args.int("limit") ?: 6
+                        )
+                    }.toToolResult()
+                }
+            )
+        )
+
+        context.registerTool(
+            ToolDef(
                 name = "app_intent",
                 description = "通过 Intent 唤起其他 App：打开 URL/Deep Link、拨号、短信、邮件、分享、应用设置、按包名启动",
                 parameters = buildJsonObject {
@@ -426,6 +613,50 @@ class PlatformPlugin @Inject constructor(
             }
         )
 
+    private data class CoordResult(
+        val ok: Boolean,
+        val lat: Double = 0.0,
+        val lon: Double = 0.0,
+        val error: JsonObject? = null
+    )
+
+    /**
+     * 优先用参数坐标；否则读 last known（需权限）。
+     */
+    private fun resolveCoords(latArg: Double?, lonArg: Double?): CoordResult {
+        if (latArg != null && lonArg != null) {
+            return CoordResult(ok = true, lat = latArg, lon = lonArg)
+        }
+        if (!locationTool.hasPermission()) {
+            return CoordResult(
+                ok = false,
+                error = buildJsonObject {
+                    put("ok", false)
+                    put("error", "未授予定位权限，且未提供 latitude/longitude")
+                    put("code", "location_permission_denied")
+                    put("needs_permission", true)
+                }
+            )
+        }
+        val once = locationTool.readOnce()
+        if (once["ok"]?.jsonPrimitive?.contentOrNull != "true") {
+            return CoordResult(ok = false, error = once)
+        }
+        val lat = once["latitude"]?.jsonPrimitive?.doubleOrNull
+        val lon = once["longitude"]?.jsonPrimitive?.doubleOrNull
+        if (lat == null || lon == null) {
+            return CoordResult(
+                ok = false,
+                error = buildJsonObject {
+                    put("ok", false)
+                    put("error", "无法解析当前位置")
+                    put("code", "location_no_fix")
+                }
+            )
+        }
+        return CoordResult(ok = true, lat = lat, lon = lon)
+    }
+
     private fun JsonObject.string(key: String): String? =
         this[key]?.jsonPrimitive?.contentOrNull
 
@@ -434,6 +665,10 @@ class PlatformPlugin @Inject constructor(
 
     private fun JsonObject.int(key: String): Int? =
         this[key]?.jsonPrimitive?.contentOrNull?.toIntOrNull()
+
+    private fun JsonObject.double(key: String): Double? =
+        this[key]?.jsonPrimitive?.doubleOrNull
+            ?: this[key]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull()
 
     private fun stringProp(desc: String) = buildJsonObject {
         put("type", "string")
@@ -447,6 +682,11 @@ class PlatformPlugin @Inject constructor(
 
     private fun intProp(desc: String) = buildJsonObject {
         put("type", "integer")
+        put("description", desc)
+    }
+
+    private fun numberProp(desc: String) = buildJsonObject {
+        put("type", "number")
         put("description", desc)
     }
 }

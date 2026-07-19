@@ -941,7 +941,8 @@ class ChatViewModel @Inject constructor(
 
     /**
      * 按联网搜索 / 设备感知开关 + 当前人格 tools/skills 过滤 MCP 工具。
-     * - web_search / system_info / get_location：受智能能力主开关 + 子开关门闸
+     * - web_search / system_info / get_location / nearby_poi / open_navigation / hotel_price_lookup：
+     *   受智能能力主开关 + 子开关门闸
      * - persona 为 null 或 tools/skills 均为 null 时仅应用上述门闸
      * - **不**因此把 needsTools 置 true（首轮仍 preferLocal）
      */
@@ -965,10 +966,24 @@ class ChatViewModel @Inject constructor(
             config = deviceSensingConfig,
             masterEnabled = master && smartConfig.deviceSensingEnabled
         )
-        val gatedTools = com.lanxin.android.builtin.capabilities.domain.LocationGate.filterTools(
+        val afterLocation = com.lanxin.android.builtin.capabilities.domain.LocationGate.filterTools(
             tools = afterDevice,
             smart = smartConfig,
             location = locationConfig
+        )
+        val locationPrefsOpen = com.lanxin.android.builtin.capabilities.domain.LocationGate.isPrefsOpen(
+            smartConfig,
+            locationConfig
+        )
+        val webOn = com.lanxin.android.builtin.platform.domain.WebSearchGate.isEnabled(
+            webSearchConfig,
+            master && smartConfig.webSearchEnabled
+        )
+        val gatedTools = com.lanxin.android.builtin.navigate.domain.NavigateGate.filterTools(
+            tools = afterLocation,
+            masterEnabled = master,
+            locationPrefsOpen = locationPrefsOpen,
+            webSearchEnabled = webOn
         )
         val persona = runCatching { personaRepository.getCurrent() }.getOrNull()
         if (persona == null || (persona.tools == null && persona.skills == null)) {
