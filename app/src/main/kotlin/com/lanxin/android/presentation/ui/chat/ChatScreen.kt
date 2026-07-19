@@ -1,5 +1,6 @@
 package com.lanxin.android.presentation.ui.chat
 
+import android.Manifest
 import android.content.ClipData
 import android.content.Context
 import android.content.Intent
@@ -41,6 +42,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
@@ -64,6 +66,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -93,6 +96,8 @@ import androidx.core.content.FileProvider.getUriForFile
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lanxin.android.R
+import com.lanxin.android.builtin.voice.domain.ChatMicPhase
+import com.lanxin.android.builtin.voice.domain.ChatMicUiState
 import com.lanxin.android.plugins.chat.data.entity.ACTIVE_REVISION_LATEST
 import com.lanxin.android.plugins.chat.data.entity.MessageV2
 import com.lanxin.android.plugins.chat.data.entity.PlatformV2
@@ -134,6 +139,7 @@ fun ChatScreen(
     val isLoaded by chatViewModel.isLoaded.collectAsStateWithLifecycle()
     val selectedAttachments by chatViewModel.selectedAttachments.collectAsStateWithLifecycle()
     val attachmentNotice by chatViewModel.attachmentNotice.collectAsStateWithLifecycle()
+    val chatMicUi by chatViewModel.chatMicUiState.collectAsStateWithLifecycle()
     val appEnabledPlatforms by chatViewModel.enabledPlatformsInApp.collectAsStateWithLifecycle()
     val appAllPlatforms by chatViewModel.platformsInApp.collectAsStateWithLifecycle()
     val chatPlatformModels by chatViewModel.chatPlatformModels.collectAsStateWithLifecycle()
@@ -145,6 +151,32 @@ fun ChatScreen(
     var rememberContent by remember { mutableStateOf<String?>(null) }
 
     val scope = rememberCoroutineScope()
+
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        chatViewModel.onMicPermissionResult(granted = granted, permanentlyDenied = !granted)
+    }
+
+    LaunchedEffect(chatMicUi.needRequestPermission) {
+        if (chatMicUi.needRequestPermission) {
+            chatViewModel.consumeMicPermissionRequest()
+            micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    LaunchedEffect(chatMicUi.snackbarMessage) {
+        chatMicUi.snackbarMessage?.let { msg ->
+            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+            chatViewModel.clearMicSnackbar()
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            chatViewModel.cancelMicSession()
+        }
+    }
 
     suspend fun animateScrollToLatestMessage() {
         if (lastMessageIndex >= 0) {
@@ -326,6 +358,8 @@ fun ChatScreen(
                 chatEnabled = canUseChat,
                 sendButtonEnabled = isIdle,
                 selectedAttachments = selectedAttachments,
+                micUiState = chatMicUi,
+                onMicClick = chatViewModel::onMicClick,
                 onFileSelected = { filePath -> chatViewModel.addSelectedFile(filePath) },
                 onFileRemoved = { filePath -> chatViewModel.removeSelectedFile(filePath) }
             ) {
@@ -747,6 +781,8 @@ fun ChatInputBox(
     chatEnabled: Boolean = true,
     sendButtonEnabled: Boolean = true,
     selectedAttachments: List<ChatAttachmentDraft> = emptyList(),
+    micUiState: ChatMicUiState = ChatMicUiState(),
+    onMicClick: () -> Unit = {},
     onFileSelected: (String) -> Unit = {},
     onFileRemoved: (String) -> Unit = {},
     onSendButtonClick: () -> Unit = {}
@@ -757,6 +793,9 @@ fun ChatInputBox(
     val scope = rememberCoroutineScope()
     val chatInputLineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 5)
     val hasQuestionText = inputState.text.isNotEmpty()
+    val micRecording = micUiState.phase == ChatMicPhase.RECORDING
+    val micBusy = micUiState.phase == ChatMicPhase.TRANSCRIBING
+    val micEnabled = chatEnabled && micUiState.micToggleEnabled
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -782,10 +821,26 @@ fun ChatInputBox(
                 onFileRemoved = onFileRemoved
             )
         }
+        if (micRecording || micBusy) {
+            Text(
+                text = if (micRecording) {
+                    stringResource(R.string.chat_mic_listening)
+                } else {
+                    stringResource(R.string.chat_mic_transcribing)
+                },
+                style = MaterialTheme.typography.labelMedium,
+                color = if (micRecording) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.primary
+                },
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 2.dp)
+            )
+        }
         BasicTextField(
             state = inputState,
             modifier = Modifier.fillMaxWidth(),
-            enabled = chatEnabled,
+            enabled = chatEnabled && !micBusy,
             textStyle = mergedStyle,
             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
             lineLimits = chatInputLineLimits,
@@ -799,7 +854,7 @@ fun ChatInputBox(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(
-                        enabled = chatEnabled,
+                        enabled = chatEnabled && !micBusy,
                         onClick = { filePickerLauncher.launch("image/*") }
                     ) {
                         Icon(
@@ -815,7 +870,11 @@ fun ChatInputBox(
                         if (inputState.text.isEmpty()) {
                             Text(
                                 modifier = Modifier.alpha(0.38f),
-                                text = if (chatEnabled) stringResource(R.string.ask_a_question) else stringResource(R.string.some_platforms_disabled)
+                                text = when {
+                                    !chatEnabled -> stringResource(R.string.some_platforms_disabled)
+                                    micRecording -> stringResource(R.string.chat_mic_listening)
+                                    else -> stringResource(R.string.ask_a_question)
+                                }
                             )
                         }
                         Box(modifier = Modifier.fillMaxWidth()) {
@@ -823,7 +882,34 @@ fun ChatInputBox(
                         }
                     }
                     IconButton(
-                        enabled = chatEnabled && sendButtonEnabled && hasQuestionText,
+                        enabled = micEnabled,
+                        onClick = onMicClick
+                    ) {
+                        if (micBusy) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(22.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Filled.Mic,
+                                contentDescription = stringResource(
+                                    if (micRecording) {
+                                        R.string.chat_mic_stop
+                                    } else {
+                                        R.string.chat_mic_start
+                                    }
+                                ),
+                                tint = if (micRecording) {
+                                    MaterialTheme.colorScheme.error
+                                } else {
+                                    LocalContentColor.current
+                                }
+                            )
+                        }
+                    }
+                    IconButton(
+                        enabled = chatEnabled && sendButtonEnabled && hasQuestionText && !micRecording && !micBusy,
                         onClick = onSendButtonClick
                     ) {
                         Icon(imageVector = ImageVector.vectorResource(id = R.drawable.ic_send), contentDescription = stringResource(R.string.send))
