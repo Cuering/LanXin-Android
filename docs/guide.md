@@ -1,38 +1,66 @@
 # 导游 Guide
 
-> **状态：规划 / 骨架** · 独立于导航 Navigate  
-> 看世界抓帧归属**本侧**；复用 `docs/companion-vision-explain.md`，不另起摄像头栈。
+> **状态：V1 已实现** · 分支 `feat/guide-v1`  
+> **独立模块**，与导航 Navigate 拆开；**不要**做成 monolithic `ScenicGuide` / `realtime-local-guide`。
 
 ## 1. 职责
 
-- 景点 / 展品讲解
-- 看世界识别讲解（全屏陪伴「看世界」）
-- 历史文化与看点
-- 附近景点介绍（位置增强，可选联网）
+| 能力 | 说明 | V1 |
+|------|------|----|
+| 看世界讲解 | 全屏陪伴抓帧 + 多模态 | ✅ 复用 companion vision（#105） |
+| 位置增强 | last known 粗坐标注入 prompt | ✅ `GuideLocationContext` |
+| 导航互跳 | 「想去/导航」→ 提示 `open_navigation` | ✅ `GuideNavHandoff`（不复制导航） |
+| 附近景点介绍 | 联网 POI 讲解 | 后续（非导航 POI 工具） |
+
+**不做**：自研 turn-by-turn、后台轨迹、无 consent 摄像头、与导航共用一个大开关。
 
 ## 2. 入口
 
-- 陪伴页「看世界」+ 对话讲解（已有 V1 视觉）
-- 智能能力 / 陪伴子项「导游/讲解」（后续设置文案）
-- **不要**与「导航/周边」做成一个大开关
+- **主入口**：全屏陪伴「看世界」+ 提问 /「看一眼」
+- **对话**：可走文本会话；V1 视觉讲解在 Companion
+- **不要**占用导航「周边/出口」主路径
 
-## 3. 共享底层
+## 3. 共享底层（不复制）
 
-- `get_location`、`web_search`、Gate、外链（去景点时跳转 **Navigate**）
-- 视觉：`CompanionVisionSession` + CameraX（已实现）
+- 视觉：`CompanionVisionSession` + CameraX + `VisionExplainClient`
+- 位置：`get_location` / `LocationTool.readOnce`（last known）
+- 导航互跳：仅提示调用 Navigate 的 `open_navigation`
+- Gate / consent：#99 场景视觉 consent；位置 prefs + 智能能力 master
 
 ## 4. 代码
 
 ```
 builtin/guide/
 └── domain/
-    └── GuideConfig.kt    # feature id / 与 vision 关联
+    ├── GuideConfig.kt
+    ├── GuideGate.kt
+    ├── GuideLocationContext.kt
+    ├── GuideNavHandoff.kt
+    └── GuidePromptBuilder.kt
 ```
 
-实现优先落在 pet companion vision；本包只承载导游域命名与后续位置增强讲解，避免与 `builtin/navigate` 揉包。
+接线：`CompanionViewModel.explainWithFrame` 注入位置 snippet + handoff。  
+单测：`GuideDomainTest`。  
+CI：`.github/workflows/guide-verify.yml`（JDK 21）。
 
-## 5. 交付
+## 5. 与导航
 
-1. ✅ 看世界 V1（#105）
-2. ⬜ 位置增强讲解（当前城市/景点上下文注入）
-3. ⬜ 与导航互跳文案（「去这里」→ open_navigation）
+| | 导航 Navigate | 导游 Guide |
+|--|---------------|------------|
+| 用户说法 | 出口/厕所/酒店价/带我去 | 这是什么/讲讲景点 |
+| 相机 | 一般不需要 | 「看世界」+ consent |
+| 交付 | #109 已合 | **本 V1** |
+| 跳转 | 到景点后可提示开导游 | 讲完「去这里」→ 调导航 |
+
+详见 `docs/navigate.md`、`docs/companion-vision-explain.md`。
+
+## 6. 隐私
+
+- 相机：consent + 会话开关，不后台偷拍
+- 位置：用时 last known，无持续轨迹
+- 讲解内容标明「供参考」
+
+## 7. 交互示例
+
+- 开「看世界」→「这是什么」→ 抓帧讲解（有定位则附粗位置）
+- 「带我去那里」→ 讲解 + 文末提示 open_navigation

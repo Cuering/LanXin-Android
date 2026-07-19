@@ -50,7 +50,7 @@ CI：`.github/workflows/navigate-verify.yml`（JDK 21 + unit + compileDebugKotli
 |--|---------------|------------|
 | 用户说法 | 出口/厕所/酒店价/带我去 | 这是什么/讲讲景点 |
 | 相机 | 一般不需要 | 可联动「看世界」 |
-| 交付 | **先** V1 | 后 V1（复用 companion vision） |
+| 交付 | **#109 已合** | Guide V1（`docs/guide.md`，看世界 + 位置增强） |
 | 跳转 | 导游讲完「去这里」→ 调导航 | 导航到景点后可提示开导游 |
 
 ## 6. 交互示例

@@ -1,0 +1,101 @@
+# 导游 Guide V1：看世界位置增强 / 导航互跳
+name: Guide Verify
+
+on:
+  push:
+    branches: [main, 'feat/guide*']
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/guide/**'
+      - 'app/src/test/kotlin/com/lanxin/android/builtin/guide/**'
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/pet/presentation/CompanionScreen.kt'
+      - 'docs/guide.md'
+      - 'docs/navigate.md'
+      - 'docs/companion-vision-explain.md'
+      - '.github/workflows/guide-verify.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/guide/**'
+      - 'app/src/test/kotlin/com/lanxin/android/builtin/guide/**'
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/pet/presentation/CompanionScreen.kt'
+      - 'docs/guide.md'
+      - 'docs/navigate.md'
+      - 'docs/companion-vision-explain.md'
+      - '.github/workflows/guide-verify.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: guide-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-and-compile:
+    name: unit-and-compile
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: gradle
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup local.properties and debug keystore
+        run: |
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+          rm -f debug-keystore.jks
+          keytool -genkeypair -v -keystore debug-keystore.jks -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Create assets model dir (models gitignored)
+        run: |
+          mkdir -p app/src/main/assets/models/gte-small
+          touch app/src/main/assets/models/gte-small/.gitkeep
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Unit tests (guide package)
+        run: |
+          ./gradlew :app:testDebugUnitTest \
+            --tests "com.lanxin.android.builtin.guide.*" \
+            --no-daemon --stacktrace
+
+      - name: Compile debug Kotlin
+        run: ./gradlew :app:compileDebugKotlin --no-daemon --stacktrace
+
+      - name: Assemble debug APK
+        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Surfaces and docs present
+        run: |
+          test -f docs/guide.md
+          test -f docs/navigate.md
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/guide/domain/GuideConfig.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/guide/domain/GuideGate.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/guide/domain/GuideLocationContext.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/guide/domain/GuideNavHandoff.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/guide/domain/GuidePromptBuilder.kt
+          test -f app/src/test/kotlin/com/lanxin/android/builtin/guide/GuideDomainTest.kt
+          # 禁止 ScenicGuide monlith / localguide 实现包
+          ! find app/src -type f \( -name '*ScenicGuide*' -o -name '*LocalGuide*' -o -name '*localguide*' \) | grep .
+          grep -E -n "GuideLocationContext|GuideNavHandoff|GuidePromptBuilder" \
+            app/src/main/kotlin/com/lanxin/android/builtin/pet/presentation/CompanionScreen.kt
+          grep -E -n "位置增强|GuideNavHandoff|open_navigation|看世界" docs/guide.md
+          grep -E -n "导游 Guide|独立" docs/navigate.md
+
+      - name: Upload Debug APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lanxin-debug-apk-guide
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: warn
