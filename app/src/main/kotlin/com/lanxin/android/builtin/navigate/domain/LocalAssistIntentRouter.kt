@@ -27,8 +27,10 @@ object LocalAssistIntentRouter {
     enum class AssistIntent {
         /** 景点/展品/看世界讲解 → Guide */
         GUIDE,
+
         /** 出口/厕所/酒店价/带我去 → Navigate */
         NAVIGATE,
+
         /** 无法判定 */
         UNKNOWN
     }

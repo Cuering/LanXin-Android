@@ -146,7 +146,7 @@ object NavigationUriBuilder {
             Mode.TRANSIT -> "transit"
         }
         // destination=lat,lng|name  （BD09 更准，但 GCJ/WGS 多数 App 可纠偏；标明 src）
-        val dest = "${t.lat},${t.lon}|${name}"
+        val dest = "${t.lat},${t.lon}|$name"
         val uri =
             "baidumap://map/direction?destination=${encode(dest)}&mode=$m&coord_type=wgs84&src=lanxin"
         return NavUri(provider = "baidu", uri = uri, packageHint = "com.baidu.BaiduMap")
