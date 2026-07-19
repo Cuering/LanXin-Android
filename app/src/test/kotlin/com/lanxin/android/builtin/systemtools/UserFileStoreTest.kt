@@ -154,13 +154,13 @@ class UserFileStoreTest {
         ) as DeviceToolOutcome.Ok
         val id = ok.data["id"]!!.toString()
 
-        val gate = DeviceToolGate {
+        val gate = DeviceToolGate(configProvider = {
             SystemToolsConfig(
                 masterEnabled = true,
                 userFileEnabled = true,
                 requireConfirmOnWrite = true
             )
-        }
+        })
         val needs = gate.invoke(delete, mapOf("id" to id), confirmed = false)
         assertTrue(needs is DeviceToolOutcome.NeedsConfirmation)
 
@@ -172,9 +172,9 @@ class UserFileStoreTest {
     @Test
     fun `capability off denies file tools`() = runBlocking {
         val list = FileListDeviceTool(catalog, io)
-        val gate = DeviceToolGate {
+        val gate = DeviceToolGate(configProvider = {
             SystemToolsConfig(masterEnabled = true, userFileEnabled = false)
-        }
+        })
         val out = gate.invoke(list, emptyMap(), confirmed = false)
         assertTrue(out is DeviceToolOutcome.Denied)
         assertEquals("capability_disabled", (out as DeviceToolOutcome.Denied).code)
