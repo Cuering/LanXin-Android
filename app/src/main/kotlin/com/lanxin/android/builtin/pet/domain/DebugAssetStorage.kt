@@ -222,7 +222,9 @@ object DebugAssetStorage {
             baseDir = externalRoot,
             lanXinDir = File(externalRoot, rootName)
         )
-        val documents = File(externalRoot, Environment.DIRECTORY_DOCUMENTS)
+        // 字面量 "Documents"：JVM 单测 android.jar 上 DIRECTORY_DOCUMENTS 可能为 null
+        val docsName = Environment.DIRECTORY_DOCUMENTS?.takeIf { it.isNotBlank() } ?: "Documents"
+        val documents = File(externalRoot, docsName)
         val underDocs = PublicCandidate(
             baseDir = documents,
             lanXinDir = File(documents, rootName)

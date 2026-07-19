@@ -91,14 +91,18 @@ class DebugAssetStorageTest {
         val external = tmp.newFolder("emulated0")
         val candidates = DebugAssetStorage.publicLanXinCandidates(external)
         assertEquals(2, candidates.size)
-        assertEquals(File(external, "LanXin").absolutePath, candidates[0].lanXinDir.absolutePath)
-        assertEquals(external.absolutePath, candidates[0].baseDir.absolutePath)
-        val docs = File(external, "Documents")
-        assertEquals(File(docs, "LanXin").absolutePath, candidates[1].lanXinDir.absolutePath)
-        assertEquals(docs.absolutePath, candidates[1].baseDir.absolutePath)
-        // relativeReadyPath 契约：baseDir + LanXin/... == lanXinDir 下
-        val ready = File(candidates[0].baseDir, "LanXin/asr/x")
-        assertTrue(ready.path.startsWith(candidates[0].lanXinDir.path))
+        assertEquals(File(external, "LanXin"), candidates[0].lanXinDir)
+        assertEquals(external, candidates[0].baseDir)
+        // 第二候选在 Documents/LanXin（docs 名可能来自 Environment 或字面量回退）
+        assertEquals("LanXin", candidates[1].lanXinDir.name)
+        assertEquals(candidates[1].baseDir, candidates[1].lanXinDir.parentFile)
+        assertEquals(external, candidates[1].baseDir.parentFile)
+        // relativeReadyPath 契约：baseDir + LanXin/... 落在 lanXinDir 下
+        val ready = File(candidates[0].baseDir, "LanXin${File.separator}asr${File.separator}x")
+        assertTrue(
+            ready.canonicalPath.startsWith(candidates[0].lanXinDir.canonicalPath + File.separator) ||
+                ready.canonicalPath == candidates[0].lanXinDir.canonicalPath
+        )
     }
 
     /**
