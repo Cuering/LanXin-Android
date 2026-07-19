@@ -1,15 +1,15 @@
 # 导航 Navigate
 
-> **状态：V1 骨架（domain 纯逻辑）** · 分支 `feat/navigate-v1`  
+> **状态：V1 已实现** · 分支 `feat/navigate-v1`  
 > **独立模块**，与「导游 Guide」拆开；**不要**做成 monolithic `ScenicGuide` / `realtime-local-guide`。
 
 ## 1. 职责
 
 | 能力 | 说明 | V1 |
 |------|------|----|
-| 附近 POI | 出口 / 洗手间 / 电梯 / 餐饮 / 酒店 / ATM / 药店 / 停车 | `nearby_poi`（待接线） |
-| 外链导航 | 调起高德 / 百度 / geo / Google，**不做**自研 turn-by-turn | `open_navigation` |
-| 酒店价 | 联网搜索摘要价位（非订房闭环） | `hotel_price_lookup` |
+| 附近 POI | 出口 / 洗手间 / 电梯 / 餐饮 / 酒店 / ATM / 药店 / 停车 | `nearby_poi` ✅ Overpass |
+| 外链导航 | 调起高德 / 百度 / geo / Google，**不做**自研 turn-by-turn | `open_navigation` ✅ |
+| 酒店价 | 联网搜索摘要价位（非订房闭环） | `hotel_price_lookup` ✅ |
 
 **不做**：后台轨迹、无确认摄像头、与导游共用一个大开关。
 
@@ -31,15 +31,18 @@
 ```
 builtin/navigate/
 ├── domain/
-│   ├── NavigateConfig.kt       # 工具名与半径/条数默认
-│   ├── PoiCategory.kt          # OSM Overpass 类别
-│   ├── GeoMath.kt              # 距离/方位
-│   ├── NavigationUriBuilder.kt # 外链 URI
+│   ├── NavigateConfig.kt / NavigateGate.kt
+│   ├── PoiCategory.kt · GeoMath.kt · NavigationUriBuilder.kt
+│   ├── OverpassPoiParser.kt · HotelPriceHints.kt
 │   └── LocalAssistIntentRouter.kt  # 导游 vs 导航粗分（提示用）
-└── tools/                      # V1 接线：NearbyPoiTool 等（待落地）
+└── tools/
+    ├── NearbyPoiTool.kt · OpenNavigationTool.kt · HotelPriceTool.kt
 ```
 
-单测：`NavigateDomainTest`。
+注册：`PlatformPlugin`（导航工具，非导游包）。  
+门闸：`ChatViewModel` → `NavigateGate.filterTools`。  
+单测：`NavigateDomainTest`。  
+CI：`.github/workflows/navigate-verify.yml`（JDK 21 + unit + compileDebugKotlin + assembleDebug）。
 
 ## 5. 与导游
 
@@ -55,3 +58,8 @@ builtin/navigate/
 - 「附近厕所」→ `get_location` + `nearby_poi(restroom)` → 距离/方位列表
 - 「带我去最近出口」→ POI + `open_navigation`
 - 「这附近酒店多少钱」→ 定位粗地址 + `hotel_price_lookup` / web_search
+
+## 7. 隐私
+
+- 用时定位（`get_location` / last known），无后台轨迹
+- POI/酒店价依赖联网；`open_navigation` 仅外链 Intent
