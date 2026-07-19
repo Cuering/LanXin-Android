@@ -41,7 +41,8 @@ IDLE → LISTENING → THINKING → SPEAKING → IDLE
 | **M3** | 真 TTS + 口型 | 后续 |
 | **M4** | 自有/授权 Live2D | 后续 |
 | **M5** | 场景识别：摄像头快照 + 确认 Gate → 现有背景/mood（最小） | ✅ · `docs/scene-sensing.md`（#99 Gate 底座） |
-| **M5b** | 全屏陪伴「看世界」：PiP 预览 + 提问抓帧 + 多模态讲解 | ✅ V1 · `docs/companion-vision-explain.md` |
+| **M5b** | 全屏陪伴「看世界」：PiP 预览 + 提问抓帧 + 多模态讲解（**导游 Guide**） | ✅ V1 · `docs/companion-vision-explain.md` · `docs/guide.md` |
+| **M5c** | **导航 Navigate** V1：附近 POI + 酒店价 + 外链导航（与导游拆开） | 骨架 · `docs/navigate.md` · 分支 `feat/navigate-v1` |
 
 ### 2.1 陪伴页背景音乐
 
