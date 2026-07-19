@@ -42,14 +42,50 @@
 
 ### 落盘路径（用户可访问）
 
+App **自动创建**统一 `LanXin/` 目录树（启动/进入资源设置时 `DebugAssetStorage.resolve`），
+用户不必手建文件夹；模型 / ASR / TTS / 本地脑 / 背景 / 音乐都落在该树下。
+
 | 优先级 | 路径 | 说明 |
 |:------:|------|------|
-| **1** | `{外部存储}/LanXin/` | 如 `/storage/emulated/0/LanXin/`；文件管理器易见 |
+| **1** | `{外部存储}/LanXin/` | 如 `/storage/emulated/0/LanXin/`；文件管理器易见（File 直写） |
+| **1b** | `{外部存储}/Documents/LanXin/` | 根 `LanXin` 不可写时尝试标准文档树 |
 | 2 | `Android/data/com.lanxin.android/files/LanXin/` | 公共目录不可写时回退（`getExternalFilesDir`） |
-| 子目录 | `live2d/<模型名>/` · `asr/…` · `tts/…` · `models/local-llm/light/` | 相对 `LanXin/`；Live2D 以目录内 `*.model3.json` 为准 |
+| **SAF** | 用户 OpenDocumentTree 授权的公共 `LanXin/` | 设置页「授权公共 LanXin」；**引擎仍写 File 路径**，下载完成后**镜像**到 SAF 树；授权时同步建子目录骨架 |
+| 子目录 | `live2d/` · `asr/` · `tts/` · `models/local-llm/light/` · `backgrounds/` · `music/` | 相对 `LanXin/`；Live2D 以目录内 `*.model3.json` 为准 |
 | 兼容 | 历史 `filesDir/debug-assets/live2d/` | 仍可被路径解析与模型列表识别 |
 
-成功下载后 UI 展示「已保存到 <绝对路径>」。
+成功下载后 UI 展示「已保存到 <绝对路径>」；若走了回退且 SAF 可写，会追加镜像结果（成功/失败均可见，**禁止静默**）。
+
+文件管理器打开路径示例：`内部存储/LanXin/` 或 `内部存储/Documents/LanXin/`，可见 `live2d` / `asr` / `tts` / `models` 等空目录（下载后才有文件）。
+
+#### SAF 授权与写入契约
+
+| 状态 | 下载主路径 | 公共目录 | UI |
+|------|-----------|---------|-----|
+| 公共 File 可写 | `{sdcard}/LanXin/` 或 `Documents/LanXin/` | 同左；**自动建子目录** | 显示真实公共路径 |
+| 回退 + **未**授权 SAF | `getExternalFilesDir()/LanXin/`（已自动建骨架） | 无 | 「未授权」+ 私有路径；引导授权公共 `LanXin` |
+| 回退 + SAF 可写 | 引擎仍写 App 私有 | **下载完成后镜像**到 SAF 树；授权时已建子目录 | 「已授权可写 · 镜像…」；失败 snackbar 可见 |
+| 回退 + SAF 已授权但不可写 | App 私有 | 无镜像 | 「已授权但不可写」+ 提示重选 |
+| 清除授权 | 回退私有 | 停止镜像 | 「已清除」 |
+
+**禁止**静默只写私有却显示「已授权公共」。
+
+实现：`DebugOpenSourcePaths.STANDARD_SUBDIRS` · `DebugAssetStorage.ensureLanXinStructure` / `publicLanXinCandidates` · `LanXinSafTree.ensureStructure` · `shouldMirror` / `mirrorReadyPathToSaf` · `DesktopPetViewModel.grantLanXinSafTree`。
+
+#### 模型开关与路径
+
+| 能力 | 默认 | 开关打开后 | 路径空/失效 |
+|------|------|-----------|------------|
+| ASR | **OFF** | **自动 `engine.load`**；调用前 `VoiceInputCoordinator` 也会 auto-load | 明确 snackbar：请一键下载/导入 |
+| **本地脑** | **OFF**（**保留独立开关**，不抬默认 ON、不合并掉） | **自动 `engine.load`**；`DefaultLocalInferenceProvider` 调用前也会 load | 明确错误文案（路径空/load 失败） |
+| TTS | **OFF** | 桌宠启用/会话时 load | 无路径仍可 stub 字幕 |
+| 路径解析 | — | 配置失效时探测 `openSourceBaseDir` 下 `LanXin/…` 并 **heal 回写** DataStore | 避免「开关开了找不到模型」 |
+
+**本地脑产品约束（收口 #106）**：
+
+1. **保留独立开关** `local_inference_enabled`（设置页「本地推理」），后续智能能力整合也**勿合并/勿删除**。
+2. **默认关**：与「其它能力大多可默认开」区分；未显式打开时不 load native、不占模型内存。
+3. **打开可 load**：开关 ON + 路径/资源就绪 → `engine.load` 真生效；路径空 / load 失败有明确提示；路径回落 + heal 仍保留。
 
 
 实现要点：
@@ -58,7 +94,7 @@
 |------|-----|
 | Catalog / 镜像 | `DebugAssetCatalog` · `DebugAssetMirror` |
 | 下载 | `DebugAssetDownloader` + `AssetDownloadTransport` |
-| 落盘根 | `DebugAssetStorage`（公共 `LanXin/` → externalFiles 回退） |
+| 落盘根 | `DebugAssetStorage`（公共 `LanXin/` → externalFiles 回退；SAF 授权后镜像公共树） |
 | 传输 | `KtorAssetDownloadTransport`（OkHttp + IPv4 优先；connect 90s / socket 5min / request=`HttpTimeoutConfig.INFINITE_TIMEOUT_MS`，**禁止** `0`） |
 | 解压 | `ArchiveExtractor`（zip / tar.bz2 / tar.gz，防 zip-slip） |
 | DI | `PetModule` binds transport |
@@ -126,12 +162,14 @@ bash scripts/download-debug-tts.sh
 
 | Key | 说明 |
 |-----|------|
-| `local_inference_model_path` | 默认选型 **Qwen2.5-1.5B-Instruct**（MNN 量化） |
+| `local_inference_enabled` | **默认 `false`**；独立开关，打开后 auto-load |
+| `local_inference_model_path` | 默认选型 **Qwen2.5-1.5B-Instruct**（MNN 量化）；可空直至下载/导入 |
 | 一键下载落盘 | `LanXin/models/local-llm/light/`（含 `llm.mnn` / `llm.mnn.weight` / tokenizer 等） |
 | 源序 | ModelScope（含 www）→ hf-mirror → HuggingFace |
 | 下载超时 | 独立 `KtorAssetDownloadTransport`（OkHttp）：connect 90s / socket 5min / request=`INFINITE_TIMEOUT_MS`（**禁止** `0`，Ktor 3.5 会直接抛并被误标 Timeout） |
 | 可恢复 | `*.part` + HTTP `Range` 续传；超时/断连自动重试（最多 3 次）；多文件跳过已下完项 |
 | 失败提示 | 各源错误聚合；可 Wi‑Fi 重试或电脑放到 `LanXin/models/local-llm/light/` |
+| 开关行为 | ON → `LocalInferenceViewModel.setEnabled` / Provider 调用前 `engine.load`；路径空 snackbar/Error；路径失效由桌宠设置 `healModelPathsIfNeeded` 回写 |
 
 详见 [`local-inference.md`](./local-inference.md)。
 

@@ -45,6 +45,7 @@ import com.lanxin.android.builtin.systemtools.domain.UserFileIoResult
 import com.lanxin.android.builtin.systemtools.domain.UserFileProbe
 import com.lanxin.android.builtin.voice.data.StubTtsEngine
 import com.lanxin.android.builtin.voice.domain.TtsConfig
+import com.lanxin.android.builtin.voice.domain.TtsSettings
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -53,6 +54,27 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class VoiceSessionCoordinatorTest {
+
+    private class FakeTtsSettings(
+        private var config: TtsConfig = TtsConfig(enabled = true)
+    ) : TtsSettings {
+        override suspend fun getConfig(): TtsConfig = config
+        override suspend fun setEnabled(enabled: Boolean) {
+            config = config.copy(enabled = enabled)
+        }
+        override suspend fun setModelPath(path: String?) {
+            config = config.copy(modelPath = path.orEmpty())
+        }
+        override suspend fun setModelDir(path: String?) {
+            config = config.copy(modelDir = path.orEmpty())
+        }
+        override suspend fun setReferenceAudio(path: String?) {
+            config = config.copy(referenceAudio = path.orEmpty())
+        }
+        override suspend fun setVoiceId(voiceId: String) {
+            config = config.copy(voiceId = voiceId)
+        }
+    }
 
     private class FakePetSettings(
         var config: PetConfig = PetConfig(enabled = true)
@@ -184,6 +206,7 @@ class VoiceSessionCoordinatorTest {
         return VoiceSessionCoordinator(
             responder = responder,
             ttsEngine = tts,
+            ttsSettings = FakeTtsSettings(),
             petSettings = FakePetSettings(pet),
             deviceToolBridge = defaultBridge()
         )

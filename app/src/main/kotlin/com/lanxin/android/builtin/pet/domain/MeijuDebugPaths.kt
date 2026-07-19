@@ -124,7 +124,10 @@ object MeijuDebugPaths {
         allowMeijuRef: Boolean = true,
         openSourceBaseDir: File = filesDir
     ): String {
-        if (configured.isNotBlank()) return configured.trim()
+        // 配置路径存在才用；失效/空 → 继续探测开源包 / 内置
+        // （修复：旧配置指向公共目录但实际落在 App 私有时开关开了也找不到）
+        val cfg = configured.trim()
+        if (cfg.isNotBlank() && pathExists(cfg)) return cfg
         if (BuiltInLive2dAssets.isInstalled(filesDir)) {
             return BuiltInLive2dAssets.installedModelFile(filesDir).absolutePath
         }
@@ -136,6 +139,8 @@ object MeijuDebugPaths {
             val f = live2dModelFile(filesDir)
             if (f.isFile) return f.absolutePath
         }
+        // 配置了但不存在：仍返回配置值便于 UI 显示「路径无效」
+        if (cfg.isNotBlank()) return cfg
         return if (preferBuiltinLogical) BuiltInLive2dAssets.LOGICAL_PATH else ""
     }
 
@@ -144,19 +149,23 @@ object MeijuDebugPaths {
         configured: String,
         openSourceBaseDir: File = filesDir
     ): String {
-        if (configured.isNotBlank()) return configured.trim()
+        val cfg = configured.trim()
+        if (cfg.isNotBlank() && pathExists(cfg)) return cfg
         for (base in openSourceSearchBases(filesDir, openSourceBaseDir)) {
             val open = DebugOpenSourcePaths.ttsModelDir(base)
             if (DebugOpenSourcePaths.isModelDirReady(open)) return open.absolutePath
         }
         val d = ttsModelDirFile(filesDir)
-        return if (d.isDirectory) d.absolutePath else ""
+        if (d.isDirectory) return d.absolutePath
+        return cfg
     }
 
     fun resolveTtsReferenceIfPresent(filesDir: File, configured: String): String {
-        if (configured.isNotBlank()) return configured.trim()
+        val cfg = configured.trim()
+        if (cfg.isNotBlank() && pathExists(cfg)) return cfg
         val f = ttsReferenceAudioFile(filesDir)
-        return if (f.isFile) f.absolutePath else ""
+        if (f.isFile) return f.absolutePath
+        return cfg
     }
 
     fun resolveAsrIfPresent(
@@ -164,13 +173,43 @@ object MeijuDebugPaths {
         configured: String,
         openSourceBaseDir: File = filesDir
     ): String {
-        if (configured.isNotBlank()) return configured.trim()
+        val cfg = configured.trim()
+        if (cfg.isNotBlank() && pathExists(cfg)) return cfg
         for (base in openSourceSearchBases(filesDir, openSourceBaseDir)) {
             val open = DebugOpenSourcePaths.asrModelDir(base)
             if (DebugOpenSourcePaths.isModelDirReady(open)) return open.absolutePath
         }
         val d = asrModelDirFile(filesDir)
-        return if (d.isDirectory) d.absolutePath else ""
+        if (d.isDirectory) return d.absolutePath
+        return cfg
+    }
+
+    /**
+     * 本地脑：配置路径存在 → 用配置；否则探测 `LanXin/models/local-llm/light/`。
+     */
+    fun resolveLocalLlmIfPresent(
+        filesDir: File,
+        configured: String,
+        openSourceBaseDir: File = filesDir
+    ): String {
+        val cfg = configured.trim()
+        if (cfg.isNotBlank() && pathExists(cfg)) return cfg
+        for (base in openSourceSearchBases(filesDir, openSourceBaseDir)) {
+            val open = DebugOpenSourcePaths.localLlmModelDir(base)
+            if (DebugOpenSourcePaths.isLocalLlmDirReady(open)) return open.absolutePath
+        }
+        return cfg
+    }
+
+    /** 文件或目录存在即 true（stub:// 视为存在）。 */
+    fun pathExists(path: String): Boolean {
+        val p = path.trim()
+        if (p.isBlank()) return false
+        if (p.startsWith("stub://") || p.startsWith("asset://") || p.startsWith("builtin://")) {
+            return true
+        }
+        val f = File(p)
+        return f.exists()
     }
 
     /** 开源包可能在公共 LanXin base、externalFiles 或历史 filesDir。 */

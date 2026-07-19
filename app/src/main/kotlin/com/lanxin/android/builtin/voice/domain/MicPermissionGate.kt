@@ -64,7 +64,8 @@ object MicPermissionGate {
             return "离线语音识别未启用。请到「设置 → 离线语音识别」打开开关。"
         }
         if (!engineReady) {
-            return "语音识别模型未就绪。请到「设置 → 离线语音识别」填写模型路径并加载。"
+            return "语音识别模型未就绪。请确认：① 开关已开；② 已下载/导入 ASR 模型；" +
+                "③ 路径有效。可到桌宠设置「一键下载 ASR」后重开开关自动加载。"
         }
         if (requireMic && !canRecord(permission)) {
             return deniedMessage(permission)

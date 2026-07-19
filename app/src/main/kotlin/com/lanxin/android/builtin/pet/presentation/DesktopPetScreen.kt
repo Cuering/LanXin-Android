@@ -386,25 +386,38 @@ fun DesktopPetScreen(
                                 append(state.downloadRootPath)
                                 when {
                                     !state.downloadRootFallback -> Unit
-                                    state.safWritable -> append("（引擎写 App 目录，已授权 SAF）")
-                                    else -> append("（公共目录不可写，已回退 App 私有）")
+                                    state.safWritable ->
+                                        append("（引擎写 App 私有；下载完成后会镜像到公共树）")
+                                    state.safGranted ->
+                                        append("（SAF 已授权但不可写；仅 App 私有）")
+                                    else ->
+                                        append("（公共目录不可写，已回退 App 私有）")
                                 }
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    // SAF：可选镜像到公共 LanXin；无授权时下载仍走 App 私有 files，不阻塞
+                    // SAF：授权后下载会镜像到公共 LanXin；失败可见，无授权时仍可用 App 私有
                     Text(
                         buildString {
                             append("公共目录：")
                             when {
                                 state.safWritable ->
-                                    append("已授权可写 · ${state.safDisplayLabel.ifBlank { "LanXin" }}")
+                                    append(
+                                        "已授权可写 · ${state.safDisplayLabel.ifBlank { "LanXin" }}" +
+                                            "（已建 live2d/asr/tts/models 骨架；下载完成后同步）"
+                                    )
                                 state.safGranted ->
-                                    append("已授权但不可写 · ${state.safDisplayLabel.ifBlank { "—" }}")
+                                    append(
+                                        "已授权但不可写 · ${state.safDisplayLabel.ifBlank { "—" }}" +
+                                            "（请重新选择可写的 LanXin 文件夹）"
+                                    )
                                 else ->
-                                    append("未授权（下载仍可用 App 私有目录，无需授权）")
+                                    append(
+                                        "未授权（App 已自动建私有 LanXin/ 骨架；" +
+                                            "点下方授权公共 LanXin 后可在文件管理器看到模型）"
+                                    )
                             }
                         },
                         style = MaterialTheme.typography.bodySmall,
