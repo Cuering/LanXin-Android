@@ -20,6 +20,7 @@ import com.lanxin.android.plugin.dynamic.SignaturePolicy
 import com.lanxin.android.plugin.dynamic.StoreBackedPluginSignatureVerifier
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
@@ -45,13 +46,13 @@ class PluginManager @Inject constructor(
     @ApplicationContext private val appContext: Context
 ) : PluginCatalog {
 
-    private val plugins = java.util.concurrent.ConcurrentHashMap<String, LanXinPlugin>()
-    private val tools = java.util.concurrent.ConcurrentHashMap<String, ToolDef>()
+    private val plugins = ConcurrentHashMap<String, LanXinPlugin>()
+    private val tools = ConcurrentHashMap<String, ToolDef>()
 
     /** toolName → 所属 pluginId（用于 disable 时清理工具） */
-    private val toolOwners = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val toolOwners = ConcurrentHashMap<String, String>()
     private val loadedIds = java.util.Collections.synchronizedSet(mutableSetOf<String>())
-    private val dynamicHandles = java.util.concurrent.ConcurrentHashMap<String, DynamicPluginHandle>()
+    private val dynamicHandles = ConcurrentHashMap<String, DynamicPluginHandle>()
     private val compiledIds = java.util.Collections.synchronizedSet(mutableSetOf<String>())
     private val lastFailures = java.util.Collections.synchronizedList(mutableListOf<PluginLoadResult.Failure>())
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -165,7 +166,8 @@ class PluginManager @Inject constructor(
     fun isEnabled(pluginId: String): Boolean = stateStore.isEnabled(pluginId)
 
     override suspend fun setEnabled(pluginId: String, enabled: Boolean): Boolean {
-        if (pluginId !in plugins && pluginId !in dynamicHandles) {
+        // ConcurrentHashMap: 必须用 containsKey，Kotlin `in` 会误走 containsValue（KT-18053）
+        if (!plugins.containsKey(pluginId) && !dynamicHandles.containsKey(pluginId)) {
             stateStore.setEnabled(pluginId, enabled)
             return false
         }
@@ -235,7 +237,7 @@ class PluginManager @Inject constructor(
     }
 
     override suspend fun unloadPlugin(pluginId: String): Boolean {
-        if (pluginId in compiledIds && pluginId !in dynamicHandles) {
+        if (pluginId in compiledIds && !dynamicHandles.containsKey(pluginId)) {
             return false
         }
         val plugin = plugins[pluginId] ?: return false
@@ -319,7 +321,7 @@ class PluginManager @Inject constructor(
                 val pkg = loaded.pkg
                 val id = pkg.manifest.id
 
-                if (id in plugins && id !in dynamicHandles) {
+                if (plugins.containsKey(id) && !dynamicHandles.containsKey(id)) {
                     return PluginLoadResult.Failure(
                         apkPath = apkFile.absolutePath,
                         pluginId = id,
@@ -327,7 +329,7 @@ class PluginManager @Inject constructor(
                     )
                 }
 
-                if (id in dynamicHandles) {
+                if (dynamicHandles.containsKey(id)) {
                     unloadPlugin(id)
                 }
 
