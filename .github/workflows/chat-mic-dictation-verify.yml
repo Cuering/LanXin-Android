@@ -87,3 +87,19 @@ jobs:
             app/src/main/kotlin/com/lanxin/android/builtin/voice/data/PcmAudioRecorder.kt
           grep -E -n "chat_mic_start|chat_mic_listening" app/src/main/res/values/strings.xml
           grep -E -n "RECORD_AUDIO" app/src/main/AndroidManifest.xml
+
+      - name: Compile Debug (catch ChatViewModel Hilt wiring)
+        run: |
+          ./gradlew :app:compileDebugKotlin --no-daemon --stacktrace
+
+      - name: Assemble Debug APK
+        run: |
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Upload debug APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-apk-chat-mic-${{ github.sha }}
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
