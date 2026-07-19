@@ -71,6 +71,34 @@ class SmartCapabilitiesTest {
     }
 
     @Test
+    fun `navigate and guide stay default OFF`() {
+        assertFalse(
+            SmartCapabilitiesGate.effective(
+                SmartCapabilitiesConfig(),
+                SmartCapabilityId.NAVIGATE
+            )
+        )
+        assertFalse(
+            SmartCapabilitiesGate.effective(
+                SmartCapabilitiesConfig(),
+                SmartCapabilityId.GUIDE
+            )
+        )
+        assertTrue(
+            SmartCapabilitiesGate.effective(
+                SmartCapabilitiesConfig(navigateEnabled = true),
+                SmartCapabilityId.NAVIGATE
+            )
+        )
+        assertTrue(
+            SmartCapabilitiesGate.effective(
+                SmartCapabilitiesConfig(guideEnabled = true),
+                SmartCapabilityId.GUIDE
+            )
+        )
+    }
+
+    @Test
     fun `master off denies all children`() {
         val c = SmartCapabilitiesConfig(
             masterEnabled = false,
@@ -130,6 +158,8 @@ class SmartCapabilitiesTest {
         assertTrue(resolved.locationEnabled)
         assertFalse(resolved.localInferenceEnabled)
         assertFalse(resolved.sceneVisionEnabled)
+        assertFalse(resolved.navigateEnabled)
+        assertFalse(resolved.guideEnabled)
         assertTrue(resolved.migratedV1)
     }
 
