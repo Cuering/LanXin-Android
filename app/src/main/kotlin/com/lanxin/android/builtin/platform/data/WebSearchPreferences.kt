@@ -22,6 +22,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.lanxin.android.builtin.capabilities.data.SmartCapabilitiesPreferences
 import com.lanxin.android.builtin.platform.domain.WebSearchConfig
 import com.lanxin.android.builtin.platform.domain.WebSearchSettings
 import javax.inject.Inject
@@ -54,7 +55,10 @@ class WebSearchPreferences @Inject constructor(
     }
 
     override suspend fun setEnabled(enabled: Boolean) {
-        dataStore.edit { it[enabledKey] = enabled }
+        dataStore.edit {
+            it[enabledKey] = enabled
+            it[booleanPreferencesKey(SmartCapabilitiesPreferences.KEY_WEB_SEARCH)] = enabled
+        }
     }
 
     override suspend fun setDefaultLimit(limit: Int) {

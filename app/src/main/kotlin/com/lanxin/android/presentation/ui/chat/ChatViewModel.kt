@@ -70,6 +70,8 @@ class ChatViewModel @Inject constructor(
     private val inferenceRouteCoordinator: InferenceRouteCoordinator,
     private val webSearchSettings: com.lanxin.android.builtin.platform.domain.WebSearchSettings,
     private val deviceSensingSettings: com.lanxin.android.builtin.platform.domain.DeviceSensingSettings,
+    private val smartCapabilitiesSettings: com.lanxin.android.builtin.capabilities.domain.SmartCapabilitiesSettings,
+    private val locationSettings: com.lanxin.android.builtin.capabilities.domain.LocationSettings,
     private val chatMicSession: ChatMicSession
 ) : ViewModel() {
     sealed class LoadingState {
@@ -939,23 +941,34 @@ class ChatViewModel @Inject constructor(
 
     /**
      * 按联网搜索 / 设备感知开关 + 当前人格 tools/skills 过滤 MCP 工具。
-     * - web_search：关则从列表移除（默认安全）
-     * - system_info：关则从列表移除（默认安全）
+     * - web_search / system_info / get_location：受智能能力主开关 + 子开关门闸
      * - persona 为 null 或 tools/skills 均为 null 时仅应用上述门闸
      * - **不**因此把 needsTools 置 true（首轮仍 preferLocal）
      */
     private suspend fun resolvePersonaFilteredTools(): PersonaFilteredTools {
+        val smartConfig = runCatching { smartCapabilitiesSettings.getConfig() }
+            .getOrDefault(com.lanxin.android.builtin.capabilities.domain.SmartCapabilitiesConfig())
+        val master = smartConfig.masterEnabled
         val webSearchConfig = runCatching { webSearchSettings.getConfig() }
             .getOrDefault(com.lanxin.android.builtin.platform.domain.WebSearchConfig())
         val deviceSensingConfig = runCatching { deviceSensingSettings.getConfig() }
             .getOrDefault(com.lanxin.android.builtin.platform.domain.DeviceSensingConfig())
+        val locationConfig = runCatching { locationSettings.getConfig() }
+            .getOrDefault(com.lanxin.android.builtin.capabilities.domain.LocationConfig())
         val afterWebSearch = com.lanxin.android.builtin.platform.domain.WebSearchGate.filterTools(
             tools = toolCallEngine.getRegisteredTools(),
-            config = webSearchConfig
+            config = webSearchConfig,
+            masterEnabled = master && smartConfig.webSearchEnabled
         )
-        val gatedTools = com.lanxin.android.builtin.platform.domain.DeviceSensingGate.filterTools(
+        val afterDevice = com.lanxin.android.builtin.platform.domain.DeviceSensingGate.filterTools(
             tools = afterWebSearch,
-            config = deviceSensingConfig
+            config = deviceSensingConfig,
+            masterEnabled = master && smartConfig.deviceSensingEnabled
+        )
+        val gatedTools = com.lanxin.android.builtin.capabilities.domain.LocationGate.filterTools(
+            tools = afterDevice,
+            smart = smartConfig,
+            location = locationConfig
         )
         val persona = runCatching { personaRepository.getCurrent() }.getOrNull()
         if (persona == null || (persona.tools == null && persona.skills == null)) {

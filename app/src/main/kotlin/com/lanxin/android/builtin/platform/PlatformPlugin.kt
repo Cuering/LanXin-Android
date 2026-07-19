@@ -16,6 +16,11 @@
 
 package com.lanxin.android.builtin.platform
 
+import com.lanxin.android.builtin.capabilities.domain.LocationConfig
+import com.lanxin.android.builtin.capabilities.domain.LocationGate
+import com.lanxin.android.builtin.capabilities.domain.LocationSettings
+import com.lanxin.android.builtin.capabilities.domain.SmartCapabilitiesSettings
+import com.lanxin.android.builtin.capabilities.tools.LocationTool
 import com.lanxin.android.builtin.platform.domain.DeviceSensingConfig
 import com.lanxin.android.builtin.platform.domain.DeviceSensingGate
 import com.lanxin.android.builtin.platform.domain.DeviceSensingSettings
@@ -47,9 +52,10 @@ import kotlinx.serialization.json.put
  * MCP 工具：
  * - clipboard_get / clipboard_set
  * - app_install_check
- * - system_info（受 [DeviceSensingSettings] 门闸；默认关）
+ * - system_info（受设备感知 + 智能能力主开关；默认随迁移 ON）
  * - file_read / file_write / file_list
- * - web_search（受 [WebSearchSettings] 门闸；默认关）
+ * - web_search（受联网搜索 + 智能能力主开关；默认随迁移 ON）
+ * - get_location（受位置 + 主开关；默认 ON，按需权限，不持续定位）
  * - app_intent
  *
  * 仅封装适合在 Android 端执行的能力。
@@ -63,14 +69,17 @@ class PlatformPlugin @Inject constructor(
     private val webSearchTool: WebSearchTool,
     private val appIntentTool: AppIntentTool,
     private val webSearchSettings: WebSearchSettings,
-    private val deviceSensingSettings: DeviceSensingSettings
+    private val deviceSensingSettings: DeviceSensingSettings,
+    private val smartCapabilitiesSettings: SmartCapabilitiesSettings,
+    private val locationSettings: LocationSettings,
+    private val locationTool: LocationTool
 ) : LanXinPlugin {
 
     override val id = "lanxin.platform"
     override val name = "手机平台工具"
-    override val version = "1.3.0"
+    override val version = "1.4.0"
     override val description =
-        "Android 专属能力：剪贴板、已安装应用、设备感知（默认关）、本地文件、联网搜索（默认关）、Intent 唤起"
+        "Android 专属能力：剪贴板、已安装应用、设备感知、本地文件、联网搜索、位置（按需权限）、Intent 唤起"
 
     override suspend fun onLoad(context: PluginContext) {
         context.registerTool(
@@ -163,8 +172,13 @@ class PlatformPlugin @Inject constructor(
                 },
                 handler = {
                     runCatching {
+                        val master = runCatching {
+                            smartCapabilitiesSettings.getConfig().masterEnabled
+                        }.getOrDefault(true)
                         val config = deviceSensingSettings.getConfig()
-                        DeviceSensingGate.denyIfDisabled(config)?.let { return@runCatching it }
+                        DeviceSensingGate.denyIfDisabled(config, master)?.let {
+                            return@runCatching it
+                        }
                         systemInfoTool.collect()
                     }.toToolResult()
                 }
@@ -302,14 +316,46 @@ class PlatformPlugin @Inject constructor(
                 },
                 handler = { args ->
                     runCatching {
+                        val master = runCatching {
+                            smartCapabilitiesSettings.getConfig().masterEnabled
+                        }.getOrDefault(true)
                         val config = webSearchSettings.getConfig()
-                        WebSearchGate.denyIfDisabled(config)?.let { return@runCatching it }
+                        WebSearchGate.denyIfDisabled(config, master)?.let {
+                            return@runCatching it
+                        }
                         val query = args.string("query") ?: error("query 必填")
                         webSearchTool.search(
                             query = query,
                             limit = args.int("limit") ?: config.clampedLimit(),
                             region = args.string("region") ?: config.normalizedRegion()
                         )
+                    }.toToolResult()
+                }
+            )
+        )
+
+        context.registerTool(
+            ToolDef(
+                name = LocationConfig.TOOL_NAME,
+                description = "读取设备最近一次已知位置（经纬度/精度）；需智能能力→位置开启；首次用时需定位权限；不后台持续定位",
+                parameters = buildJsonObject {
+                    put("type", "object")
+                    put("properties", buildJsonObject { })
+                },
+                handler = {
+                    runCatching {
+                        val smart = runCatching {
+                            smartCapabilitiesSettings.getConfig()
+                        }.getOrDefault(
+                            com.lanxin.android.builtin.capabilities.domain.SmartCapabilitiesConfig()
+                        )
+                        val locCfg = locationSettings.getConfig()
+                        LocationGate.denyIfDisabled(
+                            smart = smart,
+                            location = locCfg,
+                            permissionGranted = locationTool.hasPermission()
+                        )?.let { return@runCatching it }
+                        locationTool.readOnce()
                     }.toToolResult()
                 }
             )

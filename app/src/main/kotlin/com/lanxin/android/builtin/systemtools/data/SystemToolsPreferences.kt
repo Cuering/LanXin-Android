@@ -20,6 +20,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import com.lanxin.android.builtin.capabilities.data.SmartCapabilitiesPreferences
 import com.lanxin.android.builtin.systemtools.domain.SystemToolsConfig
 import com.lanxin.android.builtin.systemtools.domain.SystemToolsSettings
 import javax.inject.Inject
@@ -57,7 +58,10 @@ class SystemToolsPreferences @Inject constructor(
     }
 
     override suspend fun setMasterEnabled(enabled: Boolean) {
-        dataStore.edit { it[masterKey] = enabled }
+        dataStore.edit {
+            it[masterKey] = enabled
+            it[booleanPreferencesKey(SmartCapabilitiesPreferences.KEY_SYSTEM_TOOLS)] = enabled
+        }
     }
 
     override suspend fun setCalendarEnabled(enabled: Boolean) {

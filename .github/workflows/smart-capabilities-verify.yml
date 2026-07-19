@@ -1,0 +1,72 @@
+# 智能能力模块：默认值 / 迁移 / Gate / 位置 / 设置聚合
+name: Smart Capabilities Module Verify
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "app/src/main/kotlin/com/lanxin/android/builtin/capabilities/**"
+      - "app/src/test/kotlin/com/lanxin/android/builtin/capabilities/**"
+      - "app/src/main/kotlin/com/lanxin/android/builtin/platform/domain/WebSearchGate.kt"
+      - "app/src/main/kotlin/com/lanxin/android/builtin/platform/domain/DeviceSensingGate.kt"
+      - "app/src/main/kotlin/com/lanxin/android/builtin/platform/domain/SceneSensingGate.kt"
+      - "app/src/main/kotlin/com/lanxin/android/builtin/systemtools/domain/DeviceToolGate.kt"
+      - "app/src/main/kotlin/com/lanxin/android/presentation/ui/setting/SettingScreen.kt"
+      - "app/src/main/kotlin/com/lanxin/android/presentation/common/NavigationGraph.kt"
+      - "app/src/main/kotlin/com/lanxin/android/presentation/common/Route.kt"
+      - ".github/workflows/smart-capabilities-verify.yml"
+  push:
+    branches: [main, "feat/capability-module-defaults"]
+    paths:
+      - "app/src/main/kotlin/com/lanxin/android/builtin/capabilities/**"
+      - "app/src/test/kotlin/com/lanxin/android/builtin/capabilities/**"
+      - ".github/workflows/smart-capabilities-verify.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: smart-capabilities-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-and-compile:
+    name: unit-and-compile
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          # 与 android-ci / debug-build 一致：kapt 需能读 Java 21 bytecode
+          # （markdown-renderer / highlights 为 65.0）
+          java-version: "21"
+          distribution: temurin
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Unit tests (smart capabilities + related gates)
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:testDebugUnitTest \
+            --tests "com.lanxin.android.builtin.capabilities.SmartCapabilitiesTest" \
+            --tests "com.lanxin.android.builtin.platform.WebSearchGateTest" \
+            --tests "com.lanxin.android.builtin.platform.DeviceSensingGateTest" \
+            --tests "com.lanxin.android.builtin.systemtools.SystemToolsConfigTest" \
+            --tests "com.lanxin.android.builtin.localinference.LocalInferenceConfigTest"
+
+      - name: Compile debug
+        run: ./gradlew :app:compileDebugKotlin
+
+      - name: Assemble debug APK
+        run: ./gradlew :app:assembleDebug
+
+      - name: Upload Debug APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lanxin-debug-apk-smart-capabilities
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: warn

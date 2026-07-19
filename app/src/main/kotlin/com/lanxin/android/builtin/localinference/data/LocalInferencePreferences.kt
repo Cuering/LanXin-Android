@@ -23,6 +23,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.lanxin.android.builtin.capabilities.data.SmartCapabilitiesPreferences
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceConfig
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceSettings
 import javax.inject.Inject
@@ -59,7 +60,10 @@ class LocalInferencePreferences @Inject constructor(
     }
 
     override suspend fun setEnabled(enabled: Boolean) {
-        dataStore.edit { it[enabledKey] = enabled }
+        dataStore.edit {
+            it[enabledKey] = enabled
+            it[booleanPreferencesKey(SmartCapabilitiesPreferences.KEY_LOCAL_INFERENCE)] = enabled
+        }
     }
 
     override suspend fun setModelPath(path: String?) {

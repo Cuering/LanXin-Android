@@ -130,13 +130,13 @@ class NotesStoreTest {
         val list = NoteListDeviceTool(store)
         val update = NoteUpdateDeviceTool(store)
         val delete = NoteDeleteDeviceTool(store)
-        val gate = DeviceToolGate {
+        val gate = DeviceToolGate(configProvider = {
             SystemToolsConfig(
                 masterEnabled = true,
                 notesEnabled = true,
                 requireConfirmOnWrite = true
             )
-        }
+        })
 
         val needs = gate.invoke(create, mapOf("title" to "t", "body" to "b"), confirmed = false)
         assertTrue(needs is DeviceToolOutcome.NeedsConfirmation)

@@ -14,47 +14,45 @@
  * limitations under the License.
  */
 
-package com.lanxin.android.builtin.platform.data
+package com.lanxin.android.builtin.capabilities.data
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
-import com.lanxin.android.builtin.capabilities.data.SmartCapabilitiesPreferences
-import com.lanxin.android.builtin.platform.domain.DeviceSensingConfig
-import com.lanxin.android.builtin.platform.domain.DeviceSensingSettings
+import com.lanxin.android.builtin.capabilities.domain.LocationConfig
+import com.lanxin.android.builtin.capabilities.domain.LocationSettings
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.first
 
 /**
- * 设备感知配置（DataStore）。
+ * 位置能力配置（DataStore）。
  *
- * 键前缀 `device_sensing_`，与 system_tools_ / web_search_ / local_inference_ 隔离。
- * **默认关**。
+ * 键前缀 `location_`。默认 **ON**；运行时权限按需申请，不后台定位。
  */
 @Singleton
-class DeviceSensingPreferences @Inject constructor(
+class LocationPreferences @Inject constructor(
     private val dataStore: DataStore<Preferences>
-) : DeviceSensingSettings {
+) : LocationSettings {
 
     private val enabledKey = booleanPreferencesKey(KEY_ENABLED)
 
-    override suspend fun getConfig(): DeviceSensingConfig {
+    override suspend fun getConfig(): LocationConfig {
         val prefs = dataStore.data.first()
-        return DeviceSensingConfig(
-            enabled = prefs[enabledKey] ?: false
+        return LocationConfig(
+            enabled = prefs[enabledKey] ?: LocationConfig.DEFAULT_ENABLED
         )
     }
 
     override suspend fun setEnabled(enabled: Boolean) {
         dataStore.edit {
             it[enabledKey] = enabled
-            it[booleanPreferencesKey(SmartCapabilitiesPreferences.KEY_DEVICE_SENSING)] = enabled
+            it[booleanPreferencesKey(SmartCapabilitiesPreferences.KEY_LOCATION)] = enabled
         }
     }
 
     companion object {
-        const val KEY_ENABLED = "device_sensing_enabled"
+        const val KEY_ENABLED = "location_enabled"
     }
 }

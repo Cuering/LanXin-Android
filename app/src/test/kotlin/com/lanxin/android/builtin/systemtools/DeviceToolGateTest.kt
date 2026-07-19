@@ -62,9 +62,9 @@ class DeviceToolGateTest {
 
     @Test
     fun `master off denies`() = runBlocking {
-        val gate = DeviceToolGate {
+        val gate = DeviceToolGate(configProvider = {
             SystemToolsConfig(masterEnabled = false, alarmEnabled = true)
-        }
+        })
         val out = gate.invoke(alarm, mapOf("hour" to 8, "minutes" to 0), confirmed = true)
         assertTrue(out is DeviceToolOutcome.Denied)
         assertTrue((out as DeviceToolOutcome.Denied).code == "master_disabled")
@@ -72,9 +72,9 @@ class DeviceToolGateTest {
 
     @Test
     fun `capability off denies`() = runBlocking {
-        val gate = DeviceToolGate {
+        val gate = DeviceToolGate(configProvider = {
             SystemToolsConfig(masterEnabled = true, alarmEnabled = false)
-        }
+        })
         val out = gate.invoke(alarm, mapOf("hour" to 8, "minutes" to 0), confirmed = true)
         assertTrue(out is DeviceToolOutcome.Denied)
         assertTrue((out as DeviceToolOutcome.Denied).code == "capability_disabled")
@@ -82,26 +82,26 @@ class DeviceToolGateTest {
 
     @Test
     fun `write without confirm needs confirmation`() = runBlocking {
-        val gate = DeviceToolGate {
+        val gate = DeviceToolGate(configProvider = {
             SystemToolsConfig(
                 masterEnabled = true,
                 alarmEnabled = true,
                 requireConfirmOnWrite = true
             )
-        }
+        })
         val out = gate.invoke(alarm, mapOf("hour" to 8, "minutes" to 0), confirmed = false)
         assertTrue(out is DeviceToolOutcome.NeedsConfirmation)
     }
 
     @Test
     fun `write with confirm schedules alarm`() = runBlocking {
-        val gate = DeviceToolGate {
+        val gate = DeviceToolGate(configProvider = {
             SystemToolsConfig(
                 masterEnabled = true,
                 alarmEnabled = true,
                 requireConfirmOnWrite = true
             )
-        }
+        })
         val out = gate.invoke(alarm, mapOf("hour" to 8, "minutes" to 15), confirmed = true)
         assertTrue(out is DeviceToolOutcome.Ok)
         val data = (out as DeviceToolOutcome.Ok).data
@@ -111,13 +111,13 @@ class DeviceToolGateTest {
 
     @Test
     fun `calendar create without confirm needs confirmation`() = runBlocking {
-        val gate = DeviceToolGate {
+        val gate = DeviceToolGate(configProvider = {
             SystemToolsConfig(
                 masterEnabled = true,
                 calendarEnabled = true,
                 requireConfirmOnWrite = true
             )
-        }
+        })
         val out = gate.invoke(
             calendarCreate,
             mapOf(
@@ -132,13 +132,13 @@ class DeviceToolGateTest {
 
     @Test
     fun `calendar create with confirm succeeds stub`() = runBlocking {
-        val gate = DeviceToolGate {
+        val gate = DeviceToolGate(configProvider = {
             SystemToolsConfig(
                 masterEnabled = true,
                 calendarEnabled = true,
                 requireConfirmOnWrite = true
             )
-        }
+        })
         val out = gate.invoke(
             calendarCreate,
             mapOf(
@@ -154,13 +154,13 @@ class DeviceToolGateTest {
 
     @Test
     fun `read calendar does not need confirm`() = runBlocking {
-        val gate = DeviceToolGate {
+        val gate = DeviceToolGate(configProvider = {
             SystemToolsConfig(
                 masterEnabled = true,
                 calendarEnabled = true,
                 requireConfirmOnWrite = true
             )
-        }
+        })
         val out = gate.invoke(calendarList, emptyMap(), confirmed = false)
         assertTrue(out is DeviceToolOutcome.Ok)
     }

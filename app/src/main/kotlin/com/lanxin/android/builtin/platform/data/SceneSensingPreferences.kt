@@ -21,6 +21,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.lanxin.android.builtin.capabilities.data.SmartCapabilitiesPreferences
 import com.lanxin.android.builtin.platform.domain.SceneSensingConfig
 import com.lanxin.android.builtin.platform.domain.SceneSensingGate
 import com.lanxin.android.builtin.platform.domain.SceneSensingSettings
@@ -57,7 +58,10 @@ class SceneSensingPreferences @Inject constructor(
     override suspend fun setEnabled(enabled: Boolean) {
         dataStore.edit { prefs ->
             val consent = prefs[consentKey] ?: false
-            prefs[enabledKey] = SceneSensingGate.clampEnabled(enabled, consent)
+            val clamped = SceneSensingGate.clampEnabled(enabled, consent)
+            prefs[enabledKey] = clamped
+            // dual-write 智能能力聚合键，必须与 clamp 后的值一致
+            prefs[booleanPreferencesKey(SmartCapabilitiesPreferences.KEY_SCENE_VISION)] = clamped
         }
     }
 
@@ -65,8 +69,9 @@ class SceneSensingPreferences @Inject constructor(
         dataStore.edit { prefs ->
             prefs[consentKey] = granted
             if (!granted) {
-                // 撤回同意 → 强制关 + 清缓存
+                // 撤回同意 → 强制关 + 清缓存（含 smart 聚合键）
                 prefs[enabledKey] = false
+                prefs[booleanPreferencesKey(SmartCapabilitiesPreferences.KEY_SCENE_VISION)] = false
                 prefs.remove(lastSceneKey)
                 prefs.remove(lastStatusKey)
             }

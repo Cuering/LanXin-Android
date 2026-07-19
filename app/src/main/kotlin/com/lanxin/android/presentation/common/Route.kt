@@ -68,6 +68,9 @@ object Route {
 
     const val PLUGIN_MARKET = "plugin_market"
 
+    /** 智能能力聚合页（主开关 + 子能力） */
+    const val SMART_CAPABILITIES = "smart_capabilities"
+
     const val LOCAL_INFERENCE = "local_inference"
 
     const val OFFLINE_ASR = "offline_asr"
