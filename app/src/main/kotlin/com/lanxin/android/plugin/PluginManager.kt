@@ -45,15 +45,15 @@ class PluginManager @Inject constructor(
     @ApplicationContext private val appContext: Context
 ) : PluginCatalog {
 
-    private val plugins = mutableMapOf<String, LanXinPlugin>()
-    private val tools = mutableMapOf<String, ToolDef>()
+    private val plugins = java.util.concurrent.ConcurrentHashMap<String, LanXinPlugin>()
+    private val tools = java.util.concurrent.ConcurrentHashMap<String, ToolDef>()
 
     /** toolName → 所属 pluginId（用于 disable 时清理工具） */
-    private val toolOwners = mutableMapOf<String, String>()
-    private val loadedIds = mutableSetOf<String>()
-    private val dynamicHandles = mutableMapOf<String, DynamicPluginHandle>()
-    private val compiledIds = mutableSetOf<String>()
-    private val lastFailures = mutableListOf<PluginLoadResult.Failure>()
+    private val toolOwners = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val loadedIds = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+    private val dynamicHandles = java.util.concurrent.ConcurrentHashMap<String, DynamicPluginHandle>()
+    private val compiledIds = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+    private val lastFailures = java.util.Collections.synchronizedList(mutableListOf<PluginLoadResult.Failure>())
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     private val stateStore: PluginStateStore by lazy {
