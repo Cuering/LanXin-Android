@@ -32,7 +32,7 @@ object ChatSendFailureLogic {
     fun userVisibleMessage(t: Throwable): String {
         val raw = t.message?.trim().orEmpty()
         if (raw.isBlank()) {
-            val simple = t::class.java.simpleName?.trim().orEmpty()
+            val simple = t::class.java.simpleName.trim()
             return if (simple.isNotBlank() && simple != "Exception" && simple != "RuntimeException") {
                 simple
             } else {

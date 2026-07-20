@@ -295,6 +295,7 @@ class ChatSendFailureLogicTest {
     private fun tool(name: String): ToolDef = ToolDef(
         name = name,
         description = name,
-        parameters = JsonObject(emptyMap())
+        parameters = JsonObject(emptyMap()),
+        handler = { JsonObject(emptyMap()) }
     )
 }
