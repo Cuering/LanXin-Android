@@ -33,6 +33,9 @@ class DefaultLocalInferenceProviderTest {
         override suspend fun setTemperature(temperature: Float) {
             config = config.copy(temperature = temperature)
         }
+        override suspend fun setShowThinking(show: Boolean) {
+            config = config.copy(showThinking = show)
+        }
         override suspend fun isPreferLocal(): Boolean = false
         override suspend fun setPreferLocal(prefer: Boolean) = Unit
     }
@@ -83,5 +86,28 @@ class DefaultLocalInferenceProviderTest {
         assertTrue(states.any { it is ApiState.Success })
         assertTrue(states.any { it is ApiState.Done })
         assertFalse(states.any { it is ApiState.Error })
+    }
+
+    @Test
+    fun `showThinking defaults false and dirty prompt still yields clean success`() = runBlocking {
+        val engine = StubLocalLlmEngine(MnnNativeBridge())
+        val settings = FakeSettings(
+            LocalInferenceConfig(
+                enabled = true,
+                modelPath = "stub://demo-model",
+                showThinking = false
+            )
+        )
+        val provider = DefaultLocalInferenceProvider(engine, settings)
+        // stub 会 echo prompt；即使 prompt 含标签，出口清洗后不应把 [[ 泄漏到 Success
+        val dirty = "你好[[mood=joy]]"
+        val states = provider.completeAsApiState(dirty).toList()
+        val success = states.filterIsInstance<ApiState.Success>()
+        assertTrue(success.isNotEmpty())
+        success.forEach { s ->
+            assertFalse(s.textChunk.contains("[["))
+            assertFalse(s.textChunk.contains("</think>", ignoreCase = true))
+        }
+        assertFalse(states.any { it is ApiState.Thinking })
     }
 }

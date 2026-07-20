@@ -20,6 +20,7 @@ import com.lanxin.android.builtin.localinference.domain.LocalGenerateRequest
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceProvider
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceSettings
 import com.lanxin.android.builtin.localinference.domain.LocalLlmEngine
+import com.lanxin.android.builtin.localinference.domain.LocalReplySanitizer
 import com.lanxin.android.data.dto.ApiState
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -33,6 +34,7 @@ import kotlinx.coroutines.flow.onStart
  * 本地推理 Provider：把 [LocalLlmEngine] 适配为 [ApiState] 流。
  *
  * Chat 层可选调用；完整自动切换见 Phase 6.3。
+ * 引擎出口统一清洗：剥离 think / mood / 动作标签；[showThinking] 默认关。
  */
 @Singleton
 class DefaultLocalInferenceProvider @Inject constructor(
@@ -75,15 +77,33 @@ class DefaultLocalInferenceProvider @Inject constructor(
                 return@flow
             }
         }
+        val effectiveSystem = LocalReplySanitizer.appendOutputConstraint(
+            systemPrompt = systemPrompt,
+            showThinking = config.showThinking
+        )
+        // 本地现为整段 emit；累积后一次清洗，避免流式半标签泄漏
+        val rawBuilder = StringBuilder()
         engine.stream(
             LocalGenerateRequest(
                 prompt = prompt,
-                systemPrompt = systemPrompt,
+                systemPrompt = effectiveSystem,
                 maxTokens = config.maxTokens,
                 temperature = config.temperature
             )
         ).collect { chunk ->
-            emit(ApiState.Success(chunk))
+            rawBuilder.append(chunk)
+        }
+        val cleaned = LocalReplySanitizer.clean(
+            raw = rawBuilder.toString(),
+            showThinking = config.showThinking
+        )
+        if (config.showThinking) {
+            cleaned.thinkingText?.takeIf { it.isNotEmpty() }?.let {
+                emit(ApiState.Thinking(it))
+            }
+        }
+        if (cleaned.displayText.isNotEmpty()) {
+            emit(ApiState.Success(cleaned.displayText))
         }
     }
         .onStart { emit(ApiState.Loading) }

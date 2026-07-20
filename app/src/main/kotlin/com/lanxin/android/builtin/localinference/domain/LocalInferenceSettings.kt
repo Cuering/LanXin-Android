@@ -34,6 +34,11 @@ interface LocalInferenceSettings {
     suspend fun setTemperature(temperature: Float)
 
     /**
+     * 是否展示本地模型思考过程（默认 false）。
+     */
+    suspend fun setShowThinking(show: Boolean)
+
+    /**
      * 是否偏好本地路由（为 6.2/6.3 预留；默认 false）。
      */
     suspend fun isPreferLocal(): Boolean

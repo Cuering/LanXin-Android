@@ -14,6 +14,7 @@ class LocalInferenceConfigTest {
         assertEquals("", c.modelPath)
         assertEquals(LocalInferenceConfig.DEFAULT_MAX_TOKENS, c.maxTokens)
         assertEquals(LocalInferenceConfig.DEFAULT_TEMPERATURE, c.temperature, 0.001f)
+        assertFalse("showThinking 必须默认关", c.showThinking)
     }
 
     @Test

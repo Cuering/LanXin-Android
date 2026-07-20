@@ -43,12 +43,14 @@ enum class LocalEngineState {
  * @property modelPath 模型目录或文件路径（绝对路径，不入库大文件）
  * @property maxTokens 生成上限
  * @property temperature 采样温度
+ * @property showThinking 是否展示模型思考过程（默认关；关时剥离 `<think>` 并不进气泡）
  */
 data class LocalInferenceConfig(
     val enabled: Boolean = false,
     val modelPath: String = "",
     val maxTokens: Int = DEFAULT_MAX_TOKENS,
-    val temperature: Float = DEFAULT_TEMPERATURE
+    val temperature: Float = DEFAULT_TEMPERATURE,
+    val showThinking: Boolean = false
 ) {
     companion object {
         const val DEFAULT_MAX_TOKENS = 512

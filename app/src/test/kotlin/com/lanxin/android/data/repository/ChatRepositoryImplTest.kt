@@ -494,6 +494,7 @@ class ChatRepositoryImplTest {
                     override suspend fun setModelPath(path: String?) = Unit
                     override suspend fun setMaxTokens(maxTokens: Int) = Unit
                     override suspend fun setTemperature(temperature: Float) = Unit
+                    override suspend fun setShowThinking(show: Boolean) = Unit
                     override suspend fun isPreferLocal() = preferLocal
                     override suspend fun setPreferLocal(prefer: Boolean) = Unit
                 },

@@ -76,6 +76,16 @@ object MoodTagMapper {
     /** 展示路径：任意 `[[…]]` 均剥（防御扩展标签 / 脏标签 / 非法 mood）。 */
     private val ANY_BRACKET_TAG_REGEX = Regex("""\[\[[^\]]*]]""")
 
+    /** 已闭合 `<think>…</think>`（跨行）。 */
+    private val CLOSED_THINK_REGEX = Regex(
+        """(?is)<think\b[^>]*>.*?</think\s*>"""
+    )
+
+    /**
+     * 未闭合的 `[[…`（无 `]]` 收尾，常见于流式截断或脏输出）。
+     */
+    private val UNCLOSED_BRACKET_TAG_REGEX = Regex("""\[\[[^\]]*$""")
+
     /**
      * 别名 → canonical。仅归一字符串，映射结果仍落 [ALLOWED_MOODS]。
      */
@@ -180,12 +190,36 @@ object MoodTagMapper {
         return if (canonical in DEFS) canonical else null
     }
 
-    /** 剥离全部 `[[…]]` 隐藏标签，压缩多余空白，供气泡 / TTS / 历史展示。 */
+    /**
+     * 剥离全部 `[[…]]` 隐藏标签（含 `[[mood=…]]`、`[[listen]]` 等动作标签、
+     * 以及未闭合 `[[…`），压缩多余空白，供气泡 / TTS / 历史展示。
+     *
+     * mood / 动作标签 **永不** 进入气泡或 TTS。
+     */
     fun stripTags(text: String): String {
-        if (text.isEmpty() || !text.contains("[[", ignoreCase = false)) {
+        if (text.isEmpty()) {
             return text
         }
-        return ANY_BRACKET_TAG_REGEX.replace(text, " ")
+        var result = text
+        // 1) 剥离 think 块（闭合 + 未闭合），气泡/TTS 永不展示思考正文
+        if (result.contains("think", ignoreCase = true)) {
+            result = CLOSED_THINK_REGEX.replace(result, " ")
+            val openToken = "<think"
+            val lower = result.lowercase()
+            val openIdx = lower.indexOf(openToken)
+            if (openIdx >= 0) {
+                result = result.substring(0, openIdx)
+            }
+        }
+        // 2) 剥离全部 [[…]]（mood / listen 动作 / 脏标签）与未闭合 [[
+        if (result.contains("[[")) {
+            result = ANY_BRACKET_TAG_REGEX.replace(result, " ")
+            if (result.contains("[[")) {
+                result = UNCLOSED_BRACKET_TAG_REGEX.replace(result, " ")
+                result = result.replace("[[", " ")
+            }
+        }
+        return result
             .replace(Regex("""[ \t]{2,}"""), " ")
             .replace(Regex(""" *\n *"""), "\n")
             .trim()

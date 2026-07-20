@@ -210,6 +210,25 @@ fun LocalInferenceScreen(
                 )
             }
 
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("显示思考过程", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "默认关：剥离 <think>，气泡只显示正文；开启后思考可折叠展示",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = state.showThinking,
+                    onCheckedChange = viewModel::setShowThinking
+                )
+            }
+
             PathPickerField(
                 label = "本地推理模型路径",
                 path = state.modelPath,

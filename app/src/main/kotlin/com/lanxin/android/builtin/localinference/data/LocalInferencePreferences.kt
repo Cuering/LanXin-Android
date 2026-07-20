@@ -46,6 +46,7 @@ class LocalInferencePreferences @Inject constructor(
     private val modelPathKey = stringPreferencesKey(KEY_MODEL_PATH)
     private val maxTokensKey = intPreferencesKey(KEY_MAX_TOKENS)
     private val temperatureKey = floatPreferencesKey(KEY_TEMPERATURE)
+    private val showThinkingKey = booleanPreferencesKey(KEY_SHOW_THINKING)
     private val preferLocalKey = booleanPreferencesKey(KEY_PREFER_LOCAL)
 
     override suspend fun getConfig(): LocalInferenceConfig {
@@ -55,7 +56,8 @@ class LocalInferencePreferences @Inject constructor(
             modelPath = prefs[modelPathKey].orEmpty(),
             maxTokens = (prefs[maxTokensKey] ?: LocalInferenceConfig.DEFAULT_MAX_TOKENS)
                 .coerceIn(LocalInferenceConfig.MIN_MAX_TOKENS, LocalInferenceConfig.MAX_MAX_TOKENS),
-            temperature = prefs[temperatureKey] ?: LocalInferenceConfig.DEFAULT_TEMPERATURE
+            temperature = prefs[temperatureKey] ?: LocalInferenceConfig.DEFAULT_TEMPERATURE,
+            showThinking = prefs[showThinkingKey] ?: false
         )
     }
 
@@ -88,6 +90,10 @@ class LocalInferencePreferences @Inject constructor(
         dataStore.edit { it[temperatureKey] = temperature }
     }
 
+    override suspend fun setShowThinking(show: Boolean) {
+        dataStore.edit { it[showThinkingKey] = show }
+    }
+
     override suspend fun isPreferLocal(): Boolean =
         dataStore.data.map { it[preferLocalKey] ?: false }.first()
 
@@ -100,6 +106,7 @@ class LocalInferencePreferences @Inject constructor(
         const val KEY_MODEL_PATH = "local_inference_model_path"
         const val KEY_MAX_TOKENS = "local_inference_max_tokens"
         const val KEY_TEMPERATURE = "local_inference_temperature"
+        const val KEY_SHOW_THINKING = "local_inference_show_thinking"
         const val KEY_PREFER_LOCAL = "local_inference_prefer_local"
     }
 }
