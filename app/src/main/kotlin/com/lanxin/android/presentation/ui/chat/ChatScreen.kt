@@ -363,7 +363,13 @@ fun ChatScreen(
                 onFileSelected = { filePath -> chatViewModel.addSelectedFile(filePath) },
                 onFileRemoved = { filePath -> chatViewModel.removeSelectedFile(filePath) }
             ) {
-                chatViewModel.askQuestion()
+                try {
+                    chatViewModel.askQuestion()
+                } catch (t: Throwable) {
+                    if (t is kotlinx.coroutines.CancellationException) throw t
+                    Log.e("ChatScreen", "send button onClick failed", t)
+                    Toast.makeText(context, "发送失败，请重试", Toast.LENGTH_SHORT).show()
+                }
                 focusManager.clearFocus()
             }
         }

@@ -10,7 +10,6 @@ import androidx.lifecycle.viewModelScope
 import com.lanxin.android.builtin.knowledge.domain.AutoKnowledgeService
 import com.lanxin.android.builtin.localinference.domain.ChatLocalFallback
 import com.lanxin.android.builtin.localinference.domain.InferenceRouteCoordinator
-import com.lanxin.android.builtin.persona.domain.PersonaCapabilityFilter
 import com.lanxin.android.builtin.persona.domain.PersonaMoodFormatter
 import com.lanxin.android.builtin.persona.domain.PersonaRepository
 import com.lanxin.android.builtin.statistics.domain.ChatTurnStatEvent
@@ -945,35 +944,52 @@ class ChatViewModel @Inject constructor(
         turnIndex: Int? = null,
         platformIndex: Int? = null
     ) {
-        val message = ChatSendFailureLogic.userVisibleMessage(t)
-        android.util.Log.e("ChatViewModel", "chat send failed at $phase", t)
+        // 兜底出口自身也不得抛：否则 catch 块二次崩溃仍会杀进程
+        runCatching {
+            val message = ChatSendFailureLogic.userVisibleMessage(t)
+            android.util.Log.e("ChatViewModel", "chat send failed at $phase", t)
 
-        val resolvedTurn = turnIndex
-            ?: _groupedMessages.value.assistantMessages.lastIndex.takeIf { it >= 0 }
-        val resolvedPlatform = platformIndex ?: 0
+            val resolvedTurn = turnIndex
+                ?: _groupedMessages.value.assistantMessages.lastIndex.takeIf { it >= 0 }
+            val resolvedPlatform = platformIndex ?: 0
 
-        if (resolvedTurn != null && resolvedTurn >= 0) {
-            _groupedMessages.update { grouped ->
-                updateAssistantSlot(
-                    groupedMessages = grouped,
+            if (resolvedTurn != null &&
+                ChatSendPathGuard.canWriteAssistantSlot(
+                    assistantMessages = _groupedMessages.value.assistantMessages,
                     turnIndex = resolvedTurn,
                     platformIndex = resolvedPlatform
-                ) { current ->
-                    current.copy(
-                        content = buildAssistantErrorContent(current.content, message),
-                        createdAt = currentTimeStamp
-                    )
+                )
+            ) {
+                _groupedMessages.update { grouped ->
+                    updateAssistantSlot(
+                        groupedMessages = grouped,
+                        turnIndex = resolvedTurn,
+                        platformIndex = resolvedPlatform
+                    ) { current ->
+                        current.copy(
+                            content = buildAssistantErrorContent(current.content, message),
+                            createdAt = currentTimeStamp
+                        )
+                    }
                 }
             }
-        }
 
-        _attachmentNotice.update { ChatSendFailureLogic.toastMessage(message) }
-        _loadingStates.update { states ->
-            ChatSendFailureLogic.nextLoadingStates(
-                current = states,
-                platformIndex = resolvedPlatform,
-                platformCount = enabledPlatformsInChat.size
-            )
+            _attachmentNotice.update { ChatSendFailureLogic.toastMessage(message) }
+            _loadingStates.update { states ->
+                ChatSendFailureLogic.nextLoadingStates(
+                    current = states,
+                    platformIndex = resolvedPlatform,
+                    platformCount = enabledPlatformsInChat.size
+                )
+            }
+        }.onFailure { surfaceErr ->
+            android.util.Log.e("ChatViewModel", "surfaceSendFailure itself failed at $phase", surfaceErr)
+            runCatching {
+                _attachmentNotice.update { "发送失败，请重试" }
+                _loadingStates.update {
+                    List(enabledPlatformsInChat.size.coerceAtLeast(1)) { LoadingState.Idle }
+                }
+            }
         }
     }
 
@@ -1082,7 +1098,6 @@ class ChatViewModel @Inject constructor(
         return runCatching {
             val smartConfig = runCatching { smartCapabilitiesSettings.getConfig() }
                 .getOrDefault(com.lanxin.android.builtin.capabilities.domain.SmartCapabilitiesConfig())
-            val master = smartConfig.masterEnabled
             val webSearchConfig = runCatching { webSearchSettings.getConfig() }
                 .getOrDefault(com.lanxin.android.builtin.platform.domain.WebSearchConfig())
             val deviceSensingConfig = runCatching { deviceSensingSettings.getConfig() }
@@ -1093,55 +1108,29 @@ class ChatViewModel @Inject constructor(
             val registeredTools = runCatching {
                 toolCallEngine.getRegisteredTools()
             }.getOrDefault(emptyList())
-            val afterWebSearch = com.lanxin.android.builtin.platform.domain.WebSearchGate.filterTools(
-                tools = registeredTools,
-                config = webSearchConfig,
-                masterEnabled = master && smartConfig.webSearchEnabled
-            )
-            val afterDevice = com.lanxin.android.builtin.platform.domain.DeviceSensingGate.filterTools(
-                tools = afterWebSearch,
-                config = deviceSensingConfig,
-                masterEnabled = master && smartConfig.deviceSensingEnabled
-            )
-            val afterLocation = com.lanxin.android.builtin.capabilities.domain.LocationGate.filterTools(
-                tools = afterDevice,
-                smart = smartConfig,
-                location = locationConfig
-            )
-            val locationPrefsOpen = com.lanxin.android.builtin.capabilities.domain.LocationGate.isPrefsOpen(
-                smartConfig,
-                locationConfig
-            )
-            val webOn = com.lanxin.android.builtin.platform.domain.WebSearchGate.isEnabled(
-                webSearchConfig,
-                master && smartConfig.webSearchEnabled
-            )
-            val gatedTools = com.lanxin.android.builtin.navigate.domain.NavigateGate.filterTools(
-                tools = afterLocation,
-                masterEnabled = master,
-                locationPrefsOpen = locationPrefsOpen,
-                webSearchEnabled = webOn
-            )
             val persona = runCatching { personaRepository.getCurrent() }.getOrNull()
-            if (persona == null || (persona.tools == null && persona.skills == null)) {
-                // 无人格限制：仅从 prompt 去掉关着的门闸工具；执行侧 PlatformPlugin 再拦一次
-                return@runCatching PersonaFilteredTools(
-                    tools = gatedTools,
-                    allowedNames = null
-                )
+            val knownSkills = if (persona?.tools != null || persona?.skills != null) {
+                runCatching {
+                    skillEngine.getSkills().map { it.name }.toSet()
+                }.getOrDefault(emptySet())
+            } else {
+                emptySet()
             }
-            val knownSkills = runCatching {
-                skillEngine.getSkills().map { it.name }.toSet()
-            }.getOrDefault(emptySet())
-            val filtered = PersonaCapabilityFilter.filterTools(
-                tools = gatedTools,
-                allowedTools = persona.tools,
-                allowedSkills = persona.skills,
-                knownSkillNames = knownSkills
+            val filtered = ChatSendToolFilterLogic.filter(
+                ChatSendToolFilterLogic.FilterInput(
+                    tools = registeredTools,
+                    smart = smartConfig,
+                    webSearch = webSearchConfig,
+                    deviceSensing = deviceSensingConfig,
+                    location = locationConfig,
+                    allowedTools = persona?.tools,
+                    allowedSkills = persona?.skills,
+                    knownSkillNames = knownSkills
+                )
             )
             PersonaFilteredTools(
-                tools = filtered,
-                allowedNames = filtered.map { it.name }.toSet()
+                tools = filtered.tools,
+                allowedNames = filtered.allowedNames
             )
         }.getOrElse { t ->
             android.util.Log.w("ChatViewModel", "resolvePersonaFilteredTools failed, continue without tools", t)
@@ -1169,40 +1158,55 @@ class ChatViewModel @Inject constructor(
         if (userMessages.isEmpty()) return userMessages
         val last = userMessages.last()
 
-        val refs = mutableListOf<ChatRef>()
-        val enriched: String = if (unifiedSearchService.enabled) {
-            if (updateUx) setTurnPhase(turnIndex, ChatGenerationPhase.SEARCHING_MEMORY)
-            val outcome = unifiedSearchService.injectWithHits(last.content)
-            if (updateUx && outcome.knowledgeHits.isNotEmpty()) {
-                setTurnPhase(turnIndex, ChatGenerationPhase.SEARCHING_KNOWLEDGE)
-            }
-            if (updateUx) {
-                refs += ChatGenerationStatusLogic.refsFromUnifiedKeys(
-                    keys = (outcome.memoryHits + outcome.knowledgeHits).map { it.key },
-                    texts = (outcome.memoryHits + outcome.knowledgeHits).map { it.text },
-                    subtitles = (outcome.memoryHits + outcome.knowledgeHits).map { it.subtitle }
-                )
-            }
-            outcome.enrichedQuestion
-        } else {
-            if (updateUx) setTurnPhase(turnIndex, ChatGenerationPhase.SEARCHING_MEMORY)
-            val result = memoryInjector.injectWithMatches(last.content)
-            if (updateUx) {
-                refs += result.matchedMemories.map { entity ->
-                    ChatRef(
-                        type = ChatRefType.MEMORY,
-                        id = entity.id.toString(),
-                        title = MemoryType.displayName(entity.type),
-                        snippet = entity.content.take(120)
-                    )
+        return runCatching {
+            val refs = mutableListOf<ChatRef>()
+            val enriched: String = if (unifiedSearchService.enabled) {
+                if (updateUx) setTurnPhase(turnIndex, ChatGenerationPhase.SEARCHING_MEMORY)
+                val outcome = unifiedSearchService.injectWithHits(last.content)
+                if (updateUx && outcome.knowledgeHits.isNotEmpty()) {
+                    setTurnPhase(turnIndex, ChatGenerationPhase.SEARCHING_KNOWLEDGE)
                 }
+                if (updateUx) {
+                    val hits = outcome.memoryHits + outcome.knowledgeHits
+                    // 防御：三列长度必须一致，否则 require 会炸发送路径
+                    val safe = ChatSendPathGuard.safeRefsFromUnifiedKeys(
+                        keys = hits.map { it.key },
+                        texts = hits.map { it.text },
+                        subtitles = hits.map { it.subtitle }
+                    )
+                    if (safe.sizeMismatch) {
+                        android.util.Log.w(
+                            "ChatViewModel",
+                            "refsFromUnifiedKeys size mismatch keys=${hits.size}"
+                        )
+                    } else {
+                        refs += safe.refs
+                    }
+                }
+                outcome.enrichedQuestion
+            } else {
+                if (updateUx) setTurnPhase(turnIndex, ChatGenerationPhase.SEARCHING_MEMORY)
+                val result = memoryInjector.injectWithMatches(last.content)
+                if (updateUx) {
+                    refs += result.matchedMemories.map { entity ->
+                        ChatRef(
+                            type = ChatRefType.MEMORY,
+                            id = entity.id.toString(),
+                            title = MemoryType.displayName(entity.type),
+                            snippet = entity.content.take(120)
+                        )
+                    }
+                }
+                result.enrichedQuestion
             }
-            result.enrichedQuestion
-        }
-        if (updateUx) setTurnRefs(turnIndex, refs)
+            if (updateUx) setTurnRefs(turnIndex, refs)
 
-        if (enriched == last.content) return userMessages
-        return userMessages.dropLast(1) + last.copy(content = enriched)
+            if (enriched == last.content) userMessages
+            else userMessages.dropLast(1) + last.copy(content = enriched)
+        }.getOrElse { t ->
+            android.util.Log.w("ChatViewModel", "injectMemoryIntoLastUserMessage failed, use raw message", t)
+            userMessages
+        }
     }
 
     fun rememberMessage(content: String, type: String, importance: Float = 3f) {
