@@ -20,6 +20,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lanxin.android.builtin.localinference.domain.InferenceRouteCoordinator
 import com.lanxin.android.builtin.localinference.domain.LocalEngineState
+import com.lanxin.android.builtin.localinference.domain.LocalInferenceBootstrap
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceConfig
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceSettings
 import com.lanxin.android.builtin.localinference.domain.LocalLlmEngine
@@ -51,7 +52,9 @@ data class LocalInferenceUiState(
     val snackbarMessage: String? = null,
     /** Phase 6.2 路由预览（云端/本地/不可用）。 */
     val routePreview: String = "",
-    val networkAvailable: Boolean = true
+    val networkAvailable: Boolean = true,
+    /** 一键开启后若缺模型，引导选文件夹。 */
+    val needModelPicker: Boolean = false
 )
 
 @HiltViewModel
@@ -60,7 +63,8 @@ class LocalInferenceViewModel @Inject constructor(
     private val engine: LocalLlmEngine,
     private val routeCoordinator: InferenceRouteCoordinator,
     private val networkStatusProvider: NetworkStatusProvider,
-    private val pathImporter: LocalPathImporter
+    private val pathImporter: LocalPathImporter,
+    private val bootstrap: LocalInferenceBootstrap
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LocalInferenceUiState())
@@ -209,24 +213,32 @@ class LocalInferenceViewModel @Inject constructor(
         }
     }
 
-    /** SAF：选择完整模型文件夹并导入私有目录（推荐）。 */
+    /** SAF：选择完整模型文件夹并导入私有目录（推荐）；导入后自动一键就绪。 */
     fun importModelFromTree(uriString: String) {
         if (_uiState.value.pathImportBusy) {
             _uiState.update { it.copy(snackbarMessage = "正在导入，请稍候") }
             return
         }
         viewModelScope.launch {
-            _uiState.update { it.copy(pathImportBusy = true, isBusy = true) }
+            _uiState.update { it.copy(pathImportBusy = true, isBusy = true, needModelPicker = false) }
             val result = pathImporter.importTree(uriString, PathImportHelper.Kind.LOCAL_LLM)
             result.fold(
                 onSuccess = { r ->
                     settings.setModelPath(r.absolutePath)
+                    val ready = bootstrap.ensureReady(enableIfNeeded = true)
+                    val snack = when (ready.status) {
+                        LocalInferenceBootstrap.Status.READY ->
+                            "已导入并开启本地对话：${r.displayName}"
+                        else ->
+                            "文件夹已导入：${r.displayName}；${ready.message}"
+                    }
                     _uiState.update {
                         it.copy(
                             pathImportBusy = false,
                             isBusy = false,
                             modelPath = r.absolutePath,
-                            snackbarMessage = "本地模型文件夹已导入：${r.displayName}"
+                            snackbarMessage = snack,
+                            needModelPicker = ready.status == LocalInferenceBootstrap.Status.NEED_MODEL_PATH
                         )
                     }
                 },
@@ -270,26 +282,76 @@ class LocalInferenceViewModel @Inject constructor(
     fun loadModel() {
         viewModelScope.launch {
             _uiState.update { it.copy(isBusy = true) }
-            val config = settings.getConfig()
-            val ok = engine.load(config)
+            val result = bootstrap.ensureReady(enableIfNeeded = false)
             val err = engine.lastError
-            val snack = when {
-                ok && err == null -> "模型已加载（native）"
-                ok && err?.startsWith("native_degraded:") == true ->
-                    "模型路径可用，但 native 加载失败，已降级 stub：$err"
-                ok -> "模型已加载"
-                else -> "加载失败: ${err ?: "unknown"}"
+            val snack = when (result.status) {
+                LocalInferenceBootstrap.Status.READY ->
+                    if (err?.startsWith("native_degraded:") == true) {
+                        "模型路径可用，但 native 加载失败，已降级 stub：$err"
+                    } else {
+                        "模型已加载"
+                    }
+                LocalInferenceBootstrap.Status.NEED_MODEL_PATH -> result.message
+                LocalInferenceBootstrap.Status.LOAD_FAILED -> result.message
             }
             _uiState.update {
                 it.copy(
                     isBusy = false,
                     engineState = engine.state.value,
                     lastError = err,
-                    snackbarMessage = snack
+                    snackbarMessage = snack,
+                    needModelPicker = result.status == LocalInferenceBootstrap.Status.NEED_MODEL_PATH
                 )
             }
             refresh()
         }
+    }
+
+    /**
+     * 一键开启本地对话：有完整 modelPath 则 enable + load；无路径则引导选文件夹。
+     */
+    fun oneClickEnableLocalChat() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isBusy = true, needModelPicker = false) }
+            val result = bootstrap.ensureReady(enableIfNeeded = true)
+            val snack = when (result.status) {
+                LocalInferenceBootstrap.Status.READY -> "本地对话已开启，可直接聊"
+                LocalInferenceBootstrap.Status.NEED_MODEL_PATH -> result.message
+                LocalInferenceBootstrap.Status.LOAD_FAILED -> result.message
+            }
+            _uiState.update {
+                it.copy(
+                    isBusy = false,
+                    engineState = engine.state.value,
+                    lastError = engine.lastError,
+                    snackbarMessage = snack,
+                    needModelPicker = result.status == LocalInferenceBootstrap.Status.NEED_MODEL_PATH
+                )
+            }
+            refresh()
+        }
+    }
+
+    /** 失败后重试加载（不改路径）。 */
+    fun retryLoad() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isBusy = true) }
+            val result = bootstrap.ensureReady(enableIfNeeded = true)
+            _uiState.update {
+                it.copy(
+                    isBusy = false,
+                    engineState = engine.state.value,
+                    lastError = engine.lastError,
+                    snackbarMessage = result.message,
+                    needModelPicker = result.status == LocalInferenceBootstrap.Status.NEED_MODEL_PATH
+                )
+            }
+            refresh()
+        }
+    }
+
+    fun clearNeedModelPicker() {
+        _uiState.update { it.copy(needModelPicker = false) }
     }
 
     fun unloadModel() {

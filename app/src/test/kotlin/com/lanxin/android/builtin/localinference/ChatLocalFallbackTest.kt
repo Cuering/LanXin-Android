@@ -68,7 +68,22 @@ class ChatLocalFallbackTest {
             networkAvailable = false
         )
         assertEquals(InferenceRouteCoordinator.OFFLINE_LOCAL_UNAVAILABLE_MESSAGE, msg)
-        assertTrue(msg.contains("本地推理"))
+        assertTrue(msg.contains("本地"))
+        assertTrue(msg.length < 100)
+    }
+
+    @Test
+    fun `unavailableMessage forceLocal is short with retry hint`() {
+        val msg = ChatLocalFallback.unavailableMessage(
+            InferenceRouteDecision(
+                InferenceRouteTarget.UNAVAILABLE,
+                RouteReason.FORCE_LOCAL_UNAVAILABLE
+            ),
+            networkAvailable = true
+        )
+        assertEquals(InferenceRouteCoordinator.FORCE_LOCAL_UNAVAILABLE_MESSAGE, msg)
+        assertTrue(msg.contains("重试") || msg.contains("导入"))
+        assertFalse(msg.contains("智能能力 → 本地推理"))
     }
 
     @Test

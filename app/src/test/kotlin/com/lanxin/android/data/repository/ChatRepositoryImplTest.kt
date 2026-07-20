@@ -34,6 +34,7 @@ import com.lanxin.android.builtin.localinference.domain.InferenceRouteCoordinato
 import com.lanxin.android.builtin.localinference.domain.LocalEngineState
 import com.lanxin.android.builtin.localinference.domain.LocalGenerateRequest
 import com.lanxin.android.builtin.localinference.domain.LocalGenerateResult
+import com.lanxin.android.builtin.localinference.domain.LocalInferenceBootstrap
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceConfig
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceProvider
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceSettings
@@ -483,35 +484,38 @@ class ChatRepositoryImplTest {
         preferLocal: Boolean = false
     ): ChatRepositoryImpl {
         val coordinator = if (localProvider != null) {
+            val settings = object : LocalInferenceSettings {
+                override suspend fun getConfig() = LocalInferenceConfig(
+                    enabled = true,
+                    modelPath = "stub://demo-model"
+                )
+                override suspend fun setEnabled(enabled: Boolean) = Unit
+                override suspend fun setModelPath(path: String?) = Unit
+                override suspend fun setMaxTokens(maxTokens: Int) = Unit
+                override suspend fun setTemperature(temperature: Float) = Unit
+                override suspend fun setShowThinking(show: Boolean) = Unit
+                override suspend fun isPreferLocal() = preferLocal
+                override suspend fun setPreferLocal(prefer: Boolean) = Unit
+            }
+            val engine = object : LocalLlmEngine {
+                private val st = MutableStateFlow(
+                    if (localReady) LocalEngineState.READY else LocalEngineState.IDLE
+                )
+                override val state: StateFlow<LocalEngineState> = st
+                override val isReady: Boolean get() = localReady
+                override val isAvailable: Boolean get() = true
+                override val lastError: String? = null
+                override suspend fun load(config: LocalInferenceConfig) = localReady
+                override suspend fun unload() = Unit
+                override suspend fun generate(request: LocalGenerateRequest) =
+                    LocalGenerateResult("x", isStub = true)
+                override fun stream(request: LocalGenerateRequest) = emptyFlow<String>()
+            }
             InferenceRouteCoordinator(
                 networkStatusProvider = NetworkStatusProvider { networkAvailable },
-                settings = object : LocalInferenceSettings {
-                    override suspend fun getConfig() = LocalInferenceConfig(
-                        enabled = true,
-                        modelPath = "stub://demo-model"
-                    )
-                    override suspend fun setEnabled(enabled: Boolean) = Unit
-                    override suspend fun setModelPath(path: String?) = Unit
-                    override suspend fun setMaxTokens(maxTokens: Int) = Unit
-                    override suspend fun setTemperature(temperature: Float) = Unit
-                    override suspend fun setShowThinking(show: Boolean) = Unit
-                    override suspend fun isPreferLocal() = preferLocal
-                    override suspend fun setPreferLocal(prefer: Boolean) = Unit
-                },
-                engine = object : LocalLlmEngine {
-                    private val st = MutableStateFlow(
-                        if (localReady) LocalEngineState.READY else LocalEngineState.IDLE
-                    )
-                    override val state: StateFlow<LocalEngineState> = st
-                    override val isReady: Boolean get() = localReady
-                    override val isAvailable: Boolean get() = true
-                    override val lastError: String? = null
-                    override suspend fun load(config: LocalInferenceConfig) = localReady
-                    override suspend fun unload() = Unit
-                    override suspend fun generate(request: LocalGenerateRequest) =
-                        LocalGenerateResult("x", isStub = true)
-                    override fun stream(request: LocalGenerateRequest) = emptyFlow<String>()
-                }
+                settings = settings,
+                engine = engine,
+                bootstrap = LocalInferenceBootstrap(settings, engine)
             )
         } else {
             null

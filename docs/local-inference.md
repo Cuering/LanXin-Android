@@ -31,6 +31,7 @@ Phase 6.3 将云端 ↔ 本地切换提升为 **一等公民 ChatRouter**；
 | **`ChatRouter` 统一决策 + reason 码** | ✅ **6.3** |
 | **needsTools → 优先云端** | ✅ **6.3** |
 | **forceLocal 会话级强制本地** | ✅ **会话本地模型** |
+| **forceLocal 冷启动懒加载 / 一键开启** | ✅ **#120** |
 | **真实 MNN so + 薄 JNI 进 APK** | ✅ **P2** |
 | 量化模型权重打包 | ❌ 外置用户自备（不进 git） |
 | 本地 tool_call | ❌ 不做（产品边界） |
@@ -91,6 +92,18 @@ ChatRepositoryImpl.completeChat(..., needsTools, forceLocal)
 `ChatViewModel.forceLocal`：从会话槽位解析，不走全局开关。`resolvePlatformForUid` 识别本地哨兵 uid 时合成 `PlatformV2` 供 completeChat 槽位使用。
 
 `localReady` **仅** `engine.isReady`（已 load），不是「开关开了就算」。
+
+### 一键开启 / 冷启动懒加载（#120）
+
+重启后进入 forceLocal 会话时，若 DataStore 已有 `modelPath`：
+
+1. **进会话**：`ChatViewModel` init 调 `LocalInferenceBootstrap.ensureReady`（enable + load）
+2. **发消息 / decide**：`InferenceRouteCoordinator.decide(forceLocal=true)` 再次 ensure（串行 Mutex）
+3. 无路径 → 短错误 + 引导「选择完整模型文件夹」；有路径 load 失败 → 「重试加载」
+
+设置页「本地推理」提供 **一键开启本地对话** / **重试加载**；导入文件夹后自动 ensureReady。
+
+错误文案缩短，不再要求「设置 → 智能能力 → 本地推理」多层跳转。
 
 ### Reason 码
 
@@ -166,6 +179,7 @@ app/src/main/kotlin/com/lanxin/android/builtin/localinference/
 │   ├── LocalInferenceProvider.kt
 │   ├── LocalInferenceSettings.kt
 │   ├── LocalInferenceModels.kt
+│   ├── LocalInferenceBootstrap.kt    ← #120 一键开启 / 懒加载
 │   ├── ChatRouter.kt                 ← 6.3 统一决策
 │   ├── InferenceRouteSelector.kt     ← 委托 ChatRouter
 │   ├── InferenceRouteCoordinator.kt  ← 运行时门面
@@ -262,7 +276,7 @@ docs/local-inference.md   ← 本文
   --tests "com.lanxin.android.data.repository.ChatRepositoryImplTest"
 ```
 
-覆盖要点（#106 本地脑链路）：
+覆盖要点（#106 本地脑链路 + #120 一键开启）：
 
 | 用例 | 断言 |
 |------|------|
@@ -270,4 +284,6 @@ docs/local-inference.md   ← 本文
 | `DefaultLocalInferenceProviderTest` · disabled | 明确「未启用」错误，不 load |
 | 同上 · path empty | 明确「路径为空」 |
 | 同上 · enabled + stub path | **auto-load** → Success |
+| `LocalInferenceBootstrapTest` | 有路径 auto enable+load；无路径 NEED_MODEL；重试 |
+| `InferenceRouteCoordinatorTest` · forceLocal | 懒加载后 LOCAL / 无路径 UNAVAILABLE |
 | `StubLocalLlmEngineTest` / `MnnLocalLlmEngineTest` | load 契约（disabled / empty / ready） |

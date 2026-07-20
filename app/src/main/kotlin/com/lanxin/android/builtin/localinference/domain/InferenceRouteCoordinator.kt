@@ -23,8 +23,9 @@ import javax.inject.Singleton
  * Phase 6.3 ChatRouter 运行时门面：收集设置 / 引擎就绪 / 网络，委托 [ChatRouter]。
  *
  * 产品边界：
- * - `local_inference_enabled` 关 → 引擎不会 ready → 永不走本地
+ * - `local_inference_enabled` 关 → 引擎不会 ready → 永不走本地（**除非** forceLocal 懒加载）
  * - 仅 **引擎 ready（已 load）** 才算 localReady
+ * - **forceLocal** + 已有 modelPath：decide 前 [LocalInferenceBootstrap.ensureReady]（#120）
  * - **needsTools** → 优先云端（本地无 tool_call）
  * - 无网时 cloudAvailable=false；有网默认云端（preferLocal 且 ready 时本地）
  *
@@ -34,7 +35,8 @@ import javax.inject.Singleton
 class InferenceRouteCoordinator @Inject constructor(
     private val networkStatusProvider: NetworkStatusProvider,
     private val settings: LocalInferenceSettings,
-    private val engine: LocalLlmEngine
+    private val engine: LocalLlmEngine,
+    private val bootstrap: LocalInferenceBootstrap
 ) {
 
     /**
@@ -43,13 +45,17 @@ class InferenceRouteCoordinator @Inject constructor(
      * @param needsTools 本轮是否需要 tool_call / MCP 工具链
      * @param forceCloudAvailable 覆盖「云端是否可选」；默认随网络。
      *        传入 false 可模拟仅本地候选（测试 / 预览）。
-     * @param forceLocal 会话显式选中本地模型（最高优先级）
+     * @param forceLocal 会话显式选中本地模型（最高优先级；会触发懒加载）
      */
     suspend fun decide(
         needsTools: Boolean = false,
         forceCloudAvailable: Boolean? = null,
         forceLocal: Boolean = false
     ): InferenceRouteDecision {
+        // forceLocal：有路径则自动 enable + load（冷启动懒加载 / 重试）
+        if (forceLocal) {
+            runCatching { bootstrap.ensureReady(enableIfNeeded = true) }
+        }
         val networkOk = networkStatusProvider.isNetworkAvailable()
         val preferLocal = settings.isPreferLocal()
         val localReady = engine.isReady
@@ -68,11 +74,22 @@ class InferenceRouteCoordinator @Inject constructor(
 
     /**
      * 设置页 / 调试用的路由预览文案（默认按无 tool 需求预览）。
+     * 预览不触发懒加载，避免设置页误 load。
      */
     suspend fun previewLabel(needsTools: Boolean = false): String {
-        val decision = decide(needsTools = needsTools)
         val networkOk = networkStatusProvider.isNetworkAvailable()
+        val preferLocal = settings.isPreferLocal()
         val config = settings.getConfig()
+        val localReady = engine.isReady
+        val decision = ChatRouter.decide(
+            ChatRouteContext(
+                preferLocal = preferLocal,
+                localReady = localReady,
+                networkAvailable = networkOk,
+                needsTools = needsTools,
+                cloudAvailable = networkOk
+            )
+        )
         val engineState = engine.state.value
         val netLabel = if (networkOk) "有网" else "无网"
         val localLabel = when {
@@ -91,10 +108,10 @@ class InferenceRouteCoordinator @Inject constructor(
 
     companion object {
         /**
-         * 无网且本地不可用时的用户可见错误（Chat 层展示）。
+         * 无网且本地不可用时的用户可见错误（缩短，可重试）。
          */
         const val OFFLINE_LOCAL_UNAVAILABLE_MESSAGE =
-            "当前无网络，且本地推理不可用。请到「设置 → 智能能力 → 本地推理」打开开关、填写模型路径并加载模型后再试。"
+            LocalInferenceBootstrap.OFFLINE_LOCAL_UNAVAILABLE_SHORT
 
         /**
          * 路由完全不可用时的兜底文案。
@@ -103,9 +120,9 @@ class InferenceRouteCoordinator @Inject constructor(
             "当前没有可用的推理通道（云端与本地均不可用）。"
 
         /**
-         * 会话强制本地但引擎未就绪。
+         * 会话强制本地但引擎未就绪（缩短，引导重试 / 导入）。
          */
         const val FORCE_LOCAL_UNAVAILABLE_MESSAGE =
-            "本会话已选本地模型，但本地推理未就绪。请到「设置 → 智能能力 → 本地推理」打开开关、填写模型路径并加载模型后再试。"
+            LocalInferenceBootstrap.FORCE_LOCAL_UNAVAILABLE_SHORT
     }
 }
