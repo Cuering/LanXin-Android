@@ -5,6 +5,7 @@ import com.lanxin.android.builtin.localinference.domain.InferenceRouteTarget
 import com.lanxin.android.builtin.localinference.domain.LocalEngineState
 import com.lanxin.android.builtin.localinference.domain.LocalGenerateRequest
 import com.lanxin.android.builtin.localinference.domain.LocalGenerateResult
+import com.lanxin.android.builtin.localinference.domain.LocalInferenceBootstrap
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceConfig
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceSettings
 import com.lanxin.android.builtin.localinference.domain.LocalLlmEngine
@@ -112,6 +113,43 @@ class InferenceRouteCoordinatorTest {
         assertTrue(label.contains(RouteReason.OFFLINE_LOCAL) || label.contains("路由="))
     }
 
+    @Test
+    fun `forceLocal with path lazy-loads then selects LOCAL`() = runBlocking {
+        val engine = LazyFakeEngine(startReady = false, loadSucceeds = true)
+        val settings = MutableSettings(
+            LocalInferenceConfig(enabled = false, modelPath = "stub://demo-model")
+        )
+        val c = InferenceRouteCoordinator(
+            networkStatusProvider = NetworkStatusProvider { true },
+            settings = settings,
+            engine = engine,
+            bootstrap = LocalInferenceBootstrap(settings, engine)
+        )
+        val d = c.decide(forceLocal = true)
+        assertEquals(InferenceRouteTarget.LOCAL, d.target)
+        assertEquals(RouteReason.FORCE_LOCAL, d.reason)
+        assertTrue(engine.isReady)
+        assertTrue(settings.config.enabled)
+    }
+
+    @Test
+    fun `forceLocal without path stays UNAVAILABLE`() = runBlocking {
+        val engine = LazyFakeEngine(startReady = false, loadSucceeds = true)
+        val settings = MutableSettings(
+            LocalInferenceConfig(enabled = false, modelPath = "")
+        )
+        val c = InferenceRouteCoordinator(
+            networkStatusProvider = NetworkStatusProvider { true },
+            settings = settings,
+            engine = engine,
+            bootstrap = LocalInferenceBootstrap(settings, engine)
+        )
+        val d = c.decide(forceLocal = true)
+        assertEquals(InferenceRouteTarget.UNAVAILABLE, d.target)
+        assertEquals(RouteReason.FORCE_LOCAL_UNAVAILABLE, d.reason)
+        assertTrue(!engine.isReady)
+    }
+
     private fun coordinator(
         network: Boolean,
         ready: Boolean,
@@ -119,41 +157,67 @@ class InferenceRouteCoordinatorTest {
         enabled: Boolean
     ): InferenceRouteCoordinator {
         val net = NetworkStatusProvider { network }
-        val settings = object : LocalInferenceSettings {
-            override suspend fun getConfig() = LocalInferenceConfig(
+        val settings = MutableSettings(
+            LocalInferenceConfig(
                 enabled = enabled,
                 modelPath = if (enabled) "stub://demo-model" else ""
-            )
-
-            override suspend fun setEnabled(enabled: Boolean) = Unit
-            override suspend fun setModelPath(path: String?) = Unit
-            override suspend fun setMaxTokens(maxTokens: Int) = Unit
-            override suspend fun setTemperature(temperature: Float) = Unit
-            override suspend fun setShowThinking(show: Boolean) = Unit
-            override suspend fun isPreferLocal() = preferLocal
-            override suspend fun setPreferLocal(prefer: Boolean) = Unit
-        }
-        val engine = FakeEngine(ready = ready, enabled = enabled)
-        return InferenceRouteCoordinator(net, settings, engine)
+            ),
+            preferLocal = preferLocal
+        )
+        val engine = LazyFakeEngine(startReady = ready, loadSucceeds = ready)
+        return InferenceRouteCoordinator(
+            networkStatusProvider = net,
+            settings = settings,
+            engine = engine,
+            bootstrap = LocalInferenceBootstrap(settings, engine)
+        )
     }
 
-    private class FakeEngine(
-        private val ready: Boolean,
-        private val enabled: Boolean
+    private class MutableSettings(
+        @Volatile var config: LocalInferenceConfig,
+        private val preferLocal: Boolean = false
+    ) : LocalInferenceSettings {
+        override suspend fun getConfig() = config
+        override suspend fun setEnabled(enabled: Boolean) {
+            config = config.copy(enabled = enabled)
+        }
+        override suspend fun setModelPath(path: String?) {
+            config = config.copy(modelPath = path.orEmpty())
+        }
+        override suspend fun setMaxTokens(maxTokens: Int) = Unit
+        override suspend fun setTemperature(temperature: Float) = Unit
+        override suspend fun setShowThinking(show: Boolean) = Unit
+        override suspend fun isPreferLocal() = preferLocal
+        override suspend fun setPreferLocal(prefer: Boolean) = Unit
+    }
+
+    private class LazyFakeEngine(
+        startReady: Boolean,
+        private val loadSucceeds: Boolean
     ) : LocalLlmEngine {
         private val _state = MutableStateFlow(
-            when {
-                ready -> LocalEngineState.READY
-                enabled -> LocalEngineState.IDLE
-                else -> LocalEngineState.DISABLED
-            }
+            if (startReady) LocalEngineState.READY else LocalEngineState.IDLE
         )
         override val state: StateFlow<LocalEngineState> = _state
-        override val isReady: Boolean get() = ready
-        override val isAvailable: Boolean get() = enabled
+        override val isReady: Boolean get() = _state.value == LocalEngineState.READY
+        override val isAvailable: Boolean get() = true
         override val lastError: String? = null
-        override suspend fun load(config: LocalInferenceConfig): Boolean = ready
-        override suspend fun unload() = Unit
+        override suspend fun load(config: LocalInferenceConfig): Boolean {
+            if (!config.enabled || config.modelPath.isBlank()) {
+                _state.value = LocalEngineState.ERROR
+                return false
+            }
+            return if (loadSucceeds) {
+                _state.value = LocalEngineState.READY
+                true
+            } else {
+                _state.value = LocalEngineState.ERROR
+                false
+            }
+        }
+        override suspend fun unload() {
+            _state.value = LocalEngineState.IDLE
+        }
         override suspend fun generate(request: LocalGenerateRequest): LocalGenerateResult =
             LocalGenerateResult("x", isStub = true)
         override fun stream(request: LocalGenerateRequest): Flow<String> = emptyFlow()

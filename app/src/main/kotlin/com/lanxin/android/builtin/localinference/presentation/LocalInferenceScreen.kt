@@ -95,6 +95,13 @@ fun LocalInferenceScreen(
         }
     }
 
+    LaunchedEffect(state.needModelPicker) {
+        if (state.needModelPicker) {
+            modelTreePicker.launch(null)
+            viewModel.clearNeedModelPicker()
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -171,6 +178,36 @@ fun LocalInferenceScreen(
                     )
                 }
             }
+
+            Button(
+                onClick = viewModel::oneClickEnableLocalChat,
+                enabled = !state.isBusy && !state.pathImportBusy,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    if (state.engineState == LocalEngineState.READY) {
+                        "本地对话已就绪"
+                    } else {
+                        "一键开启本地对话"
+                    }
+                )
+            }
+            if (state.engineState == LocalEngineState.ERROR ||
+                (state.enabled && state.engineState != LocalEngineState.READY)
+            ) {
+                OutlinedButton(
+                    onClick = viewModel::retryLoad,
+                    enabled = !state.isBusy && !state.pathImportBusy,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("重试加载")
+                }
+            }
+            Text(
+                text = "有完整模型包：开开关并加载；无模型：引导选择文件夹（config.json + *.mnn）。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
             Row(
                 modifier = Modifier.fillMaxWidth(),

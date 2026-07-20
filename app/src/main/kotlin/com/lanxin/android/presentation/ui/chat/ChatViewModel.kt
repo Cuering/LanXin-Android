@@ -10,6 +10,7 @@ import androidx.lifecycle.viewModelScope
 import com.lanxin.android.builtin.knowledge.domain.AutoKnowledgeService
 import com.lanxin.android.builtin.localinference.domain.ChatLocalFallback
 import com.lanxin.android.builtin.localinference.domain.InferenceRouteCoordinator
+import com.lanxin.android.builtin.localinference.domain.LocalInferenceBootstrap
 import com.lanxin.android.builtin.localinference.domain.LocalModelPlatform
 import com.lanxin.android.builtin.persona.domain.PersonaMoodFormatter
 import com.lanxin.android.builtin.persona.domain.PersonaRepository
@@ -70,6 +71,7 @@ class ChatViewModel @Inject constructor(
     private val autoKnowledgeService: AutoKnowledgeService,
     private val skillEngine: SkillEngine,
     private val inferenceRouteCoordinator: InferenceRouteCoordinator,
+    private val localInferenceBootstrap: LocalInferenceBootstrap,
     private val webSearchSettings: com.lanxin.android.builtin.platform.domain.WebSearchSettings,
     private val deviceSensingSettings: com.lanxin.android.builtin.platform.domain.DeviceSensingSettings,
     private val smartCapabilitiesSettings: com.lanxin.android.builtin.capabilities.domain.SmartCapabilitiesSettings,
@@ -176,6 +178,12 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch { fetchMessages() }
         fetchEnabledPlatformsInApp()
         observeStateChanges()
+        // forceLocal 会话：进页即懒加载本地引擎（有 modelPath 时自动 enable+load）
+        if (forceLocal) {
+            viewModelScope.launch {
+                runCatching { localInferenceBootstrap.ensureReady(enableIfNeeded = true) }
+            }
+        }
     }
 
     fun addMessage(userMessage: MessageV2) {
