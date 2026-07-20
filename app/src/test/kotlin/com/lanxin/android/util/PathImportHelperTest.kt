@@ -81,6 +81,45 @@ class PathImportHelperTest {
     }
 
     @Test
+    fun localLlmPackageIssue_bareMnn() {
+        val dir = tmp.newFolder("llm-only")
+        val mnn = File(dir, "llm.mnn").apply { writeBytes(ByteArray(8)) }
+        val issue = PathImportHelper.localLlmPackageIssue(mnn.absolutePath)
+        assertTrue(issue!!.contains("missing_config"))
+    }
+
+    @Test
+    fun localLlmPackageIssue_completeDir() {
+        val dir = tmp.newFolder("llm-pack")
+        File(dir, "config.json").writeText("{}")
+        File(dir, "llm.mnn").writeBytes(ByteArray(8))
+        assertNull(PathImportHelper.localLlmPackageIssue(dir.absolutePath))
+    }
+
+    @Test
+    fun resolveLocalLlmLoadPath_prefersConfigJson() {
+        val dir = tmp.newFolder("llm-pack2")
+        val config = File(dir, "config.json").apply { writeText("{}") }
+        File(dir, "llm.mnn").writeBytes(ByteArray(8))
+        assertEquals(
+            config.absolutePath,
+            PathImportHelper.resolveLocalLlmLoadPath(dir.absolutePath)
+        )
+    }
+
+    @Test
+    fun findLocalLlmPackageDir_nested() {
+        val root = tmp.newFolder("outer")
+        val sub = File(root, "Qwen-0.5B").apply { mkdirs() }
+        File(sub, "config.json").writeText("{}")
+        File(sub, "llm.mnn").writeBytes(ByteArray(4))
+        assertEquals(
+            sub.absolutePath,
+            PathImportHelper.findLocalLlmPackageDir(root)?.absolutePath
+        )
+    }
+
+    @Test
     fun sanitizeFileName_stripsIllegal() {
         assertEquals("a_b.json", PathImportHelper.sanitizeFileName("a/b.json"))
         assertTrue(PathImportHelper.sanitizeFileName("  ").isNotBlank())

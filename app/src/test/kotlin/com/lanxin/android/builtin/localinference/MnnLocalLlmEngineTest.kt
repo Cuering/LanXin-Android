@@ -64,6 +64,18 @@ class MnnLocalLlmEngineTest {
     }
 
     @Test
+    fun `load bare mnn without config errors with missing_config`() = runBlocking {
+        val dir = tmp.newFolder("bare-mnn")
+        val mnn = File(dir, "llm.mnn").apply { writeBytes(ByteArray(32)) }
+        val e = engine()
+        val ok = e.load(LocalInferenceConfig(enabled = true, modelPath = mnn.absolutePath))
+        assertFalse(ok)
+        assertEquals(LocalEngineState.ERROR, e.state.value)
+        assertTrue(e.lastError!!.contains("missing_config"))
+        assertFalse(e.isReady)
+    }
+
+    @Test
     fun `load real dir without native degrades READY with lastError`() = runBlocking {
         val dir = tmp.newFolder("local-llm-light")
         File(dir, "config.json").writeText(

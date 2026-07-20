@@ -71,7 +71,13 @@ fun LocalInferenceScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    val modelPicker = rememberLauncherForActivityResult(
+    val modelTreePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        uri?.toString()?.let(viewModel::importModelFromTree)
+    }
+
+    val modelFilePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         uri?.toString()?.let(viewModel::importModelFromDocument)
@@ -207,11 +213,13 @@ fun LocalInferenceScreen(
             PathPickerField(
                 label = "本地推理模型路径",
                 path = state.modelPath,
-                helperText = "点选模型文件（导入 App 私有目录）。" +
-                    "轻量 0.5B/1.5B / 标准 7B Q4；也可高级手填 stub://demo。大文件勿提交 git。",
-                pickButtonText = "选择文件",
-                onPick = {
-                    modelPicker.launch(arrayOf("application/octet-stream", "*/*"))
+                helperText = "请选择完整模型文件夹（config.json + *.mnn + tokenizer）。" +
+                    "只选单个 llm.mnn 无法真正推理。高级可选手填路径 / stub://demo。",
+                pickButtonText = "选择文件夹",
+                onPick = { modelTreePicker.launch(null) },
+                secondaryPickText = "选单文件",
+                onSecondaryPick = {
+                    modelFilePicker.launch(arrayOf("application/octet-stream", "*/*"))
                 },
                 onClear = { viewModel.setModelPath("") },
                 manualDraft = modelDraft,
