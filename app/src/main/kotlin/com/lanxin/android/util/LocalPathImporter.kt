@@ -112,17 +112,34 @@ class LocalPathImporter @Inject constructor(
             destRoot.mkdirs()
             val docId = DocumentsContract.getTreeDocumentId(treeUri)
             copyDocumentNode(treeUri, docId, destRoot)
-            if (kind == PathImportHelper.Kind.LIVE2D) {
-                val model3 = PathImportHelper.findModel3Json(destRoot)
-                    ?: error("所选文件夹中未找到 *.model3.json")
-                ImportResult(absolutePath = model3.absolutePath, displayName = model3.name)
-            } else {
-                val nonEmpty = destRoot.exists() && (
-                    destRoot.isFile ||
-                        (destRoot.listFiles()?.isNotEmpty() == true)
+            when (kind) {
+                PathImportHelper.Kind.LIVE2D -> {
+                    val model3 = PathImportHelper.findModel3Json(destRoot)
+                        ?: error("所选文件夹中未找到 *.model3.json")
+                    ImportResult(absolutePath = model3.absolutePath, displayName = model3.name)
+                }
+                PathImportHelper.Kind.LOCAL_LLM -> {
+                    val pkg = PathImportHelper.findLocalLlmPackageDir(destRoot)
+                        ?: error(
+                            "所选文件夹不是完整 MNN 模型包（需 config.json + *.mnn）。" +
+                                "请选择包含权重与配置的模型目录。"
+                        )
+                    val issue = PathImportHelper.localLlmPackageIssue(pkg.absolutePath)
+                    if (issue != null) error(issue)
+                    val loadPath = PathImportHelper.resolveLocalLlmLoadPath(pkg.absolutePath)
+                    ImportResult(
+                        absolutePath = loadPath,
+                        displayName = File(loadPath).name.ifBlank { pkg.name }
                     )
-                if (!nonEmpty) error("所选文件夹为空或无法读取")
-                ImportResult(absolutePath = destRoot.absolutePath, displayName = destRoot.name)
+                }
+                else -> {
+                    val nonEmpty = destRoot.exists() && (
+                        destRoot.isFile ||
+                            (destRoot.listFiles()?.isNotEmpty() == true)
+                        )
+                    if (!nonEmpty) error("所选文件夹为空或无法读取")
+                    ImportResult(absolutePath = destRoot.absolutePath, displayName = destRoot.name)
+                }
             }
         }
     }

@@ -21,6 +21,7 @@ import com.lanxin.android.builtin.localinference.domain.LocalGenerateRequest
 import com.lanxin.android.builtin.localinference.domain.LocalGenerateResult
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceConfig
 import com.lanxin.android.builtin.localinference.domain.LocalLlmEngine
+import com.lanxin.android.util.PathImportHelper
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -90,13 +91,6 @@ class MnnLocalLlmEngine @Inject constructor(
                 return@withLock false
             }
             _state.value = LocalEngineState.LOADING
-            val pathOk = nativeBridge.validateModelPath(config.modelPath)
-            if (!pathOk) {
-                error = "model_path_missing:${config.modelPath}"
-                loadedPath = null
-                _state.value = LocalEngineState.ERROR
-                return@withLock false
-            }
 
             // stub:// 永远走 stub READY（单测 / 无真模型）
             if (config.modelPath.startsWith(MnnNativeBridge.STUB_SCHEME)) {
@@ -107,10 +101,29 @@ class MnnLocalLlmEngine @Inject constructor(
                 return@withLock true
             }
 
+            // 裸 .mnn / 缺 config 时提前失败，避免「READY + stub 回声」误导用户
+            val packageIssue = PathImportHelper.localLlmPackageIssue(config.modelPath)
+            if (packageIssue != null) {
+                error = packageIssue
+                loadedPath = null
+                usingNative = false
+                _state.value = LocalEngineState.ERROR
+                return@withLock false
+            }
+
+            val loadPath = PathImportHelper.resolveLocalLlmLoadPath(config.modelPath)
+            val pathOk = nativeBridge.validateModelPath(loadPath)
+            if (!pathOk) {
+                error = "model_path_missing:$loadPath"
+                loadedPath = null
+                _state.value = LocalEngineState.ERROR
+                return@withLock false
+            }
+
             val nativeOk = nativeBridge.isNativeAvailable() &&
-                nativeBridge.loadModel(config.modelPath)
+                nativeBridge.loadModel(loadPath)
             if (nativeOk) {
-                loadedPath = config.modelPath
+                loadedPath = loadPath
                 usingNative = true
                 error = null
                 _state.value = LocalEngineState.READY
@@ -121,7 +134,7 @@ class MnnLocalLlmEngine @Inject constructor(
             val reason = nativeBridge.lastError()
                 ?: nativeBridge.nativeLoadError()
                 ?: "native_load_failed"
-            loadedPath = config.modelPath
+            loadedPath = loadPath
             usingNative = false
             error = "native_degraded:$reason"
             _state.value = LocalEngineState.READY

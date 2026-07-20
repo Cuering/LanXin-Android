@@ -114,8 +114,8 @@ class LocalInferenceViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         snackbarMessage =
-                        "已启用本地脑，但模型路径为空。请到桌宠设置「一键下载本地脑」" +
-                            "或导入 llm.mnn 所在目录后再试。"
+                        "已启用本地脑，但模型路径为空。请用「选择文件夹」导入完整模型包" +
+                            "（config.json + *.mnn），或高级手填路径后再试。"
                     )
                 }
                 refresh()
@@ -123,17 +123,21 @@ class LocalInferenceViewModel @Inject constructor(
             }
             _uiState.update { it.copy(isBusy = true) }
             val ok = engine.load(config)
+            val err = engine.lastError
+            val snack = when {
+                ok && err == null -> "本地脑已启用并加载模型（native）"
+                ok && err?.startsWith("native_degraded:") == true ->
+                    "本地脑已启用，但 native 加载失败，已降级 stub：$err"
+                ok -> "本地脑已启用并加载模型"
+                else -> "本地脑已启用，但加载失败：${err ?: "unknown"}。" +
+                    "请用「选择文件夹」导入完整模型包（config.json + *.mnn）。"
+            }
             _uiState.update {
                 it.copy(
                     isBusy = false,
                     engineState = engine.state.value,
-                    lastError = engine.lastError,
-                    snackbarMessage = if (ok) {
-                        "本地脑已启用并加载模型"
-                    } else {
-                        "本地脑已启用，但加载失败：${engine.lastError ?: "unknown"}。" +
-                            "请检查模型路径是否存在（如 LanXin/models/local-llm/light/）。"
-                    }
+                    lastError = err,
+                    snackbarMessage = snack
                 )
             }
             refresh()
@@ -153,7 +157,7 @@ class LocalInferenceViewModel @Inject constructor(
         }
     }
 
-    /** SAF：选择模型文件并导入私有目录。 */
+    /** SAF：选择模型文件并导入私有目录（不推荐；完整包请用 [importModelFromTree]）。 */
     fun importModelFromDocument(uriString: String) {
         if (_uiState.value.pathImportBusy) {
             _uiState.update { it.copy(snackbarMessage = "正在导入，请稍候") }
@@ -164,13 +168,62 @@ class LocalInferenceViewModel @Inject constructor(
             val result = pathImporter.importFile(uriString, PathImportHelper.Kind.LOCAL_LLM)
             result.fold(
                 onSuccess = { r ->
+                    val issue = PathImportHelper.localLlmPackageIssue(r.absolutePath)
+                    if (issue != null) {
+                        settings.setModelPath(r.absolutePath)
+                        _uiState.update {
+                            it.copy(
+                                pathImportBusy = false,
+                                isBusy = false,
+                                modelPath = r.absolutePath,
+                                snackbarMessage = "已导入单文件，但模型包不完整：$issue"
+                            )
+                        }
+                    } else {
+                        val loadPath = PathImportHelper.resolveLocalLlmLoadPath(r.absolutePath)
+                        settings.setModelPath(loadPath)
+                        _uiState.update {
+                            it.copy(
+                                pathImportBusy = false,
+                                isBusy = false,
+                                modelPath = loadPath,
+                                snackbarMessage = "本地模型文件已导入"
+                            )
+                        }
+                    }
+                },
+                onFailure = { e ->
+                    _uiState.update {
+                        it.copy(
+                            pathImportBusy = false,
+                            isBusy = false,
+                            snackbarMessage = "导入失败：${e.message ?: e}"
+                        )
+                    }
+                }
+            )
+            refresh()
+        }
+    }
+
+    /** SAF：选择完整模型文件夹并导入私有目录（推荐）。 */
+    fun importModelFromTree(uriString: String) {
+        if (_uiState.value.pathImportBusy) {
+            _uiState.update { it.copy(snackbarMessage = "正在导入，请稍候") }
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update { it.copy(pathImportBusy = true, isBusy = true) }
+            val result = pathImporter.importTree(uriString, PathImportHelper.Kind.LOCAL_LLM)
+            result.fold(
+                onSuccess = { r ->
                     settings.setModelPath(r.absolutePath)
                     _uiState.update {
                         it.copy(
                             pathImportBusy = false,
                             isBusy = false,
                             modelPath = r.absolutePath,
-                            snackbarMessage = "本地模型已导入"
+                            snackbarMessage = "本地模型文件夹已导入：${r.displayName}"
                         )
                     }
                 },
@@ -209,16 +262,20 @@ class LocalInferenceViewModel @Inject constructor(
             _uiState.update { it.copy(isBusy = true) }
             val config = settings.getConfig()
             val ok = engine.load(config)
+            val err = engine.lastError
+            val snack = when {
+                ok && err == null -> "模型已加载（native）"
+                ok && err?.startsWith("native_degraded:") == true ->
+                    "模型路径可用，但 native 加载失败，已降级 stub：$err"
+                ok -> "模型已加载"
+                else -> "加载失败: ${err ?: "unknown"}"
+            }
             _uiState.update {
                 it.copy(
                     isBusy = false,
                     engineState = engine.state.value,
-                    lastError = engine.lastError,
-                    snackbarMessage = if (ok) {
-                        "模型已加载（stub）"
-                    } else {
-                        "加载失败: ${engine.lastError ?: "unknown"}"
-                    }
+                    lastError = err,
+                    snackbarMessage = snack
                 )
             }
             refresh()

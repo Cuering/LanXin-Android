@@ -90,6 +90,94 @@ object PathImportHelper {
         return null
     }
 
+    /**
+     * 在目录树中定位可用的本地 LLM 模型包根目录（含 config + 权重）。
+     * 深度优先，名字排序保证稳定。
+     */
+    fun findLocalLlmPackageDir(root: File): File? {
+        if (!root.exists()) return null
+        if (root.isFile) {
+            return root.parentFile?.takeIf { localLlmPackageIssue(it.absolutePath) == null }
+        }
+        if (localLlmPackageIssue(root.absolutePath) == null) return root
+        val kids = root.listFiles()?.sortedBy { it.name.lowercase() } ?: return null
+        for (d in kids) {
+            if (d.isDirectory) {
+                findLocalLlmPackageDir(d)?.let { return it }
+            }
+        }
+        return null
+    }
+
+    /**
+     * 解析引擎应加载的路径：优先 config.json，其次包目录，再次原路径。
+     */
+    fun resolveLocalLlmLoadPath(path: String): String {
+        val trimmed = path.trim()
+        if (trimmed.isBlank() || trimmed.startsWith("stub://")) return trimmed
+        val f = File(trimmed)
+        if (!f.exists()) return trimmed
+        val pkg = when {
+            f.isDirectory -> findLocalLlmPackageDir(f) ?: f
+            f.isFile -> f.parentFile?.let { findLocalLlmPackageDir(it) } ?: f.parentFile ?: f
+            else -> f
+        }
+        val config = listOf("config.json", "llm_config.json", "llm.mnn.json")
+            .map { File(pkg, it) }
+            .firstOrNull { it.isFile }
+        return config?.absolutePath ?: pkg.absolutePath
+    }
+
+    /**
+     * 校验本地 LLM 模型包是否基本完整。
+     *
+     * @return null 表示可尝试 native load；否则为可读错误原因
+     */
+    fun localLlmPackageIssue(path: String): String? {
+        val trimmed = path.trim()
+        if (trimmed.isBlank()) return "path_empty"
+        if (trimmed.startsWith("stub://")) return null
+        val f = File(trimmed)
+        if (!f.exists()) return "path_missing:$trimmed"
+
+        val dir: File
+        val focusFile: File?
+        when {
+            f.isDirectory -> {
+                dir = f
+                focusFile = null
+            }
+            f.isFile -> {
+                dir = f.parentFile ?: return "path_invalid_parent"
+                focusFile = f
+            }
+            else -> return "path_invalid"
+        }
+
+        val configFiles = listOf("config.json", "llm_config.json", "llm.mnn.json")
+        val hasConfig = configFiles.any { File(dir, it).isFile } ||
+            (focusFile != null && focusFile.name.endsWith(".json", ignoreCase = true))
+        val hasWeight = dir.listFiles()?.any {
+            it.isFile && it.name.endsWith(".mnn", ignoreCase = true)
+        } == true ||
+            (focusFile != null && focusFile.name.endsWith(".mnn", ignoreCase = true))
+
+        if (focusFile != null &&
+            focusFile.name.endsWith(".mnn", ignoreCase = true) &&
+            !hasConfig
+        ) {
+            return "missing_config: 仅导入了 ${focusFile.name}。" +
+                "MNN 本地脑需要完整模型文件夹（config.json + *.mnn + tokenizer），请用「选择文件夹」。"
+        }
+        if (!hasConfig) {
+            return "missing_config: 目录中无 config.json / llm_config.json"
+        }
+        if (!hasWeight) {
+            return "missing_weight: 目录中无 *.mnn 权重"
+        }
+        return null
+    }
+
     fun sanitizeFileName(raw: String): String {
         val base = raw.trim().ifBlank { "file" }
             .replace(Regex("""[\\/:*?"<>|\u0000-\u001f]"""), "_")

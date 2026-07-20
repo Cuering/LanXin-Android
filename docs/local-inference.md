@@ -218,6 +218,10 @@ docs/local-inference.md   ← 本文
 └── tokenizer.*
 ```
 
+**设置页导入**：优先「选择文件夹」导入完整包（`config.json` + `*.mnn` + tokenizer）。  
+只选单个 `llm.mnn` 会在 load 阶段以 `missing_config` 失败，不再伪造成 READY stub 回声。  
+导入后路径优先解析为包内 `config.json`。
+
 单测可用虚拟路径：`stub://demo-model`（`MnnNativeBridge` 认作合法，不走 native）。
 
 ## P2 MNN 真引擎
