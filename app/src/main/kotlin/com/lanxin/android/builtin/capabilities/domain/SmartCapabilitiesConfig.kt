@@ -41,6 +41,7 @@ enum class SmartCapabilityId {
 
     /** 导游独立插件镜像；默认 OFF */
     GUIDE,
+
     // —— 兼容别名（高级细项 / 旧调用点）——
     SYSTEM_TOOLS,
     WEB_SEARCH,
