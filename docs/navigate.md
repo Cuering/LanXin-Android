@@ -40,7 +40,7 @@ builtin/navigate/
 ```
 
 注册：`PlatformPlugin`（导航工具，非导游包）。  
-门闸：`ChatViewModel` → `NavigateGate.filterTools`。  
+门闸：`ChatViewModel` → `ChatSendToolFilterLogic` → `NavigateGate.filterTools`。  
 单测：`NavigateDomainTest`。  
 CI：`.github/workflows/navigate-verify.yml`（JDK 21 + unit + compileDebugKotlin + assembleDebug）。
 
