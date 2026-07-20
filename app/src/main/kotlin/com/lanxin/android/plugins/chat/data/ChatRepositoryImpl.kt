@@ -151,13 +151,14 @@ class ChatRepositoryImpl @Inject constructor(
         userMessages: List<MessageV2>,
         assistantMessages: List<List<MessageV2>>,
         platform: PlatformV2,
-        needsTools: Boolean
+        needsTools: Boolean,
+        forceLocal: Boolean
     ): Flow<ApiState> {
         // Phase 6.3：统一走 ChatRouter（via InferenceRouteCoordinator）
         val coordinator = inferenceRouteCoordinator
         val localProvider = localInferenceProvider
         if (coordinator != null && localProvider != null) {
-            val decision = coordinator.decide(needsTools = needsTools)
+            val decision = coordinator.decide(needsTools = needsTools, forceLocal = forceLocal)
             lastRouteReason = decision.reason
             lastUsedLocal = ChatLocalFallback.shouldUseLocal(decision)
             if (ChatLocalFallback.shouldEmitUnavailable(decision)) {

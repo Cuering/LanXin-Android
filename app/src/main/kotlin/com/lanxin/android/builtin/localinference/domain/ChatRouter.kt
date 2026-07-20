@@ -23,6 +23,12 @@ object RouteReason {
     /** 用户 preferLocal 且本地就绪（且无 tool 强制云端）。 */
     const val PREFER_LOCAL = "prefer_local"
 
+    /** 会话显式选中本地模型且就绪。 */
+    const val FORCE_LOCAL = "force_local"
+
+    /** 会话强制本地但引擎未就绪。 */
+    const val FORCE_LOCAL_UNAVAILABLE = "force_local_unavailable"
+
     /** 无网 + 本地就绪 → 本地离线兜底。 */
     const val OFFLINE_LOCAL = "offline_local"
 
@@ -53,13 +59,15 @@ object RouteReason {
  * @property networkAvailable 网络是否可用；null 表示未知（不按离线处理）
  * @property needsTools 本轮需要 tool_call / MCP 工具链（本地无 tool_call → 优先云端）
  * @property cloudAvailable 覆盖「云端是否可选」；null 时随 networkAvailable（null 网络视为可尝试云端）
+ * @property forceLocal 会话显式选中本地模型（最高优先级，覆盖 preferLocal / 默认云端）
  */
 data class ChatRouteContext(
     val preferLocal: Boolean,
     val localReady: Boolean,
     val networkAvailable: Boolean? = null,
     val needsTools: Boolean = false,
-    val cloudAvailable: Boolean? = null
+    val cloudAvailable: Boolean? = null,
+    val forceLocal: Boolean = false
 )
 
 /**
@@ -68,6 +76,7 @@ data class ChatRouteContext(
  * 单一入口：给定 [ChatRouteContext] → [InferenceRouteDecision]（CLOUD / LOCAL / UNAVAILABLE + reason）。
  *
  * 产品规则（严格）：
+ * 0. **forceLocal**（会话选本地模型）→ 就绪 LOCAL / 未就绪 UNAVAILABLE（覆盖 needsTools）
  * 1. 开关关 / 引擎未 ready → localReady=false → 不走本地
  * 2. **需要 tool_call / MCP** 且云端可选 → **CLOUD**（[RouteReason.NEED_TOOLS_CLOUD]）
  * 3. preferLocal + ready 且无 tool 强制 → LOCAL
@@ -89,6 +98,21 @@ object ChatRouter {
             ?: (networkOk != false)
         val preferLocal = context.preferLocal
         val needsTools = context.needsTools
+
+        // 0) 会话强制本地：覆盖默认云端 / needsTools（本地会话无 tool_call）
+        if (context.forceLocal) {
+            return if (localReady) {
+                InferenceRouteDecision(
+                    target = InferenceRouteTarget.LOCAL,
+                    reason = RouteReason.FORCE_LOCAL
+                )
+            } else {
+                InferenceRouteDecision(
+                    target = InferenceRouteTarget.UNAVAILABLE,
+                    reason = RouteReason.FORCE_LOCAL_UNAVAILABLE
+                )
+            }
+        }
 
         // 1) 需要工具 → 优先云端（本地无 tool_call）
         if (needsTools && cloudAvailable) {

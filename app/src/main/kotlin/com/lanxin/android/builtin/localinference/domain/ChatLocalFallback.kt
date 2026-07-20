@@ -45,13 +45,20 @@ object ChatLocalFallback {
      * 映射 UNAVAILABLE 原因到用户可见错误。
      */
     fun unavailableMessage(decision: InferenceRouteDecision, networkAvailable: Boolean): String {
-        return when {
-            !networkAvailable -> InferenceRouteCoordinator.OFFLINE_LOCAL_UNAVAILABLE_MESSAGE
-            decision.reason == RouteReason.OFFLINE_LOCAL_UNAVAILABLE ->
+        return when (decision.reason) {
+            RouteReason.FORCE_LOCAL_UNAVAILABLE ->
+                InferenceRouteCoordinator.FORCE_LOCAL_UNAVAILABLE_MESSAGE
+            RouteReason.OFFLINE_LOCAL_UNAVAILABLE ->
                 InferenceRouteCoordinator.OFFLINE_LOCAL_UNAVAILABLE_MESSAGE
-            decision.reason == RouteReason.NO_PROVIDER ->
+            RouteReason.NO_PROVIDER ->
                 InferenceRouteCoordinator.NO_PROVIDER_MESSAGE
-            else -> InferenceRouteCoordinator.NO_PROVIDER_MESSAGE
+            else -> {
+                if (!networkAvailable) {
+                    InferenceRouteCoordinator.OFFLINE_LOCAL_UNAVAILABLE_MESSAGE
+                } else {
+                    InferenceRouteCoordinator.NO_PROVIDER_MESSAGE
+                }
+            }
         }
     }
 

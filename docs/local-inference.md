@@ -30,6 +30,7 @@ Phase 6.3 将云端 ↔ 本地切换提升为 **一等公民 ChatRouter**；
 | 设置页路由预览 | ✅ **6.2** / 6.3 增强 |
 | **`ChatRouter` 统一决策 + reason 码** | ✅ **6.3** |
 | **needsTools → 优先云端** | ✅ **6.3** |
+| **forceLocal 会话级强制本地** | ✅ **会话本地模型** |
 | **真实 MNN so + 薄 JNI 进 APK** | ✅ **P2** |
 | 量化模型权重打包 | ❌ 外置用户自备（不进 git） |
 | 本地 tool_call | ❌ 不做（产品边界） |
@@ -52,6 +53,7 @@ ChatRouter.decide() → InferenceRouteDecision(target, reason)
 
 ### 产品规则（严格）
 
+0. **forceLocal**（新建会话勾选「本地模型」）→ 就绪 LOCAL（`force_local`）/ 未就绪 UNAVAILABLE（`force_local_unavailable`）；**覆盖 needsTools / preferLocal / 默认云端**
 1. 开关默认关 / 引擎未 ready → 不走本地  
 2. **需要 tool_call / MCP 工具**（工具 follow-up 轮 / 显式 needsTools）且云端可选 → **CLOUD**（`need_tools_cloud`）；首轮纯对话可 preferLocal  
 3. preferLocal + ready（且无 tool 强制）→ LOCAL（`prefer_local`）  
@@ -69,13 +71,24 @@ ChatRouter.decide() → InferenceRouteDecision(target, reason)
 ```
 ChatViewModel.runChatWithTools
         │  needsTools = 有注册工具；本地时 remainingRounds=0
+        │  forceLocal = 会话包含本地模型哨兵
         ▼
-ChatRepositoryImpl.completeChat(..., needsTools)
-        │  InferenceRouteCoordinator.decide(needsTools) → ChatRouter
+ChatRepositoryImpl.completeChat(..., needsTools, forceLocal)
+        │  InferenceRouteCoordinator.decide(needsTools, forceLocal) → ChatRouter
         ├─ LOCAL        → LocalInferenceProvider.completeAsApiState
         ├─ UNAVAILABLE  → ApiState.Error（引导去设置）
         └─ CLOUD        → completeChatCloud（OpenAI/…）
 ```
+
+### 新建会话可选本地模型
+
+新建会话对话框始终展示「本地模型」行：
+- **就绪**（引擎已 load + 开关开）→ 可选
+- **未就绪** → 灰显，文案引导去设置
+
+勾选本地模型后，会话 `enabledPlatforms` 包含哨兵 uid `__local_model__`，触发 `forceLocal` 路由，覆盖 needsTools / preferLocal / 默认云端。
+
+`ChatViewModel.forceLocal`：从会话槽位解析，不走全局开关。`resolvePlatformForUid` 识别本地哨兵 uid 时合成 `PlatformV2` 供 completeChat 槽位使用。
 
 `localReady` **仅** `engine.isReady`（已 load），不是「开关开了就算」。
 
@@ -83,6 +96,8 @@ ChatRepositoryImpl.completeChat(..., needsTools)
 
 | Code | 含义 |
 |------|------|
+| `force_local` | 会话显式选中本地模型且就绪 |
+| `force_local_unavailable` | 会话强制本地但引擎未就绪 |
 | `prefer_local` | 用户偏好本地且就绪 |
 | `offline_local` | 无网 + 本地就绪 |
 | `need_tools_cloud` | 需要工具 → 云端 |

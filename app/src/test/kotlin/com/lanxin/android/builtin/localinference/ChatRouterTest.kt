@@ -212,4 +212,80 @@ class ChatRouterTest {
         assertEquals(InferenceRouteTarget.LOCAL, d.target)
         assertEquals(RouteReason.PREFER_LOCAL, d.reason)
     }
+
+    @Test
+    fun `forceLocal ready selects LOCAL`() {
+        val d = ChatRouter.decide(
+            ChatRouteContext(
+                preferLocal = false,
+                localReady = true,
+                networkAvailable = true,
+                needsTools = false,
+                forceLocal = true
+            )
+        )
+        assertEquals(InferenceRouteTarget.LOCAL, d.target)
+        assertEquals(RouteReason.FORCE_LOCAL, d.reason)
+    }
+
+    @Test
+    fun `forceLocal not ready selects UNAVAILABLE`() {
+        val d = ChatRouter.decide(
+            ChatRouteContext(
+                preferLocal = false,
+                localReady = false,
+                networkAvailable = true,
+                needsTools = false,
+                forceLocal = true
+            )
+        )
+        assertEquals(InferenceRouteTarget.UNAVAILABLE, d.target)
+        assertEquals(RouteReason.FORCE_LOCAL_UNAVAILABLE, d.reason)
+    }
+
+    @Test
+    fun `forceLocal overrides needsTools`() {
+        val d = ChatRouter.decide(
+            ChatRouteContext(
+                preferLocal = false,
+                localReady = true,
+                networkAvailable = true,
+                needsTools = true,
+                forceLocal = true
+            )
+        )
+        assertEquals(InferenceRouteTarget.LOCAL, d.target)
+        assertEquals(RouteReason.FORCE_LOCAL, d.reason)
+    }
+
+    @Test
+    fun `forceLocal overrides preferLocal`() {
+        val d = ChatRouter.decide(
+            ChatRouteContext(
+                preferLocal = true,
+                localReady = true,
+                networkAvailable = true,
+                needsTools = false,
+                forceLocal = true
+            )
+        )
+        assertEquals(InferenceRouteTarget.LOCAL, d.target)
+        assertEquals(RouteReason.FORCE_LOCAL, d.reason)
+    }
+
+    @Test
+    fun `forceLocal offline ready selects LOCAL`() {
+        val d = ChatRouter.decide(
+            ChatRouteContext(
+                preferLocal = false,
+                localReady = true,
+                networkAvailable = false,
+                needsTools = false,
+                cloudAvailable = false,
+                forceLocal = true
+            )
+        )
+        assertEquals(InferenceRouteTarget.LOCAL, d.target)
+        assertEquals(RouteReason.FORCE_LOCAL, d.reason)
+    }
 }

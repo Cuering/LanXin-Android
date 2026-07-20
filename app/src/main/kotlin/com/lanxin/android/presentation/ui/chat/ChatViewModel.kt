@@ -10,6 +10,7 @@ import androidx.lifecycle.viewModelScope
 import com.lanxin.android.builtin.knowledge.domain.AutoKnowledgeService
 import com.lanxin.android.builtin.localinference.domain.ChatLocalFallback
 import com.lanxin.android.builtin.localinference.domain.InferenceRouteCoordinator
+import com.lanxin.android.builtin.localinference.domain.LocalModelPlatform
 import com.lanxin.android.builtin.persona.domain.PersonaMoodFormatter
 import com.lanxin.android.builtin.persona.domain.PersonaRepository
 import com.lanxin.android.builtin.statistics.domain.ChatTurnStatEvent
@@ -100,7 +101,14 @@ class ChatViewModel @Inject constructor(
 
     private val chatRoomId: Int = checkNotNull(savedStateHandle["chatRoomId"])
     private val enabledPlatformString: String = checkNotNull(savedStateHandle["enabledPlatforms"])
-    val enabledPlatformsInChat = enabledPlatformString.split(',')
+    val enabledPlatformsInChat = enabledPlatformString.split(',').filter { it.isNotBlank() }
+
+    /**
+     * 会话是否显式包含本地模型哨兵（新建会话勾选「本地模型」）。
+     * 该槽位走 forceLocal 路由，不依赖 preferLocal 全局开关。
+     */
+    val forceLocal: Boolean =
+        enabledPlatformsInChat.any { LocalModelPlatform.isLocalUid(it) }
 
     private val currentTimeStamp: Long
         get() = System.currentTimeMillis() / 1000
@@ -367,7 +375,7 @@ class ChatViewModel @Inject constructor(
         try {
             if (turnIndex !in _groupedMessages.value.assistantMessages.indices) return
             if (platformIndex >= enabledPlatformsInChat.size || platformIndex < 0) return
-            val platform = _enabledPlatformsInApp.value.firstOrNull { it.uid == enabledPlatformsInChat[platformIndex] } ?: return
+            val platform = resolvePlatformForUid(enabledPlatformsInChat[platformIndex]) ?: return
             val platformWithChatModel = resolvePlatformModel(platform)
             val revisionToAppendOnSuccess = _groupedMessages.value.assistantMessages
                 .getOrNull(turnIndex)
@@ -666,7 +674,7 @@ class ChatViewModel @Inject constructor(
             var launched = 0
             enabledPlatformsInChat.forEachIndexed { idx, platformUid ->
                 if (platformUid.isBlank()) return@forEachIndexed
-                val platform = _enabledPlatformsInApp.value.firstOrNull { it.uid == platformUid }
+                val platform = resolvePlatformForUid(platformUid)
                 if (platform == null) {
                     // 平台列表尚未加载完时不硬崩：提示并复位 loading
                     return@forEachIndexed
@@ -752,8 +760,13 @@ class ChatViewModel @Inject constructor(
             // Phase 6.3：首轮 needsTools=false（保留 preferLocal/离线本地）；
             // 仅当模型产出 tool_call 进入工具循环后，才强制 need_tools_cloud。
             // 有注册工具 ≠ 本轮「需要」工具；否则 preferLocal 在有网时永远失效。
+            // 会话 forceLocal：始终 prefer 本地（覆盖 preferLocal / 默认云端）。
+            val slotForceLocal = forceLocal || LocalModelPlatform.isLocalUid(platform.uid)
             val routeDecision = runCatching {
-                inferenceRouteCoordinator.decide(needsTools = false)
+                inferenceRouteCoordinator.decide(
+                    needsTools = false,
+                    forceLocal = slotForceLocal
+                )
             }.getOrNull()
             val useLocalGeneration =
                 routeDecision != null && ChatLocalFallback.isLocalGeneration(routeDecision)
@@ -768,10 +781,10 @@ class ChatViewModel @Inject constructor(
                 )
             }
             // 本地不做 tool_call：路由到本地时跳过工具循环
-            var remainingRounds = if (useLocalGeneration) 0 else MAX_TOOL_ROUNDS
+            var remainingRounds = if (useLocalGeneration || slotForceLocal) 0 else MAX_TOOL_ROUNDS
             var pendingRevision = revisionToAppendOnSuccess
             var markedStreamStart = false
-            // 工具 follow-up 轮：强制 needsTools → 云端
+            // 工具 follow-up 轮：强制 needsTools → 云端（forceLocal 会话永不进工具轮）
             var needsToolsForRoute = false
 
             while (true) {
@@ -779,7 +792,8 @@ class ChatViewModel @Inject constructor(
                     workingUserMessages,
                     workingAssistantMessages,
                     platformWithTools,
-                    needsTools = needsToolsForRoute
+                    needsTools = needsToolsForRoute,
+                    forceLocal = slotForceLocal
                 ).handleStates(
                     messageFlow = _groupedMessages,
                     turnIndex = turnIndex,
@@ -1517,14 +1531,23 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             val allPlatforms = settingRepository.fetchPlatformV2s()
             _platformsInApp.update { allPlatforms }
-            _enabledPlatformsInApp.update { allPlatforms.filter { it.enabled } }
+            // 会话含本地哨兵时注入合成 PlatformV2，使 completeChat 槽位可解析
+            val withLocal = if (forceLocal) {
+                allPlatforms.filter { it.enabled } + LocalModelPlatform.asPlatformV2()
+            } else {
+                allPlatforms.filter { it.enabled }
+            }
+            _enabledPlatformsInApp.update { withLocal }
             initializeChatPlatformModels(allPlatforms)
         }
     }
 
     private suspend fun initializeChatPlatformModels(platforms: List<PlatformV2>) {
         val defaultModels = enabledPlatformsInChat.associateWith { uid ->
-            platforms.firstOrNull { it.uid == uid }?.model ?: ""
+            when {
+                LocalModelPlatform.isLocalUid(uid) -> "local-llm"
+                else -> platforms.firstOrNull { it.uid == uid }?.model ?: ""
+            }
         }
         val persistedModels = if (chatRoomId != 0) {
             chatRepository.fetchChatPlatformModels(chatRoomId)
@@ -1541,6 +1564,19 @@ class ChatViewModel @Inject constructor(
         if (chatRoomId != 0 && mergedModels != persistedModels) {
             chatRepository.saveChatPlatformModels(chatRoomId, mergedModels)
         }
+    }
+
+    /**
+     * 解析会话槽位对应平台：本地哨兵 → 合成 PlatformV2；否则查已启用云端平台。
+     */
+    private fun resolvePlatformForUid(platformUid: String): PlatformV2? {
+        if (LocalModelPlatform.isLocalUid(platformUid)) {
+            return LocalModelPlatform.asPlatformV2(
+                model = _chatPlatformModels.value[platformUid]?.takeIf { it.isNotBlank() } ?: "local-llm"
+            )
+        }
+        return _enabledPlatformsInApp.value.firstOrNull { it.uid == platformUid }
+            ?: _platformsInApp.value.firstOrNull { it.uid == platformUid }
     }
 
     private fun observeStateChanges() {
