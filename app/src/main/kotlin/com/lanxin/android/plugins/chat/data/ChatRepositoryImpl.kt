@@ -17,6 +17,7 @@ import com.lanxin.android.plugins.chat.data.entity.MessageV2
 import com.lanxin.android.plugins.chat.data.entity.PlatformV2
 import com.lanxin.android.plugins.chat.data.entity.effectiveContent
 import com.lanxin.android.data.dto.ApiState
+import com.lanxin.android.presentation.ui.chat.ChatSendPathGuard
 import com.lanxin.android.data.dto.anthropic.common.ImageContent as AnthropicImageContent
 import com.lanxin.android.data.dto.anthropic.common.ImageSource
 import com.lanxin.android.data.dto.anthropic.common.MediaType
@@ -353,7 +354,13 @@ class ChatRepositoryImpl @Inject constructor(
                             chunk.error != null -> emit(ApiState.Error(chunk.error.message))
 
                             chunk.choices?.firstOrNull()?.delta?.content != null -> {
-                                emit(ApiState.Success(chunk.choices.first().delta.content!!))
+                                val content = ChatSendPathGuard.openAiDeltaContent(
+                                    choicesSize = chunk.choices?.size ?: 0,
+                                    firstDeltaContent = chunk.choices?.firstOrNull()?.delta?.content
+                                )
+                                if (content != null) {
+                                    emit(ApiState.Success(content))
+                                }
                             }
                         }
                     }
@@ -736,7 +743,12 @@ class ChatRepositoryImpl @Inject constructor(
                             }
 
                             response.candidates?.firstOrNull()?.content?.parts != null -> {
-                                val parts = response.candidates.first().content?.parts.orEmpty()
+                                val candidates = response.candidates.orEmpty()
+                                val parts = if (candidates.isEmpty()) {
+                                    emptyList()
+                                } else {
+                                    candidates.firstOrNull()?.content?.parts.orEmpty()
+                                }
                                 parts.forEach { part ->
                                     part.text?.let { text ->
                                         if (part.thought == true) {

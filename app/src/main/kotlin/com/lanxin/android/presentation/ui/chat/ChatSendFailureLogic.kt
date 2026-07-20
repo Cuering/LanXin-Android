@@ -26,34 +26,59 @@ import com.lanxin.android.util.buildAssistantErrorContent
  */
 object ChatSendFailureLogic {
 
+    private const val MAX_MESSAGE_CHARS = 180
+    private const val FALLBACK = "发送失败，请重试"
+
     fun userVisibleMessage(t: Throwable): String {
-        val msg = t.message?.trim().orEmpty()
-        if (msg.isNotEmpty()) return msg
-        val simple = t::class.java.simpleName?.trim().orEmpty()
-        return simple.ifBlank { "UnknownError" }
+        val raw = t.message?.trim().orEmpty()
+        if (raw.isBlank()) {
+            val simple = t::class.java.simpleName.trim()
+            return if (simple.isNotBlank() && simple != "Exception" && simple != "RuntimeException") {
+                simple
+            } else {
+                FALLBACK
+            }
+        }
+        // 去掉超长堆栈式 message，避免 toast 刷屏
+        val oneLine = raw.lineSequence().firstOrNull { it.isNotBlank() }?.trim().orEmpty()
+        if (oneLine.isBlank()) return FALLBACK
+        return if (oneLine.length <= MAX_MESSAGE_CHARS) {
+            oneLine
+        } else {
+            oneLine.take(MAX_MESSAGE_CHARS - 1) + "…"
+        }
     }
 
-    fun toastMessage(detail: String): String = "发送失败：$detail"
+    fun toastMessage(detail: String): String {
+        val d = detail.trim()
+        return when {
+            d.isBlank() -> FALLBACK
+            d.startsWith("发送失败") -> d
+            else -> "发送失败：$d"
+        }
+    }
 
     fun bubbleContent(existingContent: String, error: String): String =
         buildAssistantErrorContent(existingContent, error)
 
     /**
-     * 复位 loading：指定平台 idle；索引越界时整表 idle。
+     * 复位 loading：指定平台 idle；索引越界 / 长度不齐时整体 idle，避免二次 IndexOutOfBounds。
      */
     fun nextLoadingStates(
         current: List<ChatViewModel.LoadingState>,
         platformIndex: Int,
         platformCount: Int
     ): List<ChatViewModel.LoadingState> {
-        if (current.isEmpty()) {
-            val size = platformCount.coerceAtLeast(1)
+        val size = platformCount.coerceAtLeast(current.size).coerceAtLeast(1)
+        if (platformIndex !in 0 until size) {
             return List(size) { ChatViewModel.LoadingState.Idle }
         }
-        if (platformIndex !in current.indices) {
-            return List(current.size) { ChatViewModel.LoadingState.Idle }
+        val base = if (current.size == size) {
+            current
+        } else {
+            List(size) { i -> current.getOrNull(i) ?: ChatViewModel.LoadingState.Idle }
         }
-        return current.toMutableList().apply {
+        return base.toMutableList().apply {
             this[platformIndex] = ChatViewModel.LoadingState.Idle
         }
     }

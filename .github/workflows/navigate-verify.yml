@@ -9,6 +9,7 @@ on:
       - 'app/src/test/kotlin/com/lanxin/android/builtin/navigate/**'
       - 'app/src/main/kotlin/com/lanxin/android/builtin/platform/PlatformPlugin.kt'
       - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/ChatViewModel.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/ChatSendToolFilterLogic.kt'
       - 'docs/navigate.md'
       - 'docs/guide.md'
       - '.github/workflows/navigate-verify.yml'
@@ -19,6 +20,7 @@ on:
       - 'app/src/test/kotlin/com/lanxin/android/builtin/navigate/**'
       - 'app/src/main/kotlin/com/lanxin/android/builtin/platform/PlatformPlugin.kt'
       - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/ChatViewModel.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/ChatSendToolFilterLogic.kt'
       - 'docs/navigate.md'
       - 'docs/guide.md'
       - '.github/workflows/navigate-verify.yml'
@@ -98,7 +100,10 @@ jobs:
           # 三工具 + Gate 接线
           grep -E -n "NEARBY_POI_TOOL|OPEN_NAVIGATION_TOOL|HOTEL_PRICE_TOOL|NearbyPoiTool|OpenNavigationTool|HotelPriceTool" \
             app/src/main/kotlin/com/lanxin/android/builtin/platform/PlatformPlugin.kt
+          # Gate 接线：ChatViewModel 经 ChatSendToolFilterLogic 调 NavigateGate.filterTools
           grep -E -n "NavigateGate\.filterTools" \
+            app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/ChatSendToolFilterLogic.kt
+          grep -E -n "ChatSendToolFilterLogic" \
             app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/ChatViewModel.kt
           grep -E -n "nearby_poi|open_navigation|hotel_price_lookup|Overpass|NavigateGate" \
             docs/navigate.md

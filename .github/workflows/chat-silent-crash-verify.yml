@@ -3,10 +3,11 @@ name: Chat Silent Crash Verify
 
 on:
   push:
-    branches: [main, 'fix/chat-silent-crash*']
+    branches: [main, 'fix/chat-silent-crash*', 'fix/chat-send-crash*']
     paths:
       - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/**'
       - 'app/src/test/kotlin/com/lanxin/android/presentation/ui/chat/**'
+      - 'app/src/main/kotlin/com/lanxin/android/plugins/chat/data/ChatRepositoryImpl.kt'
       - 'app/src/main/kotlin/com/lanxin/android/plugin/PluginManager.kt'
       - 'app/src/main/kotlin/com/lanxin/android/plugin/ToolCallEngine.kt'
       - 'app/src/main/kotlin/com/lanxin/android/util/AssistantMessageUtils.kt'
@@ -16,6 +17,7 @@ on:
     paths:
       - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/**'
       - 'app/src/test/kotlin/com/lanxin/android/presentation/ui/chat/**'
+      - 'app/src/main/kotlin/com/lanxin/android/plugins/chat/data/ChatRepositoryImpl.kt'
       - 'app/src/main/kotlin/com/lanxin/android/plugin/PluginManager.kt'
       - 'app/src/main/kotlin/com/lanxin/android/plugin/ToolCallEngine.kt'
       - 'app/src/main/kotlin/com/lanxin/android/util/AssistantMessageUtils.kt'
