@@ -28,13 +28,17 @@ package com.lanxin.android.builtin.capabilities.domain
 enum class SmartCapabilityId {
     LOCAL_INFERENCE,
     VOICE,
+
     /** 聚合：系统工具 + 联网搜索 + 设备感知 */
     ASSISTANT_TOOLS,
+
     /** 聚合：位置（导航/周边门闸可复用）；不含场景视觉 */
     LOCATION_AROUND,
     SCENE_VISION,
+
     /** 导航独立插件镜像；默认 OFF */
     NAVIGATE,
+
     /** 导游独立插件镜像；默认 OFF */
     GUIDE,
     // —— 兼容别名（高级细项 / 旧调用点）——
@@ -115,8 +119,10 @@ data class SmartCapabilitiesConfig(
         const val DEFAULT_VOICE = true
         const val DEFAULT_ASSISTANT_TOOLS = true
         const val DEFAULT_LOCATION_AROUND = true
+
         /** 导航插件默认关 */
         const val DEFAULT_NAVIGATE = false
+
         /** 导游插件默认关 */
         const val DEFAULT_GUIDE = false
         const val DEFAULT_SCENE_VISION = false
