@@ -21,6 +21,8 @@ import com.lanxin.android.builtin.guide.domain.GuideGate
 import com.lanxin.android.builtin.guide.domain.GuideLocationContext
 import com.lanxin.android.builtin.guide.domain.GuideNavHandoff
 import com.lanxin.android.builtin.guide.domain.GuidePromptBuilder
+import com.lanxin.android.plugin.ToolDef
+import kotlinx.serialization.json.buildJsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -34,27 +36,63 @@ import org.junit.Test
 class GuideDomainTest {
 
     @Test
-    fun `config is guide-scoped not scenic monolith`() {
+    fun `config is guide-scoped plugin default off`() {
+        assertEquals("lanxin.guide", GuideConfig.PLUGIN_ID)
         assertEquals("guide", GuideConfig.FEATURE_ID)
         assertEquals("companion_vision_explain", GuideConfig.VISION_FEATURE)
         assertEquals("explain_sight", GuideConfig.EXPLAIN_SIGHT_TOOL)
         assertEquals("open_navigation", GuideConfig.NAV_HANDOFF_TOOL)
+        assertFalse(GuideConfig.DEFAULT_ENABLED)
+        assertEquals(setOf("explain_sight"), GuideConfig.ALL_TOOL_NAMES)
     }
 
     @Test
-    fun `location augment requires master and location prefs`() {
-        assertTrue(GuideGate.canAugmentWithLocation(true, true))
-        assertFalse(GuideGate.canAugmentWithLocation(false, true))
-        assertFalse(GuideGate.canAugmentWithLocation(true, false))
-        assertFalse(GuideGate.canAugmentWithLocation(false, false))
+    fun `location augment requires plugin master and location prefs`() {
+        assertTrue(GuideGate.canAugmentWithLocation(true, true, true))
+        assertFalse(GuideGate.canAugmentWithLocation(false, true, true))
+        assertFalse(GuideGate.canAugmentWithLocation(true, false, true))
+        assertFalse(GuideGate.canAugmentWithLocation(true, true, false))
     }
 
     @Test
-    fun `vision explain requires looking consent and camera`() {
-        assertTrue(GuideGate.canExplainWithVision(true, true, true))
-        assertFalse(GuideGate.canExplainWithVision(false, true, true))
-        assertFalse(GuideGate.canExplainWithVision(true, false, true))
-        assertFalse(GuideGate.canExplainWithVision(true, true, false))
+    fun `vision explain requires plugin looking consent and camera`() {
+        assertTrue(GuideGate.canExplainWithVision(true, true, true, true))
+        assertFalse(GuideGate.canExplainWithVision(false, true, true, true))
+        assertFalse(GuideGate.canExplainWithVision(true, false, true, true))
+        assertFalse(GuideGate.canExplainWithVision(true, true, false, true))
+        assertFalse(GuideGate.canExplainWithVision(true, true, true, false))
+    }
+
+    @Test
+    fun `vision entry hidden when plugin default off`() {
+        assertFalse(
+            GuideGate.canShowVisionEntry(
+                pluginEnabled = GuideConfig.DEFAULT_ENABLED,
+                masterEnabled = true
+            )
+        )
+        assertTrue(GuideGate.canShowVisionEntry(true, true))
+        assertFalse(GuideGate.canShowVisionEntry(true, false))
+    }
+
+    @Test
+    fun `filterTools strips explain_sight when plugin off`() {
+        val tools = listOf(
+            ToolDef("explain_sight", "d", buildJsonObject { }, handler = { buildJsonObject { } }),
+            ToolDef("other", "d", buildJsonObject { }, handler = { buildJsonObject { } })
+        )
+        val off = GuideGate.filterTools(tools, pluginEnabled = false, masterEnabled = true)
+        assertEquals(listOf("other"), off.map { it.name })
+        val on = GuideGate.filterTools(tools, pluginEnabled = true, masterEnabled = true)
+        assertEquals(2, on.size)
+    }
+
+    @Test
+    fun `denyExplain when plugin off`() {
+        val denied = GuideGate.denyExplainIfDisabled(false, true)
+        assertNotNull(denied)
+        assertEquals(GuideGate.DENIED_PLUGIN, denied!!["code"]?.toString()?.trim('"'))
+        assertNull(GuideGate.denyExplainIfDisabled(true, true))
     }
 
     @Test
@@ -94,7 +132,6 @@ class GuideDomainTest {
         val with = GuideNavHandoff.appendIfNeeded(base, "导航过去", "古塔")
         assertTrue(with.contains("open_navigation") || with.contains("导航"))
         assertTrue(with.contains("古塔"))
-        // 已含提示不重复
         val again = GuideNavHandoff.appendIfNeeded(with, "再导航一次")
         assertEquals(with, again)
     }

@@ -240,6 +240,26 @@ fun SmartCapabilitiesScreen(
             )
 
             CapabilitySwitchRow(
+                title = "导航",
+                description = "默认关；附近 POI / 外链导航 / 酒店价（lanxin.navigate）",
+                checked = state.navigateEnabled,
+                enabled = state.masterEnabled,
+                onCheckedChange = {
+                    viewModel.setChild(SmartCapabilityId.NAVIGATE, it)
+                }
+            )
+
+            CapabilitySwitchRow(
+                title = "导游",
+                description = "默认关；看世界讲解 / 位置增强（lanxin.guide）",
+                checked = state.guideEnabled,
+                enabled = state.masterEnabled,
+                onCheckedChange = {
+                    viewModel.setChild(SmartCapabilityId.GUIDE, it)
+                }
+            )
+
+            CapabilitySwitchRow(
                 title = "场景视觉",
                 description = "默认关；摄像头快照→本地场景；需 consent",
                 checked = state.sceneVisionEnabled,

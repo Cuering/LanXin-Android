@@ -18,6 +18,7 @@ package com.lanxin.android.presentation.ui.chat
 
 import com.lanxin.android.builtin.capabilities.domain.LocationConfig
 import com.lanxin.android.builtin.capabilities.domain.SmartCapabilitiesConfig
+import com.lanxin.android.builtin.guide.domain.GuideConfig
 import com.lanxin.android.builtin.navigate.domain.NavigateConfig
 import com.lanxin.android.builtin.platform.domain.DeviceSensingConfig
 import com.lanxin.android.builtin.platform.domain.WebSearchConfig
@@ -232,19 +233,53 @@ class ChatSendFailureLogicTest {
             tool("system_info"),
             tool("get_location"),
             tool(NavigateConfig.NEARBY_POI_TOOL),
+            tool(GuideConfig.EXPLAIN_SIGHT_TOOL),
             tool("other")
         )
         val out = ChatSendToolFilterLogic.filter(
             ChatSendToolFilterLogic.FilterInput(
                 tools = tools,
+                smart = SmartCapabilitiesConfig(
+                    masterEnabled = true,
+                    navigateEnabled = true,
+                    guideEnabled = true
+                ),
+                webSearch = WebSearchConfig(enabled = true),
+                deviceSensing = DeviceSensingConfig(enabled = true),
+                location = LocationConfig(enabled = true)
+            )
+        )
+        assertEquals(6, out.tools.size)
+        assertNull(out.allowedNames)
+    }
+
+    @Test
+    fun `tool filter strips navigate and guide when plugin default off`() {
+        val tools = listOf(
+            tool("web_search"),
+            tool("get_location"),
+            tool(NavigateConfig.NEARBY_POI_TOOL),
+            tool(NavigateConfig.OPEN_NAVIGATION_TOOL),
+            tool(GuideConfig.EXPLAIN_SIGHT_TOOL),
+            tool("other")
+        )
+        val out = ChatSendToolFilterLogic.filter(
+            ChatSendToolFilterLogic.FilterInput(
+                tools = tools,
+                // navigate/guide 默认 OFF
                 smart = SmartCapabilitiesConfig(masterEnabled = true),
                 webSearch = WebSearchConfig(enabled = true),
                 deviceSensing = DeviceSensingConfig(enabled = true),
                 location = LocationConfig(enabled = true)
             )
         )
-        assertEquals(5, out.tools.size)
-        assertNull(out.allowedNames)
+        val names = out.tools.map { it.name }.toSet()
+        assertTrue(names.contains("web_search"))
+        assertTrue(names.contains("get_location"))
+        assertTrue(names.contains("other"))
+        assertFalse(names.contains(NavigateConfig.NEARBY_POI_TOOL))
+        assertFalse(names.contains(NavigateConfig.OPEN_NAVIGATION_TOOL))
+        assertFalse(names.contains(GuideConfig.EXPLAIN_SIGHT_TOOL))
     }
 
     @Test
@@ -255,12 +290,17 @@ class ChatSendFailureLogicTest {
             tool("get_location"),
             tool(NavigateConfig.NEARBY_POI_TOOL),
             tool(NavigateConfig.OPEN_NAVIGATION_TOOL),
+            tool(GuideConfig.EXPLAIN_SIGHT_TOOL),
             tool("other")
         )
         val out = ChatSendToolFilterLogic.filter(
             ChatSendToolFilterLogic.FilterInput(
                 tools = tools,
-                smart = SmartCapabilitiesConfig(masterEnabled = false),
+                smart = SmartCapabilitiesConfig(
+                    masterEnabled = false,
+                    navigateEnabled = true,
+                    guideEnabled = true
+                ),
                 webSearch = WebSearchConfig(enabled = true),
                 deviceSensing = DeviceSensingConfig(enabled = true),
                 location = LocationConfig(enabled = true)
@@ -272,6 +312,7 @@ class ChatSendFailureLogicTest {
         assertFalse(names.contains("get_location"))
         assertFalse(names.contains(NavigateConfig.NEARBY_POI_TOOL))
         assertFalse(names.contains(NavigateConfig.OPEN_NAVIGATION_TOOL))
+        assertFalse(names.contains(GuideConfig.EXPLAIN_SIGHT_TOOL))
         assertTrue(names.contains("other"))
     }
 

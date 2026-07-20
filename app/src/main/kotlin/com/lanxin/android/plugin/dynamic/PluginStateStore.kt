@@ -17,7 +17,7 @@ import kotlinx.serialization.json.put
  * { "enabled": { "plugin.id": true, "other": false } }
  * ```
  *
- * 未出现在 map 中的 id 视为 **默认启用**。
+ * 未出现在 map 中的 id：若 [ensureDefault] 已登记则用登记默认值，否则 **默认启用**。
  */
 class PluginStateStore(
     private val stateFile: File
@@ -30,6 +30,9 @@ class PluginStateStore(
     }
 
     private val enabledMap = linkedMapOf<String, Boolean>()
+
+    /** 编译期插件登记的默认值（仅在尚未落盘时生效）。 */
+    private val defaultEnabledMap = linkedMapOf<String, Boolean>()
 
     init {
         reload()
@@ -51,12 +54,26 @@ class PluginStateStore(
                 }
             }
         } catch (_: Exception) {
-            // 损坏文件：保持空 map（全部默认启用），不崩溃
+            // 损坏文件：保持空 map，不崩溃
         }
     }
 
+    /**
+     * 登记默认启用状态。若尚未落盘则立即写入默认值（首次出现即固化）。
+     *
+     * @return 当前有效 enabled 值
+     */
+    fun ensureDefault(pluginId: String, defaultEnabled: Boolean): Boolean {
+        defaultEnabledMap[pluginId] = defaultEnabled
+        if (pluginId !in enabledMap) {
+            enabledMap[pluginId] = defaultEnabled
+            persist()
+        }
+        return enabledMap[pluginId] ?: defaultEnabled
+    }
+
     fun isEnabled(pluginId: String): Boolean =
-        enabledMap[pluginId] ?: true
+        enabledMap[pluginId] ?: defaultEnabledMap[pluginId] ?: true
 
     fun setEnabled(pluginId: String, enabled: Boolean) {
         enabledMap[pluginId] = enabled

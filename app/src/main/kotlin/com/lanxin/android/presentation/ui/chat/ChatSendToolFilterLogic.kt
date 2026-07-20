@@ -19,6 +19,7 @@ package com.lanxin.android.presentation.ui.chat
 import com.lanxin.android.builtin.capabilities.domain.LocationConfig
 import com.lanxin.android.builtin.capabilities.domain.LocationGate
 import com.lanxin.android.builtin.capabilities.domain.SmartCapabilitiesConfig
+import com.lanxin.android.builtin.guide.domain.GuideGate
 import com.lanxin.android.builtin.navigate.domain.NavigateGate
 import com.lanxin.android.builtin.persona.domain.PersonaCapabilityFilter
 import com.lanxin.android.builtin.platform.domain.DeviceSensingConfig
@@ -30,8 +31,11 @@ import com.lanxin.android.plugin.ToolDef
 /**
  * 发送路径工具门闸纯逻辑（可单测）。
  *
- * 将 WebSearch / DeviceSensing / Location / Navigate / Persona 过滤串成一条链路，
+ * 将 WebSearch / DeviceSensing / Location / Navigate / Guide / Persona 过滤串成一条链路，
  * 任一步异常不得打穿发送协程；调用方仍应再包一层 runCatching。
+ *
+ * 导航 / 导游默认 OFF：读 [SmartCapabilitiesConfig.navigateEnabled] /
+ * [SmartCapabilitiesConfig.guideEnabled]（与独立插件开关镜像）。
  */
 object ChatSendToolFilterLogic {
 
@@ -74,11 +78,17 @@ object ChatSendToolFilterLogic {
             input.webSearch,
             master && input.smart.webSearchEnabled
         )
-        val gated = NavigateGate.filterTools(
+        val afterNavigate = NavigateGate.filterTools(
             tools = afterLocation,
+            pluginEnabled = input.smart.navigateEnabled,
             masterEnabled = master,
             locationPrefsOpen = locationPrefsOpen,
             webSearchEnabled = webOn
+        )
+        val gated = GuideGate.filterTools(
+            tools = afterNavigate,
+            pluginEnabled = input.smart.guideEnabled,
+            masterEnabled = master
         )
 
         if (input.allowedTools == null && input.allowedSkills == null) {
