@@ -125,6 +125,7 @@ data class SmartCapabilitiesConfig(
 
         /** 导游插件默认关 */
         const val DEFAULT_GUIDE = false
+
         const val DEFAULT_SCENE_VISION = false
 
         /** 兼容旧默认名 */
