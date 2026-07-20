@@ -1607,8 +1607,11 @@ class CompanionViewModel @Inject constructor(
 
     fun encodeBubbleRaw(): String? {
         val snap = sessionCoordinator.current()
-        val bubble = LocalReplySanitizer.forDisplay(snap.subtitle.ifBlank { snap.replyText }
-                .ifBlank { _uiState.value.lastReply }, showThinking = false)
+        val bubble = LocalReplySanitizer.forDisplay(
+            snap.subtitle.ifBlank { snap.replyText }
+                .ifBlank { _uiState.value.lastReply },
+            showThinking = false
+        )
         return if (bubble.isBlank()) null else bridge.encodeBubble(bubble)
     }
 

@@ -162,8 +162,7 @@ class MoodTagMapperTest {
     @Test
     fun `stripTags removes think blocks for bubble safety`() {
         val cleaned = MoodTagMapper.stripTags(
-            "<think>内部推理</think>
-你好[[mood=joy]]"
+            "<think>内部推理</think>\n你好[[mood=joy]]"
         )
         assertEquals("你好", cleaned)
         assertTrue(!cleaned.contains("内部推理"))
