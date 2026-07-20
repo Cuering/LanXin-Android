@@ -43,10 +43,12 @@ class InferenceRouteCoordinator @Inject constructor(
      * @param needsTools 本轮是否需要 tool_call / MCP 工具链
      * @param forceCloudAvailable 覆盖「云端是否可选」；默认随网络。
      *        传入 false 可模拟仅本地候选（测试 / 预览）。
+     * @param forceLocal 会话显式选中本地模型（最高优先级）
      */
     suspend fun decide(
         needsTools: Boolean = false,
-        forceCloudAvailable: Boolean? = null
+        forceCloudAvailable: Boolean? = null,
+        forceLocal: Boolean = false
     ): InferenceRouteDecision {
         val networkOk = networkStatusProvider.isNetworkAvailable()
         val preferLocal = settings.isPreferLocal()
@@ -58,7 +60,8 @@ class InferenceRouteCoordinator @Inject constructor(
                 localReady = localReady,
                 networkAvailable = networkOk,
                 needsTools = needsTools,
-                cloudAvailable = cloudAvailable
+                cloudAvailable = cloudAvailable,
+                forceLocal = forceLocal
             )
         )
     }
@@ -98,5 +101,11 @@ class InferenceRouteCoordinator @Inject constructor(
          */
         const val NO_PROVIDER_MESSAGE =
             "当前没有可用的推理通道（云端与本地均不可用）。"
+
+        /**
+         * 会话强制本地但引擎未就绪。
+         */
+        const val FORCE_LOCAL_UNAVAILABLE_MESSAGE =
+            "本会话已选本地模型，但本地推理未就绪。请到「设置 → 智能能力 → 本地推理」打开开关、填写模型路径并加载模型后再试。"
     }
 }

@@ -14,12 +14,14 @@ interface ChatRepository {
      * 完成一轮对话（云端或本地）。
      *
      * @param needsTools 本轮是否需要 tool_call / MCP（Phase 6.3：优先云端）
+     * @param forceLocal 会话显式选中本地模型（最高优先级）
      */
     suspend fun completeChat(
         userMessages: List<MessageV2>,
         assistantMessages: List<List<MessageV2>>,
         platform: PlatformV2,
-        needsTools: Boolean = false
+        needsTools: Boolean = false,
+        forceLocal: Boolean = false
     ): Flow<ApiState>
 
     suspend fun fetchChatList(): List<ChatRoom>

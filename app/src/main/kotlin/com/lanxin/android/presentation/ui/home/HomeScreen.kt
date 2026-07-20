@@ -74,6 +74,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lanxin.android.R
+import com.lanxin.android.builtin.localinference.domain.LocalModelPlatform
 import com.lanxin.android.plugins.chat.data.entity.ChatRoomV2
 import com.lanxin.android.plugins.chat.data.entity.PlatformV2
 import com.lanxin.android.presentation.common.PlatformCheckBoxItem
@@ -95,6 +96,7 @@ fun HomeScreen(
     val showSelectModelDialog by homeViewModel.showSelectModelDialog.collectAsStateWithLifecycle()
     val showDeleteWarningDialog by homeViewModel.showDeleteWarningDialog.collectAsStateWithLifecycle()
     val platformState by homeViewModel.platformState.collectAsStateWithLifecycle()
+    val localModelOption by homeViewModel.localModelOption.collectAsStateWithLifecycle()
     val searchQuery by homeViewModel.searchQuery.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
     val lifecycleState by lifecycleOwner.lifecycle.currentStateFlow.collectAsStateWithLifecycle()
@@ -158,12 +160,8 @@ fun HomeScreen(
         floatingActionButton = {
             if (!chatListState.isSelectionMode && !chatListState.isSearchMode) {
                 NewChatButton(expanded = listState.isScrollingUp(), onClick = {
-                    val enabledApiTypes = platformState.filter { it.enabled }.map { it.uid }
-                    if (enabledApiTypes.size == 1) {
-                        navigateToNewChat(enabledApiTypes)
-                    } else {
-                        homeViewModel.openSelectModelDialog()
-                    }
+                    // 始终弹选择框：本地模型需可见（就绪可选 / 未就绪灰显）
+                    homeViewModel.openSelectModelDialog()
                 })
             }
         }
@@ -233,9 +231,15 @@ fun HomeScreen(
             SelectPlatformDialog(
                 platformState,
                 selectedPlatforms = chatListState.selectedPlatforms,
+                localModelReady = localModelOption.ready,
+                localModelSelected = localModelOption.selected,
+                onLocalModelSelect = { homeViewModel.toggleLocalModelSelected() },
                 onDismissRequest = { homeViewModel.closeSelectModelDialog() },
-                onConfirmation = {
-                    navigateToNewChat(it)
+                onConfirmation = { cloudUids ->
+                    val uids = homeViewModel.resolveSelectedPlatformUids(cloudUids)
+                    if (uids.isNotEmpty()) {
+                        navigateToNewChat(uids)
+                    }
                     homeViewModel.closeSelectModelDialog()
                 },
                 onPlatformSelect = { homeViewModel.updatePlatformCheckedState(it) },
@@ -483,6 +487,9 @@ fun NewChatButton(
 fun SelectPlatformDialog(
     platforms: List<PlatformV2>,
     selectedPlatforms: List<Boolean>,
+    localModelReady: Boolean = false,
+    localModelSelected: Boolean = false,
+    onLocalModelSelect: () -> Unit = {},
     onDismissRequest: () -> Unit,
     onConfirmation: (enabledPlatforms: List<String>) -> Unit,
     onPlatformSelect: (idx: Int) -> Unit,
@@ -491,6 +498,8 @@ fun SelectPlatformDialog(
     val configuration = LocalWindowInfo.current
     val screenWidth = with(LocalDensity.current) { configuration.containerSize.width.toDp() }
     val screenHeight = with(LocalDensity.current) { configuration.containerSize.height.toDp() }
+    val anyCloudEnabled = platforms.any { it.enabled }
+    val confirmEnabled = selectedPlatforms.any { it } || (localModelReady && localModelSelected)
 
     AlertDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false),
@@ -515,17 +524,30 @@ fun SelectPlatformDialog(
         text = {
             HorizontalDivider()
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                if (platforms.any { it.enabled }) {
+                // 本地模型：始终展示；就绪可选，未就绪灰显
+                PlatformCheckBoxItem(
+                    title = LocalModelPlatform.DISPLAY_NAME,
+                    enabled = localModelReady,
+                    selected = localModelSelected && localModelReady,
+                    description = if (localModelReady) {
+                        LocalModelPlatform.READY_HINT
+                    } else {
+                        LocalModelPlatform.NOT_READY_HINT
+                    },
+                    onClickEvent = onLocalModelSelect
+                )
+                HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                if (anyCloudEnabled) {
                     platforms.forEachIndexed { i, platform ->
                         PlatformCheckBoxItem(
                             title = platform.name,
                             enabled = platform.enabled,
-                            selected = selectedPlatforms[i],
+                            selected = selectedPlatforms.getOrElse(i) { false },
                             description = null,
                             onClickEvent = { onPlatformSelect(i) }
                         )
                     }
-                } else {
+                } else if (!localModelReady) {
                     EnablePlatformWarningText(onGoToSettings = onGoToSettings)
                 }
                 HorizontalDivider(Modifier.padding(top = 8.dp))
@@ -533,8 +555,13 @@ fun SelectPlatformDialog(
         },
         confirmButton = {
             TextButton(
-                enabled = selectedPlatforms.any { it },
-                onClick = { onConfirmation(platforms.filterIndexed { i, _ -> selectedPlatforms[i] }.map { it.uid }) }
+                enabled = confirmEnabled,
+                onClick = {
+                    onConfirmation(
+                        platforms.filterIndexed { i, _ -> selectedPlatforms.getOrElse(i) { false } }
+                            .map { it.uid }
+                    )
+                }
             ) {
                 Text(stringResource(R.string.confirm))
             }
