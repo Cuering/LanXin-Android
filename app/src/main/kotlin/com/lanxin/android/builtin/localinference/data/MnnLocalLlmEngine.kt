@@ -104,7 +104,12 @@ class MnnLocalLlmEngine @Inject constructor(
             // 裸 .mnn / 缺 config 时提前失败，避免「READY + stub 回声」误导用户
             val packageIssue = PathImportHelper.localLlmPackageIssue(config.modelPath)
             if (packageIssue != null) {
-                error = packageIssue
+                // 与历史契约对齐：路径不存在统一 model_path_missing:
+                error = when {
+                    packageIssue.startsWith("path_missing:") ->
+                        "model_path_missing:" + packageIssue.removePrefix("path_missing:")
+                    else -> packageIssue
+                }
                 loadedPath = null
                 usingNative = false
                 _state.value = LocalEngineState.ERROR
