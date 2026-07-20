@@ -34,14 +34,14 @@ class DeviceToolGate(
     ): DeviceToolOutcome? {
         if (!smartMasterProvider()) {
             return DeviceToolOutcome.Denied(
-                reason = "智能能力主开关已关闭（设置 → 智能能力）",
+                reason = "智能能力或助手工具已关闭（设置 → 智能能力）",
                 code = "smart_master_disabled"
             )
         }
         val config = configProvider()
         if (!config.masterEnabled) {
             return DeviceToolOutcome.Denied(
-                reason = "系统能力总开关已关闭（设置 → 智能能力 → 系统工具）",
+                reason = "系统能力总开关已关闭（设置 → 智能能力 → 助手工具 / 高级）",
                 code = "master_disabled"
             )
         }

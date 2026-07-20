@@ -36,24 +36,29 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 智能能力：默认值、迁移、master 级联、本地脑仍默认 false。
+ * 智能能力：默认值、v1/v2 迁移、master 级联、聚合门闸、本地脑仍默认 false。
  */
 class SmartCapabilitiesTest {
 
     @Test
-    fun `defaults match product table`() {
+    fun `defaults match product table v2`() {
         val c = SmartCapabilitiesConfig()
         assertTrue(c.masterEnabled)
         assertFalse(c.localInferenceEnabled)
         assertTrue(c.voiceEnabled)
+        assertTrue(c.assistantToolsEnabled)
+        assertTrue(c.locationAroundEnabled)
+        assertFalse(c.sceneVisionEnabled)
+        // 兼容属性映射到聚合
         assertTrue(c.systemToolsEnabled)
         assertTrue(c.webSearchEnabled)
         assertTrue(c.deviceSensingEnabled)
         assertTrue(c.locationEnabled)
         assertFalse(c.navigateEnabled)
         assertFalse(c.guideEnabled)
-        assertFalse(c.sceneVisionEnabled)
         assertFalse(c.migratedV1)
+        assertFalse(c.migratedV2)
+        assertEquals(5, SmartCapabilitiesConfig.PRIMARY_IDS.size)
         assertFalse(SmartCapabilitiesConfig.DEFAULT_NAVIGATE)
         assertFalse(SmartCapabilitiesConfig.DEFAULT_GUIDE)
     }
@@ -70,19 +75,15 @@ class SmartCapabilitiesTest {
         )
     }
 
+
     @Test
-    fun `navigate and guide stay default OFF`() {
+    fun `navigate and guide default OFF and gateable`() {
+        val off = SmartCapabilitiesConfig()
         assertFalse(
-            SmartCapabilitiesGate.effective(
-                SmartCapabilitiesConfig(),
-                SmartCapabilityId.NAVIGATE
-            )
+            SmartCapabilitiesGate.effective(off, SmartCapabilityId.NAVIGATE)
         )
         assertFalse(
-            SmartCapabilitiesGate.effective(
-                SmartCapabilitiesConfig(),
-                SmartCapabilityId.GUIDE
-            )
+            SmartCapabilitiesGate.effective(off, SmartCapabilityId.GUIDE)
         )
         assertTrue(
             SmartCapabilitiesGate.effective(
@@ -96,14 +97,20 @@ class SmartCapabilitiesTest {
                 SmartCapabilityId.GUIDE
             )
         )
+        assertFalse(
+            SmartCapabilitiesGate.effective(
+                SmartCapabilitiesConfig(masterEnabled = false, navigateEnabled = true),
+                SmartCapabilityId.NAVIGATE
+            )
+        )
     }
 
     @Test
-    fun `master off denies all children`() {
+    fun `master off denies all children including aliases`() {
         val c = SmartCapabilitiesConfig(
             masterEnabled = false,
             voiceEnabled = true,
-            webSearchEnabled = true,
+            assistantToolsEnabled = true,
             localInferenceEnabled = true,
             sceneVisionEnabled = true
         )
@@ -117,16 +124,26 @@ class SmartCapabilitiesTest {
     }
 
     @Test
-    fun `master on child off denied`() {
-        val c = SmartCapabilitiesConfig(webSearchEnabled = false)
-        assertFalse(
-            SmartCapabilitiesGate.effective(c, SmartCapabilityId.WEB_SEARCH)
-        )
+    fun `assistant tools off denies system tools web search device sensing`() {
+        val c = SmartCapabilitiesConfig(assistantToolsEnabled = false)
+        assertFalse(SmartCapabilitiesGate.effective(c, SmartCapabilityId.ASSISTANT_TOOLS))
+        assertFalse(SmartCapabilitiesGate.effective(c, SmartCapabilityId.WEB_SEARCH))
+        assertFalse(SmartCapabilitiesGate.effective(c, SmartCapabilityId.SYSTEM_TOOLS))
+        assertFalse(SmartCapabilitiesGate.effective(c, SmartCapabilityId.DEVICE_SENSING))
         assertEquals(
             SmartCapabilitiesGate.DENIED_CHILD,
             SmartCapabilitiesGate.denyReason(c, SmartCapabilityId.WEB_SEARCH)
         )
         assertTrue(SmartCapabilitiesGate.effective(c, SmartCapabilityId.VOICE))
+        assertTrue(SmartCapabilitiesGate.effective(c, SmartCapabilityId.LOCATION_AROUND))
+    }
+
+    @Test
+    fun `location around off denies location alias`() {
+        val c = SmartCapabilitiesConfig(locationAroundEnabled = false)
+        assertFalse(SmartCapabilitiesGate.effective(c, SmartCapabilityId.LOCATION_AROUND))
+        assertFalse(SmartCapabilitiesGate.effective(c, SmartCapabilityId.LOCATION))
+        assertFalse(c.locationEnabled)
     }
 
     @Test
@@ -152,6 +169,8 @@ class SmartCapabilitiesTest {
         )
         assertTrue(resolved.masterEnabled)
         assertTrue(resolved.voiceEnabled)
+        assertTrue(resolved.assistantToolsEnabled)
+        assertTrue(resolved.locationAroundEnabled)
         assertTrue(resolved.systemToolsEnabled)
         assertTrue(resolved.webSearchEnabled)
         assertTrue(resolved.deviceSensingEnabled)
@@ -161,24 +180,43 @@ class SmartCapabilitiesTest {
         assertFalse(resolved.navigateEnabled)
         assertFalse(resolved.guideEnabled)
         assertTrue(resolved.migratedV1)
+        assertTrue(resolved.migratedV2)
     }
 
     @Test
-    fun `migration preserves explicit false`() {
+    fun `migration preserves explicit false on members collapses group off`() {
         val resolved = SmartCapabilitiesMigration.buildConfig(
             SmartCapabilitiesMigration.LegacyCapabilitySnapshot(
                 webSearch = false,
-                deviceSensing = false,
-                systemToolsMaster = false,
+                deviceSensing = true,
+                systemToolsMaster = true,
                 voiceAsr = false,
                 voiceTts = true
             )
         )
+        // 任一项关 → 助手工具组关
+        assertFalse(resolved.assistantToolsEnabled)
         assertFalse(resolved.webSearchEnabled)
-        assertFalse(resolved.deviceSensingEnabled)
         assertFalse(resolved.systemToolsEnabled)
+        assertFalse(resolved.deviceSensingEnabled)
         assertFalse(resolved.voiceEnabled)
         assertFalse(resolved.localInferenceEnabled)
+    }
+
+    @Test
+    fun `migration any member false turns assistant tools off`() {
+        assertFalse(
+            SmartCapabilitiesMigration.resolveGroup(true, false, true)
+        )
+        assertTrue(
+            SmartCapabilitiesMigration.resolveGroup(true, true, true)
+        )
+        assertTrue(
+            SmartCapabilitiesMigration.resolveGroup(null, null, null)
+        )
+        assertFalse(
+            SmartCapabilitiesMigration.resolveGroup(null, false, null)
+        )
     }
 
     @Test
@@ -211,12 +249,47 @@ class SmartCapabilitiesTest {
     }
 
     @Test
-    fun `location gate respects master and child`() {
+    fun `v2 collapse from fine keys`() {
+        val collapsed = SmartCapabilitiesMigration.collapseToV2(
+            masterEnabled = true,
+            localInferenceEnabled = false,
+            voiceEnabled = true,
+            systemTools = true,
+            webSearch = false,
+            deviceSensing = true,
+            location = true,
+            sceneVisionEnabled = false
+        )
+        assertFalse(collapsed.assistantToolsEnabled)
+        assertTrue(collapsed.locationAroundEnabled)
+        assertTrue(collapsed.migratedV2)
+    }
+
+    @Test
+    fun `v2 collapse prefers existing aggregate keys`() {
+        val collapsed = SmartCapabilitiesMigration.collapseToV2(
+            masterEnabled = true,
+            localInferenceEnabled = false,
+            voiceEnabled = true,
+            systemTools = false,
+            webSearch = false,
+            deviceSensing = false,
+            location = false,
+            sceneVisionEnabled = false,
+            existingAssistantTools = true,
+            existingLocationAround = false
+        )
+        assertTrue(collapsed.assistantToolsEnabled)
+        assertFalse(collapsed.locationAroundEnabled)
+    }
+
+    @Test
+    fun `location gate respects master and location around`() {
         val smartOff = SmartCapabilitiesConfig(masterEnabled = false)
         val locOn = LocationConfig(enabled = true)
         assertFalse(LocationGate.isPrefsOpen(smartOff, locOn))
 
-        val childOff = SmartCapabilitiesConfig(locationEnabled = false)
+        val childOff = SmartCapabilitiesConfig(locationAroundEnabled = false)
         assertFalse(LocationGate.isPrefsOpen(childOff, locOn))
 
         val ok = SmartCapabilitiesConfig()
@@ -233,7 +306,7 @@ class SmartCapabilitiesTest {
         )
         val filtered = LocationGate.filterTools(
             tools,
-            SmartCapabilitiesConfig(locationEnabled = false),
+            SmartCapabilitiesConfig(locationAroundEnabled = false),
             LocationConfig()
         )
         assertEquals(listOf("system_info"), filtered.map { it.name })
@@ -270,11 +343,14 @@ class SmartCapabilitiesTest {
     }
 
     @Test
-    fun `summary line`() {
+    fun `summary line counts primary groups`() {
         val off = SmartCapabilitiesConfig(masterEnabled = false)
         assertTrue(off.summaryLine().contains("主开关已关"))
         val on = SmartCapabilitiesConfig()
         assertTrue(on.summaryLine().contains("主开关开"))
+        assertTrue(on.summaryLine().contains("3/5") || on.summaryLine().contains("组已开"))
+        // 默认 ON 组：voice + assistant + location = 3；local/scene OFF
+        assertTrue(on.summaryLine().contains("3/5"))
     }
 
     @Test
@@ -286,8 +362,24 @@ class SmartCapabilitiesTest {
     }
 
     @Test
+    fun `assistantToolsEffective helper`() {
+        assertTrue(
+            SmartCapabilitiesGate.assistantToolsEffective(SmartCapabilitiesConfig())
+        )
+        assertFalse(
+            SmartCapabilitiesGate.assistantToolsEffective(
+                SmartCapabilitiesConfig(assistantToolsEnabled = false)
+            )
+        )
+        assertFalse(
+            SmartCapabilitiesGate.assistantToolsEffective(
+                SmartCapabilitiesConfig(masterEnabled = false)
+            )
+        )
+    }
+
+    @Test
     fun `scene clampEnabled dual-write must use clamped value`() {
-        // 智能能力页与 SceneSensingPreferences 共用 clamp：无 consent 写 true → false
         val noConsent = SceneSensingGate.clampEnabled(
             requestedEnabled = true,
             consentGranted = false
@@ -298,7 +390,6 @@ class SmartCapabilitiesTest {
             consentGranted = true
         )
         assertTrue(withConsent)
-        // 关永远可写
         assertFalse(
             SceneSensingGate.clampEnabled(requestedEnabled = false, consentGranted = false)
         )

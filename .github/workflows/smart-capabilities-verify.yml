@@ -1,4 +1,4 @@
-# 智能能力模块：默认值 / 迁移 / Gate / 位置 / 设置聚合
+# 智能能力模块：默认值 / v1+v2 迁移 / 聚合 Gate / 位置 / 设置精简
 name: Smart Capabilities Module Verify
 
 on:
@@ -14,12 +14,14 @@ on:
       - "app/src/main/kotlin/com/lanxin/android/presentation/ui/setting/SettingScreen.kt"
       - "app/src/main/kotlin/com/lanxin/android/presentation/common/NavigationGraph.kt"
       - "app/src/main/kotlin/com/lanxin/android/presentation/common/Route.kt"
+      - "docs/smart-capabilities.md"
       - ".github/workflows/smart-capabilities-verify.yml"
   push:
-    branches: [main, "feat/capability-module-defaults"]
+    branches: [main, "feat/capability-module-defaults", "feat/smart-capabilities-simplify"]
     paths:
       - "app/src/main/kotlin/com/lanxin/android/builtin/capabilities/**"
       - "app/src/test/kotlin/com/lanxin/android/builtin/capabilities/**"
+      - "docs/smart-capabilities.md"
       - ".github/workflows/smart-capabilities-verify.yml"
   workflow_dispatch:
 

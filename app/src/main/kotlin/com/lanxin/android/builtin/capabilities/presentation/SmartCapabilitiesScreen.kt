@@ -66,7 +66,7 @@ import com.lanxin.android.builtin.capabilities.domain.SmartCapabilityId
 /**
  * 设置 → 智能能力 聚合页。
  *
- * 主开关 + 状态摘要 + 子能力平铺；高级折叠放路径/细项入口。
+ * 主开关 + 状态摘要 + 合并后 5 组；高级折叠放路径/细项入口。
  * Claw / 桌宠悬浮不在此页默认 ON 列表。
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -152,8 +152,8 @@ fun SmartCapabilitiesScreen(
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "主开关关闭时，语音 / 系统工具 / 搜索 / 设备感知 / 位置 / 本地推理 / 场景视觉一律拒绝。" +
-                            "本地推理与场景视觉默认关；桌宠悬浮与 Claw 不在本页。",
+                        text = "主开关关闭时，本地模型 / 语音 / 助手工具 / 位置与周边 / 看世界一律拒绝。" +
+                            "本地模型与看世界默认关；桌宠悬浮与 Claw 不在本页。",
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -175,7 +175,7 @@ fun SmartCapabilitiesScreen(
             HorizontalDivider()
 
             CapabilitySwitchRow(
-                title = "本地推理",
+                title = "本地模型",
                 description = "默认关；0.5B/1.5B 或 7B Q4；打开后须能真正 load",
                 checked = state.localInferenceEnabled,
                 enabled = state.masterEnabled,
@@ -186,7 +186,7 @@ fun SmartCapabilitiesScreen(
             )
 
             CapabilitySwitchRow(
-                title = "语音能力",
+                title = "语音",
                 description = "ASR + TTS 会话；悬浮窗不绑死为 ON",
                 checked = state.voiceEnabled,
                 enabled = state.masterEnabled,
@@ -197,45 +197,23 @@ fun SmartCapabilitiesScreen(
             )
 
             CapabilitySwitchRow(
-                title = "系统工具",
-                description = "日历 / 闹钟 / 笔记 / 文件；写操作仍确认",
-                checked = state.systemToolsEnabled,
+                title = "助手工具",
+                description = "系统工具 + 联网搜索 + 设备感知；写操作仍确认",
+                checked = state.assistantToolsEnabled,
                 enabled = state.masterEnabled,
                 onCheckedChange = {
-                    viewModel.setChild(SmartCapabilityId.SYSTEM_TOOLS, it)
+                    viewModel.setChild(SmartCapabilityId.ASSISTANT_TOOLS, it)
                 },
                 onDetailClick = onNavigateToSystemTools
             )
 
             CapabilitySwitchRow(
-                title = "联网搜索",
-                description = "web_search（DuckDuckGo）；开后 Agent 可见",
-                checked = state.webSearchEnabled,
+                title = "位置与周边",
+                description = "定位 / 附近；tool 用时申请权限，不后台持续定位",
+                checked = state.locationAroundEnabled,
                 enabled = state.masterEnabled,
                 onCheckedChange = {
-                    viewModel.setChild(SmartCapabilityId.WEB_SEARCH, it)
-                },
-                onDetailClick = onNavigateToWebSearch
-            )
-
-            CapabilitySwitchRow(
-                title = "设备感知",
-                description = "system_info（型号/网络/电量）",
-                checked = state.deviceSensingEnabled,
-                enabled = state.masterEnabled,
-                onCheckedChange = {
-                    viewModel.setChild(SmartCapabilityId.DEVICE_SENSING, it)
-                },
-                onDetailClick = onNavigateToDeviceSensing
-            )
-
-            CapabilitySwitchRow(
-                title = "位置",
-                description = "默认授权可调；tool 用时申请权限，不后台持续定位",
-                checked = state.locationEnabled,
-                enabled = state.masterEnabled,
-                onCheckedChange = {
-                    viewModel.setChild(SmartCapabilityId.LOCATION, it)
+                    viewModel.setChild(SmartCapabilityId.LOCATION_AROUND, it)
                 }
             )
 
@@ -260,8 +238,8 @@ fun SmartCapabilitiesScreen(
             )
 
             CapabilitySwitchRow(
-                title = "场景视觉",
-                description = "默认关；摄像头快照→本地场景；需 consent",
+                title = "看世界",
+                description = "默认关；摄像头快照→本地场景；需 consent（隐私敏感）",
                 checked = state.sceneVisionEnabled,
                 enabled = state.masterEnabled,
                 onCheckedChange = {
@@ -297,14 +275,15 @@ fun SmartCapabilitiesScreen(
 
             AnimatedVisibility(visible = state.advancedExpanded) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    AdvancedLink("本地推理 · 模型路径 / 参数", onNavigateToLocalInference)
+                    AdvancedLink("本地模型 · 模型路径 / 参数", onNavigateToLocalInference)
                     AdvancedLink("离线语音 · ASR 模型 / 语言", onNavigateToVoice)
                     AdvancedLink("系统工具 · 分项与写确认", onNavigateToSystemTools)
                     AdvancedLink("联网搜索 · 条数 / 区域", onNavigateToWebSearch)
                     AdvancedLink("设备感知 · system_info", onNavigateToDeviceSensing)
-                    AdvancedLink("场景视觉 · consent / 识别", onNavigateToSceneVision)
+                    AdvancedLink("看世界 · consent / 识别", onNavigateToSceneVision)
                     Text(
-                        text = "键前缀 smart_capabilities_*；迁移标记 migrated_v1。" +
+                        text = "键前缀 smart_capabilities_*；迁移标记 migrated_v1 / migrated_v2。" +
+                            "助手工具开关联动系统工具/搜索/设备感知；位置与周边不含看世界。" +
                             "Claw 与桌宠悬浮仍在各自设置页。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,

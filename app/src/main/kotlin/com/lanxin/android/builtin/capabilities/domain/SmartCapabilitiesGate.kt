@@ -24,6 +24,8 @@ package com.lanxin.android.builtin.capabilities.domain
  * - 主开关关：子能力一律拒，不改各子模块 DataStore 原值
  * - runtime_ready：权限/模型/引擎等运行时条件；缺省 true
  * - 本地脑默认 OFF：不因 master ON 而抬升
+ * - ASSISTANT_TOOLS 同时门控系统工具 / 联网搜索 / 设备感知（含旧 id 别名）
+ * - LOCATION_AROUND 门控位置（含旧 LOCATION）
  */
 object SmartCapabilitiesGate {
 
@@ -35,7 +37,7 @@ object SmartCapabilitiesGate {
      * 子能力是否有效可用。
      *
      * @param config 总配置
-     * @param id 子能力
+     * @param id 子能力（主 UI 组或兼容别名均可）
      * @param runtimeReady 运行时就绪（权限已授、模型已 load 等）；默认 true
      */
     fun effective(
@@ -72,10 +74,24 @@ object SmartCapabilitiesGate {
     /**
      * 旧模块开关与主开关合成：master && legacyChild。
      * 用于 WebSearch / DeviceSensing 等已有 config.enabled 字段。
+     *
+     * 调用方应传入 master && assistantTools（或 master 本身）作为 masterEnabled。
      */
     fun effectiveLegacy(
         masterEnabled: Boolean,
         childEnabled: Boolean,
         runtimeReady: Boolean = true
     ): Boolean = masterEnabled && childEnabled && runtimeReady
+
+    /** 助手工具组是否有效（系统工具 / 搜索 / 设备感知共用）。 */
+    fun assistantToolsEffective(
+        config: SmartCapabilitiesConfig,
+        runtimeReady: Boolean = true
+    ): Boolean = effective(config, SmartCapabilityId.ASSISTANT_TOOLS, runtimeReady)
+
+    /** 位置与周边是否有效。 */
+    fun locationAroundEffective(
+        config: SmartCapabilitiesConfig,
+        runtimeReady: Boolean = true
+    ): Boolean = effective(config, SmartCapabilityId.LOCATION_AROUND, runtimeReady)
 }
