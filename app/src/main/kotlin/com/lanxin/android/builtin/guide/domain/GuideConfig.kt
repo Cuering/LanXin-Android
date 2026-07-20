@@ -17,32 +17,44 @@
 package com.lanxin.android.builtin.guide.domain
 
 /**
- * 导游 Guide V1 — 与导航 Navigate **独立**。
+ * 导游 Guide 插件配置常量。
  *
- * 职责：景点/展品讲解、看世界识别讲解、历史文化与看点；可选位置增强。
- * 看世界抓帧归属本模块侧（复用 companion vision），导航不强制开相机。
+ * 形态：独立 [com.lanxin.android.builtin.guide.GuidePlugin]（编译期插件，挂 PluginManager）。
+ * **默认关闭**（[DEFAULT_ENABLED]=false）：未开时不注册 explain_sight、不主动要相机、
+ * 全屏陪伴「看世界」入口门闸关闭。
  *
- * 不实现自研 turn-by-turn；「去这里」仅提示/互跳 [com.lanxin.android.builtin.navigate] 的 open_navigation。
+ * 与导航 Navigate 拆开，不揉成 ScenicGuide。
  */
 object GuideConfig {
-    /** 模块 id（文档 / 埋点） */
+    /** 插件 id（PluginManager / plugin-state） */
+    const val PLUGIN_ID = "lanxin.guide"
+
+    /** 导游功能 id（文档 / 门闸 / 日志） */
     const val FEATURE_ID = "guide"
 
     /** 复用全屏陪伴「看世界」 */
     const val VISION_FEATURE = "companion_vision_explain"
 
-    /** 可选：附近景点介绍（依赖 get_location + web_search，非导航 POI） */
+    /** 可选：附近景点介绍（依赖 get_location + 讲解，非导航 POI 列表） */
     const val NEARBY_SIGHTS_HINT = "nearby_sights_explain"
 
-    /** 对话侧可选 tool 名（V1 主入口仍是陪伴「看世界」） */
+    /** 对话工具：景点/话题讲解辅助（位置 + 可选 web_search，不抓帧） */
     const val EXPLAIN_SIGHT_TOOL = "explain_sight"
 
-    /** 导航互跳目标 tool（不复制实现） */
+    /** 导航互跳提示里引用的已有工具名（实现在 builtin/navigate） */
     const val NAV_HANDOFF_TOOL = "open_navigation"
+
+    /** 产品默认：关（需插件管理或智能能力设置页开启） */
+    const val DEFAULT_ENABLED = false
+
+    /** DataStore 键：智能能力页「导游」开关镜像 */
+    const val PREF_KEY_ENABLED = "guide_plugin_enabled"
 
     /** 位置增强：坐标精度提示（约 100m 量级展示） */
     const val LOCATION_HINT_PRECISION_M = 100
 
     /** 互跳提示文案前缀 */
     const val NAV_HANDOFF_PREFIX = "若要过去，可以说「导航到这里」或让我调起 open_navigation。"
+
+    val ALL_TOOL_NAMES: Set<String> = setOf(EXPLAIN_SIGHT_TOOL)
 }

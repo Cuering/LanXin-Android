@@ -50,8 +50,12 @@ class SmartCapabilitiesTest {
         assertTrue(c.webSearchEnabled)
         assertTrue(c.deviceSensingEnabled)
         assertTrue(c.locationEnabled)
+        assertFalse(c.navigateEnabled)
+        assertFalse(c.guideEnabled)
         assertFalse(c.sceneVisionEnabled)
         assertFalse(c.migratedV1)
+        assertFalse(SmartCapabilitiesConfig.DEFAULT_NAVIGATE)
+        assertFalse(SmartCapabilitiesConfig.DEFAULT_GUIDE)
     }
 
     @Test
@@ -62,6 +66,34 @@ class SmartCapabilitiesTest {
             SmartCapabilitiesGate.effective(
                 SmartCapabilitiesConfig(),
                 SmartCapabilityId.LOCAL_INFERENCE
+            )
+        )
+    }
+
+    @Test
+    fun `navigate and guide stay default OFF`() {
+        assertFalse(
+            SmartCapabilitiesGate.effective(
+                SmartCapabilitiesConfig(),
+                SmartCapabilityId.NAVIGATE
+            )
+        )
+        assertFalse(
+            SmartCapabilitiesGate.effective(
+                SmartCapabilitiesConfig(),
+                SmartCapabilityId.GUIDE
+            )
+        )
+        assertTrue(
+            SmartCapabilitiesGate.effective(
+                SmartCapabilitiesConfig(navigateEnabled = true),
+                SmartCapabilityId.NAVIGATE
+            )
+        )
+        assertTrue(
+            SmartCapabilitiesGate.effective(
+                SmartCapabilitiesConfig(guideEnabled = true),
+                SmartCapabilityId.GUIDE
             )
         )
     }
@@ -126,6 +158,8 @@ class SmartCapabilitiesTest {
         assertTrue(resolved.locationEnabled)
         assertFalse(resolved.localInferenceEnabled)
         assertFalse(resolved.sceneVisionEnabled)
+        assertFalse(resolved.navigateEnabled)
+        assertFalse(resolved.guideEnabled)
         assertTrue(resolved.migratedV1)
     }
 

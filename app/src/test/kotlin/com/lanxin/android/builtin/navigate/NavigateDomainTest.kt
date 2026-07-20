@@ -133,6 +133,12 @@ class NavigateDomainTest {
     }
 
     @Test
+    fun `plugin id and default off`() {
+        assertEquals("lanxin.navigate", NavigateConfig.PLUGIN_ID)
+        assertFalse(NavigateConfig.DEFAULT_ENABLED)
+    }
+
+    @Test
     fun `gate filters poi when web off`() {
         val tools = listOf(
             tool(NavigateConfig.NEARBY_POI_TOOL),
@@ -142,6 +148,7 @@ class NavigateDomainTest {
         )
         val filtered = NavigateGate.filterTools(
             tools = tools,
+            pluginEnabled = true,
             masterEnabled = true,
             locationPrefsOpen = true,
             webSearchEnabled = false
@@ -153,6 +160,23 @@ class NavigateDomainTest {
     }
 
     @Test
+    fun `gate removes all when plugin off`() {
+        val tools = listOf(
+            tool(NavigateConfig.NEARBY_POI_TOOL),
+            tool(NavigateConfig.OPEN_NAVIGATION_TOOL),
+            tool("other")
+        )
+        val filtered = NavigateGate.filterTools(
+            tools = tools,
+            pluginEnabled = false,
+            masterEnabled = true,
+            locationPrefsOpen = true,
+            webSearchEnabled = true
+        )
+        assertEquals(listOf("other"), filtered.map { it.name })
+    }
+
+    @Test
     fun `gate removes all when master off`() {
         val tools = listOf(
             tool(NavigateConfig.NEARBY_POI_TOOL),
@@ -161,6 +185,7 @@ class NavigateDomainTest {
         )
         val filtered = NavigateGate.filterTools(
             tools = tools,
+            pluginEnabled = true,
             masterEnabled = false,
             locationPrefsOpen = true,
             webSearchEnabled = true
@@ -171,6 +196,7 @@ class NavigateDomainTest {
     @Test
     fun `denyPoi when location closed`() {
         val denied = NavigateGate.denyPoiIfDisabled(
+            pluginEnabled = true,
             masterEnabled = true,
             locationPrefsOpen = false,
             webSearchEnabled = true
@@ -180,9 +206,22 @@ class NavigateDomainTest {
     }
 
     @Test
-    fun `denyNav only master`() {
-        assertNull(NavigateGate.denyNavIfDisabled(true))
-        assertNotNull(NavigateGate.denyNavIfDisabled(false))
+    fun `denyPoi when plugin closed`() {
+        val denied = NavigateGate.denyPoiIfDisabled(
+            pluginEnabled = false,
+            masterEnabled = true,
+            locationPrefsOpen = true,
+            webSearchEnabled = true
+        )
+        assertNotNull(denied)
+        assertEquals(NavigateGate.DENIED_PLUGIN, denied!!["code"]?.toString()?.trim('"'))
+    }
+
+    @Test
+    fun `denyNav requires plugin and master`() {
+        assertNull(NavigateGate.denyNavIfDisabled(pluginEnabled = true, masterEnabled = true))
+        assertNotNull(NavigateGate.denyNavIfDisabled(pluginEnabled = false, masterEnabled = true))
+        assertNotNull(NavigateGate.denyNavIfDisabled(pluginEnabled = true, masterEnabled = false))
     }
 
     @Test

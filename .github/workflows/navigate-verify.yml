@@ -1,4 +1,4 @@
-# 导航 Navigate V1：附近 POI / 外链导航 / 酒店价
+# 导航 Navigate V1 插件 · 默认 OFF
 name: Navigate Verify
 
 on:
@@ -8,8 +8,13 @@ on:
       - 'app/src/main/kotlin/com/lanxin/android/builtin/navigate/**'
       - 'app/src/test/kotlin/com/lanxin/android/builtin/navigate/**'
       - 'app/src/main/kotlin/com/lanxin/android/builtin/platform/PlatformPlugin.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/capabilities/**'
+      - 'app/src/main/kotlin/com/lanxin/android/plugin/PluginManager.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/plugin/dynamic/PluginStateStore.kt'
       - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/ChatViewModel.kt'
       - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/ChatSendToolFilterLogic.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/LanXinApp.kt'
+      - 'app/src/test/kotlin/com/lanxin/android/presentation/ui/chat/ChatSendFailureLogicTest.kt'
       - 'docs/navigate.md'
       - 'docs/guide.md'
       - '.github/workflows/navigate-verify.yml'
@@ -19,8 +24,13 @@ on:
       - 'app/src/main/kotlin/com/lanxin/android/builtin/navigate/**'
       - 'app/src/test/kotlin/com/lanxin/android/builtin/navigate/**'
       - 'app/src/main/kotlin/com/lanxin/android/builtin/platform/PlatformPlugin.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/capabilities/**'
+      - 'app/src/main/kotlin/com/lanxin/android/plugin/PluginManager.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/plugin/dynamic/PluginStateStore.kt'
       - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/ChatViewModel.kt'
       - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/ChatSendToolFilterLogic.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/LanXinApp.kt'
+      - 'app/src/test/kotlin/com/lanxin/android/presentation/ui/chat/ChatSendFailureLogicTest.kt'
       - 'docs/navigate.md'
       - 'docs/guide.md'
       - '.github/workflows/navigate-verify.yml'
@@ -42,7 +52,6 @@ jobs:
       - name: Set up JDK 21 (Temurin)
         uses: actions/setup-java@v4
         with:
-          # 与 android-ci / debug-build 一致：kapt 需能读 Java 21 bytecode
           java-version: '21'
           distribution: temurin
           cache: gradle
@@ -66,10 +75,13 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Unit tests (navigate package)
+      - name: Unit tests (navigate + smart capabilities defaults)
         run: |
           ./gradlew :app:testDebugUnitTest \
             --tests "com.lanxin.android.builtin.navigate.*" \
+            --tests "com.lanxin.android.builtin.capabilities.SmartCapabilitiesTest" \
+            --tests "com.lanxin.android.plugin.dynamic.PluginStateStoreTest" \
+            --tests "com.lanxin.android.presentation.ui.chat.ChatSendFailureLogicTest" \
             --no-daemon --stacktrace
 
       - name: Compile debug Kotlin
@@ -82,6 +94,8 @@ jobs:
         run: |
           test -f docs/navigate.md
           test -f docs/guide.md
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/navigate/NavigatePlugin.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/navigate/di/NavigateModule.kt
           test -f app/src/main/kotlin/com/lanxin/android/builtin/navigate/domain/NavigateConfig.kt
           test -f app/src/main/kotlin/com/lanxin/android/builtin/navigate/domain/NavigateGate.kt
           test -f app/src/main/kotlin/com/lanxin/android/builtin/navigate/domain/PoiCategory.kt
@@ -94,20 +108,33 @@ jobs:
           test -f app/src/main/kotlin/com/lanxin/android/builtin/navigate/tools/OpenNavigationTool.kt
           test -f app/src/main/kotlin/com/lanxin/android/builtin/navigate/tools/HotelPriceTool.kt
           test -f app/src/test/kotlin/com/lanxin/android/builtin/navigate/NavigateDomainTest.kt
-          test -f app/src/main/kotlin/com/lanxin/android/builtin/guide/domain/GuideConfig.kt
           # 禁止 ScenicGuide monlith / localguide 实现包
           ! find app/src -type f \( -name '*ScenicGuide*' -o -name '*LocalGuide*' -o -name '*localguide*' \) | grep .
-          # 三工具 + Gate 接线
+          # 三工具在 NavigatePlugin，不在 PlatformPlugin
           grep -E -n "NEARBY_POI_TOOL|OPEN_NAVIGATION_TOOL|HOTEL_PRICE_TOOL|NearbyPoiTool|OpenNavigationTool|HotelPriceTool" \
+            app/src/main/kotlin/com/lanxin/android/builtin/navigate/NavigatePlugin.kt
+          ! grep -E -n "nearby_poi|open_navigation|hotel_price_lookup|NearbyPoiTool|OpenNavigationTool|HotelPriceTool" \
             app/src/main/kotlin/com/lanxin/android/builtin/platform/PlatformPlugin.kt
-          # Gate 接线：ChatViewModel 经 ChatSendToolFilterLogic 调 NavigateGate.filterTools
-          grep -E -n "NavigateGate\.filterTools" \
+          # 默认 OFF + 插件注册
+          grep -E -n "DEFAULT_ENABLED\\s*=\\s*false|PLUGIN_ID|lanxin\\.navigate" \
+            app/src/main/kotlin/com/lanxin/android/builtin/navigate/domain/NavigateConfig.kt
+          grep -E -n "defaultEnabled\\s*=\\s*NavigateConfig\\.DEFAULT_ENABLED|register\\(" \
+            app/src/main/kotlin/com/lanxin/android/builtin/navigate/di/NavigateModule.kt
+          grep -E -n "pluginEnabled|filterTools" \
+            app/src/main/kotlin/com/lanxin/android/builtin/navigate/domain/NavigateGate.kt
+          grep -E -n "NavigateGate\\.filterTools|navigateEnabled|GuideGate\\.filterTools|guideEnabled" \
             app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/ChatSendToolFilterLogic.kt
-          grep -E -n "ChatSendToolFilterLogic" \
-            app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/ChatViewModel.kt
-          grep -E -n "nearby_poi|open_navigation|hotel_price_lookup|Overpass|NavigateGate" \
-            docs/navigate.md
-          grep -E -n "导游|Guide|骨架" docs/guide.md
+          grep -E -n "NavigatePluginRegistration|GuidePluginRegistration" \
+            app/src/main/kotlin/com/lanxin/android/presentation/LanXinApp.kt
+          grep -E -n "NAVIGATE|navigateEnabled|smart_capabilities_navigate" \
+            app/src/main/kotlin/com/lanxin/android/builtin/capabilities/domain/SmartCapabilitiesConfig.kt \
+            app/src/main/kotlin/com/lanxin/android/builtin/capabilities/presentation/SmartCapabilitiesScreen.kt
+          grep -E -n "defaultEnabled|ensureDefault" \
+            app/src/main/kotlin/com/lanxin/android/plugin/PluginManager.kt \
+            app/src/main/kotlin/com/lanxin/android/plugin/dynamic/PluginStateStore.kt
+          # 文档
+          grep -E -n "默认|OFF|lanxin\\.navigate|NavigatePlugin|开启" docs/navigate.md
+          grep -E -n "导游|Guide|默认" docs/guide.md
 
       - name: Upload Debug APK
         if: success()

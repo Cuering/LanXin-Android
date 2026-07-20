@@ -288,41 +288,43 @@ fun CompanionScreen(
                 color = Color(0xFF5A2038),
                 modifier = Modifier.weight(1f)
             )
-            // 看世界开关（默认关）
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(end = 2.dp)
-            ) {
-                Icon(
-                    if (state.visionLooking) Icons.Filled.Visibility else Icons.Filled.VisibilityOff,
-                    contentDescription = null,
-                    tint = if (state.visionLooking) Color(0xFFE85D8E) else Color(0xFF5A2038),
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(2.dp))
-                Text(
-                    text = "看世界",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Color(0xFF5A2038)
-                )
-                Switch(
-                    checked = state.visionLooking,
-                    onCheckedChange = { on ->
-                        viewModel.setVisionLooking(on)
-                        if (on) {
-                            val granted = ContextCompat.checkSelfPermission(
-                                context,
-                                Manifest.permission.CAMERA
-                            ) == PackageManager.PERMISSION_GRANTED
-                            if (!granted) {
-                                requestCamera.launch(Manifest.permission.CAMERA)
-                            } else {
-                                viewModel.onCameraPermissionResult(true)
+            // 看世界开关：导游插件 OFF 时不露入口
+            if (state.guidePluginEnabled) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(end = 2.dp)
+                ) {
+                    Icon(
+                        if (state.visionLooking) Icons.Filled.Visibility else Icons.Filled.VisibilityOff,
+                        contentDescription = null,
+                        tint = if (state.visionLooking) Color(0xFFE85D8E) else Color(0xFF5A2038),
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(2.dp))
+                    Text(
+                        text = "看世界",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color(0xFF5A2038)
+                    )
+                    Switch(
+                        checked = state.visionLooking,
+                        onCheckedChange = { on ->
+                            viewModel.setVisionLooking(on)
+                            if (on) {
+                                val granted = ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.CAMERA
+                                ) == PackageManager.PERMISSION_GRANTED
+                                if (!granted) {
+                                    requestCamera.launch(Manifest.permission.CAMERA)
+                                } else {
+                                    viewModel.onCameraPermissionResult(true)
+                                }
                             }
-                        }
-                    },
-                    modifier = Modifier.padding(start = 2.dp)
-                )
+                        },
+                        modifier = Modifier.padding(start = 2.dp)
+                    )
+                }
             }
             TextButton(onClick = onOpenSettings) {
                 Icon(
@@ -996,6 +998,8 @@ data class CompanionUiState(
     val bgError: String? = null,
     /** 陪伴页「看世界」会话开关；默认关，不持久化（离开页即停） */
     val visionLooking: Boolean = false,
+    /** 导游插件是否开（默认 OFF；关则不露入口/不主动相机） */
+    val guidePluginEnabled: Boolean = false,
     val visionConsentGranted: Boolean = false,
     val cameraGranted: Boolean = false,
     val visionPreviewReady: Boolean = false,
@@ -1060,6 +1064,14 @@ class CompanionViewModel @Inject constructor(
             }
             BuiltInMusicAssets.ensureTestTrackInstalled(appContext)
             val scene = sceneSensingSettings.getConfig()
+            val smart = runCatching { smartCapabilitiesSettings.getConfig() }
+                .getOrDefault(
+                    com.lanxin.android.builtin.capabilities.domain.SmartCapabilitiesConfig()
+                )
+            val guideOn = GuideGate.canShowVisionEntry(
+                pluginEnabled = smart.guideEnabled,
+                masterEnabled = smart.masterEnabled
+            )
             val p = player()
             p.refreshPlaylist()
             resolveLive2d()
@@ -1071,9 +1083,10 @@ class CompanionViewModel @Inject constructor(
                     trackCount = p.currentTracks().size,
                     musicVolume = p.currentVolume(),
                     visionConsentGranted = scene.consentGranted,
-                    // 会话开关默认关
+                    // 会话开关默认关；导游插件 OFF 不主动开相机
                     visionLooking = false,
-                    visionPreviewReady = false
+                    visionPreviewReady = false,
+                    guidePluginEnabled = guideOn
                 )
             }
             bumpWeb()
@@ -1095,12 +1108,27 @@ class CompanionViewModel @Inject constructor(
 
     fun setVisionLooking(on: Boolean) {
         viewModelScope.launch {
+            val smart = runCatching { smartCapabilitiesSettings.getConfig() }
+                .getOrDefault(
+                    com.lanxin.android.builtin.capabilities.domain.SmartCapabilitiesConfig()
+                )
+            if (on && !GuideGate.canShowVisionEntry(smart.guideEnabled, smart.masterEnabled)) {
+                _uiState.update {
+                    it.copy(
+                        visionLooking = false,
+                        guidePluginEnabled = false,
+                        visionHint = "导游插件已关闭（设置 → 智能能力 → 导游）"
+                    )
+                }
+                return@launch
+            }
             val scene = sceneSensingSettings.getConfig()
             if (on && CompanionVisionSession.needsConsentDialog(scene.consentGranted, turningOn = true)) {
                 _uiState.update {
                     it.copy(
                         showVisionConsentDialog = true,
-                        visionConsentGranted = scene.consentGranted
+                        visionConsentGranted = scene.consentGranted,
+                        guidePluginEnabled = true
                     )
                 }
                 return@launch
@@ -1115,7 +1143,8 @@ class CompanionViewModel @Inject constructor(
                     visionConsentGranted = scene.consentGranted,
                     visionPreviewReady = if (on) it.visionPreviewReady else false,
                     visionHint = if (on) null else CompanionVisionSession.STATUS_PAUSED,
-                    showVisionConsentDialog = false
+                    showVisionConsentDialog = false,
+                    guidePluginEnabled = smart.guideEnabled && smart.masterEnabled
                 )
             }
         }
@@ -1129,6 +1158,21 @@ class CompanionViewModel @Inject constructor(
 
     fun confirmVisionConsentAndEnable() {
         viewModelScope.launch {
+            val smart = runCatching { smartCapabilitiesSettings.getConfig() }
+                .getOrDefault(
+                    com.lanxin.android.builtin.capabilities.domain.SmartCapabilitiesConfig()
+                )
+            if (!GuideGate.canShowVisionEntry(smart.guideEnabled, smart.masterEnabled)) {
+                _uiState.update {
+                    it.copy(
+                        showVisionConsentDialog = false,
+                        visionLooking = false,
+                        guidePluginEnabled = false,
+                        visionHint = "导游插件已关闭（设置 → 智能能力 → 导游）"
+                    )
+                }
+                return@launch
+            }
             sceneSensingSettings.setConsentGranted(true)
             sceneSensingSettings.setEnabled(true)
             _uiState.update {
@@ -1136,7 +1180,8 @@ class CompanionViewModel @Inject constructor(
                     showVisionConsentDialog = false,
                     visionConsentGranted = true,
                     visionLooking = true,
-                    visionHint = null
+                    visionHint = null,
+                    guidePluginEnabled = true
                 )
             }
         }
@@ -1332,13 +1377,20 @@ class CompanionViewModel @Inject constructor(
     }
 
     /**
-     * 导游位置增强：主开关 + 位置 prefs 开且有权限时读 last known；失败静默（讲解仍可进行）。
+     * 导游位置增强：插件开 + 主开关 + 位置 prefs 开且有权限时读 last known；失败静默。
      */
     private suspend fun resolveGuideLocationSnippet(): String {
         return runCatching {
-            val master = smartCapabilitiesSettings.getConfig().masterEnabled
-            val locOpen = locationSettings.getConfig().enabled
-            if (!GuideGate.canAugmentWithLocation(master, locOpen)) return@runCatching ""
+            val smart = smartCapabilitiesSettings.getConfig()
+            val locOpen = locationSettings.getConfig().enabled && smart.locationEnabled
+            if (!GuideGate.canAugmentWithLocation(
+                    pluginEnabled = smart.guideEnabled,
+                    masterEnabled = smart.masterEnabled,
+                    locationPrefsOpen = locOpen
+                )
+            ) {
+                return@runCatching ""
+            }
             if (!locationTool.hasPermission()) return@runCatching ""
             val json = locationTool.readOnce()
             val ok = json["ok"]?.jsonPrimitive?.booleanOrNull == true

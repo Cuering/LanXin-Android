@@ -1,13 +1,17 @@
-# 导游 Guide V1：看世界位置增强 / 导航互跳
+# 导游 Guide V1 插件 · 默认 OFF
 name: Guide Verify
 
 on:
   push:
-    branches: [main, 'feat/guide*']
+    branches: [main, 'feat/guide*', 'feat/navigate-guide*']
     paths:
       - 'app/src/main/kotlin/com/lanxin/android/builtin/guide/**'
       - 'app/src/test/kotlin/com/lanxin/android/builtin/guide/**'
       - 'app/src/main/kotlin/com/lanxin/android/builtin/pet/presentation/CompanionScreen.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/capabilities/**'
+      - 'app/src/main/kotlin/com/lanxin/android/plugin/PluginManager.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/LanXinApp.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/ChatSendToolFilterLogic.kt'
       - 'docs/guide.md'
       - 'docs/navigate.md'
       - 'docs/companion-vision-explain.md'
@@ -18,6 +22,10 @@ on:
       - 'app/src/main/kotlin/com/lanxin/android/builtin/guide/**'
       - 'app/src/test/kotlin/com/lanxin/android/builtin/guide/**'
       - 'app/src/main/kotlin/com/lanxin/android/builtin/pet/presentation/CompanionScreen.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/capabilities/**'
+      - 'app/src/main/kotlin/com/lanxin/android/plugin/PluginManager.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/LanXinApp.kt'
+      - 'app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/ChatSendToolFilterLogic.kt'
       - 'docs/guide.md'
       - 'docs/navigate.md'
       - 'docs/companion-vision-explain.md'
@@ -63,10 +71,11 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Unit tests (guide package)
+      - name: Unit tests (guide + smart capabilities)
         run: |
           ./gradlew :app:testDebugUnitTest \
             --tests "com.lanxin.android.builtin.guide.*" \
+            --tests "com.lanxin.android.builtin.capabilities.SmartCapabilitiesTest" \
             --no-daemon --stacktrace
 
       - name: Compile debug Kotlin
@@ -79,6 +88,8 @@ jobs:
         run: |
           test -f docs/guide.md
           test -f docs/navigate.md
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/guide/GuidePlugin.kt
+          test -f app/src/main/kotlin/com/lanxin/android/builtin/guide/di/GuideModule.kt
           test -f app/src/main/kotlin/com/lanxin/android/builtin/guide/domain/GuideConfig.kt
           test -f app/src/main/kotlin/com/lanxin/android/builtin/guide/domain/GuideGate.kt
           test -f app/src/main/kotlin/com/lanxin/android/builtin/guide/domain/GuideLocationContext.kt
@@ -87,10 +98,23 @@ jobs:
           test -f app/src/test/kotlin/com/lanxin/android/builtin/guide/GuideDomainTest.kt
           # 禁止 ScenicGuide monlith / localguide 实现包
           ! find app/src -type f \( -name '*ScenicGuide*' -o -name '*LocalGuide*' -o -name '*localguide*' \) | grep .
-          grep -E -n "GuideLocationContext|GuideNavHandoff|GuidePromptBuilder" \
+          grep -E -n "GuideLocationContext|GuideNavHandoff|GuidePromptBuilder|guidePluginEnabled|canShowVisionEntry" \
             app/src/main/kotlin/com/lanxin/android/builtin/pet/presentation/CompanionScreen.kt
-          grep -E -n "位置增强|GuideNavHandoff|open_navigation|看世界" docs/guide.md
-          grep -E -n "导游 Guide|独立" docs/navigate.md
+          grep -E -n "DEFAULT_ENABLED\\s*=\\s*false|PLUGIN_ID|lanxin\\.guide" \
+            app/src/main/kotlin/com/lanxin/android/builtin/guide/domain/GuideConfig.kt
+          grep -E -n "defaultEnabled\\s*=\\s*GuideConfig\\.DEFAULT_ENABLED|register\\(" \
+            app/src/main/kotlin/com/lanxin/android/builtin/guide/di/GuideModule.kt
+          grep -E -n "pluginEnabled|filterTools|canShowVisionEntry" \
+            app/src/main/kotlin/com/lanxin/android/builtin/guide/domain/GuideGate.kt
+          grep -E -n "GUIDE|guideEnabled|smart_capabilities_guide" \
+            app/src/main/kotlin/com/lanxin/android/builtin/capabilities/domain/SmartCapabilitiesConfig.kt \
+            app/src/main/kotlin/com/lanxin/android/builtin/capabilities/presentation/SmartCapabilitiesScreen.kt
+          grep -E -n "GuidePluginRegistration|NavigatePluginRegistration" \
+            app/src/main/kotlin/com/lanxin/android/presentation/LanXinApp.kt
+          grep -E -n "GuideGate\\.filterTools|guideEnabled" \
+            app/src/main/kotlin/com/lanxin/android/presentation/ui/chat/ChatSendToolFilterLogic.kt
+          grep -E -n "默认|OFF|lanxin\\.guide|GuidePlugin|看世界" docs/guide.md
+          grep -E -n "导游 Guide|独立|默认" docs/navigate.md
 
       - name: Upload Debug APK
         if: success()

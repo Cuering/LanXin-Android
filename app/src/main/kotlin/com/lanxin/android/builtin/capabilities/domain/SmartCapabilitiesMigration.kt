@@ -94,6 +94,9 @@ object SmartCapabilitiesMigration {
                 newDefault = SmartCapabilitiesConfig.DEFAULT_DEVICE_SENSING
             ),
             locationEnabled = SmartCapabilitiesConfig.DEFAULT_LOCATION,
+            // 导航 / 导游：永不因迁移抬 ON
+            navigateEnabled = SmartCapabilitiesConfig.DEFAULT_NAVIGATE,
+            guideEnabled = SmartCapabilitiesConfig.DEFAULT_GUIDE,
             sceneVisionEnabled = resolveChild(
                 legacy = legacy.sceneVision,
                 newDefault = SmartCapabilitiesConfig.DEFAULT_SCENE_VISION,

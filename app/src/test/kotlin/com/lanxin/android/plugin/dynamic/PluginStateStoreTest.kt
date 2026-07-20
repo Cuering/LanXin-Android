@@ -20,6 +20,27 @@ class PluginStateStoreTest {
     }
 
     @Test
+    fun `ensureDefault false persists and isEnabled respects it`() {
+        val file = File(System.getProperty("java.io.tmpdir"), "ps-def-${System.nanoTime()}.json")
+        try {
+            val store = PluginStateStore(file)
+            assertFalse(store.ensureDefault("lanxin.navigate", false))
+            assertFalse(store.isEnabled("lanxin.navigate"))
+            // already set: keep false even if ensureDefault(true)
+            assertFalse(store.ensureDefault("lanxin.navigate", true))
+            assertFalse(store.isEnabled("lanxin.navigate"))
+
+            val reloaded = PluginStateStore(file)
+            assertFalse(reloaded.isEnabled("lanxin.navigate"))
+            assertTrue(reloaded.isEnabled("other"))
+            assertFalse(reloaded.ensureDefault("lanxin.guide", false))
+            assertFalse(reloaded.isEnabled("lanxin.guide"))
+        } finally {
+            file.delete()
+        }
+    }
+
+    @Test
     fun `setEnabled persists and reloads`() {
         val file = File(System.getProperty("java.io.tmpdir"), "ps-${System.nanoTime()}.json")
         try {
