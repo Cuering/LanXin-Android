@@ -42,6 +42,8 @@ data class LocalInferenceUiState(
     val maxTokens: Int = LocalInferenceConfig.DEFAULT_MAX_TOKENS,
     val temperature: Float = LocalInferenceConfig.DEFAULT_TEMPERATURE,
     val preferLocal: Boolean = false,
+    /** 是否展示本地模型思考过程（默认关）。 */
+    val showThinking: Boolean = false,
     val engineState: LocalEngineState = LocalEngineState.DISABLED,
     val lastError: String? = null,
     val isBusy: Boolean = false,
@@ -90,6 +92,7 @@ class LocalInferenceViewModel @Inject constructor(
                     maxTokens = config.maxTokens,
                     temperature = config.temperature,
                     preferLocal = prefer,
+                    showThinking = config.showThinking,
                     engineState = engine.state.value,
                     lastError = engine.lastError,
                     routePreview = preview,
@@ -254,6 +257,13 @@ class LocalInferenceViewModel @Inject constructor(
             settings.setPreferLocal(prefer)
             _uiState.update { it.copy(preferLocal = prefer) }
             refresh()
+        }
+    }
+
+    fun setShowThinking(show: Boolean) {
+        viewModelScope.launch {
+            settings.setShowThinking(show)
+            _uiState.update { it.copy(showThinking = show) }
         }
     }
 

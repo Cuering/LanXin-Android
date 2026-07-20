@@ -126,6 +126,7 @@ import com.lanxin.android.builtin.pet.domain.MeijuDebugPaths
 import com.lanxin.android.builtin.pet.domain.PetBridgeCommand
 import com.lanxin.android.builtin.pet.domain.PetBridgeMessage
 import com.lanxin.android.builtin.pet.domain.PetBridgeProtocol
+import com.lanxin.android.builtin.localinference.domain.LocalReplySanitizer
 import com.lanxin.android.builtin.pet.domain.MoodTagMapper
 import com.lanxin.android.builtin.pet.domain.PetExpressionController
 import com.lanxin.android.builtin.pet.domain.PetSettings
@@ -1215,7 +1216,7 @@ class CompanionViewModel @Inject constructor(
                 question = "请描述你现在看到的画面，并简要讲解。",
                 holder = holder
             )
-            val display = MoodTagMapper.stripTags(reply)
+            val display = LocalReplySanitizer.forDisplay(reply, showThinking = false)
             _uiState.update {
                 it.copy(
                     busy = false,
@@ -1280,7 +1281,7 @@ class CompanionViewModel @Inject constructor(
             if (useVision) {
                 // P0：提问时抓 1 帧 → 多模态；无 vision 不瞎编
                 val reply = explainWithFrame(trimmed, frameHolder)
-                val display = MoodTagMapper.stripTags(reply)
+                val display = LocalReplySanitizer.forDisplay(reply, showThinking = false)
                 _uiState.update {
                     it.copy(
                         busy = false,
@@ -1300,9 +1301,7 @@ class CompanionViewModel @Inject constructor(
                 )
             )
             // VoiceSessionResult 已 strip；气泡 / lastReply 不进标签
-            val reply = MoodTagMapper.stripTags(
-                result.subtitle.ifBlank { result.replyText }
-            )
+            val reply = LocalReplySanitizer.forDisplay(result.subtitle.ifBlank { result.replyText }, showThinking = false)
             _uiState.update {
                 it.copy(
                     busy = false,
@@ -1344,7 +1343,7 @@ class CompanionViewModel @Inject constructor(
                 )
             }.getOrNull()
             val chat = stub?.let {
-                MoodTagMapper.stripTags(it.subtitle.ifBlank { it.replyText })
+                LocalReplySanitizer.forDisplay(it.subtitle.ifBlank { it.replyText }, showThinking = false)
             }.orEmpty()
             val notice = cap.message.ifBlank { VisionModelCapability.MSG_NO_VISION }
             val raw = if (chat.isBlank()) {
@@ -1608,9 +1607,10 @@ class CompanionViewModel @Inject constructor(
 
     fun encodeBubbleRaw(): String? {
         val snap = sessionCoordinator.current()
-        val bubble = MoodTagMapper.stripTags(
+        val bubble = LocalReplySanitizer.forDisplay(
             snap.subtitle.ifBlank { snap.replyText }
-                .ifBlank { _uiState.value.lastReply }
+                .ifBlank { _uiState.value.lastReply },
+            showThinking = false
         )
         return if (bubble.isBlank()) null else bridge.encodeBubble(bubble)
     }

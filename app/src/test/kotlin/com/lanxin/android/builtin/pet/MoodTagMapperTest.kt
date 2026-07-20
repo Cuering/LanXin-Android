@@ -149,4 +149,23 @@ class MoodTagMapperTest {
         assertTrue(over.mouthAnimating)
         assertEquals("律动", over.shortLabel)
     }
+
+    @Test
+    fun `stripTags removes bare action tags like listen`() {
+        val cleaned = MoodTagMapper.stripTags("嗯[[listen]]好")
+        assertTrue(!cleaned.contains("listen"))
+        assertTrue(!cleaned.contains("[["))
+        assertTrue(cleaned.contains("嗯"))
+        assertTrue(cleaned.contains("好"))
+    }
+
+    @Test
+    fun `stripTags removes think blocks for bubble safety`() {
+        val cleaned = MoodTagMapper.stripTags(
+            "<think>内部推理</think>\n你好[[mood=joy]]"
+        )
+        assertEquals("你好", cleaned)
+        assertTrue(!cleaned.contains("内部推理"))
+        assertTrue(!cleaned.contains("[["))
+    }
 }

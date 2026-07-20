@@ -16,6 +16,7 @@
 
 package com.lanxin.android.builtin.pet.domain
 
+import com.lanxin.android.builtin.localinference.domain.LocalReplySanitizer
 import com.lanxin.android.builtin.systemtools.domain.DeviceToolBridge
 import com.lanxin.android.builtin.systemtools.domain.DeviceToolInvocation
 import com.lanxin.android.builtin.systemtools.domain.DeviceToolOutcome
@@ -135,7 +136,7 @@ class VoiceSessionCoordinator @Inject constructor(
 
         // rawReply 保留 [[mood=…]] 供 SPEAKING 相位匹配；展示/TTS/历史统一剥标签
         val rawReply = composeReply(chatReply, toolTurn)
-        val displayReply = MoodTagMapper.stripTags(rawReply)
+        val displayReply = LocalReplySanitizer.forDisplay(rawReply, showThinking = false)
 
         // SPEAKING：replyText=raw（匹配），subtitle=剥后（气泡立刻干净）
         snap = VoiceSessionStateMachine.onThinkDone(snap, rawReply).copy(
@@ -184,7 +185,10 @@ class VoiceSessionCoordinator @Inject constructor(
             )
         }
 
-        val spokenSubtitle = MoodTagMapper.stripTags(tts.subtitle.ifBlank { displayReply })
+        val spokenSubtitle = LocalReplySanitizer.forDisplay(
+            tts.subtitle.ifBlank { displayReply },
+            showThinking = false
+        )
         // 匹配仍读 replyText(raw)；气泡优先 subtitle(已剥)
         snap = snap.copy(subtitle = spokenSubtitle)
         _snapshot.value = snap
@@ -192,8 +196,8 @@ class VoiceSessionCoordinator @Inject constructor(
         snap = VoiceSessionStateMachine.onSpeakDone(snap)
         // 说完后历史快照统一剥离，避免标签进 UI / 预览
         snap = snap.copy(
-            replyText = MoodTagMapper.stripTags(snap.replyText),
-            subtitle = MoodTagMapper.stripTags(snap.subtitle)
+            replyText = LocalReplySanitizer.forDisplay(snap.replyText, showThinking = false),
+            subtitle = LocalReplySanitizer.forDisplay(snap.subtitle, showThinking = false)
         )
         _snapshot.value = snap
 
