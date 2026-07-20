@@ -70,7 +70,7 @@ class NavigatePlugin @Inject constructor(
             ToolDef(
                 name = NavigateConfig.NEARBY_POI_TOOL,
                 description =
-                    "查附近 POI：洗手间/出口/电梯/餐饮/酒店/ATM/药店/停车场；需位置+联网；返回距离/方向粗估与 opening_hours；不做室内逐步导航",
+                "查附近 POI：洗手间/出口/电梯/餐饮/酒店/ATM/药店/停车场；需位置+联网；返回距离/方向粗估与 opening_hours；不做室内逐步导航",
                 parameters = buildJsonObject {
                     put("type", "object")
                     put(

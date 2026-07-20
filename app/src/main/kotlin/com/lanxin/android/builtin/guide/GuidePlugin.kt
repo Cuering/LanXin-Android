@@ -64,7 +64,7 @@ class GuidePlugin @Inject constructor(
             ToolDef(
                 name = GuideConfig.EXPLAIN_SIGHT_TOOL,
                 description =
-                    "景点/展品/话题文本讲解辅助：可选位置上下文；不抓帧（视觉讲解走陪伴「看世界」）；默认关需先开导游插件",
+                "景点/展品/话题文本讲解辅助：可选位置上下文；不抓帧（视觉讲解走陪伴「看世界」）；默认关需先开导游插件",
                 parameters = buildJsonObject {
                     put("type", "object")
                     put(

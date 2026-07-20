@@ -91,8 +91,10 @@ data class SmartCapabilitiesConfig(
         const val DEFAULT_WEB_SEARCH = true
         const val DEFAULT_DEVICE_SENSING = true
         const val DEFAULT_LOCATION = true
+
         /** 导航插件默认关 */
         const val DEFAULT_NAVIGATE = false
+
         /** 导游插件默认关 */
         const val DEFAULT_GUIDE = false
         const val DEFAULT_SCENE_VISION = false

@@ -456,5 +456,4 @@ class PlatformPlugin @Inject constructor(
         put("type", "integer")
         put("description", desc)
     }
-
 }
