@@ -492,6 +492,7 @@ class ChatRepositoryImplTest {
                 override suspend fun setEnabled(enabled: Boolean) = Unit
                 override suspend fun setModelPath(path: String?) = Unit
                 override suspend fun setMaxTokens(maxTokens: Int) = Unit
+                override suspend fun setContextWindowTokens(tokens: Int) = Unit
                 override suspend fun setTemperature(temperature: Float) = Unit
                 override suspend fun setShowThinking(show: Boolean) = Unit
                 override suspend fun isPreferLocal() = preferLocal
@@ -543,6 +544,25 @@ class ChatRepositoryImplTest {
             inferenceRouteCoordinator = coordinator,
             networkStatusProvider = if (localProvider != null) {
                 NetworkStatusProvider { networkAvailable }
+            } else {
+                null
+            },
+            localInferenceSettings = if (localProvider != null) {
+                object : LocalInferenceSettings {
+                    override suspend fun getConfig() = LocalInferenceConfig(
+                        enabled = true,
+                        modelPath = "stub://demo-model",
+                        contextWindowTokens = 8192
+                    )
+                    override suspend fun setEnabled(enabled: Boolean) = Unit
+                    override suspend fun setModelPath(path: String?) = Unit
+                    override suspend fun setMaxTokens(maxTokens: Int) = Unit
+                    override suspend fun setTemperature(temperature: Float) = Unit
+                    override suspend fun setContextWindowTokens(tokens: Int) = Unit
+                    override suspend fun setShowThinking(show: Boolean) = Unit
+                    override suspend fun isPreferLocal() = preferLocal
+                    override suspend fun setPreferLocal(prefer: Boolean) = Unit
+                }
             } else {
                 null
             }

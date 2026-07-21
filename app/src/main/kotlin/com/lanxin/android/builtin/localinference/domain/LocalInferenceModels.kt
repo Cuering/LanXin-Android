@@ -41,22 +41,35 @@ enum class LocalEngineState {
  *
  * @property enabled 是否启用本地推理
  * @property modelPath 模型目录或文件路径（绝对路径，不入库大文件）
- * @property maxTokens 生成上限
+ * @property maxTokens 生成上限（输出 token，与上下文窗口分离）
  * @property temperature 采样温度
  * @property showThinking 是否展示模型思考过程（默认关；关时剥离 `<think>` 并不进气泡）
+ * @property contextWindowTokens 上下文窗口（历史+system+生成预留的总预算，默认 8k）
  */
 data class LocalInferenceConfig(
     val enabled: Boolean = false,
     val modelPath: String = "",
     val maxTokens: Int = DEFAULT_MAX_TOKENS,
     val temperature: Float = DEFAULT_TEMPERATURE,
-    val showThinking: Boolean = false
+    val showThinking: Boolean = false,
+    val contextWindowTokens: Int = DEFAULT_CONTEXT_WINDOW_TOKENS
 ) {
     companion object {
+        /** 生成 max_new_tokens 默认。 */
         const val DEFAULT_MAX_TOKENS = 512
         const val DEFAULT_TEMPERATURE = 0.7f
         const val MIN_MAX_TOKENS = 16
-        const val MAX_MAX_TOKENS = 4096
+
+        /** 生成上限（输出）；勿与 context window 混淆。 */
+        const val MAX_MAX_TOKENS = 2048
+
+        /** 12G 机默认 8k ctx；可选 4k/8k/12k。 */
+        const val DEFAULT_CONTEXT_WINDOW_TOKENS = 8192
+        const val MIN_CONTEXT_WINDOW_TOKENS = 2048
+        const val MAX_CONTEXT_WINDOW_TOKENS = 12288
+
+        /** UI 快捷选项。 */
+        val CONTEXT_WINDOW_PRESETS = intArrayOf(4096, 8192, 12288)
     }
 }
 

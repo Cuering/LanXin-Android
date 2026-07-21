@@ -60,7 +60,10 @@ import com.lanxin.android.data.network.OpenAIAPI
 import com.lanxin.android.data.repository.SettingRepository
 import com.lanxin.android.builtin.localinference.domain.ChatLocalFallback
 import com.lanxin.android.builtin.localinference.domain.InferenceRouteCoordinator
+import com.lanxin.android.builtin.localinference.domain.LocalContextCompressor
+import com.lanxin.android.builtin.localinference.domain.LocalInferenceConfig
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceProvider
+import com.lanxin.android.builtin.localinference.domain.LocalInferenceSettings
 import com.lanxin.android.builtin.localinference.domain.NetworkStatusProvider
 import com.lanxin.android.builtin.localinference.domain.RouteReason
 import com.lanxin.android.util.AttachmentPayloadCache
@@ -94,7 +97,8 @@ class ChatRepositoryImpl @Inject constructor(
     private val contextBuilder: ContextBuilder,
     private val localInferenceProvider: LocalInferenceProvider? = null,
     private val inferenceRouteCoordinator: InferenceRouteCoordinator? = null,
-    private val networkStatusProvider: NetworkStatusProvider? = null
+    private val networkStatusProvider: NetworkStatusProvider? = null,
+    private val localInferenceSettings: LocalInferenceSettings? = null
 ) : ChatRepository {
 
     /**
@@ -171,8 +175,27 @@ class ChatRepositoryImpl @Inject constructor(
                 }
             }
             if (ChatLocalFallback.shouldUseLocal(decision)) {
-                val prompt = ChatLocalFallback.extractPrompt(userMessages.map { it.content })
-                // 记忆/KB 已在 App 侧注入 userMessages；本地不做 tool_call
+                // 多轮 + 滑动窗口压缩；记忆/KB 已在 App 侧注入 userMessages；本地不做 tool_call
+                val userTexts = userMessages.map { it.effectiveContent() }
+                val assistantTexts = userTexts.indices.map { i ->
+                    assistantMessages.getOrNull(i)
+                        ?.lastOrNull()
+                        ?.effectiveContent()
+                        .orEmpty()
+                }
+                val config = runCatching {
+                    localInferenceSettings?.getConfig()
+                }.getOrNull() ?: LocalInferenceConfig()
+                val compressed = LocalContextCompressor.compressFromMessages(
+                    userTexts = userTexts,
+                    assistantTexts = assistantTexts,
+                    systemPrompt = platform.systemPrompt,
+                    contextWindowTokens = config.contextWindowTokens,
+                    maxNewTokens = config.maxTokens
+                )
+                val prompt = compressed.prompt.ifBlank {
+                    ChatLocalFallback.extractPrompt(userTexts)
+                }
                 return localProvider.completeAsApiState(
                     prompt = prompt,
                     systemPrompt = platform.systemPrompt?.takeIf { it.isNotBlank() }

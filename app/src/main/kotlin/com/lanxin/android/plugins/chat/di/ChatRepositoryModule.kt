@@ -17,6 +17,7 @@ import com.lanxin.android.plugins.chat.data.ChatRepositoryImpl
 import com.lanxin.android.data.repository.SettingRepository
 import com.lanxin.android.builtin.localinference.domain.InferenceRouteCoordinator
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceProvider
+import com.lanxin.android.builtin.localinference.domain.LocalInferenceSettings
 import com.lanxin.android.builtin.localinference.domain.NetworkStatusProvider
 import dagger.Module
 import dagger.Provides
@@ -48,7 +49,8 @@ object ChatRepositoryModule {
         contextBuilder: ContextBuilder,
         localInferenceProvider: LocalInferenceProvider,
         inferenceRouteCoordinator: InferenceRouteCoordinator,
-        networkStatusProvider: NetworkStatusProvider
+        networkStatusProvider: NetworkStatusProvider,
+        localInferenceSettings: LocalInferenceSettings
     ): ChatRepository = ChatRepositoryImpl(
         context,
         chatRoomDao,
@@ -66,6 +68,7 @@ object ChatRepositoryModule {
         contextBuilder,
         localInferenceProvider,
         inferenceRouteCoordinator,
-        networkStatusProvider
+        networkStatusProvider,
+        localInferenceSettings
     )
 }

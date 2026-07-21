@@ -30,6 +30,9 @@ class DefaultLocalInferenceProviderTest {
         override suspend fun setMaxTokens(maxTokens: Int) {
             config = config.copy(maxTokens = maxTokens)
         }
+        override suspend fun setContextWindowTokens(tokens: Int) {
+            config = config.copy(contextWindowTokens = tokens)
+        }
         override suspend fun setTemperature(temperature: Float) {
             config = config.copy(temperature = temperature)
         }

@@ -34,6 +34,11 @@ interface LocalInferenceSettings {
     suspend fun setTemperature(temperature: Float)
 
     /**
+     * 上下文窗口 token 数（与生成 maxTokens 分离）。
+     */
+    suspend fun setContextWindowTokens(tokens: Int)
+
+    /**
      * 是否展示本地模型思考过程（默认 false）。
      */
     suspend fun setShowThinking(show: Boolean)
