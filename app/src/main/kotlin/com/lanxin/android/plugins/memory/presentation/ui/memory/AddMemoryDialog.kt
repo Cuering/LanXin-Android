@@ -60,10 +60,18 @@ fun AddMemoryDialog(
                     onValueChange = { content = it },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(120.dp),
-                    label = { Text("记忆内容") },
-                    placeholder = { Text("写下想记住的内容…") },
-                    maxLines = 6
+                        .height(200.dp),
+                    label = { Text(if (isEdit) "修改记忆文字" else "记忆内容") },
+                    placeholder = {
+                        Text(if (isEdit) "直接改这段文字，保存后立即生效…" else "写下想记住的内容…")
+                    },
+                    supportingText = {
+                        if (isEdit) {
+                            Text("保存后会更新列表与检索索引")
+                        }
+                    },
+                    minLines = 5,
+                    maxLines = 12
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))

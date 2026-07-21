@@ -105,6 +105,55 @@ class MemoryImportReindexTest {
         assertTrue(text.contains("\"version\": 1") || text.contains("\"version\":1"))
     }
 
+    @Test
+    fun `updateMemory reindexes edited content`() = runBlocking {
+        val dao = FakeMemoryDao(
+            initial = listOf(
+                MemoryEntity(id = 3, content = "旧文案", type = "chat", importance = 4f)
+            )
+        )
+        val rebuilder = RecordingRebuilder()
+        val repo = MemoryRepository(dao, rebuilder)
+
+        repo.updateMemory(
+            MemoryEntity(id = 3, content = "  新文案可以改  ", type = "factual", importance = 6f)
+        )
+
+        assertEquals("新文案可以改", dao.getMemoryById(3)!!.content)
+        assertEquals("factual", dao.getMemoryById(3)!!.type)
+        assertEquals(1, rebuilder.reindexedEntities.size)
+        assertEquals("新文案可以改", rebuilder.reindexedEntities.single().content)
+    }
+
+    @Test
+    fun `updateMemoryContent only changes text and reindexes`() = runBlocking {
+        val dao = FakeMemoryDao(
+            initial = listOf(
+                MemoryEntity(id = 5, content = "A", type = "preference", importance = 8f)
+            )
+        )
+        val rebuilder = RecordingRebuilder()
+        val repo = MemoryRepository(dao, rebuilder)
+
+        assertTrue(repo.updateMemoryContent(5, "  B  "))
+        assertEquals("B", dao.getMemoryById(5)!!.content)
+        assertEquals("preference", dao.getMemoryById(5)!!.type)
+        assertEquals(1, rebuilder.reindexedEntities.size)
+        assertEquals(false, repo.updateMemoryContent(99, "不存在"))
+        assertEquals(false, repo.updateMemoryContent(5, "   "))
+    }
+
+    @Test
+    fun `addMemory reindexes inserted row`() = runBlocking {
+        val rebuilder = RecordingRebuilder()
+        val repo = MemoryRepository(FakeMemoryDao(), rebuilder)
+        val id = repo.addMemory("新加一条", type = "chat", importance = 3f)
+        assertTrue(id > 0)
+        assertEquals(1, rebuilder.reindexedEntities.size)
+        assertEquals(id, rebuilder.reindexedEntities.single().id)
+        assertEquals("新加一条", rebuilder.reindexedEntities.single().content)
+    }
+
     private object Noop : MemoryIndexRebuilder {
         override suspend fun clearMemorySources() = Unit
         override suspend fun reindex(entities: List<MemoryEntity>): Int = 0

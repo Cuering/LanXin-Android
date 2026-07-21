@@ -128,6 +128,7 @@ import com.lanxin.android.builtin.pet.domain.MeijuDebugPaths
 import com.lanxin.android.builtin.pet.domain.PetBridgeCommand
 import com.lanxin.android.builtin.pet.domain.PetBridgeMessage
 import com.lanxin.android.builtin.pet.domain.PetBridgeProtocol
+import com.lanxin.android.builtin.localinference.domain.LocalInferenceBootstrap
 import com.lanxin.android.builtin.localinference.domain.LocalReplySanitizer
 import com.lanxin.android.builtin.pet.domain.MoodTagMapper
 import com.lanxin.android.builtin.pet.domain.PetExpressionController
@@ -1040,6 +1041,7 @@ class CompanionViewModel @Inject constructor(
     private val smartCapabilitiesSettings: SmartCapabilitiesSettings,
     private val locationSettings: LocationSettings,
     private val locationTool: LocationTool,
+    private val localInferenceBootstrap: LocalInferenceBootstrap,
     @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context
 ) : ViewModel() {
 
@@ -1085,6 +1087,10 @@ class CompanionViewModel @Inject constructor(
             val config = petSettings.getConfig()
             if (!config.enabled) {
                 petSettings.setEnabled(true)
+            }
+            // 快速陪伴：进页预热本地脑（OpenCL/CPU load），避免首句冷启动卡顿
+            runCatching {
+                localInferenceBootstrap.ensureReady(enableIfNeeded = true)
             }
             BuiltInMusicAssets.ensureTestTrackInstalled(appContext)
             val scene = sceneSensingSettings.getConfig()

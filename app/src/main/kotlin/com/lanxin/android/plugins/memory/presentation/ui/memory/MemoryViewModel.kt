@@ -158,18 +158,26 @@ class MemoryViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 修改记忆文字（及类型/重要性）。Repository 内会 reindex，聊天/陪伴检索读到新文案。
+     */
     fun updateMemory(memory: MemoryEntity, content: String, type: String, importance: Float) {
         viewModelScope.launch {
             _isLoading.update { true }
             try {
+                val trimmed = content.trim()
+                if (trimmed.isEmpty()) {
+                    _snackbarMessage.update { "记忆内容不能为空" }
+                    return@launch
+                }
                 val updated = memory.copy(
-                    content = content,
+                    content = trimmed,
                     type = type,
-                    importance = importance,
+                    importance = importance.coerceIn(1f, 10f),
                     lastAccessedAt = System.currentTimeMillis()
                 )
                 memoryRepository.updateMemory(updated)
-                _snackbarMessage.update { "记忆已更新" }
+                _snackbarMessage.update { "记忆文字已更新" }
                 closeAddDialog()
             } finally {
                 _isLoading.update { false }

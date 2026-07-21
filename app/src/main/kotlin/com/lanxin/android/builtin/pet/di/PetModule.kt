@@ -20,6 +20,8 @@ import com.lanxin.android.builtin.pet.data.KtorAssetDownloadTransport
 import com.lanxin.android.builtin.pet.data.PetPreferences
 import com.lanxin.android.builtin.pet.domain.AssetDownloadTransport
 import com.lanxin.android.builtin.pet.domain.OpenAiVisionExplainClient
+import com.lanxin.android.builtin.pet.domain.CompanionMemoryEnricher
+import com.lanxin.android.builtin.pet.domain.DefaultCompanionMemoryEnricher
 import com.lanxin.android.builtin.pet.domain.LocalAwarePetChatResponder
 import com.lanxin.android.builtin.pet.domain.PetChatResponder
 import com.lanxin.android.builtin.pet.domain.PetSettings
@@ -35,6 +37,7 @@ import javax.inject.Singleton
  * 桌宠 / 语音会话 DI。
  *
  * [PetChatResponder] → [LocalAwarePetChatResponder]（本地就绪走本地，否则 stub）。
+ * [CompanionMemoryEnricher] → 精简记忆（快速陪伴，不接 Chat 全量）。
  */
 @Module
 @DisableInstallInCheck
@@ -48,6 +51,12 @@ abstract class PetModule {
     @Binds
     @Singleton
     abstract fun bindPetChatResponder(impl: LocalAwarePetChatResponder): PetChatResponder
+
+    @Binds
+    @Singleton
+    abstract fun bindCompanionMemoryEnricher(
+        impl: DefaultCompanionMemoryEnricher
+    ): CompanionMemoryEnricher
 
     @Binds
     @Singleton

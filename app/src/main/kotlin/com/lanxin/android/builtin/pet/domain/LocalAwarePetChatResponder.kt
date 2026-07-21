@@ -29,15 +29,19 @@ import kotlinx.coroutines.withTimeoutOrNull
 /**
  * 全屏陪伴 / 桌宠「想」阶段：本地脑就绪则走本地，否则 stub 短答。
  *
- * - 不塞 Chat 输入框；不拉云端全链路（陪伴优先低延迟离线）
- * - 限短 maxTokens，减少元分析长输出与等待
- * - 出口再清洗一次，避免 think / 元分析泄漏
+ * 快速陪伴版：
+ * - 精简记忆 [CompanionMemoryEnricher]（默认 BM25 短预算，不接 Chat 全量）
+ * - 更短 maxTokens / 超时，优先体感延迟
+ * - 不塞 Chat 输入框；不拉云端全链路
+ * - 出口再清洗，避免 think / 元分析泄漏
+ * - 语音由 [VoiceSessionCoordinator] + 麦克风开关控制
  */
 @Singleton
 class LocalAwarePetChatResponder @Inject constructor(
     private val localProvider: LocalInferenceProvider,
     private val localSettings: LocalInferenceSettings,
     private val bootstrap: LocalInferenceBootstrap,
+    private val memoryEnricher: CompanionMemoryEnricher,
     private val stub: StubPetChatResponder
 ) : PetChatResponder {
 
@@ -49,13 +53,14 @@ class LocalAwarePetChatResponder @Inject constructor(
         if (!ensureLocalReady()) {
             return stub.respond(text)
         }
+        val prompt = runCatching { memoryEnricher.enrich(text) }.getOrDefault(text)
         val system = LocalReplySanitizer.appendOutputConstraint(
             systemPrompt = COMPANION_SYSTEM,
             showThinking = false
         )
         val states = withTimeoutOrNull(COMPANION_TIMEOUT_MS) {
             localProvider.completeAsApiState(
-                prompt = text,
+                prompt = prompt,
                 systemPrompt = system,
                 maxTokens = COMPANION_MAX_TOKENS
             ).toList()
@@ -95,15 +100,16 @@ class LocalAwarePetChatResponder @Inject constructor(
     }
 
     companion object {
-        /** 陪伴 system：角色短答，叠加输出约束。 */
+        /** 陪伴 system：角色短答 + 可参考精简记忆。 */
         const val COMPANION_SYSTEM: String =
             "你是兰心，温柔、亲近的中文陪伴角色。用户在全屏陪伴里跟你说话。" +
-                "用口语短句回复，像面对面聊天；不要列点、不要写报告。"
+                "若消息前有[精简记忆]，只在相关时自然用到，不要复述标签。" +
+                "用口语短句回复，一两句即可；不要列点、不要写报告、不要长分析。"
 
-        /** 陪伴生成上限：短答优先，降低延迟与元分析空间。 */
-        const val COMPANION_MAX_TOKENS: Int = 128
+        /** 快速陪伴生成上限：更短 → 更低延迟。 */
+        const val COMPANION_MAX_TOKENS: Int = 64
 
         /** 单轮本地推理超时；超时回 stub，避免卡死「思考中」。 */
-        const val COMPANION_TIMEOUT_MS: Long = 45_000L
+        const val COMPANION_TIMEOUT_MS: Long = 20_000L
     }
 }

@@ -108,31 +108,63 @@ Java_com_lanxin_android_builtin_localinference_data_MnnNativeBridge_nativeLoadMo
     const std::string configPath = resolveConfigPath(path);
     ALOGI("nativeLoadModel path=%s config=%s", path.c_str(), configPath.c_str());
 
-    Llm* llm = nullptr;
-    try {
-        llm = Llm::createLLM(configPath);
-        if (llm == nullptr) {
-            setError("createLLM_null:" + configPath);
-            return JNI_FALSE;
+    // Fast path for Adreno (e.g. Redmi K70): OpenCL + multi-thread + low precision.
+    // Fall back to CPU if OpenCL load fails (missing so / driver / unsupported op).
+    static const char* kGpuRuntimeCfg =
+            R"({"backend_type":"opencl","thread_num":6,"precision":"low","memory":"low","reuse_kv":true})";
+    static const char* kCpuRuntimeCfg =
+            R"({"backend_type":"cpu","thread_num":6,"precision":"low","memory":"low","reuse_kv":true})";
+
+    auto tryCreateAndLoad = [&](const char* runtimeCfg, const char* label) -> Llm* {
+        Llm* llm = nullptr;
+        try {
+            llm = Llm::createLLM(configPath);
+            if (llm == nullptr) {
+                ALOGE("createLLM_null:%s label=%s", configPath.c_str(), label);
+                return nullptr;
+            }
+            // Best-effort: merge runtime knobs (model config.json still provides weights/paths).
+            if (!llm->set_config(runtimeCfg)) {
+                ALOGI("set_config soft-fail label=%s (continue load)", label);
+            }
+            if (!llm->load()) {
+                ALOGE("llm_load_failed label=%s path=%s", label, configPath.c_str());
+                Llm::destroy(llm);
+                return nullptr;
+            }
+            ALOGI("nativeLoadModel ok label=%s", label);
+            return llm;
+        } catch (const std::exception& e) {
+            ALOGE("load_exception label=%s: %s", label, e.what());
+            if (llm != nullptr) {
+                Llm::destroy(llm);
+            }
+            return nullptr;
+        } catch (...) {
+            ALOGE("load_exception label=%s: unknown", label);
+            if (llm != nullptr) {
+                Llm::destroy(llm);
+            }
+            return nullptr;
         }
-        if (!llm->load()) {
-            Llm::destroy(llm);
+    };
+
+    try {
+        Llm* llm = tryCreateAndLoad(kGpuRuntimeCfg, "opencl");
+        if (llm == nullptr) {
+            ALOGI("opencl path failed, fallback cpu");
+            llm = tryCreateAndLoad(kCpuRuntimeCfg, "cpu");
+        }
+        if (llm == nullptr) {
             setError("llm_load_failed:" + configPath);
             return JNI_FALSE;
         }
         g_llm = llm;
-        ALOGI("nativeLoadModel ok");
         return JNI_TRUE;
     } catch (const std::exception& e) {
-        if (llm != nullptr) {
-            Llm::destroy(llm);
-        }
         setError(std::string("load_exception:") + e.what());
         return JNI_FALSE;
     } catch (...) {
-        if (llm != nullptr) {
-            Llm::destroy(llm);
-        }
         setError("load_exception:unknown");
         return JNI_FALSE;
     }

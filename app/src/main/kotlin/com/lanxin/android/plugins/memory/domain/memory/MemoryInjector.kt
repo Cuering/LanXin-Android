@@ -62,6 +62,51 @@ class MemoryInjector @Inject constructor(
     }
 
     /**
+     * 全屏陪伴专用：精简记忆注入。
+     *
+     * - 仅稀疏 BM25 / LIKE（跳过语义向量，省延迟）
+     * - 最多 [COMPANION_MEMORY_LIMIT] 条、[COMPANION_MAX_INJECT_CHARS] 字
+     * - 不注入判断准则包（陪伴口语短答不需要长规则）
+     * - 命中失败时原样返回，不拖垮会话
+     */
+    suspend fun injectForCompanion(question: String): String {
+        if (!enabled || question.isBlank()) return question
+        if (shouldSkipInject(question)) return question
+        return runCatching {
+            val keyword = extractKeyword(question)
+            val prevSemantic = semanticEnabled
+            semanticEnabled = false
+            try {
+                val sparse = searchSparseOrLike(keyword, COMPANION_MEMORY_LIMIT * 2)
+                    .filterNot { it.type == MemoryType.JUDGMENT }
+                    .take(COMPANION_MEMORY_LIMIT)
+                if (sparse.isEmpty()) return@runCatching question
+                val lines = sparse.joinToString("
+") { "- ${it.content.trim().take(120)}" }
+                val block = buildString {
+                    appendLine("[精简记忆]")
+                    appendLine(lines)
+                    append("[记忆结束·勿朗读标签]")
+                }.trimEnd()
+                val clipped = if (block.length > COMPANION_MAX_INJECT_CHARS) {
+                    block.take(COMPANION_MAX_INJECT_CHARS - 1) + "…"
+                } else {
+                    block
+                }
+                Log.d(TAG, "[Trace] companion inject count=${sparse.size} chars=${clipped.length}")
+                clipped + "
+
+" + question
+            } finally {
+                semanticEnabled = prevSemantic
+            }
+        }.getOrElse { e ->
+            Log.w(TAG, "injectForCompanion failed: ${e.message}")
+            question
+        }
+    }
+
+    /**
      * 注入并返回命中的记忆实体列表。
      */
     suspend fun injectWithMatches(question: String, limit: Int = 5): InjectResult {
@@ -368,6 +413,10 @@ class MemoryInjector @Inject constructor(
         private const val RRF_K = 60
         private const val MAX_INJECT_CHARS = 1800
         private const val JUDGMENT_PACKS_DIR = "judgment_packs"
+
+        /** 陪伴路径：条数少、字数紧，优先低延迟。 */
+        const val COMPANION_MEMORY_LIMIT: Int = 2
+        const val COMPANION_MAX_INJECT_CHARS: Int = 280
 
         /**
          * Reciprocal Rank Fusion：两路按排名累加 1/(k+rank)，再取 topK。

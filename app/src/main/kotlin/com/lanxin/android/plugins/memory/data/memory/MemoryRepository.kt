@@ -90,11 +90,40 @@ class MemoryRepository @Inject constructor(
             createdAt = System.currentTimeMillis(),
             metadata = metadata
         )
-        return dao.insertMemory(memory)
+        val id = dao.insertMemory(memory)
+        // 新增后重建向量/稀疏索引，保证语义检索与编辑后一致
+        if (id > 0L) {
+            runCatching { indexRebuilder.reindex(listOf(memory.copy(id = id))) }
+        }
+        return id
     }
 
+    /**
+     * 更新记忆正文 / 类型 / 重要性等，并 **reindex** 该条（编辑文字后语义检索才能命中新文案）。
+     */
     suspend fun updateMemory(memory: MemoryEntity) {
-        dao.updateMemory(memory)
+        val normalized = memory.copy(content = memory.content.trim())
+        dao.updateMemory(normalized)
+        if (normalized.id > 0L && normalized.content.isNotBlank()) {
+            runCatching { indexRebuilder.reindex(listOf(normalized)) }
+        }
+    }
+
+    /**
+     * 便捷改文字：保留 type/importance 等字段，只改 content（+ lastAccessed）。
+     * UI「编辑记忆」主路径可走 [updateMemory] 全量；工具/脚本可走本方法。
+     */
+    suspend fun updateMemoryContent(id: Long, content: String): Boolean {
+        val existing = dao.getMemoryById(id) ?: return false
+        val trimmed = content.trim()
+        if (trimmed.isEmpty()) return false
+        updateMemory(
+            existing.copy(
+                content = trimmed,
+                lastAccessedAt = System.currentTimeMillis()
+            )
+        )
+        return true
     }
 
     suspend fun deleteMemory(id: Long) {
