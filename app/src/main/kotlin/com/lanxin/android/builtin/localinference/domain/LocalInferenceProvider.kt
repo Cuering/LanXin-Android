@@ -35,9 +35,11 @@ interface LocalInferenceProvider {
      *
      * @param prompt 用户侧文本（已拼好上下文时可整段传入）
      * @param systemPrompt 可选 system
+     * @param maxTokens 可选输出上限覆盖（陪伴短答可传更小值）
      */
     fun completeAsApiState(
         prompt: String,
-        systemPrompt: String? = null
+        systemPrompt: String? = null,
+        maxTokens: Int? = null
     ): Flow<ApiState>
 }

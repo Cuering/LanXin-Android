@@ -20,9 +20,9 @@ import com.lanxin.android.builtin.pet.data.KtorAssetDownloadTransport
 import com.lanxin.android.builtin.pet.data.PetPreferences
 import com.lanxin.android.builtin.pet.domain.AssetDownloadTransport
 import com.lanxin.android.builtin.pet.domain.OpenAiVisionExplainClient
+import com.lanxin.android.builtin.pet.domain.LocalAwarePetChatResponder
 import com.lanxin.android.builtin.pet.domain.PetChatResponder
 import com.lanxin.android.builtin.pet.domain.PetSettings
-import com.lanxin.android.builtin.pet.domain.StubPetChatResponder
 import com.lanxin.android.builtin.pet.domain.VisionExplainClient
 import dagger.Binds
 import dagger.Module
@@ -33,6 +33,8 @@ import javax.inject.Singleton
 
 /**
  * 桌宠 / 语音会话 DI。
+ *
+ * [PetChatResponder] → [LocalAwarePetChatResponder]（本地就绪走本地，否则 stub）。
  */
 @Module
 @DisableInstallInCheck
@@ -45,7 +47,7 @@ abstract class PetModule {
 
     @Binds
     @Singleton
-    abstract fun bindPetChatResponder(impl: StubPetChatResponder): PetChatResponder
+    abstract fun bindPetChatResponder(impl: LocalAwarePetChatResponder): PetChatResponder
 
     @Binds
     @Singleton

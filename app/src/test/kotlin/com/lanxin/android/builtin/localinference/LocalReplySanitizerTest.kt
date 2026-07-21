@@ -2,6 +2,7 @@ package com.lanxin.android.builtin.localinference
 
 import com.lanxin.android.builtin.localinference.domain.LocalReplySanitizer
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -46,6 +47,7 @@ class LocalReplySanitizerTest {
     fun `appendOutputConstraint only when thinking off`() {
         val off = LocalReplySanitizer.appendOutputConstraint(null, showThinking = false)
         assertTrue(off!!.contains("不要输出"))
+        assertTrue(off.contains("元话术") || off.contains("兰心"))
         val on = LocalReplySanitizer.appendOutputConstraint("sys", showThinking = true)
         assertEquals("sys", on)
     }
@@ -57,5 +59,63 @@ class LocalReplySanitizerTest {
         assertTrue(d.contains("好"))
         assertTrue(!d.contains("listen"))
         assertTrue(!d.contains("[["))
+    }
+
+    @Test
+    fun `strips untagged meta analysis dump like user sample`() {
+        val raw = """
+            让我分析一下这个问题：
+
+            1. 用户是兰心（AI），用户说"你好"，我应该回应欢迎和友好
+
+            查看可用工具：没有专门处理问候语的 tool
+
+            2. 检查工具可用性：没有 greeting_tool 可以调用，直接回复即可
+
+            3. 生成友好回应
+
+            注意：不能添加隐藏标签，只能用可见内容回复
+
+            ## 回应建议
+
+            欢迎来到美丽的世界！🌟 我是一名智能助手，很高兴能为你提供支持和帮助。如果你有任何问题或需要闲聊，请随时告诉我也就了。
+
+            期待与你度过美好时光！ 💖
+
+            ---
+
+            **分析：**
+            - "你好"是问候语，适合简短友好的回答
+            - 没有专门的 greeting_tool 可以调用，直接用自然语言回复即可
+            - 保持温暖积极的氛围，传递善意
+
+            **理由：** 用户发送的是一个非常普通的问候语，不需要复杂的推理或调用工具。一个真诚亲切的回答既能表达欢迎，又能让使用者感受到友好。
+            （系统时间：2026-07-21 13:21）
+        """.trimIndent()
+        val cleaned = LocalReplySanitizer.clean(raw, showThinking = false)
+        assertTrue(
+            "应保留回应建议正文，实际=${cleaned.displayText}",
+            cleaned.displayText.contains("欢迎") || cleaned.displayText.contains("美好")
+        )
+        assertFalse(cleaned.displayText.contains("让我分析"))
+        assertFalse(cleaned.displayText.contains("greeting_tool"))
+        assertFalse(cleaned.displayText.contains("**分析**") || cleaned.displayText.contains("分析："))
+        assertFalse(cleaned.displayText.contains("系统时间"))
+        assertFalse(cleaned.displayText.contains("查看可用工具"))
+    }
+
+    @Test
+    fun `orphan think close stripped`() {
+        val d = LocalReplySanitizer.forDisplay("你好呀</think>\n多余", showThinking = false)
+        assertTrue(d.contains("你好呀"))
+        assertFalse(d.contains("think", ignoreCase = true))
+    }
+
+    @Test
+    fun `pure meta lead without suggested falls to empty or non-meta`() {
+        val raw = "让我分析一下这个问题：\n查看可用工具：无"
+        val d = LocalReplySanitizer.forDisplay(raw, showThinking = false)
+        assertFalse(d.contains("让我分析"))
+        assertFalse(d.contains("查看可用工具"))
     }
 }

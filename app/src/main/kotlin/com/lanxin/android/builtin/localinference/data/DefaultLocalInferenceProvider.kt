@@ -46,7 +46,8 @@ class DefaultLocalInferenceProvider @Inject constructor(
 
     override fun completeAsApiState(
         prompt: String,
-        systemPrompt: String?
+        systemPrompt: String?,
+        maxTokens: Int?
     ): Flow<ApiState> = flow {
         val config = settings.getConfig()
         if (!config.enabled) {
@@ -81,13 +82,14 @@ class DefaultLocalInferenceProvider @Inject constructor(
             systemPrompt = systemPrompt,
             showThinking = config.showThinking
         )
+        val effectiveMax = (maxTokens ?: config.maxTokens).coerceAtLeast(16)
         // 本地现为整段 emit；累积后一次清洗，避免流式半标签泄漏
         val rawBuilder = StringBuilder()
         engine.stream(
             LocalGenerateRequest(
                 prompt = prompt,
                 systemPrompt = effectiveSystem,
-                maxTokens = config.maxTokens,
+                maxTokens = effectiveMax,
                 temperature = config.temperature
             )
         ).collect { chunk ->
