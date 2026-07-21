@@ -39,7 +39,8 @@ import com.lanxin.android.util.PathImportHelper
 /**
  * 路径选择行：当前值摘要 + 选择/清除 + 可选「高级：手填」折叠。
  *
- * 实际 SAF launcher 由调用方持有；本组件只负责触发 [onPick] / [onClear] / 手填。
+ * 默认关闭手填（[showManualEntry]=false），避免误用绝对路径；
+ * 实际 SAF launcher 由调用方持有；本组件只负责触发 [onPick] / [onClear] / 可选手填。
  */
 @Composable
 fun PathPickerField(
@@ -53,7 +54,7 @@ fun PathPickerField(
     readyLabel: String? = null,
     ready: Boolean? = null,
     enabled: Boolean = true,
-    showManualEntry: Boolean = true,
+    showManualEntry: Boolean = false,
     manualDraft: String = path,
     onManualDraftChange: (String) -> Unit = {},
     onManualSave: ((String) -> Unit)? = null,

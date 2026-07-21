@@ -54,9 +54,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -76,17 +74,12 @@ import com.lanxin.android.presentation.common.PathPickerField
 fun DesktopPetScreen(
     onBackAction: () -> Unit,
     onOpenCompanion: () -> Unit = {},
+    onOpenLocalInference: () -> Unit = {},
     viewModel: DesktopPetViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val lifecycleOwner = LocalLifecycleOwner.current
-
-    var live2dDraft by remember { mutableStateOf("") }
-    var asrDraft by remember { mutableStateOf("") }
-    var ttsDirDraft by remember { mutableStateOf("") }
-    var ttsRefDraft by remember { mutableStateOf("") }
-    var localLlmDraft by remember { mutableStateOf("") }
 
     val live2dFilePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -113,11 +106,6 @@ fun DesktopPetScreen(
     ) { uri: Uri? ->
         uri?.toString()?.let(viewModel::importTtsReferenceFromDocument)
     }
-    val localLlmPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri: Uri? ->
-        uri?.toString()?.let(viewModel::importLocalLlmFromDocument)
-    }
     // 公共 LanXin/ 目录 SAF 授权（下载主路径仍写 App 私有；成功后可选镜像）
     val lanXinSafTreePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
@@ -133,22 +121,6 @@ fun DesktopPetScreen(
         }
         lifecycleOwner.lifecycle.addObserver(obs)
         onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
-    }
-
-    LaunchedEffect(state.live2dModelPathConfigured) {
-        live2dDraft = state.live2dModelPathConfigured
-    }
-    LaunchedEffect(state.asrModelPathConfigured) {
-        asrDraft = state.asrModelPathConfigured
-    }
-    LaunchedEffect(state.ttsModelDirConfigured) {
-        ttsDirDraft = state.ttsModelDirConfigured
-    }
-    LaunchedEffect(state.ttsReferenceConfigured) {
-        ttsRefDraft = state.ttsReferenceConfigured
-    }
-    LaunchedEffect(state.localLlmPathConfigured) {
-        localLlmDraft = state.localLlmPathConfigured
     }
 
     LaunchedEffect(state.snackbarMessage) {
@@ -567,13 +539,13 @@ fun DesktopPetScreen(
                     )
 
                     PathPickerField(
-                        label = "Live2D 模型（高级手填）",
+                        label = "Live2D 模型（高级导入）",
                         path = state.live2dModelPathConfigured,
                         readyLabel = "就绪：${state.live2dReadyLabel} · 生效：${
                             state.live2dModelPathResolved.ifBlank { "（空 → 占位/内置）" }
                         }",
                         ready = state.live2dReady,
-                        helperText = "优先用上方列表；此处可手填绝对路径。导入请用上方「导入 model3/文件夹」。",
+                        helperText = "优先用上方列表；导入请选 model3.json 或模型文件夹。",
                         pickButtonText = "选 model3.json",
                         onPick = {
                             live2dFilePicker.launch(arrayOf("application/json", "*/*"))
@@ -581,9 +553,7 @@ fun DesktopPetScreen(
                         secondaryPickText = "选文件夹",
                         onSecondaryPick = { live2dTreePicker.launch(null) },
                         onClear = { viewModel.setLive2dModelPath("") },
-                        manualDraft = live2dDraft,
-                        onManualDraftChange = { live2dDraft = it },
-                        onManualSave = viewModel::setLive2dModelPath,
+                        showManualEntry = false,
                         enabled = !state.pathImportBusy
                     )
 
@@ -594,13 +564,11 @@ fun DesktopPetScreen(
                             state.asrModelPathResolved.ifBlank { "（空）" }
                         }",
                         ready = state.asrReady,
-                        helperText = "选择含模型文件的文件夹；也可在「离线语音识别」页配置。",
+                        helperText = "选择含模型文件的文件夹；详细参数也可在「智能能力 → 语音」页配置。",
                         pickButtonText = "选择目录",
                         onPick = { asrTreePicker.launch(null) },
                         onClear = { viewModel.setAsrModelPath("") },
-                        manualDraft = asrDraft,
-                        onManualDraftChange = { asrDraft = it },
-                        onManualSave = viewModel::setAsrModelPath,
+                        showManualEntry = false,
                         enabled = !state.pathImportBusy
                     )
 
@@ -615,9 +583,7 @@ fun DesktopPetScreen(
                         pickButtonText = "选择目录",
                         onPick = { ttsTreePicker.launch(null) },
                         onClear = { viewModel.setTtsModelDir("") },
-                        manualDraft = ttsDirDraft,
-                        onManualDraftChange = { ttsDirDraft = it },
-                        onManualSave = viewModel::setTtsModelDir,
+                        showManualEntry = false,
                         enabled = !state.pathImportBusy
                     )
 
@@ -643,9 +609,7 @@ fun DesktopPetScreen(
                             )
                         },
                         onClear = { viewModel.setTtsReferenceAudio("") },
-                        manualDraft = ttsRefDraft,
-                        onManualDraftChange = { ttsRefDraft = it },
-                        onManualSave = viewModel::setTtsReferenceAudio,
+                        showManualEntry = false,
                         enabled = !state.pathImportBusy
                     )
 
@@ -658,50 +622,34 @@ fun DesktopPetScreen(
                 }
             }
 
-            // 本地脑预留
+            // 本地脑：唯一配置源在「智能能力 → 本地模型」；此处仅展示状态 + 跳转
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("本地脑（预留）", fontWeight = FontWeight.SemiBold)
+                    Text("本地脑", fontWeight = FontWeight.SemiBold)
                     Text(
-                        "键：local_inference_model_path · 状态：${state.localLlmReadyLabel}",
+                        "状态：${state.localLlmReadyLabel}",
                         style = MaterialTheme.typography.bodySmall
                     )
                     Text(
-                        state.localLlmHint,
+                        "路径：${state.localLlmPathConfigured.ifBlank { "（未配置）" }}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        "也可在上方「一键下载」拉取 Qwen2.5-1.5B MNN（~880MB，优先魔搭）；" +
-                            "或自备模型用选择器导入。",
+                        "开关、模型文件夹与参数请在「智能能力 → 本地模型」统一配置；" +
+                            "也可在上方「一键下载」拉取 Qwen2.5-1.5B MNN。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.secondary
                     )
-                    PathPickerField(
-                        label = "本地推理模型路径",
-                        path = state.localLlmPathConfigured,
-                        readyLabel = "状态：${state.localLlmReadyLabel}",
-                        ready = state.localLlmPathConfigured.isNotBlank() &&
-                            state.localLlmReadyLabel.contains("就绪"),
-                        helperText = "选择模型文件（如 .gguf / .mnn / 目录打包文件）；大文件勿提交 git。",
-                        pickButtonText = "选择文件",
-                        onPick = {
-                            localLlmPicker.launch(
-                                arrayOf(
-                                    "application/octet-stream",
-                                    "*/*"
-                                )
-                            )
-                        },
-                        onClear = { viewModel.setLocalLlmModelPath("") },
-                        manualDraft = localLlmDraft,
-                        onManualDraftChange = { localLlmDraft = it },
-                        onManualSave = viewModel::setLocalLlmModelPath,
-                        enabled = !state.pathImportBusy
-                    )
+                    OutlinedButton(
+                        onClick = onOpenLocalInference,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("前往本地模型设置")
+                    }
                 }
             }
 

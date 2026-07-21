@@ -152,8 +152,8 @@ fun SmartCapabilitiesScreen(
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "主开关关闭时，本地模型 / 语音 / 助手工具 / 位置与周边 / 看世界一律拒绝。" +
-                            "本地模型与看世界默认关；桌宠悬浮与 Claw 不在本页。",
+                        text = "本页只管能力开关：主开关关闭时，本地模型 / 语音 / 助手工具 / 位置与周边 / 看世界一律拒绝。" +
+                            "本地模型与看世界默认关。Live2D/背景/音乐与下载资源请去「桌宠 / 语音陪伴」。",
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -275,7 +275,7 @@ fun SmartCapabilitiesScreen(
 
             AnimatedVisibility(visible = state.advancedExpanded) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    AdvancedLink("本地模型 · 模型路径 / 参数", onNavigateToLocalInference)
+                    AdvancedLink("本地模型 · 模型文件夹 / 参数（唯一配置源）", onNavigateToLocalInference)
                     AdvancedLink("离线语音 · ASR 模型 / 语言", onNavigateToVoice)
                     AdvancedLink("系统工具 · 分项与写确认", onNavigateToSystemTools)
                     AdvancedLink("联网搜索 · 条数 / 区域", onNavigateToWebSearch)
@@ -284,7 +284,7 @@ fun SmartCapabilitiesScreen(
                     Text(
                         text = "键前缀 smart_capabilities_*；迁移标记 migrated_v1 / migrated_v2。" +
                             "助手工具开关联动系统工具/搜索/设备感知；位置与周边不含看世界。" +
-                            "Claw 与桌宠悬浮仍在各自设置页。",
+                            "桌宠页只做体验资源与下载，本地脑路径不在此双份编辑。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 8.dp)

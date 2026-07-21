@@ -122,7 +122,7 @@ class LocalInferenceViewModel @Inject constructor(
                     it.copy(
                         snackbarMessage =
                         "已启用本地脑，但模型路径为空。请用「选择文件夹」导入完整模型包" +
-                            "（config.json + *.mnn），或高级手填路径后再试。"
+                            "（config.json + *.mnn）后再试。"
                     )
                 }
                 refresh()

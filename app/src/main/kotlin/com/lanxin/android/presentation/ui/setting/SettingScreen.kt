@@ -215,7 +215,7 @@ fun SettingScreen(
 
             SettingItem(
                 title = "智能能力",
-                description = "主开关默认开；语音/搜索/系统工具/设备感知/位置；本地推理与场景视觉默认关",
+                description = "总开关与能力清单：本地模型 / 语音 / 助手工具 / 位置 / 看世界（体验资源不在此页）",
                 onItemClick = onNavigateToSmartCapabilities,
                 showTrailingIcon = true,
                 showLeadingIcon = false
@@ -223,7 +223,7 @@ fun SettingScreen(
 
             SettingItem(
                 title = "桌宠 / 语音陪伴",
-                description = "全屏陪伴 + 悬浮窗（默认关）；内置 Live2D；ASR/TTS 可一键下载到 LanXin/",
+                description = "体验与资源：全屏陪伴、悬浮窗、Live2D/背景/音乐、ASR·TTS 下载（开关见智能能力）",
                 onItemClick = onNavigateToDesktopPet,
                 showTrailingIcon = true,
                 showLeadingIcon = false
