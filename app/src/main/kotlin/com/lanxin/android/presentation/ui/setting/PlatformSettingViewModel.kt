@@ -140,8 +140,14 @@ class PlatformSettingViewModel @Inject constructor(
                             lastFetchedAtMs = System.currentTimeMillis(),
                             filterQuery = it.filterQuery,
                             checkedModelIds = nextChecked,
-                            autoFetch = !triggeredByUser
+                            autoFetch = !triggeredByUser,
+                            latencyRanking = false
                         )
+                    }
+                    // User-triggered "获取模型": measure latency and rank fast → slow.
+                    // Auto-fetch on open only fills the list (avoid bulk probe tax every visit).
+                    if (triggeredByUser && result.modelIds.isNotEmpty()) {
+                        rankModelsByLatency(result.modelIds, preferredModel = current)
                     }
                 }
                 is OpenAiModelListResult.Error -> {
@@ -150,10 +156,72 @@ class PlatformSettingViewModel @Inject constructor(
                         it.copy(
                             loading = false,
                             error = OpenAiModelProbeSupport.humanizeListError(result.message),
-                            autoFetch = !triggeredByUser
+                            autoFetch = !triggeredByUser,
+                            latencyRanking = false
                         )
                     }
                 }
+            }
+        }
+    }
+
+    /**
+     * Bulk-probe listed models and reorder [RemoteModelListState.models] by latency (fast → slow).
+     * Does not mutate [PlatformV2.model] on failure.
+     */
+    fun rankModelsByLatency(
+        modelIds: List<String> = _remoteModelListState.value.models,
+        preferredModel: String? = _platformState.value?.model
+    ) {
+        val platform = _platformState.value ?: return
+        if (!supportsRemoteModelList(platform.compatibleType)) return
+        if (modelIds.isEmpty()) return
+        if (_probeState.value.running) return
+
+        val targets = OpenAiModelProbeSupport.resolveBulkLatencyTargets(
+            modelIds = modelIds,
+            preferredModel = preferredModel
+        )
+        if (targets.isEmpty()) return
+
+        probeJob?.cancel()
+        probeJob = viewModelScope.launch {
+            _remoteModelListState.update { it.copy(latencyRanking = true) }
+            _probeState.update {
+                ModelProbeState(running = true, results = emptyList(), error = null)
+            }
+            val timeout = platform.timeout.takeIf { it > 0 }
+                ?: OpenAiModelProbeSupport.DEFAULT_TIMEOUT_SECONDS
+            val semaphore = Semaphore(OpenAiModelProbeSupport.MAX_BULK_PROBE_CONCURRENCY)
+            val results = coroutineScope {
+                targets.map { modelId ->
+                    async {
+                        semaphore.withPermit {
+                            openAiModelProbeClient.probe(
+                                apiUrl = platform.apiUrl,
+                                token = platform.token,
+                                model = modelId,
+                                timeoutSeconds = timeout
+                            )
+                        }
+                    }
+                }.awaitAll()
+            }
+            val sortedResults = OpenAiModelProbeSupport.sortProbeResultsByLatency(results)
+            val rankedIds = OpenAiModelProbeSupport.sortModelIdsByLatency(modelIds, results)
+            _probeState.update {
+                ModelProbeState(
+                    running = false,
+                    results = sortedResults,
+                    error = null,
+                    lastProbedAtMs = System.currentTimeMillis()
+                )
+            }
+            _remoteModelListState.update {
+                it.copy(
+                    models = rankedIds,
+                    latencyRanking = false
+                )
             }
         }
     }
@@ -245,7 +313,7 @@ class PlatformSettingViewModel @Inject constructor(
             _probeState.update {
                 ModelProbeState(
                     running = false,
-                    results = results,
+                    results = OpenAiModelProbeSupport.sortProbeResultsByLatency(results),
                     error = null,
                     lastProbedAtMs = System.currentTimeMillis()
                 )
@@ -429,7 +497,9 @@ class PlatformSettingViewModel @Inject constructor(
         val lastFetchedAtMs: Long? = null,
         val filterQuery: String = "",
         val checkedModelIds: Set<String> = emptySet(),
-        val autoFetch: Boolean = false
+        val autoFetch: Boolean = false,
+        /** True while bulk latency ranking is in progress after list fetch. */
+        val latencyRanking: Boolean = false
     )
 
     data class ModelProbeState(

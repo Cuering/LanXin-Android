@@ -248,10 +248,16 @@
     <string name="gemini_safety_block_medium_and_above">屏蔽中等及以上</string>
     <string name="gemini_safety_block_low_and_above">屏蔽低及以上</string>
     <string name="fetch_remote_models">从 API 拉取模型列表</string>
-    <string name="fetch_remote_models_hint">通过 OpenAI 兼容 /models 加载（进入详情自动尝试）</string>
+    <string name="fetch_remote_models_hint">通过 OpenAI 兼容 /models 加载，并按延迟由快到慢排序</string>
     <string name="fetch_remote_models_loading">正在加载模型…</string>
+    <string name="fetch_remote_models_ranking">正在测速并按延迟排序（快 → 慢）…</string>
     <string name="fetch_remote_models_error">拉取失败：%1$s</string>
     <string name="fetch_remote_models_count">共 %1$d 个模型 — 点选应用，勾选后可测速</string>
+    <string name="fetch_remote_models_count_ranked">共 %1$d 个模型 · 已按延迟排序（%2$d 成功）— 快 → 慢</string>
+    <string name="fetch_models_button">获取模型</string>
+    <string name="fetch_models_need_fields">请先填写供应商网址（以及需要的 API 密钥）</string>
+    <string name="fetch_models_unsupported">当前供应商类型不支持远程拉取模型列表</string>
+    <string name="fetch_models_select_hint">点选一行作为默认模型（已按延迟排序）</string>
     <string name="current_model_selected">当前已选</string>
     <string name="tap_to_select_model">点此使用该模型</string>
     <string name="remote_models_truncated">…还有 %1$d 个</string>

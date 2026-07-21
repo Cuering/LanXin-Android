@@ -181,16 +181,24 @@ fun PlatformSettingScreen(
                         title = stringResource(R.string.fetch_remote_models),
                         description = when {
                             remoteModels.loading -> stringResource(R.string.fetch_remote_models_loading)
+                            remoteModels.latencyRanking || probeState.running ->
+                                stringResource(R.string.fetch_remote_models_ranking)
                             remoteModels.error != null ->
                                 stringResource(
                                     R.string.fetch_remote_models_error,
                                     humanizeModelListError(remoteModels.error!!)
                                 )
+                            remoteModels.models.isNotEmpty() && probeState.results.isNotEmpty() ->
+                                stringResource(
+                                    R.string.fetch_remote_models_count_ranked,
+                                    remoteModels.models.size,
+                                    probeState.results.count { it.success }
+                                )
                             remoteModels.models.isNotEmpty() ->
                                 stringResource(R.string.fetch_remote_models_count, remoteModels.models.size)
                             else -> stringResource(R.string.fetch_remote_models_hint)
                         },
-                        enabled = platformData.enabled && !remoteModels.loading,
+                        enabled = platformData.enabled && !remoteModels.loading && !remoteModels.latencyRanking,
                         onItemClick = settingViewModel::fetchRemoteModels,
                         showTrailingIcon = false,
                         showLeadingIcon = true,
@@ -213,7 +221,11 @@ fun PlatformSettingScreen(
                             label = { Text(stringResource(R.string.remote_models_filter_label)) },
                             placeholder = { Text(stringResource(R.string.remote_models_filter_hint)) }
                         )
-                        val filtered = remember(remoteModels.models, remoteModels.filterQuery) {
+                        val filtered = remember(
+                            remoteModels.models,
+                            remoteModels.filterQuery
+                        ) {
+                            // models already ranked fast → slow after latency probe
                             OpenAiModelProbeSupport.filterModelIds(
                                 remoteModels.models,
                                 remoteModels.filterQuery

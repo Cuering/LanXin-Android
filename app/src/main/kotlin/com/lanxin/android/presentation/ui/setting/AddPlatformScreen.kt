@@ -1,5 +1,6 @@
 package com.lanxin.android.presentation.ui.setting
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
@@ -36,27 +38,35 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lanxin.android.R
 import com.lanxin.android.data.ModelConstants
-import com.lanxin.android.plugins.chat.data.entity.PlatformV2
 import com.lanxin.android.data.model.ClientType
+import com.lanxin.android.plugins.chat.data.entity.PlatformV2
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddPlatformScreen(
     modifier: Modifier = Modifier,
     onNavigationClick: () -> Unit,
-    onSave: (PlatformV2) -> Unit
+    onSave: (PlatformV2) -> Unit,
+    viewModel: AddPlatformViewModel = hiltViewModel()
 ) {
     var platformName by remember { mutableStateOf("") }
     var selectedClientType by remember { mutableStateOf(ClientType.OPENAI) }
     var clientTypeExpanded by remember { mutableStateOf(false) }
-    var apiUrl by remember { mutableStateOf("") }
+    var apiUrl by remember { mutableStateOf(ModelConstants.OPENAI_API_URL) }
     var apiKey by remember { mutableStateOf("") }
     var model by remember { mutableStateOf("") }
     var reasoningEnabled by remember { mutableStateOf(false) }
+
+    val fetchState by viewModel.uiState.collectAsStateWithLifecycle()
+    val supportsList = viewModel.supportsRemoteModelList(selectedClientType)
+    val canFetch = supportsList && apiUrl.isNotBlank() && !fetchState.busy
 
     Scaffold(
         modifier = modifier,
@@ -87,7 +97,6 @@ fun AddPlatformScreen(
         ) {
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Header text
             Text(
                 text = stringResource(R.string.add_platform_description),
                 style = MaterialTheme.typography.bodyLarge,
@@ -96,7 +105,6 @@ fun AddPlatformScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Platform Name
             OutlinedTextField(
                 value = platformName,
                 onValueChange = { platformName = it },
@@ -111,7 +119,6 @@ fun AddPlatformScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Client Type Dropdown
             ExposedDropdownMenuBox(
                 expanded = clientTypeExpanded,
                 onExpandedChange = { clientTypeExpanded = it }
@@ -153,7 +160,6 @@ fun AddPlatformScreen(
                             },
                             onClick = {
                                 selectedClientType = clientType
-                                // Set default API URL based on client type
                                 apiUrl = when (clientType) {
                                     ClientType.OPENAI -> ModelConstants.OPENAI_API_URL
                                     ClientType.ANTHROPIC -> ModelConstants.ANTHROPIC_API_URL
@@ -164,6 +170,7 @@ fun AddPlatformScreen(
                                     ClientType.CUSTOM -> ""
                                     ClientType.LANXIN -> ModelConstants.LANXIN_API_URL
                                 }
+                                viewModel.clearFetchState()
                                 clientTypeExpanded = false
                             }
                         )
@@ -173,7 +180,6 @@ fun AddPlatformScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // API URL
             OutlinedTextField(
                 value = apiUrl,
                 onValueChange = { apiUrl = it },
@@ -185,7 +191,6 @@ fun AddPlatformScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // API Key
             OutlinedTextField(
                 value = apiKey,
                 onValueChange = { apiKey = it },
@@ -199,9 +204,157 @@ fun AddPlatformScreen(
                 }
             )
 
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Fetch models + latency rank
+            OutlinedButton(
+                onClick = {
+                    if (!supportsList) {
+                        // state will show unsupported via fetch path
+                    }
+                    viewModel.fetchAndRankModels(
+                        clientType = selectedClientType,
+                        apiUrl = apiUrl,
+                        apiKey = apiKey,
+                        preferredModel = model.takeIf { it.isNotBlank() }
+                    )
+                },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = canFetch || (!supportsList && apiUrl.isNotBlank() && !fetchState.busy)
+            ) {
+                if (fetchState.busy) {
+                    CircularProgressIndicator(
+                        modifier = Modifier
+                            .height(18.dp)
+                            .padding(end = 8.dp),
+                        strokeWidth = 2.dp
+                    )
+                }
+                Text(
+                    text = when {
+                        fetchState.loading -> stringResource(R.string.fetch_remote_models_loading)
+                        fetchState.ranking -> stringResource(R.string.fetch_remote_models_ranking)
+                        else -> stringResource(R.string.fetch_models_button)
+                    }
+                )
+            }
+
+            when {
+                !supportsList -> {
+                    Text(
+                        text = stringResource(R.string.fetch_models_unsupported),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+                fetchState.error != null -> {
+                    Text(
+                        text = stringResource(
+                            R.string.fetch_remote_models_error,
+                            humanizeAddPlatformListError(fetchState.error!!)
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+                fetchState.models.isNotEmpty() -> {
+                    Text(
+                        text = if (fetchState.results.isNotEmpty()) {
+                            stringResource(
+                                R.string.fetch_remote_models_count_ranked,
+                                fetchState.models.size,
+                                fetchState.results.count { it.success }
+                            )
+                        } else {
+                            stringResource(
+                                R.string.fetch_remote_models_count,
+                                fetchState.models.size
+                            )
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                    Text(
+                        text = stringResource(R.string.fetch_models_select_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
+                    )
+                    val visible = fetchState.models.take(ADD_PLATFORM_MODEL_VISIBLE_LIMIT)
+                    visible.forEach { modelId ->
+                        val probe = fetchState.results.firstOrNull {
+                            it.modelId.equals(modelId, ignoreCase = true)
+                        }
+                        val selected = modelId.equals(model, ignoreCase = true)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { model = modelId }
+                                .padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = modelId,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                                    color = if (selected) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurface
+                                    }
+                                )
+                                if (probe != null) {
+                                    Text(
+                                        text = if (probe.success) {
+                                            stringResource(
+                                                R.string.probe_result_ok_short,
+                                                probe.latencyMs
+                                            )
+                                        } else {
+                                            stringResource(
+                                                R.string.probe_result_fail_short,
+                                                probe.latencyMs
+                                            )
+                                        },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (probe.success) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.error
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    if (fetchState.models.size > ADD_PLATFORM_MODEL_VISIBLE_LIMIT) {
+                        Text(
+                            text = stringResource(
+                                R.string.remote_models_truncated,
+                                fetchState.models.size - ADD_PLATFORM_MODEL_VISIBLE_LIMIT
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                    }
+                }
+                supportsList && apiUrl.isBlank() -> {
+                    Text(
+                        text = stringResource(R.string.fetch_models_need_fields),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Model
             OutlinedTextField(
                 value = model,
                 onValueChange = { model = it },
@@ -216,7 +369,6 @@ fun AddPlatformScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Extended Thinking Toggle
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -242,7 +394,6 @@ fun AddPlatformScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Action buttons
             Button(
                 onClick = {
                     val platform = PlatformV2(
@@ -279,6 +430,24 @@ fun AddPlatformScreen(
             Spacer(modifier = Modifier.height(24.dp))
         }
     }
+}
+
+private const val ADD_PLATFORM_MODEL_VISIBLE_LIMIT = 40
+
+@Composable
+private fun humanizeAddPlatformListError(code: String): String = when (code) {
+    "empty_api_url" -> stringResource(R.string.model_list_error_empty_url)
+    "unsupported_type" -> stringResource(R.string.model_list_error_unsupported)
+    "http_401" -> stringResource(R.string.model_list_error_401)
+    "http_403" -> stringResource(R.string.model_list_error_403)
+    "http_404" -> stringResource(R.string.model_list_error_404)
+    "http_429" -> stringResource(R.string.model_list_error_429)
+    "http_5xx" -> stringResource(R.string.model_list_error_5xx)
+    "no_models" -> stringResource(R.string.model_list_error_no_models)
+    "empty_body" -> stringResource(R.string.model_list_error_empty_body)
+    "network_error" -> stringResource(R.string.model_list_error_network)
+    "no_probe_targets" -> stringResource(R.string.probe_error_no_targets)
+    else -> code
 }
 
 @Composable

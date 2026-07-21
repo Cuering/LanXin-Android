@@ -316,10 +316,16 @@
     <string name="previous_revision" translatable="false">Previous revision</string>
     <string name="next_revision" translatable="false">Next revision</string>
     <string name="fetch_remote_models">Fetch models from API</string>
-    <string name="fetch_remote_models_hint">Load model list via OpenAI-compatible /models (auto on open)</string>
+    <string name="fetch_remote_models_hint">Load model list via OpenAI-compatible /models, then rank by latency (fast → slow)</string>
     <string name="fetch_remote_models_loading">Loading models…</string>
+    <string name="fetch_remote_models_ranking">Measuring latency and sorting (fast → slow)…</string>
     <string name="fetch_remote_models_error">Failed: %1$s</string>
     <string name="fetch_remote_models_count">%1$d models available — tap to select, check to probe</string>
+    <string name="fetch_remote_models_count_ranked">%1$d models · ranked by latency (%2$d ok) — fast → slow</string>
+    <string name="fetch_models_button">Fetch models</string>
+    <string name="fetch_models_need_fields">Enter provider URL (and API key if required) first</string>
+    <string name="fetch_models_unsupported">This provider type does not support remote model list</string>
+    <string name="fetch_models_select_hint">Tap a row to use as default model (sorted by latency)</string>
     <string name="current_model_selected">Currently selected</string>
     <string name="tap_to_select_model">Tap to use this model</string>
     <string name="remote_models_truncated">…and %1$d more</string>
