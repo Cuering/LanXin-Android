@@ -48,6 +48,7 @@ class LocalInferencePreferences @Inject constructor(
     private val temperatureKey = floatPreferencesKey(KEY_TEMPERATURE)
     private val showThinkingKey = booleanPreferencesKey(KEY_SHOW_THINKING)
     private val preferLocalKey = booleanPreferencesKey(KEY_PREFER_LOCAL)
+    private val contextWindowKey = intPreferencesKey(KEY_CONTEXT_WINDOW)
 
     override suspend fun getConfig(): LocalInferenceConfig {
         val prefs = dataStore.data.first()
@@ -57,7 +58,13 @@ class LocalInferencePreferences @Inject constructor(
             maxTokens = (prefs[maxTokensKey] ?: LocalInferenceConfig.DEFAULT_MAX_TOKENS)
                 .coerceIn(LocalInferenceConfig.MIN_MAX_TOKENS, LocalInferenceConfig.MAX_MAX_TOKENS),
             temperature = prefs[temperatureKey] ?: LocalInferenceConfig.DEFAULT_TEMPERATURE,
-            showThinking = prefs[showThinkingKey] ?: false
+            showThinking = prefs[showThinkingKey] ?: false,
+            contextWindowTokens = (prefs[contextWindowKey]
+                ?: LocalInferenceConfig.DEFAULT_CONTEXT_WINDOW_TOKENS)
+                .coerceIn(
+                    LocalInferenceConfig.MIN_CONTEXT_WINDOW_TOKENS,
+                    LocalInferenceConfig.MAX_CONTEXT_WINDOW_TOKENS
+                )
         )
     }
 
@@ -90,6 +97,14 @@ class LocalInferencePreferences @Inject constructor(
         dataStore.edit { it[temperatureKey] = temperature }
     }
 
+    override suspend fun setContextWindowTokens(tokens: Int) {
+        val value = tokens.coerceIn(
+            LocalInferenceConfig.MIN_CONTEXT_WINDOW_TOKENS,
+            LocalInferenceConfig.MAX_CONTEXT_WINDOW_TOKENS
+        )
+        dataStore.edit { it[contextWindowKey] = value }
+    }
+
     override suspend fun setShowThinking(show: Boolean) {
         dataStore.edit { it[showThinkingKey] = show }
     }
@@ -108,5 +123,6 @@ class LocalInferencePreferences @Inject constructor(
         const val KEY_TEMPERATURE = "local_inference_temperature"
         const val KEY_SHOW_THINKING = "local_inference_show_thinking"
         const val KEY_PREFER_LOCAL = "local_inference_prefer_local"
+        const val KEY_CONTEXT_WINDOW = "local_inference_context_window"
     }
 }

@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lanxin.android.builtin.localinference.domain.LocalEngineState
+import com.lanxin.android.builtin.localinference.domain.LocalInferenceConfig
 import com.lanxin.android.presentation.common.PathPickerField
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -265,13 +266,49 @@ fun LocalInferenceScreen(
                 enabled = !state.pathImportBusy && !state.isBusy
             )
 
+            Text(
+                text = "上下文窗口",
+                style = MaterialTheme.typography.titleSmall
+            )
+            Text(
+                text = "默认 8k。窗口越大越吃内存（KV cache）；12G 机建议不超过 12k。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                LocalInferenceConfig.CONTEXT_WINDOW_PRESETS.forEach { preset ->
+                    val selected = state.contextWindowTokens == preset
+                    if (selected) {
+                        Button(
+                            onClick = { viewModel.setContextWindowTokens(preset) },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(labelContextWindow(preset))
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = { viewModel.setContextWindowTokens(preset) },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(labelContextWindow(preset))
+                        }
+                    }
+                }
+            }
+
             OutlinedTextField(
                 value = state.maxTokens.toString(),
                 onValueChange = { raw ->
                     raw.toIntOrNull()?.let { viewModel.setMaxTokens(it) }
                 },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("maxTokens") },
+                label = { Text("生成 maxTokens（输出上限）") },
+                supportingText = {
+                    Text("与上下文窗口分离；默认 512，上限 ${LocalInferenceConfig.MAX_MAX_TOKENS}")
+                },
                 singleLine = true
             )
 
@@ -308,4 +345,11 @@ private fun stateLabel(state: LocalEngineState): String = when (state) {
     LocalEngineState.LOADING -> "加载中"
     LocalEngineState.READY -> "就绪"
     LocalEngineState.ERROR -> "错误"
+}
+
+private fun labelContextWindow(tokens: Int): String = when (tokens) {
+    4096 -> "4k"
+    8192 -> "8k"
+    12288 -> "12k"
+    else -> "${tokens / 1024}k"
 }

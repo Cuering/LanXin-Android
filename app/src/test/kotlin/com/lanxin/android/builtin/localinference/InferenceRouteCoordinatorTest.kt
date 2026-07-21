@@ -185,6 +185,7 @@ class InferenceRouteCoordinatorTest {
             config = config.copy(modelPath = path.orEmpty())
         }
         override suspend fun setMaxTokens(maxTokens: Int) = Unit
+                override suspend fun setContextWindowTokens(tokens: Int) = Unit
         override suspend fun setTemperature(temperature: Float) = Unit
         override suspend fun setShowThinking(show: Boolean) = Unit
         override suspend fun isPreferLocal() = preferLocal
