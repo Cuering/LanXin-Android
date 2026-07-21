@@ -62,6 +62,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -456,6 +458,25 @@ fun CompanionScreen(
                         }
                     )
                 )
+                // 语音聊天开关：点一次开，再点关；关=仅文字、不占麦
+                IconButton(
+                    onClick = { viewModel.toggleVoiceChat() },
+                    enabled = !state.busy
+                ) {
+                    Icon(
+                        imageVector = if (state.voiceChatEnabled) Icons.Filled.Mic else Icons.Filled.MicOff,
+                        contentDescription = if (state.voiceChatEnabled) {
+                            "关闭语音聊天"
+                        } else {
+                            "开启语音聊天"
+                        },
+                        tint = if (state.voiceChatEnabled) {
+                            Color(0xFFE85D8E)
+                        } else {
+                            Color(0xFF5A2038).copy(alpha = 0.55f)
+                        }
+                    )
+                }
                 IconButton(
                     onClick = {
                         val text = draft
@@ -983,6 +1004,8 @@ data class CompanionUiState(
     val busy: Boolean = false,
     val statusLine: String = "内置 Live2D · 可直接打字",
     val lastReply: String = "",
+    /** 语音聊天模式开关；开=ASR听→想→说(TTS)，关=仅文字。会话态，不持久化。 */
+    val voiceChatEnabled: Boolean = false,
     val webPushTicket: Long = 0L,
     val musicPlaying: Boolean = false,
     val musicTitle: String = "",
@@ -1264,56 +1287,102 @@ class CompanionViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 语音聊天模式开关：开=听→想→说(TTS)，关=仅文字。
+     * 会话态，不持久化。关时状态仅影响后续轮次（不占麦）。
+     */
+    fun toggleVoiceChat() {
+        _uiState.update { st ->
+            val next = !st.voiceChatEnabled
+            st.copy(
+                voiceChatEnabled = next,
+                statusLine = if (next) "语音聊天已开" else "语音聊天已关（仅文字）"
+            )
+        }
+    }
+
     fun sendText(text: String, frameHolder: CompanionFrameHolder? = null) {
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return
         viewModelScope.launch {
             _uiState.update { it.copy(busy = true, statusLine = "思考中…") }
-            if (!petSettings.getConfig().enabled) {
-                petSettings.setEnabled(true)
-            }
-            val st = _uiState.value
-            val useVision = CompanionVisionSession.shouldCaptureOnAsk(
-                lookingEnabled = st.visionLooking,
-                consentGranted = st.visionConsentGranted,
-                cameraGranted = st.cameraGranted
-            )
-            if (useVision) {
-                // P0：提问时抓 1 帧 → 多模态；无 vision 不瞎编
-                val reply = explainWithFrame(trimmed, frameHolder)
-                val display = LocalReplySanitizer.forDisplay(reply, showThinking = false)
+            runCatching {
+                if (!petSettings.getConfig().enabled) {
+                    petSettings.setEnabled(true)
+                }
+                val st = _uiState.value
+                val useVision = CompanionVisionSession.shouldCaptureOnAsk(
+                    lookingEnabled = st.visionLooking,
+                    consentGranted = st.visionConsentGranted,
+                    cameraGranted = st.cameraGranted
+                )
+                if (useVision) {
+                    // P0：提问时抓 1 帧 → 多模态；无 vision 不瞎编
+                    val reply = explainWithFrame(trimmed, frameHolder)
+                    val display = LocalReplySanitizer.forDisplay(reply, showThinking = false)
+                    _uiState.update {
+                        it.copy(
+                            busy = false,
+                            lastReply = display,
+                            statusLine = "已回复",
+                            visionHint = null
+                        )
+                    }
+                    bumpWeb()
+                    return@runCatching
+                }
+                val voiceEnabled = st.voiceChatEnabled
+                val result = runCatching {
+                    sessionCoordinator.runRound(
+                        input = VoiceSessionInput(
+                            asrText = trimmed,
+                            isStub = true,
+                            source = "companion_text"
+                        ),
+                        // 关语音聊天：跳过 TTS，纯文字不因合成失败而失败
+                        skipTts = !voiceEnabled
+                    )
+                }.getOrElse { e ->
+                    // runRound 本身抛异常 → 不崩溃，构造一个 error result
+                    com.lanxin.android.builtin.pet.domain.VoiceSessionResult(
+                        asrText = trimmed,
+                        replyText = "",
+                        subtitle = "",
+                        phase = VoiceSessionPhase.ERROR,
+                        isStub = true,
+                        error = e.message ?: "send_failed"
+                    )
+                }
+                // VoiceSessionResult 已 strip；气泡 / lastReply 不进标签
+                val reply = LocalReplySanitizer.forDisplay(
+                    result.subtitle.ifBlank { result.replyText },
+                    showThinking = false
+                )
+                // TTS 失败仍可能有文字：优先展示 reply，仅在 status 提示
+                val ttsSoftFail = result.error?.startsWith("tts_failed") == true && reply.isNotBlank()
                 _uiState.update {
                     it.copy(
                         busy = false,
-                        lastReply = display,
-                        statusLine = "已回复",
-                        visionHint = null
+                        lastReply = reply,
+                        statusLine = when {
+                            result.error != null && !ttsSoftFail -> "出错：${result.error}"
+                            ttsSoftFail -> "已回复（语音播放失败）"
+                            !voiceEnabled -> "已回复（仅文字）"
+                            else -> "已回复"
+                        }
                     )
                 }
                 bumpWeb()
-                return@launch
+            }.getOrElse { e ->
+                // 全路径兜底：任何未预期异常 → 用户可见错误，绝不闪退
+                _uiState.update {
+                    it.copy(
+                        busy = false,
+                        statusLine = "发送失败：${e.message ?: "未知错误"}",
+                        lastReply = it.lastReply
+                    )
+                }
             }
-            val result = sessionCoordinator.runRound(
-                VoiceSessionInput(
-                    asrText = trimmed,
-                    isStub = true,
-                    source = "companion_text"
-                )
-            )
-            // VoiceSessionResult 已 strip；气泡 / lastReply 不进标签
-            val reply = LocalReplySanitizer.forDisplay(result.subtitle.ifBlank { result.replyText }, showThinking = false)
-            _uiState.update {
-                it.copy(
-                    busy = false,
-                    lastReply = reply,
-                    statusLine = if (result.error != null) {
-                        "出错：${result.error}"
-                    } else {
-                        "已回复"
-                    }
-                )
-            }
-            bumpWeb()
         }
     }
 
@@ -1334,12 +1403,14 @@ class CompanionViewModel @Inject constructor(
         if (!cap.available) {
             // 无 vision：友好提示 + 仍可用 stub 闲聊（不注入假画面描述）
             val stub = runCatching {
+                // 看世界降级闲聊：默认不强制 TTS，避免未就绪闪退/占麦
                 sessionCoordinator.runRound(
-                    VoiceSessionInput(
+                    input = VoiceSessionInput(
                         asrText = enrichedQuestion,
                         isStub = true,
                         source = "companion_text_no_vision"
-                    )
+                    ),
+                    skipTts = !_uiState.value.voiceChatEnabled
                 )
             }.getOrNull()
             val chat = stub?.let {

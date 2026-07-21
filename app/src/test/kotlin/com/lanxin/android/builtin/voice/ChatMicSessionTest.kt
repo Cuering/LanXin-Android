@@ -134,6 +134,7 @@ class ChatMicSessionTest {
 
         s.onMicClick { transcripts += it }
         assertEquals(ChatMicPhase.RECORDING, s.uiState.value.phase)
+        assertTrue(s.uiState.value.voiceChatEnabled)
         assertTrue(recorder.isRecording())
 
         // stub 硬件路径：等一小段再停，保证 duration ≥ MIN_USEFUL_MS
@@ -141,6 +142,8 @@ class ChatMicSessionTest {
 
         s.onMicClick { transcripts += it }
         assertEquals(ChatMicPhase.IDLE, s.uiState.value.phase)
+        // 听写结束后模式保持开，便于连续语音
+        assertTrue(s.uiState.value.voiceChatEnabled)
         assertFalse(recorder.isRecording())
         assertEquals(1, transcripts.size)
         assertTrue(transcripts[0].contains("[asr-stub]") || transcripts[0].isNotBlank())
@@ -182,8 +185,40 @@ class ChatMicSessionTest {
         assertEquals(ChatMicPhase.RECORDING, s.uiState.value.phase)
         s.cancel()
         assertEquals(ChatMicPhase.IDLE, s.uiState.value.phase)
+        assertFalse(s.uiState.value.voiceChatEnabled)
         assertFalse(recorder.isRecording())
         assertTrue(transcripts.isEmpty())
+    }
+
+    @Test
+    fun `idle click while voice on turns mode off without recording`() = runBlocking {
+        settings.config = AsrConfig(enabled = true, modelPath = "stub://demo")
+        val s = session()
+        // 开并录音
+        s.onMicClick { transcripts += it }
+        assertTrue(s.uiState.value.voiceChatEnabled)
+        assertEquals(ChatMicPhase.RECORDING, s.uiState.value.phase)
+        delay(250)
+        // 停录，模式保持开
+        s.onMicClick { transcripts += it }
+        assertEquals(ChatMicPhase.IDLE, s.uiState.value.phase)
+        assertTrue(s.uiState.value.voiceChatEnabled)
+        // 再点：关模式、不占麦
+        s.onMicClick { transcripts += it }
+        assertEquals(ChatMicPhase.IDLE, s.uiState.value.phase)
+        assertFalse(s.uiState.value.voiceChatEnabled)
+        assertFalse(recorder.isRecording())
+        assertEquals(1, transcripts.size)
+        assertTrue(s.uiState.value.snackbarMessage!!.contains("语音聊天已关"))
+    }
+
+    @Test
+    fun `failed open rolls back voiceChatEnabled`() = runBlocking {
+        settings.config = AsrConfig(enabled = false, modelPath = "stub://demo")
+        val s = session()
+        s.onMicClick { transcripts += it }
+        assertFalse(s.uiState.value.voiceChatEnabled)
+        assertEquals(ChatMicPhase.IDLE, s.uiState.value.phase)
     }
 
     @Test

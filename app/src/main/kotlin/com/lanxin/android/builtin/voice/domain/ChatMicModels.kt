@@ -35,13 +35,19 @@ enum class ChatMicPhase {
 /**
  * Chat 输入区麦克风 UI 状态。
  *
+ * 与全屏陪伴底栏对齐的「语音聊天模式」语义：
+ * - [voiceChatEnabled]=false：关，不占麦（MicOff）
+ * - true：开，可听写轮次（Mic）
+ *
  * @property phase 阶段
+ * @property voiceChatEnabled 语音聊天模式开关（会话态；关后不占麦）
  * @property snackbarMessage 一次性提示（未就绪 / 权限 / 错误）；消费后清空
  * @property needRequestPermission 为 true 时 UI 应拉起 RECORD_AUDIO 申请
  * @property lastFilledText 最近一次成功填入输入框的文本（便于调试 / 单测）
  */
 data class ChatMicUiState(
     val phase: ChatMicPhase = ChatMicPhase.IDLE,
+    val voiceChatEnabled: Boolean = false,
     val snackbarMessage: String? = null,
     val needRequestPermission: Boolean = false,
     val lastFilledText: String? = null

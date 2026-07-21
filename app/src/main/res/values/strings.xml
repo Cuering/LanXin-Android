@@ -354,4 +354,5 @@
     <string name="chat_mic_stop">Stop listening</string>
     <string name="chat_mic_listening">Listening… tap mic to stop</string>
     <string name="chat_mic_transcribing">Transcribing…</string>
+    <string name="chat_mic_voice_off">Turn off voice chat</string>
 </resources>

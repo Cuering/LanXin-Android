@@ -44,6 +44,13 @@ import com.lanxin.android.builtin.systemtools.domain.UserFileIoGateway
 import com.lanxin.android.builtin.systemtools.domain.UserFileIoResult
 import com.lanxin.android.builtin.systemtools.domain.UserFileProbe
 import com.lanxin.android.builtin.voice.data.StubTtsEngine
+import com.lanxin.android.builtin.voice.domain.TtsEngine
+import com.lanxin.android.builtin.voice.domain.TtsEngineState
+import com.lanxin.android.builtin.voice.domain.TtsSynthesizeRequest
+import com.lanxin.android.builtin.voice.domain.TtsSynthesizeResult
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import com.lanxin.android.builtin.voice.domain.TtsConfig
 import com.lanxin.android.builtin.voice.domain.TtsSettings
 import kotlinx.coroutines.runBlocking
@@ -257,5 +264,86 @@ class VoiceSessionCoordinatorTest {
         assertFalse(r.replyText.contains("[["))
         assertFalse(c.current().replyText.contains("[["))
         assertFalse(c.current().subtitle.contains("[["))
+    }
+
+    @Test
+    fun `skipTts returns text without synthesizing and ends IDLE`() = runBlocking {
+        val tts = CountingTtsEngine()
+        tts.load(TtsConfig(enabled = true))
+        val c = VoiceSessionCoordinator(
+            responder = FixedResponder("仅文字回复"),
+            ttsEngine = tts,
+            ttsSettings = FakeTtsSettings(),
+            petSettings = FakePetSettings(PetConfig(enabled = true)),
+            deviceToolBridge = defaultBridge()
+        )
+        val r = c.runRound(
+            input = VoiceSessionInput("测试", isStub = true, source = "companion_text"),
+            skipTts = true
+        )
+        assertEquals(null, r.error)
+        assertEquals(VoiceSessionPhase.IDLE, r.phase)
+        assertEquals("仅文字回复", r.replyText)
+        assertEquals("仅文字回复", r.subtitle)
+        assertEquals(0, tts.synthesizeCount)
+    }
+
+    @Test
+    fun `tts failure still returns display text for caller soft-handle`() = runBlocking {
+        val tts = FailingTtsEngine()
+        tts.load(TtsConfig(enabled = true))
+        val c = VoiceSessionCoordinator(
+            responder = FixedResponder("有字可显示"),
+            ttsEngine = tts,
+            ttsSettings = FakeTtsSettings(),
+            petSettings = FakePetSettings(PetConfig(enabled = true)),
+            deviceToolBridge = defaultBridge()
+        )
+        val r = c.runRound(VoiceSessionInput("测试", isStub = true))
+        assertTrue(r.error!!.startsWith("tts_failed"))
+        assertEquals("有字可显示", r.replyText)
+        assertEquals("有字可显示", r.subtitle)
+    }
+
+    /** 统计 synthesize 调用次数，验证 skipTts 短路。 */
+    private class CountingTtsEngine : TtsEngine {
+        private val _state = MutableStateFlow(TtsEngineState.DISABLED)
+        var synthesizeCount: Int = 0
+            private set
+        override val state: StateFlow<TtsEngineState> = _state.asStateFlow()
+        override val isReady: Boolean get() = _state.value == TtsEngineState.READY
+        override val isAvailable: Boolean = true
+        override val lastError: String? = null
+        override suspend fun load(config: TtsConfig): Boolean {
+            _state.value = TtsEngineState.READY
+            return true
+        }
+        override suspend fun unload() {
+            _state.value = TtsEngineState.DISABLED
+        }
+        override suspend fun synthesize(request: TtsSynthesizeRequest): TtsSynthesizeResult {
+            synthesizeCount += 1
+            return TtsSynthesizeResult(
+                pcm16leMono = ByteArray(0),
+                sampleRateHz = 22050,
+                durationMs = 100L,
+                isStub = true,
+                subtitle = request.text
+            )
+        }
+    }
+
+    /** synthesize 必失败，模拟 TTS 未就绪路径。 */
+    private class FailingTtsEngine : TtsEngine {
+        private val _state = MutableStateFlow(TtsEngineState.READY)
+        override val state: StateFlow<TtsEngineState> = _state.asStateFlow()
+        override val isReady: Boolean = true
+        override val isAvailable: Boolean = true
+        override val lastError: String? = "tts_not_ready"
+        override suspend fun load(config: TtsConfig): Boolean = true
+        override suspend fun unload() = Unit
+        override suspend fun synthesize(request: TtsSynthesizeRequest): TtsSynthesizeResult {
+            error("tts_not_ready")
+        }
     }
 }

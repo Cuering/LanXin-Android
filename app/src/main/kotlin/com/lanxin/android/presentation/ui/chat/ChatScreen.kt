@@ -43,6 +43,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
@@ -897,19 +898,21 @@ fun ChatInputBox(
                                 strokeWidth = 2.dp
                             )
                         } else {
+                            // 与陪伴底栏一致：关=MicOff；开/听写中=Mic
+                            val voiceOn = micUiState.voiceChatEnabled || micRecording
                             Icon(
-                                imageVector = Icons.Filled.Mic,
+                                imageVector = if (voiceOn) Icons.Filled.Mic else Icons.Filled.MicOff,
                                 contentDescription = stringResource(
-                                    if (micRecording) {
-                                        R.string.chat_mic_stop
-                                    } else {
-                                        R.string.chat_mic_start
+                                    when {
+                                        micRecording -> R.string.chat_mic_stop
+                                        voiceOn -> R.string.chat_mic_voice_off
+                                        else -> R.string.chat_mic_start
                                     }
                                 ),
-                                tint = if (micRecording) {
-                                    MaterialTheme.colorScheme.error
-                                } else {
-                                    LocalContentColor.current
+                                tint = when {
+                                    micRecording -> MaterialTheme.colorScheme.error
+                                    voiceOn -> MaterialTheme.colorScheme.primary
+                                    else -> LocalContentColor.current.copy(alpha = 0.55f)
                                 }
                             )
                         }
