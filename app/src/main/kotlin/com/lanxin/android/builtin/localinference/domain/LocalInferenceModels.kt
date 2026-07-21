@@ -59,6 +59,7 @@ data class LocalInferenceConfig(
         const val DEFAULT_MAX_TOKENS = 512
         const val DEFAULT_TEMPERATURE = 0.7f
         const val MIN_MAX_TOKENS = 16
+
         /** 生成上限（输出）；勿与 context window 混淆。 */
         const val MAX_MAX_TOKENS = 2048
 

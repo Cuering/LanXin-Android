@@ -51,8 +51,10 @@ class LocalContextCompressorTest {
         assertTrue(r.droppedTurns > 0)
         assertTrue(r.keptTurns < users.size)
         assertTrue("必须保留最近用户", r.prompt.contains("用户问题编号40"))
-        assertFalse("最旧轮应被丢掉", r.prompt.contains("用户问题编号1："))
+        // 对话体中不应再出现最旧轮（摘要只记轮数，不含原文）
+        assertFalse("最旧轮应被丢掉", r.prompt.contains("User: 用户问题编号1"))
         assertTrue(r.summaryHint != null)
+        assertTrue(r.summaryHint!!.contains("省略"))
     }
 
     @Test

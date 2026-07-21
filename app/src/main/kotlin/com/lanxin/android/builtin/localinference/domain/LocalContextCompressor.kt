@@ -169,9 +169,8 @@ object LocalContextCompressor {
             (kept.size == 1 && turns.isNotEmpty() && kept.first().user != turns.last().user)
 
         val summaryHint = if (dropped > 0) {
-            // P0：规则摘要（不调用模型）
-            val droppedUsers = turns.take(dropped).map { it.user.trim().take(40) }
-            "（更早 ${dropped} 轮已省略：${droppedUsers.joinToString(" / ")}）"
+            // P0：只记轮数，不把已丢内容写回 prompt（避免再占预算、污染断言）
+            "（更早 $dropped 轮已省略）"
         } else {
             null
         }
