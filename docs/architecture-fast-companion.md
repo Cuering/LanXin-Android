@@ -109,7 +109,9 @@ MemoryIndexRebuilder.reindex  // 语义/稀疏索引跟上新文案
 | `updateMemoryContent` API | ✅ |
 | 单测：编辑 reindex | ✅ |
 | architecture 文档 | ✅ 本文件 |
-| 合入 main / PR | ⏳ 未推 |
+| PR #134（旁路，不改 main） | ✅ 已开 |
+| CI 语法修复（MemoryInjector 换行字面量） | ✅ |
+| 合入 main | ⏸ 按约定不自动合 |
 
 ## 7. 验证建议
 

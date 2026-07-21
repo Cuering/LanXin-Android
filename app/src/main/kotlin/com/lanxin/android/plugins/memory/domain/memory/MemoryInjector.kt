@@ -81,8 +81,9 @@ class MemoryInjector @Inject constructor(
                     .filterNot { it.type == MemoryType.JUDGMENT }
                     .take(COMPANION_MEMORY_LIMIT)
                 if (sparse.isEmpty()) return@runCatching question
-                val lines = sparse.joinToString("
-") { "- ${it.content.trim().take(120)}" }
+                val lines = sparse.joinToString(separator = "\n") { mem ->
+                    "- " + mem.content.trim().take(120)
+                }
                 val block = buildString {
                     appendLine("[精简记忆]")
                     appendLine(lines)
@@ -94,9 +95,7 @@ class MemoryInjector @Inject constructor(
                     block
                 }
                 Log.d(TAG, "[Trace] companion inject count=${sparse.size} chars=${clipped.length}")
-                clipped + "
-
-" + question
+                clipped + "\n\n" + question
             } finally {
                 semanticEnabled = prevSemantic
             }
