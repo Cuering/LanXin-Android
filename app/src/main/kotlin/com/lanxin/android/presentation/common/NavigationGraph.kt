@@ -143,7 +143,8 @@ fun NavGraphBuilder.desktopPetScreenNavigation(navController: NavHostController)
     composable(Route.DESKTOP_PET) {
         DesktopPetScreen(
             onBackAction = { navController.navigateUp() },
-            onOpenCompanion = { navController.navigate(Route.COMPANION) }
+            onOpenCompanion = { navController.navigate(Route.COMPANION) },
+            onOpenLocalInference = { navController.navigate(Route.LOCAL_INFERENCE) }
         )
     }
 }

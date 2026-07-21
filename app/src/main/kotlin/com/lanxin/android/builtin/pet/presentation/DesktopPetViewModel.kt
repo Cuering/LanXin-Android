@@ -528,14 +528,6 @@ class DesktopPetViewModel @Inject constructor(
         }
     }
 
-    fun importLocalLlmFromDocument(uriString: String) {
-        importPath("本地脑") {
-            val result = pathImporter.importFile(uriString, PathImportHelper.Kind.LOCAL_LLM)
-            result.getOrNull()?.let { localInferenceSettings.setModelPath(it.absolutePath) }
-            result
-        }
-    }
-
     private fun importPath(label: String, block: suspend () -> Result<*>) {
         if (_uiState.value.pathImportBusy) {
             _uiState.update { it.copy(snackbarMessage = "正在导入，请稍候") }

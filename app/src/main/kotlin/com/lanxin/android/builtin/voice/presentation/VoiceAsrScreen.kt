@@ -51,9 +51,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -83,11 +81,6 @@ fun VoiceAsrScreen(
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri: Uri? ->
         uri?.toString()?.let(viewModel::importModelFromTree)
-    }
-
-    var modelDraft by remember { mutableStateOf(state.modelPath) }
-    LaunchedEffect(state.modelPath) {
-        modelDraft = state.modelPath
     }
 
     LaunchedEffect(state.snackbarMessage) {
@@ -139,7 +132,7 @@ fun VoiceAsrScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = "总开关默认关闭；关闭时不 load so、不占用麦克风。" +
-                            "模型自备（小模型优先），路径填绝对路径或 stub://demo。" +
+                            "模型自备（小模型优先），请选择含模型文件的文件夹。" +
                             "「试转写」走 stub PCM，不偷偷后台录音。",
                         style = MaterialTheme.typography.bodyMedium
                     )
@@ -195,13 +188,11 @@ fun VoiceAsrScreen(
                 label = "ASR 模型目录",
                 path = state.modelPath,
                 helperText = "优先在「桌宠 / 语音陪伴」一键下载；此处可自定义选择文件夹。" +
-                    "也可高级手填 stub://demo。大文件勿提交 git。",
+                    "大文件勿提交 git。",
                 pickButtonText = "选择目录",
                 onPick = { asrTreePicker.launch(null) },
                 onClear = { viewModel.setModelPath("") },
-                manualDraft = modelDraft,
-                onManualDraftChange = { modelDraft = it },
-                onManualSave = viewModel::setModelPath,
+                showManualEntry = false,
                 enabled = !state.pathImportBusy && !state.isBusy
             )
 

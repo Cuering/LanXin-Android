@@ -50,9 +50,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -75,17 +73,6 @@ fun LocalInferenceScreen(
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri: Uri? ->
         uri?.toString()?.let(viewModel::importModelFromTree)
-    }
-
-    val modelFilePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri: Uri? ->
-        uri?.toString()?.let(viewModel::importModelFromDocument)
-    }
-
-    var modelDraft by remember { mutableStateOf(state.modelPath) }
-    LaunchedEffect(state.modelPath) {
-        modelDraft = state.modelPath
     }
 
     LaunchedEffect(state.snackbarMessage) {
@@ -270,17 +257,11 @@ fun LocalInferenceScreen(
                 label = "本地推理模型路径",
                 path = state.modelPath,
                 helperText = "请选择完整模型文件夹（config.json + *.mnn + tokenizer）。" +
-                    "只选单个 llm.mnn 无法真正推理。高级可选手填路径 / stub://demo。",
+                    "只选单个 llm.mnn 无法真正推理。",
                 pickButtonText = "选择文件夹",
                 onPick = { modelTreePicker.launch(null) },
-                secondaryPickText = "选单文件",
-                onSecondaryPick = {
-                    modelFilePicker.launch(arrayOf("application/octet-stream", "*/*"))
-                },
                 onClear = { viewModel.setModelPath("") },
-                manualDraft = modelDraft,
-                onManualDraftChange = { modelDraft = it },
-                onManualSave = viewModel::setModelPath,
+                showManualEntry = false,
                 enabled = !state.pathImportBusy && !state.isBusy
             )
 
