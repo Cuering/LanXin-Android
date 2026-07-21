@@ -24,8 +24,17 @@ object OpenAiModelProbeSupport {
     /** Soft cap on how many models the user can probe at once (quota safety). */
     const val MAX_PROBE_MODELS: Int = 3
 
+    /**
+     * Cap for "fetch models then measure latency" bulk path (settings / add provider).
+     * Keeps quota reasonable while covering the common head of a catalog.
+     */
+    const val MAX_BULK_LATENCY_PROBE_MODELS: Int = 24
+
     /** Concurrent in-flight probe requests. */
     const val MAX_PROBE_CONCURRENCY: Int = 2
+
+    /** Slightly higher concurrency for bulk latency ranking. */
+    const val MAX_BULK_PROBE_CONCURRENCY: Int = 4
 
     const val DEFAULT_MAX_TOKENS: Int = 16
     const val DEFAULT_TIMEOUT_SECONDS: Int = 15
@@ -83,6 +92,94 @@ object OpenAiModelProbeSupport {
     fun responseContainsExpectedToken(content: String?): Boolean {
         if (content.isNullOrBlank()) return false
         return content.contains(PROBE_EXPECTED_TOKEN, ignoreCase = false)
+    }
+
+    /**
+     * Models to probe when ranking by latency after a full list fetch.
+     * Prefer [preferredModel] first, then list order; hard-cap [MAX_BULK_LATENCY_PROBE_MODELS].
+     */
+    fun resolveBulkLatencyTargets(
+        modelIds: List<String>,
+        preferredModel: String? = null,
+        max: Int = MAX_BULK_LATENCY_PROBE_MODELS
+    ): List<String> {
+        if (max <= 0) return emptyList()
+        val ordered = LinkedHashSet<String>()
+        preferredModel?.trim()?.takeIf { it.isNotEmpty() }?.let { preferred ->
+            val match = modelIds.firstOrNull { it.equals(preferred, ignoreCase = true) }
+            ordered.add(match ?: preferred)
+        }
+        modelIds.asSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .forEach { ordered.add(it) }
+        return ordered.take(max.coerceAtLeast(0))
+    }
+
+    /**
+     * Sort probe results: success first (fast → slow), then failures (fast → slow),
+     * then by model id for stability.
+     */
+    fun sortProbeResultsByLatency(
+        results: List<OpenAiModelProbeResult>
+    ): List<OpenAiModelProbeResult> {
+        return results.sortedWith(
+            compareBy<OpenAiModelProbeResult> { !it.success }
+                .thenBy { it.latencyMs }
+                .thenBy(String.CASE_INSENSITIVE_ORDER) { it.modelId }
+        )
+    }
+
+    /**
+     * Apply latency ranking to a model id list.
+     * - Probed successes: ascending latency
+     * - Probed failures: after successes, ascending latency
+     * - Unprobed ids: keep original relative order at the end
+     */
+    fun sortModelIdsByLatency(
+        modelIds: List<String>,
+        results: List<OpenAiModelProbeResult>
+    ): List<String> {
+        if (modelIds.isEmpty()) return emptyList()
+        val byId = LinkedHashMap<String, OpenAiModelProbeResult>()
+        results.forEach { r ->
+            val key = r.modelId.trim().lowercase()
+            if (key.isNotEmpty()) byId[key] = r
+        }
+        val ranked = ArrayList<String>(modelIds.size)
+        val used = HashSet<String>()
+
+        val successSorted = results
+            .filter { it.success }
+            .sortedWith(
+                compareBy<OpenAiModelProbeResult> { it.latencyMs }
+                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.modelId }
+            )
+        successSorted.forEach { r ->
+            val original = modelIds.firstOrNull { it.equals(r.modelId, ignoreCase = true) }
+                ?: r.modelId
+            val key = original.lowercase()
+            if (used.add(key)) ranked.add(original)
+        }
+
+        val failSorted = results
+            .filter { !it.success }
+            .sortedWith(
+                compareBy<OpenAiModelProbeResult> { it.latencyMs }
+                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.modelId }
+            )
+        failSorted.forEach { r ->
+            val original = modelIds.firstOrNull { it.equals(r.modelId, ignoreCase = true) }
+                ?: r.modelId
+            val key = original.lowercase()
+            if (used.add(key)) ranked.add(original)
+        }
+
+        modelIds.forEach { id ->
+            val key = id.lowercase()
+            if (used.add(key)) ranked.add(id)
+        }
+        return ranked
     }
 
     /**
