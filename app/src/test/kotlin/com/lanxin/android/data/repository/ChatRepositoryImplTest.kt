@@ -577,7 +577,11 @@ class ChatRepositoryImplTest {
 
         override fun canServe(): Boolean = true
 
-        override fun completeAsApiState(prompt: String, systemPrompt: String?): Flow<ApiState> {
+        override fun completeAsApiState(
+            prompt: String,
+            systemPrompt: String?,
+            maxTokens: Int?
+        ): Flow<ApiState> {
             calls += 1
             return flowOf(*states.toTypedArray())
         }
