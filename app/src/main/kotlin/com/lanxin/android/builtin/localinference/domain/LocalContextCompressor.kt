@@ -56,7 +56,7 @@ object LocalContextCompressor {
     )
 
     /**
-     * CJK 友好粗估：汉字等宽字符约 1 token / 1.6 字，ASCII 约 4 字 1 token。
+     * CJK 友好粗估：中日韩约 1 token/字（偏保守占预算），ASCII 约 4 字 1 token。
      */
     fun estimateTokens(text: String): Int {
         if (text.isEmpty()) return 0
@@ -68,12 +68,11 @@ object LocalContextCompressor {
                     ch.code in 0x3400..0x4DBF ||
                     ch.code in 0x3040..0x30FF ||
                     ch.code in 0xAC00..0xD7AF -> cjk++
-                ch.isWhitespace() -> other++
                 else -> other++
             }
         }
-        // 1.6 char/token for CJK ≈ *0.625；ASCII ≈ /4
-        val tokens = (cjk * 0.625) + (other / 4.0)
+        // 保守：CJK 1:1；ASCII /4。预算宁可略紧，少 OOM。
+        val tokens = cjk + (other / 4.0)
         return tokens.toInt().coerceAtLeast(if (text.isBlank()) 0 else 1)
     }
 

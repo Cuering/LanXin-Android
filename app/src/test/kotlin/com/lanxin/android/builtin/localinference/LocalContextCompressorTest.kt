@@ -14,12 +14,12 @@ class LocalContextCompressorTest {
 
     @Test
     fun `estimateTokens treats CJK denser than ascii`() {
-        val cjk = LocalContextCompressor.estimateTokens("你好世界测试文本")
-        val ascii = LocalContextCompressor.estimateTokens("hello world test text")
+        val cjk = LocalContextCompressor.estimateTokens("你好世界测试文本一二三四") // 12 CJK
+        val ascii = LocalContextCompressor.estimateTokens("abcdefghijkl") // 12 ASCII
         assertTrue(cjk > 0)
         assertTrue(ascii > 0)
-        // 同长度中文 token 应明显高于纯 ASCII
-        assertTrue(cjk > ascii)
+        // 同字符数：CJK ≈ 12 token，ASCII ≈ 3 token
+        assertTrue("CJK 应明显高于 ASCII：$cjk vs $ascii", cjk > ascii * 2)
     }
 
     @Test
