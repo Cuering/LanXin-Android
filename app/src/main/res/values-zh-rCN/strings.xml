@@ -292,4 +292,5 @@
     <string name="chat_mic_stop">停止听写</string>
     <string name="chat_mic_listening">正在听写…再点麦克风结束</string>
     <string name="chat_mic_transcribing">识别中…</string>
+    <string name="chat_mic_voice_off">关闭语音聊天</string>
 </resources>

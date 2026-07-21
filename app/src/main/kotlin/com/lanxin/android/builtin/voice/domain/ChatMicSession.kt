@@ -52,16 +52,40 @@ class ChatMicSession @Inject constructor(
     val uiState: StateFlow<ChatMicUiState> = _uiState.asStateFlow()
 
     /**
-     * 点击麦克风：IDLE→开录；RECORDING→停录并转写；TRANSCRIBING→忽略。
+     * 点击麦克风（与陪伴底栏同一套「语音聊天模式」语义）：
+     * - 关 + IDLE → 开模式并开始听写
+     * - 开 + RECORDING → 停录并转写（模式保持开）
+     * - 开 + IDLE → 关模式（不占麦）
+     * - TRANSCRIBING → 忽略
      *
      * @param onTranscript 成功转写后回调（主线程外也可；UI 侧填入输入框）
      */
     suspend fun onMicClick(onTranscript: (String) -> Unit) {
         mutex.withLock {
-            when (_uiState.value.phase) {
+            val st = _uiState.value
+            when (st.phase) {
                 ChatMicPhase.TRANSCRIBING -> return
                 ChatMicPhase.RECORDING -> stopAndTranscribeLocked(onTranscript)
-                ChatMicPhase.IDLE -> startRecordingLocked()
+                ChatMicPhase.IDLE -> {
+                    if (st.voiceChatEnabled) {
+                        // 已开且空闲：再点关，释放麦意图
+                        _uiState.update {
+                            it.copy(
+                                voiceChatEnabled = false,
+                                snackbarMessage = "语音聊天已关"
+                            )
+                        }
+                    } else {
+                        _uiState.update { it.copy(voiceChatEnabled = true) }
+                        startRecordingLocked()
+                        // 未能进入录音（权限/引擎）则回关，避免假开占位
+                        if (_uiState.value.phase != ChatMicPhase.RECORDING &&
+                            !_uiState.value.needRequestPermission
+                        ) {
+                            _uiState.update { it.copy(voiceChatEnabled = false) }
+                        }
+                    }
+                }
             }
         }
     }
@@ -88,23 +112,29 @@ class ChatMicSession @Inject constructor(
                 _uiState.update {
                     it.copy(
                         phase = ChatMicPhase.IDLE,
+                        voiceChatEnabled = false,
                         snackbarMessage = MicPermissionGate.deniedMessage(state)
                     )
                 }
                 return@withLock
             }
-            // 授权后自动开录（用户刚点过麦）
+            // 授权后自动开录（用户刚点过麦）；保持语音模式开
+            _uiState.update { it.copy(voiceChatEnabled = true) }
             startRecordingLocked(skipPermissionCheck = true)
+            if (_uiState.value.phase != ChatMicPhase.RECORDING) {
+                _uiState.update { it.copy(voiceChatEnabled = false) }
+            }
         }
     }
 
-    /** 离开 Chat 页 / 取消：停录并释放麦，不转写。 */
+    /** 离开 Chat 页 / 取消：停录并释放麦，不转写；语音模式也关。 */
     suspend fun cancel() {
         mutex.withLock {
             runCatching { recorder.cancelRecording() }
             _uiState.update {
                 it.copy(
                     phase = ChatMicPhase.IDLE,
+                    voiceChatEnabled = false,
                     needRequestPermission = false
                 )
             }

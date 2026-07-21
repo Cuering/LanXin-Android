@@ -72,10 +72,12 @@ class VoiceSessionCoordinator @Inject constructor(
      *
      * @param input ASR 文本；stub 演示可传固定句
      * @param toolConfirmed 若本轮命中写操作工具，是否视为用户已确认
+     * @param skipTts true=仅文字（跳过 load/synthesize）；文字陪伴默认 true，避免 TTS 未就绪拖垮/误占麦
      */
     suspend fun runRound(
         input: VoiceSessionInput,
-        toolConfirmed: Boolean = false
+        toolConfirmed: Boolean = false,
+        skipTts: Boolean = false
     ): VoiceSessionResult = mutex.withLock {
         val started = System.currentTimeMillis()
         var snap = _snapshot.value
@@ -144,6 +146,26 @@ class VoiceSessionCoordinator @Inject constructor(
         )
         _snapshot.value = snap
 
+        // 仅文字轮次：跳过 TTS load/synthesize，直接收口到 IDLE（不因 TTS 失败标 error）
+        if (skipTts) {
+            snap = VoiceSessionStateMachine.onSpeakDone(snap)
+            snap = snap.copy(
+                replyText = LocalReplySanitizer.forDisplay(snap.replyText, showThinking = false),
+                subtitle = LocalReplySanitizer.forDisplay(snap.subtitle, showThinking = false)
+            )
+            _snapshot.value = snap
+            return@withLock VoiceSessionResult(
+                asrText = text,
+                replyText = displayReply,
+                subtitle = displayReply,
+                phase = snap.phase,
+                isStub = input.isStub,
+                durationMs = System.currentTimeMillis() - started,
+                toolName = toolTurn.plan?.toolName,
+                toolOutcome = toolTurn.outcome
+            )
+        }
+
         // TTS：未就绪时用 DataStore 配置 auto-load（含 modelDir）；绝不把标签念出来
         if (!ttsEngine.isReady) {
             runCatching {
@@ -163,7 +185,7 @@ class VoiceSessionCoordinator @Inject constructor(
         val tts = runCatching {
             ttsEngine.synthesize(TtsSynthesizeRequest(text = displayReply))
         }.getOrElse { e ->
-            // 合成失败仍回 IDLE；历史/字幕用剥离后文本
+            // 合成失败：文字结果仍返回；error 仅作状态提示，调用方不应崩溃
             snap = VoiceSessionStateMachine.fail(snap, e.message ?: "tts_failed")
             _snapshot.value = snap
             snap = VoiceSessionStateMachine.reset(snap).copy(
