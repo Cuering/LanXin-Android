@@ -17,10 +17,11 @@
 package com.lanxin.android.builtin.localinference.domain
 
 /**
- * 本地推理上下文压缩（P0：滑动窗口；P1 摘要预留字段）。
+ * 本地推理上下文压缩（P0：滑动窗口；P1：规则摘要被挤出轮次）。
  *
  * - 保留 system + 最近若干轮 + 当前 user
  * - 超 `contextWindow * softRatio` 时从最旧轮次丢弃
+ * - 丢轮时由 [LocalConversationSummarizer] 生成规则摘要注入 prompt
  * - token 用 CJK 粗估，不依赖 tokenizer
  */
 object LocalContextCompressor {
@@ -44,7 +45,7 @@ object LocalContextCompressor {
      * @property droppedTurns 丢弃的旧轮次数
      * @property estimatedTokens 估算占用（不含 system 时可单独加）
      * @property compressed 是否发生了截断
-     * @property summaryHint P1 预留：被挤出内容的规则摘要（当前可为 null）
+     * @property summaryHint 注入 prompt 的摘要正文（规则摘要和/或外部摘要；无则 null）
      */
     data class Result(
         val prompt: String,
@@ -109,7 +110,8 @@ object LocalContextCompressor {
      * @param contextWindowTokens 上下文窗口
      * @param maxNewTokens 预留给生成的 token（从窗口中扣减）
      * @param softRatio 触发阈值
-     * @param conversationSummary 已有摘要（P1；非空时放在历史前）
+     * @param conversationSummary 外部已有摘要（与丢轮规则摘要合并）
+     * @param maxSummaryTokens 摘要 token 预算
      */
     fun compress(
         turns: List<Turn>,
@@ -117,7 +119,8 @@ object LocalContextCompressor {
         contextWindowTokens: Int = LocalInferenceConfig.DEFAULT_CONTEXT_WINDOW_TOKENS,
         maxNewTokens: Int = LocalInferenceConfig.DEFAULT_MAX_TOKENS,
         softRatio: Float = DEFAULT_SOFT_RATIO,
-        conversationSummary: String? = null
+        conversationSummary: String? = null,
+        maxSummaryTokens: Int = LocalConversationSummarizer.DEFAULT_MAX_SUMMARY_TOKENS
     ): Result {
         val window = contextWindowTokens.coerceIn(
             LocalInferenceConfig.MIN_CONTEXT_WINDOW_TOKENS,
@@ -127,20 +130,41 @@ object LocalContextCompressor {
             LocalInferenceConfig.MIN_MAX_TOKENS,
             LocalInferenceConfig.MAX_MAX_TOKENS
         )
-        // 输入可用预算 = 窗口 * soft - 生成预留 - system - 可选摘要
+        val summaryBudget = maxSummaryTokens.coerceAtLeast(32)
+        // 先按「摘要预算上限」预留，避免丢轮后再塞摘要撑爆窗口
         val sysTokens = estimateTokens(systemPrompt.orEmpty())
-        val summaryTokens = estimateTokens(conversationSummary.orEmpty())
+        val reservedSummary = minOf(
+            summaryBudget,
+            estimateTokens(conversationSummary.orEmpty()).coerceAtLeast(0)
+        ).let { base ->
+            // 有外部摘要用其实际；否则预留默认摘要预算的一半作丢轮摘要
+            if (conversationSummary.isNullOrBlank()) {
+                (summaryBudget / 2).coerceAtLeast(32)
+            } else {
+                maxOf(base, summaryBudget / 2)
+            }
+        }
         val inputBudget = (
-            (window * softRatio).toInt() - genBudget - sysTokens - summaryTokens
+            (window * softRatio).toInt() - genBudget - sysTokens - reservedSummary
             ).coerceAtLeast(64)
 
         if (turns.isEmpty()) {
+            val onlyExternal = LocalConversationSummarizer.mergeSummaries(
+                external = conversationSummary,
+                ruleFromDropped = null,
+                maxTokens = summaryBudget
+            )
             return Result(
-                prompt = "",
+                prompt = renderPrompt(
+                    kept = emptyList(),
+                    conversationSummary = onlyExternal,
+                    droppedHint = null
+                ),
                 keptTurns = 0,
                 droppedTurns = 0,
-                estimatedTokens = sysTokens + summaryTokens,
-                compressed = false
+                estimatedTokens = sysTokens + estimateTokens(onlyExternal.orEmpty()),
+                compressed = false,
+                summaryHint = onlyExternal
             )
         }
 
@@ -164,29 +188,37 @@ object LocalContextCompressor {
             used += cost
         }
 
-        val dropped = turns.size - kept.size
-        val compressed = dropped > 0 ||
+        val droppedCount = turns.size - kept.size
+        val droppedTurns = if (droppedCount > 0) turns.take(droppedCount) else emptyList()
+        val compressed = droppedCount > 0 ||
             (kept.size == 1 && turns.isNotEmpty() && kept.first().user != turns.last().user)
 
-        val summaryHint = if (dropped > 0) {
-            // P0：只记轮数，不把已丢内容写回 prompt（避免再占预算、污染断言）
-            "（更早 $dropped 轮已省略）"
+        val ruleSummary = if (droppedTurns.isNotEmpty()) {
+            LocalConversationSummarizer.summarizeDropped(
+                droppedTurns = droppedTurns,
+                maxTokens = summaryBudget
+            )
         } else {
             null
         }
+        val mergedSummary = LocalConversationSummarizer.mergeSummaries(
+            external = conversationSummary,
+            ruleFromDropped = ruleSummary,
+            maxTokens = summaryBudget
+        )
 
         val prompt = renderPrompt(
             kept = kept,
-            conversationSummary = conversationSummary,
-            droppedHint = summaryHint
+            conversationSummary = mergedSummary,
+            droppedHint = null
         )
         return Result(
             prompt = prompt,
             keptTurns = kept.size,
-            droppedTurns = dropped,
-            estimatedTokens = sysTokens + summaryTokens + estimateTokens(prompt),
+            droppedTurns = droppedCount,
+            estimatedTokens = sysTokens + estimateTokens(prompt),
             compressed = compressed,
-            summaryHint = summaryHint
+            summaryHint = mergedSummary
         )
     }
 
@@ -199,7 +231,8 @@ object LocalContextCompressor {
         systemPrompt: String? = null,
         contextWindowTokens: Int = LocalInferenceConfig.DEFAULT_CONTEXT_WINDOW_TOKENS,
         maxNewTokens: Int = LocalInferenceConfig.DEFAULT_MAX_TOKENS,
-        conversationSummary: String? = null
+        conversationSummary: String? = null,
+        maxSummaryTokens: Int = LocalConversationSummarizer.DEFAULT_MAX_SUMMARY_TOKENS
     ): Result {
         val turns = buildTurns(userTexts, assistantTexts)
         return compress(
@@ -207,7 +240,8 @@ object LocalContextCompressor {
             systemPrompt = systemPrompt,
             contextWindowTokens = contextWindowTokens,
             maxNewTokens = maxNewTokens,
-            conversationSummary = conversationSummary
+            conversationSummary = conversationSummary,
+            maxSummaryTokens = maxSummaryTokens
         )
     }
 
