@@ -391,6 +391,7 @@ class VoiceSessionCoordinator @Inject constructor(
 
     companion object {
         private const val TAG = "VoiceSession"
+
         /** 跨会话固定 session：全屏陪伴 / 桌宠共用。 */
         const val COMPANION_SESSION_ID = "companion"
         const val COMPANION_SESSION_TITLE = "全屏陪伴"
