@@ -78,6 +78,8 @@ class LanXinApp : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
+        // 尽早安装：捕获 Java/Kotlin 未处理异常，写 crash-*.log + 崩溃展示页
+        CrashHandler.init(this)
         logManager.initialize(this)
         val log = logManager.getLogger("LanXinApp")
         log.info("LanXin starting…")
