@@ -98,13 +98,14 @@ val sherpaAarForCompile: File = when {
 // ---------------------------------------------------------------------------
 // P2: MNN 本地 LLM 预编译 so（构建期下载，不进 git）
 // 官方 zip: mnn_{ver}_android_armv7_armv8_cpu_opencl_vulkan.zip
-// 解压 arm64-v8a → app/src/main/jniLibs/arm64-v8a/（CMake 链 libllm + 我方 JNI）
+// 解压 arm64-v8a + armeabi-v7a → app/src/main/jniLibs/<abi>/（CMake 链 libllm + 我方 JNI）
 // 覆盖: MNN_NATIVE_ZIP=本地 zip 或 MNN_NATIVE_URL=下载 URL
 // ---------------------------------------------------------------------------
 val mnnVersion = "3.6.0"
 val mnnZipFileName = "mnn_${mnnVersion}_android_armv7_armv8_cpu_opencl_vulkan.zip"
 val mnnZipLocal = layout.projectDirectory.file("libs/$mnnZipFileName").asFile
 val mnnJniArm64 = layout.projectDirectory.dir("src/main/jniLibs/arm64-v8a").asFile
+val mnnJniArmv7 = layout.projectDirectory.dir("src/main/jniLibs/armeabi-v7a").asFile
 val mnnDefaultUrl =
     "https://github.com/alibaba/MNN/releases/download/$mnnVersion/$mnnZipFileName"
 val mnnMirrorUrl =
@@ -115,18 +116,24 @@ val mnnRequiredSo = listOf(
     "libllm.so",
     "libc++_shared.so"
 )
+val mnnTargetAbis = listOf(
+    "arm64-v8a" to mnnJniArm64,
+    "armeabi-v7a" to mnnJniArmv7
+)
 
-fun mnnNativeReady(): Boolean {
+fun mnnAbiReady(jniDir: File): Boolean {
     return mnnRequiredSo.all { name ->
-        val f = File(mnnJniArm64, name)
+        val f = File(jniDir, name)
         f.isFile && f.length() > 10_000L
     }
 }
 
+fun mnnNativeReady(): Boolean = mnnTargetAbis.all { (_, dir) -> mnnAbiReady(dir) }
+
 val downloadMnnNative by tasks.registering {
     group = "lanxin"
-    description = "Download MNN Android prebuilt so into jniLibs (not committed)"
-    outputs.dir(mnnJniArm64)
+    description = "Download MNN Android prebuilt so into jniLibs (arm64-v8a + armeabi-v7a)"
+    outputs.dirs(mnnJniArm64, mnnJniArmv7)
     onlyIf {
         val override = System.getenv("MNN_NATIVE_ZIP")
         if (!override.isNullOrBlank()) {
@@ -144,6 +151,7 @@ val downloadMnnNative by tasks.registering {
     doLast {
         mnnZipLocal.parentFile.mkdirs()
         mnnJniArm64.mkdirs()
+        mnnJniArmv7.mkdirs()
         if (!(mnnZipLocal.isFile && mnnZipLocal.length() > 1_000_000L)) {
             val envUrl = System.getenv("MNN_NATIVE_URL")
             val urls = buildList {
@@ -176,7 +184,7 @@ val downloadMnnNative by tasks.registering {
                 )
             }
         }
-        // extract arm64-v8a so only
+        // extract arm64-v8a + armeabi-v7a so
         val tmpDir = layout.buildDirectory.dir("mnn-extract").get().asFile
         if (tmpDir.exists()) tmpDir.deleteRecursively()
         tmpDir.mkdirs()
@@ -184,21 +192,24 @@ val downloadMnnNative by tasks.registering {
             from(zipTree(mnnZipLocal))
             into(tmpDir)
         }
-        // zip root: mnn_3.6.0_android_.../arm64-v8a/*.so
-        val arm64Dir = tmpDir.walkTopDown()
-            .firstOrNull { it.isDirectory && it.name == "arm64-v8a" }
-            ?: throw GradleException("arm64-v8a not found in $mnnZipLocal")
-        arm64Dir.listFiles()
-            ?.filter { it.isFile && it.name.endsWith(".so") }
-            ?.forEach { so ->
-                so.copyTo(File(mnnJniArm64, so.name), overwrite = true)
+        // zip root: mnn_3.6.0_android_.../<abi>/*.so
+        for ((abiName, jniDir) in mnnTargetAbis) {
+            val abiDir = tmpDir.walkTopDown()
+                .firstOrNull { it.isDirectory && it.name == abiName }
+                ?: throw GradleException("$abiName not found in $mnnZipLocal")
+            jniDir.mkdirs()
+            abiDir.listFiles()
+                ?.filter { it.isFile && it.name.endsWith(".so") }
+                ?.forEach { so ->
+                    so.copyTo(File(jniDir, so.name), overwrite = true)
+                }
+            require(mnnAbiReady(jniDir)) {
+                "MNN extract incomplete under $jniDir: ${jniDir.list()?.toList()}"
             }
-        require(mnnNativeReady()) {
-            "MNN extract incomplete under $mnnJniArm64: ${mnnJniArm64.list()?.toList()}"
+            logger.lifecycle(
+                "MNN native ready under $jniDir (${jniDir.list()?.size ?: 0} files)"
+            )
         }
-        logger.lifecycle(
-            "MNN native ready under $mnnJniArm64 (${mnnJniArm64.list()?.size ?: 0} files)"
-        )
     }
 }
 
@@ -217,9 +228,9 @@ extensions.configure<ApplicationExtension> {
         vectorDrawables {
             useSupportLibrary = true
         }
-        // 真机为主；保留 x86_64 供模拟器 / CI 体积可控
+        // 真机 arm64 + ARMv7；x86_64 供模拟器 / CI（MNN 走 stub .so）
         ndk {
-            abiFilters += listOf("arm64-v8a", "x86_64")
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
         }
         externalNativeBuild {
             cmake {

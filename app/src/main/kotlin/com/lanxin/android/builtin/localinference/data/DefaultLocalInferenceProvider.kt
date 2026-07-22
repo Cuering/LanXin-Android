@@ -16,6 +16,7 @@
 
 package com.lanxin.android.builtin.localinference.data
 
+import com.lanxin.android.builtin.localinference.domain.LocalChatMessage
 import com.lanxin.android.builtin.localinference.domain.LocalGenerateRequest
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceProvider
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceSettings
@@ -47,7 +48,8 @@ class DefaultLocalInferenceProvider @Inject constructor(
     override fun completeAsApiState(
         prompt: String,
         systemPrompt: String?,
-        maxTokens: Int?
+        maxTokens: Int?,
+        history: List<LocalChatMessage>
     ): Flow<ApiState> = flow {
         val config = settings.getConfig()
         if (!config.enabled) {
@@ -90,7 +92,8 @@ class DefaultLocalInferenceProvider @Inject constructor(
                 prompt = prompt,
                 systemPrompt = effectiveSystem,
                 maxTokens = effectiveMax,
-                temperature = config.temperature
+                temperature = config.temperature,
+                history = history
             )
         ).collect { chunk ->
             rawBuilder.append(chunk)

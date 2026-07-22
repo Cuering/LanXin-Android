@@ -98,4 +98,20 @@ class LocalContextCompressorTest {
         assertTrue(r.prompt.contains("用户喜欢猫咪"))
         assertTrue(r.prompt.contains("继续"))
     }
+
+    @Test
+    fun `history is structured excluding current user`() {
+        val r = LocalContextCompressor.compressFromMessages(
+            userTexts = listOf("第一问", "第二问"),
+            assistantTexts = listOf("第一答", ""),
+            contextWindowTokens = 8192,
+            maxNewTokens = 512
+        )
+        assertEquals("第二问", r.currentUser)
+        assertEquals(2, r.history.size)
+        assertEquals("user", r.history[0].role)
+        assertEquals("第一问", r.history[0].content)
+        assertEquals("assistant", r.history[1].role)
+        assertEquals("第一答", r.history[1].content)
+    }
 }

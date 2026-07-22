@@ -25,6 +25,7 @@ import com.lanxin.android.util.PathImportHelper
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -167,12 +168,16 @@ class MnnLocalLlmEngine @Inject constructor(
         }
         val maxTokens = (request.maxTokens ?: config.maxTokens)
             .coerceIn(LocalInferenceConfig.MIN_MAX_TOKENS, LocalInferenceConfig.MAX_MAX_TOKENS)
-        val prompt = buildPrompt(request)
         val modelName = loadedPath?.let { File(it).name } ?: "?"
 
         if (usingNative) {
+            val (roles, contents) = buildChatMessages(request)
             val text = withContext(Dispatchers.IO) {
-                nativeBridge.generate(prompt, maxTokens)
+                if (roles.size > 1) {
+                    nativeBridge.generateChat(roles, contents, maxTokens)
+                } else {
+                    nativeBridge.generate(request.prompt.trim(), maxTokens)
+                }
             }
             if (text != null) {
                 return LocalGenerateResult(
@@ -208,19 +213,64 @@ class MnnLocalLlmEngine @Inject constructor(
     }
 
     override fun stream(request: LocalGenerateRequest): Flow<String> = flow {
-        // 整段 generate 后一次 emit；真实 token 流式后续可扩 native 回调
-        val result = generate(request)
-        emit(result.text)
+        if (!isReady) {
+            error("LocalLlmEngine not ready: state=${_state.value}, error=$error")
+        }
+        val maxTokens = (request.maxTokens ?: config.maxTokens)
+            .coerceIn(LocalInferenceConfig.MIN_MAX_TOKENS, LocalInferenceConfig.MAX_MAX_TOKENS)
+
+        if (usingNative) {
+            val (roles, contents) = buildChatMessages(request)
+            if (roles.size > 1) {
+                // generateChatStream 的回调是非 suspend lambda，用 Channel 桥接 flow emit
+                val channel = Channel<String>(Channel.UNLIMITED)
+                withContext(Dispatchers.IO) {
+                    nativeBridge.generateChatStream(roles, contents, maxTokens) { piece ->
+                        channel.trySend(piece)
+                        false
+                    }
+                    channel.close()
+                }
+                for (piece in channel) {
+                    emit(piece)
+                }
+            } else {
+                val text = withContext(Dispatchers.IO) {
+                    nativeBridge.generate(request.prompt.trim(), maxTokens)
+                }
+                if (text != null) emit(text)
+            }
+        } else {
+            val result = generate(request)
+            emit(result.text)
+        }
     }
 
-    private fun buildPrompt(request: LocalGenerateRequest): String {
-        val user = request.prompt.trim()
-        val sys = request.systemPrompt?.trim().orEmpty()
-        return if (sys.isNotEmpty()) {
-            // 简单拼接；模型侧 chat template 由 MNN config 负责
-            "System: $sys\n\nUser: $user"
-        } else {
-            user
+    /**
+     * 构建 ChatMessages 数组（对齐 MNN Chat 的多轮格式）。
+     *
+     * - 有 systemPrompt → ["system","user",…] 或 ["system","user","assistant","user",…]
+     * - 无 systemPrompt + 单轮 → roles.size==1，调用方走 generate fast path
+     */
+    private fun buildChatMessages(
+        request: LocalGenerateRequest
+    ): Pair<Array<String>, Array<String>> {
+        val roles = mutableListOf<String>()
+        val contents = mutableListOf<String>()
+
+        request.systemPrompt?.takeIf { it.isNotBlank() }?.let {
+            roles.add("system")
+            contents.add(it.trim())
         }
+
+        request.history.forEach { msg ->
+            roles.add(msg.role)
+            contents.add(msg.content)
+        }
+
+        roles.add("user")
+        contents.add(request.prompt.trim())
+
+        return roles.toTypedArray() to contents.toTypedArray()
     }
 }

@@ -99,6 +99,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lanxin.android.R
 import com.lanxin.android.builtin.voice.domain.ChatMicPhase
 import com.lanxin.android.builtin.voice.domain.ChatMicUiState
+import com.lanxin.android.builtin.voice.domain.VoiceChatPhase
+import com.lanxin.android.builtin.voice.domain.VoiceChatUiState
 import com.lanxin.android.plugins.chat.data.entity.ACTIVE_REVISION_LATEST
 import com.lanxin.android.plugins.chat.data.entity.MessageV2
 import com.lanxin.android.plugins.chat.data.entity.PlatformV2
@@ -141,6 +143,7 @@ fun ChatScreen(
     val selectedAttachments by chatViewModel.selectedAttachments.collectAsStateWithLifecycle()
     val attachmentNotice by chatViewModel.attachmentNotice.collectAsStateWithLifecycle()
     val chatMicUi by chatViewModel.chatMicUiState.collectAsStateWithLifecycle()
+    val voiceChatUi by chatViewModel.voiceChatUiState.collectAsStateWithLifecycle()
     val appEnabledPlatforms by chatViewModel.enabledPlatformsInApp.collectAsStateWithLifecycle()
     val appAllPlatforms by chatViewModel.platformsInApp.collectAsStateWithLifecycle()
     val chatPlatformModels by chatViewModel.chatPlatformModels.collectAsStateWithLifecycle()
@@ -159,16 +162,17 @@ fun ChatScreen(
         chatViewModel.onMicPermissionResult(granted = granted, permanentlyDenied = !granted)
     }
 
-    LaunchedEffect(chatMicUi.needRequestPermission) {
-        if (chatMicUi.needRequestPermission) {
+    LaunchedEffect(chatMicUi.needRequestPermission, voiceChatUi.needRequestPermission) {
+        if (chatMicUi.needRequestPermission || voiceChatUi.needRequestPermission) {
             chatViewModel.consumeMicPermissionRequest()
             micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
         }
     }
 
-    LaunchedEffect(chatMicUi.snackbarMessage) {
-        chatMicUi.snackbarMessage?.let { msg ->
-            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+    LaunchedEffect(chatMicUi.snackbarMessage, voiceChatUi.snackbarMessage) {
+        val msg = voiceChatUi.snackbarMessage ?: chatMicUi.snackbarMessage
+        msg?.let {
+            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
             chatViewModel.clearMicSnackbar()
         }
     }
@@ -360,7 +364,9 @@ fun ChatScreen(
                 sendButtonEnabled = isIdle,
                 selectedAttachments = selectedAttachments,
                 micUiState = chatMicUi,
+                voiceChatUiState = voiceChatUi,
                 onMicClick = chatViewModel::onMicClick,
+                onToggleVoiceChat = chatViewModel::toggleVoiceChatMode,
                 onFileSelected = { filePath -> chatViewModel.addSelectedFile(filePath) },
                 onFileRemoved = { filePath -> chatViewModel.removeSelectedFile(filePath) }
             ) {
@@ -789,7 +795,9 @@ fun ChatInputBox(
     sendButtonEnabled: Boolean = true,
     selectedAttachments: List<ChatAttachmentDraft> = emptyList(),
     micUiState: ChatMicUiState = ChatMicUiState(),
+    voiceChatUiState: VoiceChatUiState = VoiceChatUiState(),
     onMicClick: () -> Unit = {},
+    onToggleVoiceChat: () -> Unit = {},
     onFileSelected: (String) -> Unit = {},
     onFileRemoved: (String) -> Unit = {},
     onSendButtonClick: () -> Unit = {}
@@ -800,9 +808,12 @@ fun ChatInputBox(
     val scope = rememberCoroutineScope()
     val chatInputLineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 5)
     val hasQuestionText = inputState.text.isNotEmpty()
-    val micRecording = micUiState.phase == ChatMicPhase.RECORDING
-    val micBusy = micUiState.phase == ChatMicPhase.TRANSCRIBING
-    val micEnabled = chatEnabled && micUiState.micToggleEnabled
+    // 语音对话优先：听中/识别中/等待/播报都算占用麦
+    val voiceListening = voiceChatUiState.phase == VoiceChatPhase.LISTENING
+    val voiceBusy = voiceChatUiState.isBusy
+    val micRecording = voiceListening || micUiState.phase == ChatMicPhase.RECORDING
+    val micBusy = voiceBusy || micUiState.phase == ChatMicPhase.TRANSCRIBING
+    val micEnabled = chatEnabled && !voiceBusy && micUiState.micToggleEnabled
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -828,20 +839,40 @@ fun ChatInputBox(
                 onFileRemoved = onFileRemoved
             )
         }
-        if (micRecording || micBusy) {
-            Text(
-                text = if (micRecording) {
-                    stringResource(R.string.chat_mic_listening)
+        // 语音对话 / 听写状态条
+        val statusText = when {
+            voiceChatUiState.phase == VoiceChatPhase.LISTENING ->
+                if (voiceChatUiState.partialText.isNotBlank()) {
+                    voiceChatUiState.partialText
                 } else {
-                    stringResource(R.string.chat_mic_transcribing)
-                },
+                    stringResource(R.string.chat_voice_listening)
+                }
+            voiceChatUiState.phase == VoiceChatPhase.TRANSCRIBING ->
+                stringResource(R.string.chat_mic_transcribing)
+            voiceChatUiState.phase == VoiceChatPhase.WAITING_REPLY ->
+                stringResource(R.string.chat_voice_waiting_reply)
+            voiceChatUiState.phase == VoiceChatPhase.SPEAKING ->
+                stringResource(R.string.chat_voice_speaking)
+            micUiState.phase == ChatMicPhase.RECORDING ->
+                stringResource(R.string.chat_mic_listening)
+            micUiState.phase == ChatMicPhase.TRANSCRIBING ->
+                stringResource(R.string.chat_mic_transcribing)
+            else -> null
+        }
+        statusText?.let { text ->
+            Text(
+                text = text,
                 style = MaterialTheme.typography.labelMedium,
                 color = if (micRecording) {
                     MaterialTheme.colorScheme.error
                 } else {
                     MaterialTheme.colorScheme.primary
                 },
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 2.dp)
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 2.dp)
             )
         }
         BasicTextField(
@@ -890,23 +921,26 @@ fun ChatInputBox(
                     }
                     IconButton(
                         enabled = micEnabled,
+                        // 点按：开语音对话 / 听中收口发送 / 空闲再点关
                         onClick = onMicClick
                     ) {
-                        if (micBusy) {
+                        if (micBusy && !micRecording) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(22.dp),
                                 strokeWidth = 2.dp
                             )
                         } else {
-                            // 与陪伴底栏一致：关=MicOff；开/听写中=Mic
-                            val voiceOn = micUiState.voiceChatEnabled || micRecording
+                            // 关=MicOff；语音对话开/听中=Mic
+                            val voiceOn = voiceChatUiState.enabled ||
+                                micUiState.voiceChatEnabled ||
+                                micRecording
                             Icon(
                                 imageVector = if (voiceOn) Icons.Filled.Mic else Icons.Filled.MicOff,
                                 contentDescription = stringResource(
                                     when {
                                         micRecording -> R.string.chat_mic_stop
                                         voiceOn -> R.string.chat_mic_voice_off
-                                        else -> R.string.chat_mic_start
+                                        else -> R.string.chat_voice_start
                                     }
                                 ),
                                 tint = when {

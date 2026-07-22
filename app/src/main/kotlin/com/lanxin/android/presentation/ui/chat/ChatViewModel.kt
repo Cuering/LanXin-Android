@@ -20,6 +20,8 @@ import com.lanxin.android.builtin.statistics.domain.StatisticsRepository
 import com.lanxin.android.builtin.unifiedsearch.domain.UnifiedSearchService
 import com.lanxin.android.builtin.voice.domain.ChatMicSession
 import com.lanxin.android.builtin.voice.domain.ChatMicUiState
+import com.lanxin.android.builtin.voice.domain.VoiceChatSession
+import com.lanxin.android.builtin.voice.domain.VoiceChatUiState
 import com.lanxin.android.data.repository.SettingRepository
 import com.lanxin.android.plugin.ToolCallEngine
 import com.lanxin.android.plugin.ToolDef
@@ -76,7 +78,8 @@ class ChatViewModel @Inject constructor(
     private val deviceSensingSettings: com.lanxin.android.builtin.platform.domain.DeviceSensingSettings,
     private val smartCapabilitiesSettings: com.lanxin.android.builtin.capabilities.domain.SmartCapabilitiesSettings,
     private val locationSettings: com.lanxin.android.builtin.capabilities.domain.LocationSettings,
-    private val chatMicSession: ChatMicSession
+    private val chatMicSession: ChatMicSession,
+    private val voiceChatSession: VoiceChatSession
 ) : ViewModel() {
     sealed class LoadingState {
         data object Idle : LoadingState()
@@ -143,6 +146,9 @@ class ChatViewModel @Inject constructor(
 
     /** 主聊天麦克风听写 UI（复用 Voice/ASR 链路）。 */
     val chatMicUiState: StateFlow<ChatMicUiState> = chatMicSession.uiState
+
+    /** 真语音对话 UI（自动发送 + TTS）。 */
+    val voiceChatUiState: StateFlow<VoiceChatUiState> = voiceChatSession.uiState
 
     private val _selectedAttachments = MutableStateFlow(listOf<ChatAttachmentDraft>())
     val selectedAttachments = _selectedAttachments.asStateFlow()
@@ -245,14 +251,24 @@ class ChatViewModel @Inject constructor(
     }
 
     /**
-     * 主聊天麦克风：点一下开录，再点停录并转写填入输入框（不自动发送）。
+     * 主聊天麦克风 = 语音对话开关：
+     * - 点一下：开启并自动听 → 识别 → 自动发送 → TTS 回复 → 连续下一轮
+     * - 再点：听中则收口发送；空闲则关闭语音对话
      */
     fun onMicClick() {
         viewModelScope.launch {
-            chatMicSession.onMicClick { text ->
-                appendDictationToInput(text)
+            chatMicSession.cancel()
+            voiceChatSession.onMicClick(continuousListen = true) { text ->
+                sendQuestionFromVoice(text)
             }
         }
+    }
+
+    /**
+     * 与 [onMicClick] 同语义：开/关真语音对话（自动发送 + TTS）。
+     */
+    fun toggleVoiceChatMode() {
+        onMicClick()
     }
 
     /**
@@ -260,27 +276,69 @@ class ChatViewModel @Inject constructor(
      */
     fun onMicPermissionResult(granted: Boolean, permanentlyDenied: Boolean = false) {
         viewModelScope.launch {
-            chatMicSession.onPermissionResult(
-                granted = granted,
-                permanentlyDenied = permanentlyDenied
-            ) { text ->
-                appendDictationToInput(text)
+            if (voiceChatSession.uiState.value.enabled ||
+                voiceChatSession.uiState.value.needRequestPermission
+            ) {
+                voiceChatSession.onPermissionResult(
+                    granted = granted,
+                    permanentlyDenied = permanentlyDenied
+                ) { text ->
+                    sendQuestionFromVoice(text)
+                }
+            } else {
+                chatMicSession.onPermissionResult(
+                    granted = granted,
+                    permanentlyDenied = permanentlyDenied
+                ) { text ->
+                    appendDictationToInput(text)
+                }
             }
         }
     }
 
     fun clearMicSnackbar() {
         chatMicSession.clearSnackbar()
+        voiceChatSession.clearSnackbar()
     }
 
     fun consumeMicPermissionRequest() {
         chatMicSession.consumePermissionRequest()
+        voiceChatSession.consumePermissionRequest()
     }
 
     /** 离开页面时停麦释放资源。 */
     fun cancelMicSession() {
         viewModelScope.launch {
             chatMicSession.cancel()
+            voiceChatSession.cancel()
+        }
+    }
+
+    /**
+     * 语音对话：识别完成 → 直接发送（不填输入框）。
+     */
+    private fun sendQuestionFromVoice(text: String) {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return
+        voiceChatSession.markWaitingReply()
+        question.setTextAndPlaceCursorAtEnd(trimmed)
+        // 复用现有发送路径
+        try {
+            askQuestion()
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            surfaceSendFailure(t, phase = "voiceSend")
+        }
+    }
+
+    /**
+     * 助手回复完成后：若语音对话开着，播 TTS。
+     * 由 completeChat / 流式结束路径调用。
+     */
+    fun onAssistantReplyForVoice(replyText: String) {
+        if (!voiceChatSession.uiState.value.enabled) return
+        viewModelScope.launch {
+            voiceChatSession.onReplyReady(replyText)
         }
     }
 
@@ -952,6 +1010,11 @@ class ChatViewModel @Inject constructor(
                 } else {
                     states.toMutableList().apply { this[platformIndex] = LoadingState.Idle }
                 }
+            }
+
+            // 语音对话模式：助手回复完成后触发 TTS 播放
+            if (platformIndex == 0 && !recordedError && lastAssistantText.isNotBlank()) {
+                onAssistantReplyForVoice(lastAssistantText)
             }
         }
     }

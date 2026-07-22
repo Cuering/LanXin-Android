@@ -73,6 +73,12 @@ data class LocalInferenceConfig(
     }
 }
 
+/** 单轮对话消息（role + content），用于多轮历史。 */
+data class LocalChatMessage(
+    val role: String,
+    val content: String
+)
+
 /**
  * 生成请求。
  *
@@ -85,7 +91,9 @@ data class LocalGenerateRequest(
     val prompt: String,
     val systemPrompt: String? = null,
     val maxTokens: Int? = null,
-    val temperature: Float? = null
+    val temperature: Float? = null,
+    /** 多轮历史（role=system/user/assistant），不含当前 prompt */
+    val history: List<LocalChatMessage> = emptyList()
 )
 
 /**
