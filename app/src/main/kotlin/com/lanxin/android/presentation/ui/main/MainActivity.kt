@@ -14,7 +14,6 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import com.lanxin.android.builtin.scheduler.domain.PendingSchedulerChat
 import com.lanxin.android.builtin.scheduler.worker.SchedulerTaskWorker
-import com.lanxin.android.data.repository.SettingRepository
 import com.lanxin.android.presentation.common.LocalDynamicTheme
 import com.lanxin.android.presentation.common.LocalThemeMode
 import com.lanxin.android.presentation.common.Route
@@ -22,16 +21,12 @@ import com.lanxin.android.presentation.common.SetupNavGraph
 import com.lanxin.android.presentation.common.ThemeSettingProvider
 import com.lanxin.android.presentation.theme.LanXinTheme
 import dagger.hilt.android.AndroidEntryPoint
-import javax.inject.Inject
 import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     private val mainViewModel: MainViewModel by viewModels()
-
-    @Inject
-    lateinit var settingRepository: SettingRepository
 
     private var navControllerRef: NavHostController? = null
 
@@ -104,26 +99,12 @@ class MainActivity : ComponentActivity() {
     }
 
     private suspend fun maybeNavigateToSchedulerChat() {
-        val pending = PendingSchedulerChat.peek() ?: return
+        // 有定时任务意图时，直接确保落在全屏陪伴（不再开会话页）
+        PendingSchedulerChat.peek() ?: return
         val nav = navControllerRef ?: return
-        val platforms = runCatching {
-            settingRepository.fetchPlatformV2s()
-                .filter { it.enabled }
-                .map { it.uid }
-        }.getOrDefault(emptyList())
-
-        if (platforms.isEmpty()) {
-            // 无可用平台时仍保留 pending，进入会话列表由用户配置
-            return
-        }
-
-        val enabledPlatformString = platforms.joinToString(",")
-        nav.navigate(
-            Route.CHAT_ROOM
-                .replace("{chatRoomId}", "0")
-                .replace("{enabledPlatforms}", enabledPlatformString)
-        ) {
+        nav.navigate(Route.COMPANION) {
             launchSingleTop = true
+            popUpTo(Route.COMPANION) { inclusive = false }
         }
     }
 
@@ -132,19 +113,15 @@ class MainActivity : ComponentActivity() {
             repeatOnLifecycle(Lifecycle.State.CREATED) {
                 mainViewModel.event.collect { event ->
                     when (event) {
-                        MainViewModel.SplashEvent.OpenIntro -> {
-                            navigate(Route.GET_STARTED) {
-                                popUpTo(Route.CHAT_LIST) { inclusive = true }
-                            }
-                        }
-
+                        // 启动页已是 COMPANION；仅迁移需要额外跳转
                         MainViewModel.SplashEvent.OpenMigrate -> {
                             navigate(Route.MIGRATE_V2) {
-                                popUpTo(Route.CHAT_LIST) { inclusive = true }
+                                popUpTo(Route.COMPANION) { inclusive = false }
                             }
                         }
-
-                        else -> {}
+                        else -> {
+                            // OpenIntro / OpenHome：留在全屏陪伴
+                        }
                     }
                 }
             }

@@ -13,6 +13,7 @@
 #include <jni.h>
 
 #include <atomic>
+#include <cstdint>
 #include <memory>
 #include <mutex>
 #include <sstream>
@@ -130,15 +131,15 @@ bool isUtf8Cont(unsigned char b) {
 }
 
 /**
- * 校验 [data, data+len) 是否为合法 Modified UTF-8 可接受序列（不含 0x00）。
- * 用于 NewStringUTF 前过滤非法续字节 / 截断序列。
+ * 校验 [data, data+len) 是否为合法 UTF-8（标准，含 4 字节 emoji）。
+ * 裸 0 视为非法（后续转 jstring 时替换为空格）。
  */
 bool isValidUtf8Sequence(const char* data, size_t len) {
     if (len == 0) return true;
     size_t i = 0;
     while (i < len) {
         auto lead = static_cast<unsigned char>(data[i]);
-        if (lead == 0x00) return false; // Modified UTF-8 不允许裸 0
+        if (lead == 0x00) return false;
         int need = utf8ExpectedLen(lead);
         if (need < 0) return false;
         if (i + static_cast<size_t>(need) > len) return false;
@@ -147,7 +148,7 @@ bool isValidUtf8Sequence(const char* data, size_t len) {
                 return false;
             }
         }
-        // 过度长编码 / 代理对等简单拒绝
+        // 过度长编码 / 超范围简单拒绝
         if (need == 2 && lead < 0xC2) return false;
         if (need == 4 && lead > 0xF4) return false;
         i += static_cast<size_t>(need);
@@ -156,7 +157,7 @@ bool isValidUtf8Sequence(const char* data, size_t len) {
 }
 
 /**
- * 把任意字节串清洗为 NewStringUTF 安全的 UTF-8：
+ * 把任意字节串清洗为合法 UTF-8：
  * - 截断/非法序列替换为 U+FFFD (EF BF BD)
  * - 裸 0 替换为空格
  */
@@ -179,7 +180,6 @@ std::string sanitizeToValidUtf8(const std::string& in) {
             continue;
         }
         if (i + static_cast<size_t>(need) > n) {
-            // 尾部不完整：替换后结束
             out.append("\xEF\xBF\xBD");
             break;
         }
@@ -203,19 +203,93 @@ std::string sanitizeToValidUtf8(const std::string& in) {
     return out;
 }
 
-/** NewStringUTF 安全包装：非法 UTF-8 先清洗，避免 JNI abort。 */
+/**
+ * UTF-8 → UTF-16，再 NewString。
+ *
+ * 关键：绝不用 NewStringUTF。
+ * NewStringUTF 只接受 Modified UTF-8，**禁止 4 字节序列（emoji 等 U+10000+）**，
+ * 合法标准 UTF-8 也会直接 JNI Abort / SIGABRT，Java CrashHandler 捕不到。
+ */
 jstring newStringUtfSafe(JNIEnv* env, const std::string& s) {
     if (env == nullptr) return nullptr;
-    if (isValidUtf8Sequence(s.data(), s.size())) {
-        return env->NewStringUTF(s.c_str());
+    const std::string& utf8 =
+        isValidUtf8Sequence(s.data(), s.size()) ? s : sanitizeToValidUtf8(s);
+
+    std::vector<jchar> utf16;
+    utf16.reserve(utf8.size() + 1);
+    size_t i = 0;
+    const size_t n = utf8.size();
+    while (i < n) {
+        auto lead = static_cast<unsigned char>(utf8[i]);
+        if (lead == 0x00) {
+            utf16.push_back(static_cast<jchar>(' '));
+            ++i;
+            continue;
+        }
+        int need = utf8ExpectedLen(lead);
+        if (need < 0 || i + static_cast<size_t>(need) > n) {
+            utf16.push_back(static_cast<jchar>(0xFFFD));
+            ++i;
+            continue;
+        }
+        bool contOk = true;
+        for (int k = 1; k < need; ++k) {
+            if (!isUtf8Cont(static_cast<unsigned char>(utf8[i + static_cast<size_t>(k)]))) {
+                contOk = false;
+                break;
+            }
+        }
+        if (!contOk) {
+            utf16.push_back(static_cast<jchar>(0xFFFD));
+            ++i;
+            continue;
+        }
+
+        uint32_t cp = 0;
+        if (need == 1) {
+            cp = lead;
+        } else if (need == 2) {
+            cp = (static_cast<uint32_t>(lead & 0x1F) << 6) |
+                 (static_cast<unsigned char>(utf8[i + 1]) & 0x3F);
+        } else if (need == 3) {
+            cp = (static_cast<uint32_t>(lead & 0x0F) << 12) |
+                 (static_cast<uint32_t>(static_cast<unsigned char>(utf8[i + 1]) & 0x3F) << 6) |
+                 (static_cast<unsigned char>(utf8[i + 2]) & 0x3F);
+        } else {
+            cp = (static_cast<uint32_t>(lead & 0x07) << 18) |
+                 (static_cast<uint32_t>(static_cast<unsigned char>(utf8[i + 1]) & 0x3F) << 12) |
+                 (static_cast<uint32_t>(static_cast<unsigned char>(utf8[i + 2]) & 0x3F) << 6) |
+                 (static_cast<unsigned char>(utf8[i + 3]) & 0x3F);
+        }
+
+        if (cp <= 0xFFFF) {
+            // 单独的代理区码点非法 → 替换
+            if (cp >= 0xD800 && cp <= 0xDFFF) {
+                utf16.push_back(static_cast<jchar>(0xFFFD));
+            } else {
+                utf16.push_back(static_cast<jchar>(cp));
+            }
+        } else if (cp <= 0x10FFFF) {
+            // 代理对（emoji 等）
+            uint32_t v = cp - 0x10000;
+            utf16.push_back(static_cast<jchar>(0xD800 + (v >> 10)));
+            utf16.push_back(static_cast<jchar>(0xDC00 + (v & 0x3FF)));
+        } else {
+            utf16.push_back(static_cast<jchar>(0xFFFD));
+        }
+        i += static_cast<size_t>(need);
     }
-    std::string cleaned = sanitizeToValidUtf8(s);
-    return env->NewStringUTF(cleaned.c_str());
+
+    if (utf16.empty()) {
+        // 空串
+        return env->NewString(nullptr, 0);
+    }
+    return env->NewString(utf16.data(), static_cast<jsize>(utf16.size()));
 }
 
 /**
  * ostream 适配：每次写入（token/片段）回调 Java onToken。
- * 关键：按 UTF-8 码点边界缓冲，绝不把半个 emoji 交给 NewStringUTF。
+ * 关键：按 UTF-8 码点边界缓冲；回调用 NewString(UTF-16)，可安全传 emoji。
  * 返回 true 表示用户请求停止。
  */
 class JavaStreamBuf : public std::streambuf {
@@ -316,7 +390,7 @@ private:
         }
 
         if (endOfStream && !pending_.empty()) {
-            // 尾部残缺（如半个 emoji）：丢弃，避免 NewStringUTF abort
+            // 尾部残缺（如半个 emoji）：丢弃，避免半码点
             ALOGW("drop incomplete utf8 tail bytes=%zu", pending_.size());
             pending_.clear();
         }

@@ -3,6 +3,7 @@ package com.lanxin.android.plugins.chat.data
 import android.content.Context
 import com.lanxin.android.data.context.ContextBuilder
 import com.lanxin.android.data.context.ConversationTurn
+import com.lanxin.android.data.context.OutboundPromptSanitizer
 import com.lanxin.android.data.context.ProviderContextPolicy
 import com.lanxin.android.plugins.chat.data.dao.ChatPlatformModelV2Dao
 import com.lanxin.android.plugins.chat.data.dao.ChatRoomDao
@@ -262,7 +263,7 @@ class ChatRepositoryImpl @Inject constructor(
                     model = platform.model,
                     input = inputMessages,
                     stream = true,
-                    instructions = platform.systemPrompt?.takeIf { it.isNotBlank() },
+                    instructions = OutboundPromptSanitizer.normalizeSystemPrompt(platform.systemPrompt),
                     temperature = if (platform.reasoning) null else platform.temperature,
                     topP = if (platform.reasoning) null else platform.topP,
                     reasoning = if (platform.reasoning) {
@@ -408,11 +409,13 @@ class ChatRepositoryImpl @Inject constructor(
     ): List<ConversationTurn> {
         val policy = ProviderContextPolicy.forClientType(platform.compatibleType)
         val contextTurns = contextBuilder.build(userMessages, assistantMessages, platform, policy)
-        if (!policy.preferProviderFileRefs || contextTurns.isEmpty()) {
-            return contextTurns
+        // 出站前：敏感词过滤 + 附件稳定排序（提高中转网关通过率与 Prompt Cache 命中）
+        val sanitized = OutboundPromptSanitizer.prepareTurnsForOutbound(contextTurns)
+        if (!policy.preferProviderFileRefs || sanitized.isEmpty()) {
+            return sanitized
         }
 
-        return ensureProviderReferencesForTurns(contextTurns, platform)
+        return ensureProviderReferencesForTurns(sanitized, platform)
     }
 
     private suspend fun ensureProviderReferencesForTurns(
@@ -439,7 +442,8 @@ class ChatRepositoryImpl @Inject constructor(
     ): List<ChatMessage> {
         val messages = mutableListOf<ChatMessage>()
 
-        systemPrompt?.takeIf { it.isNotBlank() }?.let { prompt ->
+        // system 固定在最前 + 规范化：静态前缀稳定 → 提高 Prompt Cache 命中
+        OutboundPromptSanitizer.normalizeSystemPrompt(systemPrompt)?.let { prompt ->
             messages.add(
                 ChatMessage(
                     role = OpenAIRole.SYSTEM,
@@ -632,7 +636,7 @@ class ChatRepositoryImpl @Inject constructor(
                     messages = messages,
                     maxTokens = if (platform.reasoning) 16000 else 4096,
                     stream = platform.stream,
-                    systemPrompt = platform.systemPrompt,
+                    systemPrompt = OutboundPromptSanitizer.normalizeSystemPrompt(platform.systemPrompt),
                     temperature = if (platform.reasoning) null else platform.temperature,
                     topP = if (platform.reasoning) null else platform.topP,
                     thinking = if (platform.reasoning) {
@@ -746,7 +750,7 @@ class ChatRepositoryImpl @Inject constructor(
                             null
                         }
                     ),
-                    systemInstruction = platform.systemPrompt?.takeIf { it.isNotBlank() }?.let {
+                    systemInstruction = OutboundPromptSanitizer.normalizeSystemPrompt(platform.systemPrompt)?.let {
                         Content(
                             parts = listOf(Part.text(it))
                         )
@@ -806,7 +810,9 @@ class ChatRepositoryImpl @Inject constructor(
         lanXinAPI.setToken(platform.token ?: "")
         lanXinAPI.setAPIUrl(platform.apiUrl)
 
-        val latestUserMessage = userMessages.lastOrNull()?.content ?: ""
+        val latestUserMessage = OutboundPromptSanitizer.sanitizeText(
+            userMessages.lastOrNull()?.content.orEmpty()
+        )
         val sessionId = userMessages.firstOrNull()?.chatId?.toString()
         val username = settingRepository.getLanXinUserName() ?: "default_user"
 

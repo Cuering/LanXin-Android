@@ -18,8 +18,8 @@ import java.util.Locale
  * 1. 同步写入 filesDir/logs/crash-*.log（方便无 adb 时从 App 内导出）
  * 2. 跳转 [CrashDisplayActivity] 展示堆栈，支持一键复制
  *
- * 注意：JNI Abort / SIGABRT（如 NewStringUTF 非法 UTF-8）**不会**走本 handler，
- * 需在 native 侧避免；本 handler 只覆盖 Java/Kotlin 未捕获异常。
+ * 注意：JNI Abort / SIGABRT **不会**走本 handler，只覆盖 Java/Kotlin 未捕获异常。
+ * native 侧已改用 NewString(UTF-16)，不再用 NewStringUTF（后者对 emoji 会 abort）。
  */
 object CrashHandler : Thread.UncaughtExceptionHandler {
 
