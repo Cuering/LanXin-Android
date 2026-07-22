@@ -244,8 +244,7 @@ object LocalContextCompressor {
             out.add(
                 LocalChatMessage(
                     role = "system",
-                    content = "【对话摘要】
-${it.trim()}"
+                    content = "【对话摘要】\n${it.trim()}"
                 )
             )
         }
