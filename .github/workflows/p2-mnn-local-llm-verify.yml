@@ -38,7 +38,7 @@ jobs:
   unit-tests:
     name: Local LLM unit tests
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 50
 
     steps:
       - uses: actions/checkout@v4
@@ -109,3 +109,31 @@ jobs:
           grep -E -n "MnnLocalLlmEngine|native_degraded|libmnn_lanxin|LanXin/models/local-llm" \
             docs/local-inference.md
           grep -E -n "Apache|MNN|libllm" third_party/mnn/NOTICE
+          # JNI 源码必须含 UTF-8 安全路径（防 NewStringUTF abort）
+          grep -E -n "newStringUtfSafe|flushComplete|utf8ExpectedLen" app/src/main/cpp/mnn_lanxin_jni.cpp
+
+      - name: Assemble debug APK and verify libmnn_lanxin.so packed
+        run: |
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          test -f "$APK"
+          # 解压检查：arm64 真 so + armv7 真 so + x86_64 stub 均应进包
+          unzip -l "$APK" | tee /tmp/apk-libs.txt
+          grep -E 'lib/arm64-v8a/libmnn_lanxin\.so' /tmp/apk-libs.txt
+          grep -E 'lib/armeabi-v7a/libmnn_lanxin\.so' /tmp/apk-libs.txt
+          grep -E 'lib/arm64-v8a/libllm\.so' /tmp/apk-libs.txt
+          grep -E 'lib/arm64-v8a/libMNN\.so' /tmp/apk-libs.txt
+          # 体积：真 so 应明显大于 stub（stub 通常 < 20KB）
+          TMP=$(mktemp -d)
+          unzip -o -q "$APK" 'lib/arm64-v8a/libmnn_lanxin.so' -d "$TMP"
+          SIZE=$(stat -c%s "$TMP/lib/arm64-v8a/libmnn_lanxin.so")
+          echo "arm64 libmnn_lanxin.so size=$SIZE"
+          test "$SIZE" -gt 20000
+          ls -lh "$TMP/lib/arm64-v8a/libmnn_lanxin.so"
+
+      - name: Upload debug APK (with mnn so)
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-mnn-${{ github.sha }}
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
