@@ -36,6 +36,7 @@ import com.lanxin.android.builtin.localinference.domain.LocalGenerateRequest
 import com.lanxin.android.builtin.localinference.domain.LocalGenerateResult
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceBootstrap
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceConfig
+import com.lanxin.android.builtin.localinference.domain.LocalChatMessage
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceProvider
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceSettings
 import com.lanxin.android.builtin.localinference.domain.LocalLlmEngine
@@ -580,7 +581,8 @@ class ChatRepositoryImplTest {
         override fun completeAsApiState(
             prompt: String,
             systemPrompt: String?,
-            maxTokens: Int?
+            maxTokens: Int?,
+            history: List<LocalChatMessage>
         ): Flow<ApiState> {
             calls += 1
             return flowOf(*states.toTypedArray())
