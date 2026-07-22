@@ -152,7 +152,7 @@ fun NavGraphBuilder.desktopPetScreenNavigation(navController: NavHostController)
 
 fun NavGraphBuilder.companionScreenNavigation(navController: NavHostController) {
     composable(Route.COMPANION) {
-        val activity = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
+        val activity = androidx.activity.compose.LocalActivity.current
         CompanionScreen(
             // 根页面：返回 = 退出 App，不回到会话列表/欢迎页
             onBackAction = {

@@ -21,15 +21,23 @@ import com.lanxin.android.builtin.systemtools.domain.DeviceToolBridge
 import com.lanxin.android.builtin.systemtools.domain.DeviceToolInvocation
 import com.lanxin.android.builtin.systemtools.domain.DeviceToolOutcome
 import com.lanxin.android.builtin.systemtools.domain.DeviceToolTurn
-import com.lanxin.android.builtin.voice.domain.TtsConfig
 import com.lanxin.android.builtin.voice.domain.TtsEngine
 import com.lanxin.android.builtin.voice.domain.TtsSettings
 import com.lanxin.android.builtin.voice.domain.TtsSynthesizeRequest
+import com.lanxin.android.core.log.LogManager
+import com.lanxin.android.plugins.unifiedinbox.data.CrossSessionEntity
+import com.lanxin.android.plugins.unifiedinbox.data.CrossSessionPlatform
+import com.lanxin.android.plugins.unifiedinbox.data.CrossSessionRepository
+import com.lanxin.android.plugins.unifiedinbox.data.CrossSessionRole
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -40,6 +48,7 @@ import kotlinx.coroutines.sync.withLock
  * - 思考：[PetChatResponder]（stub / 后续 ChatRouter）
  * - 办事：[DeviceToolBridge]（Registry + Gate，与 Chat/MCP 同一路径）
  * - 输出：[TtsEngine] + 字幕气泡（**不**塞 Chat 输入框）
+ * - 落盘：每轮 user/assistant 写入跨会话历史 + 文件日志（不依赖 logcat）
  *
  * 默认不录音、不截屏；仅用户 / 设置页显式触发。
  * 系统工具默认关；写操作需确认策略由 Gate 决定。
@@ -58,8 +67,12 @@ class VoiceSessionCoordinator @Inject constructor(
     private val ttsEngine: TtsEngine,
     private val ttsSettings: TtsSettings,
     private val petSettings: PetSettings,
-    private val deviceToolBridge: DeviceToolBridge
+    private val deviceToolBridge: DeviceToolBridge,
+    private val logManager: LogManager? = null,
+    private val crossSessionRepository: CrossSessionRepository? = null
 ) {
+    private val log = logManager?.getLogger(TAG)
+    private val persistScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val mutex = Mutex()
     private val _snapshot = MutableStateFlow(VoiceSessionSnapshot())
@@ -85,6 +98,7 @@ class VoiceSessionCoordinator @Inject constructor(
         if (!config.enabled) {
             snap = VoiceSessionStateMachine.fail(snap, "pet_disabled")
             _snapshot.value = snap
+            log?.w("runRound blocked: pet_disabled source=${input.source}")
             return@withLock VoiceSessionResult(
                 asrText = input.asrText,
                 replyText = "",
@@ -99,6 +113,7 @@ class VoiceSessionCoordinator @Inject constructor(
         if (text.isEmpty()) {
             snap = VoiceSessionStateMachine.fail(snap, "empty_asr")
             _snapshot.value = snap
+            log?.w("runRound blocked: empty_asr source=${input.source}")
             return@withLock VoiceSessionResult(
                 asrText = "",
                 replyText = "",
@@ -109,6 +124,8 @@ class VoiceSessionCoordinator @Inject constructor(
             )
         }
 
+        log?.i("round start source=${input.source} stub=${input.isStub} skipTts=$skipTts text=${text.take(80)}")
+
         snap = VoiceSessionStateMachine.startListening(snap).copy(isStubRound = input.isStub)
         _snapshot.value = snap
 
@@ -117,12 +134,19 @@ class VoiceSessionCoordinator @Inject constructor(
 
         // 办：统一 DeviceToolBridge.voiceTurn（意图未命中 → 纯闲聊）
         val toolTurn = deviceToolBridge.voiceTurn(text, confirmed = toolConfirmed)
-        val toolInvocation: DeviceToolInvocation? = toolTurn.toInvocationOrNull()
 
         val chatReply = runCatching { responder.respond(text) }
             .getOrElse { e ->
                 snap = VoiceSessionStateMachine.fail(snap, e.message ?: "think_failed")
                 _snapshot.value = snap
+                log?.e("think_failed source=${input.source}: ${e.message}", e)
+                // 用户输入仍归档，便于跨会话/排障
+                persistRound(
+                    userText = text,
+                    assistantText = "",
+                    source = input.source,
+                    error = snap.lastError
+                )
                 return@withLock VoiceSessionResult(
                     asrText = text,
                     replyText = "",
@@ -154,7 +178,7 @@ class VoiceSessionCoordinator @Inject constructor(
                 subtitle = LocalReplySanitizer.forDisplay(snap.subtitle, showThinking = false)
             )
             _snapshot.value = snap
-            return@withLock VoiceSessionResult(
+            val result = VoiceSessionResult(
                 asrText = text,
                 replyText = displayReply,
                 subtitle = displayReply,
@@ -164,6 +188,15 @@ class VoiceSessionCoordinator @Inject constructor(
                 toolName = toolTurn.plan?.toolName,
                 toolOutcome = toolTurn.outcome
             )
+            persistRound(
+                userText = text,
+                assistantText = displayReply,
+                source = input.source,
+                error = null,
+                durationMs = result.durationMs,
+                toolName = result.toolName
+            )
+            return@withLock result
         }
 
         // TTS：未就绪时用 DataStore 配置 auto-load（含 modelDir）；绝不把标签念出来
@@ -180,6 +213,8 @@ class VoiceSessionCoordinator @Inject constructor(
                 if (!stored.enabled) {
                     ttsSettings.setEnabled(true)
                 }
+            }.onFailure { e ->
+                log?.w("tts auto-load failed: ${e.message}")
             }
         }
         val tts = runCatching {
@@ -194,13 +229,23 @@ class VoiceSessionCoordinator @Inject constructor(
                 asrText = text
             )
             _snapshot.value = snap
+            val err = "tts_failed:${e.message}"
+            log?.w("tts synthesize failed, keep text reply: ${e.message}")
+            persistRound(
+                userText = text,
+                assistantText = displayReply,
+                source = input.source,
+                error = err,
+                durationMs = System.currentTimeMillis() - started,
+                toolName = toolTurn.plan?.toolName
+            )
             return@withLock VoiceSessionResult(
                 asrText = text,
                 replyText = displayReply,
                 subtitle = displayReply,
                 phase = snap.phase,
                 isStub = input.isStub,
-                error = "tts_failed:${e.message}",
+                error = err,
                 durationMs = System.currentTimeMillis() - started,
                 toolName = toolTurn.plan?.toolName,
                 toolOutcome = toolTurn.outcome
@@ -223,7 +268,7 @@ class VoiceSessionCoordinator @Inject constructor(
         )
         _snapshot.value = snap
 
-        VoiceSessionResult(
+        val result = VoiceSessionResult(
             asrText = text,
             replyText = displayReply,
             subtitle = spokenSubtitle,
@@ -233,6 +278,15 @@ class VoiceSessionCoordinator @Inject constructor(
             toolName = toolTurn.plan?.toolName,
             toolOutcome = toolTurn.outcome
         )
+        persistRound(
+            userText = text,
+            assistantText = displayReply,
+            source = input.source,
+            error = null,
+            durationMs = result.durationMs,
+            toolName = result.toolName
+        )
+        result
     }
 
     /**
@@ -266,5 +320,79 @@ class VoiceSessionCoordinator @Inject constructor(
             is DeviceToolOutcome.Denied,
             is DeviceToolOutcome.Error -> toolLine
         }
+    }
+
+    /**
+     * 异步写入文件日志 + 跨会话历史。
+     * 不阻塞会话主路径；失败仅记 warning，不抛回 UI。
+     */
+    private fun persistRound(
+        userText: String,
+        assistantText: String,
+        source: String,
+        error: String?,
+        durationMs: Long = 0L,
+        toolName: String? = null
+    ) {
+        val now = System.currentTimeMillis()
+        val summary = buildString {
+            append("round done source=").append(source)
+            append(" durationMs=").append(durationMs)
+            if (!toolName.isNullOrBlank()) append(" tool=").append(toolName)
+            if (!error.isNullOrBlank()) append(" error=").append(error)
+            append(" user=").append(userText.take(120))
+            if (assistantText.isNotBlank()) {
+                append(" reply=").append(assistantText.take(160))
+            }
+        }
+        if (error.isNullOrBlank()) {
+            log?.i(summary)
+        } else {
+            log?.w(summary)
+        }
+
+        val repo = crossSessionRepository ?: return
+        persistScope.launch {
+            runCatching {
+                val entities = buildList {
+                    if (userText.isNotBlank()) {
+                        add(
+                            CrossSessionEntity(
+                                platform = CrossSessionPlatform.LOCAL,
+                                sessionId = COMPANION_SESSION_ID,
+                                sessionTitle = COMPANION_SESSION_TITLE,
+                                time = now,
+                                role = CrossSessionRole.USER,
+                                content = userText
+                            )
+                        )
+                    }
+                    if (assistantText.isNotBlank()) {
+                        add(
+                            CrossSessionEntity(
+                                platform = CrossSessionPlatform.LOCAL,
+                                sessionId = COMPANION_SESSION_ID,
+                                sessionTitle = COMPANION_SESSION_TITLE,
+                                time = now + 1,
+                                role = CrossSessionRole.ASSISTANT,
+                                content = assistantText
+                            )
+                        )
+                    }
+                }
+                if (entities.isNotEmpty()) {
+                    repo.insertAll(entities)
+                }
+            }.onFailure { e ->
+                log?.w("persistRound failed: ${e.message}")
+            }
+        }
+    }
+
+    companion object {
+        private const val TAG = "VoiceSession"
+        /** 跨会话固定 session：全屏陪伴 / 桌宠共用。 */
+        const val COMPANION_SESSION_ID = "companion"
+        const val COMPANION_SESSION_TITLE = "全屏陪伴"
     }
 }
