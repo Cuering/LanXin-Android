@@ -193,12 +193,14 @@ class ChatRepositoryImpl @Inject constructor(
                     contextWindowTokens = config.contextWindowTokens,
                     maxNewTokens = config.maxTokens
                 )
-                val prompt = compressed.prompt.ifBlank {
+                // 结构化多轮：history + 当前 user；无历史时也只发 currentUser
+                val currentUser = compressed.currentUser.ifBlank {
                     ChatLocalFallback.extractPrompt(userTexts)
                 }
                 return localProvider.completeAsApiState(
-                    prompt = prompt,
-                    systemPrompt = platform.systemPrompt?.takeIf { it.isNotBlank() }
+                    prompt = currentUser,
+                    systemPrompt = platform.systemPrompt?.takeIf { it.isNotBlank() },
+                    history = compressed.history
                 )
             }
         } else {

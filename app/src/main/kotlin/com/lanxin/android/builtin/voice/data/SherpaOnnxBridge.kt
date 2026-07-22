@@ -187,6 +187,137 @@ class SherpaOnnxBridge @Inject constructor() {
         }
     }
 
+    // ------------------------------------------------------------------
+    // 流式 ASR（OnlineRecognizer 边录边解）
+    // ------------------------------------------------------------------
+
+    @Volatile
+    private var streamingStream: com.k2fsa.sherpa.onnx.OnlineStream? = null
+
+    @Volatile
+    private var streamingSampleRate: Int = 16_000
+
+    @Volatile
+    private var lastPartialText: String = ""
+
+    /** 当前是否在流式会话中。 */
+    fun isStreaming(): Boolean = streamingStream != null
+
+    /**
+     * 开启流式识别会话（仅 OnlineTransducer 模式可用）。
+     *
+     * OfflineParaformer 不支持流式，返回 false，调用方应回退整段 transcribe。
+     */
+    @Synchronized
+    fun startStreaming(sampleRateHz: Int = 16_000): Boolean {
+        stopStreamingInternal()
+        lastPartialText = ""
+        streamingSampleRate = sampleRateHz.coerceIn(8_000, 48_000)
+        val rec = online
+        if (mode != Mode.ONLINE_TRANSDUCER || rec == null) {
+            lastLoadError = "streaming_requires_online_transducer"
+            return false
+        }
+        return try {
+            streamingStream = rec.createStream()
+            true
+        } catch (t: Throwable) {
+            lastLoadError = "start_stream_failed:${t.javaClass.simpleName}:${t.message}"
+            Log.e(TAG, "startStreaming failed", t)
+            streamingStream = null
+            false
+        }
+    }
+
+    /**
+     * 喂入一段 PCM chunk，返回当前 partial 文本（可能与上次相同）。
+     *
+     * 未开启流式 / 失败时返回 null。
+     */
+    @Synchronized
+    fun feedPcmChunk(pcm16leMono: ByteArray): String? {
+        val stream = streamingStream ?: return null
+        val rec = online ?: return null
+        if (pcm16leMono.isEmpty()) return lastPartialText
+        return try {
+            val samples = pcm16leToFloat(pcm16leMono)
+            stream.acceptWaveform(samples, streamingSampleRate)
+            while (rec.isReady(stream)) {
+                rec.decode(stream)
+            }
+            val text = rec.getResult(stream).text.trim()
+            lastPartialText = text
+            text
+        } catch (t: Throwable) {
+            lastLoadError = "feed_chunk_failed:${t.javaClass.simpleName}:${t.message}"
+            Log.e(TAG, "feedPcmChunk failed", t)
+            null
+        }
+    }
+
+    /**
+     * 当前 partial 文本（不推进解码）。
+     */
+    fun currentPartial(): String = lastPartialText
+
+    /**
+     * 是否检测到 endpoint（说完一句，可自动停麦）。
+     * 仅 OnlineTransducer + enableEndpoint=true 时有效。
+     */
+    @Synchronized
+    fun isEndpoint(): Boolean {
+        val stream = streamingStream ?: return false
+        val rec = online ?: return false
+        return try {
+            rec.isEndpoint(stream)
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    /**
+     * 结束流式会话，返回最终文本。
+     */
+    @Synchronized
+    fun finishStreaming(): String? {
+        val stream = streamingStream
+        val rec = online
+        if (stream == null || rec == null) {
+            stopStreamingInternal()
+            return lastPartialText.ifBlank { null }
+        }
+        return try {
+            stream.inputFinished()
+            while (rec.isReady(stream)) {
+                rec.decode(stream)
+            }
+            val text = rec.getResult(stream).text.trim()
+            lastPartialText = text
+            text
+        } catch (t: Throwable) {
+            lastLoadError = "finish_stream_failed:${t.javaClass.simpleName}:${t.message}"
+            Log.e(TAG, "finishStreaming failed", t)
+            lastPartialText.ifBlank { null }
+        } finally {
+            stopStreamingInternal()
+        }
+    }
+
+    /** 取消流式会话，丢弃结果。 */
+    @Synchronized
+    fun cancelStreaming() {
+        stopStreamingInternal()
+        lastPartialText = ""
+    }
+
+    private fun stopStreamingInternal() {
+        try {
+            streamingStream?.release()
+        } catch (_: Throwable) {
+        }
+        streamingStream = null
+    }
+
     /** 释放 native 会话。 */
     @Synchronized
     fun unload() {
@@ -194,6 +325,8 @@ class SherpaOnnxBridge @Inject constructor() {
     }
 
     private fun unloadInternal() {
+        stopStreamingInternal()
+        lastPartialText = ""
         try {
             online?.release()
         } catch (_: Throwable) {

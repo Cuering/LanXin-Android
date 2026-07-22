@@ -67,6 +67,13 @@ class PcmAudioRecorder @Inject constructor() {
     private var stubMode: Boolean = false
 
     /**
+     * 流式 PCM chunk 回调（捕获线程调用）。
+     * 设为 null 时仅整段缓冲；VoiceChat 流式 ASR 时注入。
+     */
+    @Volatile
+    var onPcmChunk: ((ByteArray) -> Unit)? = null
+
+    /**
      * 生成一段可预测的 stub PCM（静音帧），不触碰硬件麦克风。
      *
      * @param durationMs 时长
@@ -164,6 +171,7 @@ class PcmAudioRecorder @Inject constructor() {
         activeRecord = record
         val localBuffer = captureBuffer!!
         val stopFlag = recording
+        val chunkListener = onPcmChunk
         captureThread = Thread(
             {
                 val chunk = ByteArray(bufferSize)
@@ -176,6 +184,10 @@ class PcmAudioRecorder @Inject constructor() {
                     if (n > 0) {
                         synchronized(localBuffer) {
                             localBuffer.write(chunk, 0, n)
+                        }
+                        if (chunkListener != null) {
+                            val copy = chunk.copyOf(n)
+                            runCatching { chunkListener.invoke(copy) }
                         }
                     } else if (n < 0) {
                         break

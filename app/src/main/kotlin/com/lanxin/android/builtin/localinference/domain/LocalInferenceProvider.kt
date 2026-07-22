@@ -33,13 +33,15 @@ interface LocalInferenceProvider {
     /**
      * 以 [ApiState] 流形式输出，对齐 [com.lanxin.android.plugins.chat.data.ChatRepository.completeChat]。
      *
-     * @param prompt 用户侧文本（已拼好上下文时可整段传入）
+     * @param prompt 当前用户文本（可含整段拼好的上下文；有 [history] 时仅为本轮 user）
      * @param systemPrompt 可选 system
      * @param maxTokens 可选输出上限覆盖（陪伴短答可传更小值）
+     * @param history 多轮历史（不含当前 prompt）；空列表表示单轮/整段 prompt
      */
     fun completeAsApiState(
         prompt: String,
         systemPrompt: String? = null,
-        maxTokens: Int? = null
+        maxTokens: Int? = null,
+        history: List<LocalChatMessage> = emptyList()
     ): Flow<ApiState>
 }

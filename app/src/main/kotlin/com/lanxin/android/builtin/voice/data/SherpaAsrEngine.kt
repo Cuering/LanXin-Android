@@ -197,7 +197,52 @@ class SherpaAsrEngine @Inject constructor(
     }
 
     override fun streamPartial(request: AsrTranscribeRequest): Flow<AsrTranscribeResult> = flow {
-        // 整段 transcribe 后一次 partial + final；流式 partial 后续可接 OnlineRecognizer 边录边解
+        // Online transducer：若已在流式会话中，读 currentPartial；否则整段 transcribe
+        if (usingNative && nativeBridge.currentMode() == SherpaOnnxBridge.Mode.ONLINE_TRANSDUCER) {
+            // 一次性喂整段 PCM 做流式模拟：start → feed → finish，中间 emit partial
+            val sampleRate = request.sampleRateHz ?: config.sampleRateHz
+            val started = withContext(Dispatchers.IO) {
+                nativeBridge.startStreaming(sampleRate)
+            }
+            if (started) {
+                val pcm = request.pcm16leMono
+                val chunkSize = (sampleRate / 10) * 2 // ~100ms
+                var offset = 0
+                var last = ""
+                while (offset < pcm.size) {
+                    val end = (offset + chunkSize).coerceAtMost(pcm.size)
+                    val chunk = pcm.copyOfRange(offset, end)
+                    val partial = withContext(Dispatchers.IO) {
+                        nativeBridge.feedPcmChunk(chunk)
+                    }.orEmpty()
+                    if (partial.isNotEmpty() && partial != last) {
+                        last = partial
+                        emit(
+                            AsrTranscribeResult(
+                                text = partial,
+                                isPartial = true,
+                                isStub = false,
+                                confidence = null
+                            )
+                        )
+                    }
+                    offset = end
+                }
+                val finalText = withContext(Dispatchers.IO) {
+                    nativeBridge.finishStreaming()
+                }.orEmpty()
+                emit(
+                    AsrTranscribeResult(
+                        text = finalText.ifBlank { last },
+                        isPartial = false,
+                        isStub = false,
+                        confidence = null
+                    )
+                )
+                return@flow
+            }
+        }
+        // 回退：整段 transcribe 后一次 partial + final
         val result = transcribe(request)
         emit(result.copy(isPartial = true))
         emit(result.copy(isPartial = false))

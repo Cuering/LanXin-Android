@@ -40,12 +40,14 @@ object LocalContextCompressor {
     /**
      * 压缩结果。
      *
-     * @property prompt 拼好的 user 侧多轮文本（system 仍走 [LocalGenerateRequest.systemPrompt]）
+     * @property prompt 拼好的 user 侧多轮文本（兼容旧路径；优先用 [currentUser] + [history]）
      * @property keptTurns 保留的轮次数
      * @property droppedTurns 丢弃的旧轮次数
      * @property estimatedTokens 估算占用（不含 system 时可单独加）
      * @property compressed 是否发生了截断
      * @property summaryHint 注入 prompt 的摘要正文（规则摘要和/或外部摘要；无则 null）
+     * @property history 结构化多轮历史（不含当前 user；system 摘要可在首位）
+     * @property currentUser 当前轮 user 文本
      */
     data class Result(
         val prompt: String,
@@ -53,7 +55,9 @@ object LocalContextCompressor {
         val droppedTurns: Int,
         val estimatedTokens: Int,
         val compressed: Boolean,
-        val summaryHint: String? = null
+        val summaryHint: String? = null,
+        val history: List<LocalChatMessage> = emptyList(),
+        val currentUser: String = ""
     )
 
     /**
@@ -164,7 +168,9 @@ object LocalContextCompressor {
                 droppedTurns = 0,
                 estimatedTokens = sysTokens + estimateTokens(onlyExternal.orEmpty()),
                 compressed = false,
-                summaryHint = onlyExternal
+                summaryHint = onlyExternal,
+                history = toHistoryMessages(emptyList(), onlyExternal),
+                currentUser = ""
             )
         }
 
@@ -212,14 +218,46 @@ object LocalContextCompressor {
             conversationSummary = mergedSummary,
             droppedHint = null
         )
+        val currentUser = kept.lastOrNull()?.user?.trim().orEmpty()
+        val prior = if (kept.isEmpty()) emptyList() else kept.dropLast(1)
         return Result(
             prompt = prompt,
             keptTurns = kept.size,
             droppedTurns = droppedCount,
             estimatedTokens = sysTokens + estimateTokens(prompt),
             compressed = compressed,
-            summaryHint = mergedSummary
+            summaryHint = mergedSummary,
+            history = toHistoryMessages(prior, mergedSummary),
+            currentUser = currentUser
         )
+    }
+
+    /**
+     * 将保留轮次 + 摘要转为 [LocalChatMessage] 列表（不含当前 user）。
+     */
+    fun toHistoryMessages(
+        priorTurns: List<Turn>,
+        conversationSummary: String?
+    ): List<LocalChatMessage> {
+        val out = ArrayList<LocalChatMessage>()
+        conversationSummary?.takeIf { it.isNotBlank() }?.let {
+            out.add(
+                LocalChatMessage(
+                    role = "system",
+                    content = "【对话摘要】
+${it.trim()}"
+                )
+            )
+        }
+        for (turn in priorTurns) {
+            if (turn.user.isNotBlank()) {
+                out.add(LocalChatMessage(role = "user", content = turn.user.trim()))
+            }
+            turn.assistant?.takeIf { it.isNotBlank() }?.let {
+                out.add(LocalChatMessage(role = "assistant", content = it.trim()))
+            }
+        }
+        return out
     }
 
     /**
