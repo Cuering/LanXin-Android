@@ -25,6 +25,7 @@ import com.lanxin.android.util.PathImportHelper
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -221,11 +222,17 @@ class MnnLocalLlmEngine @Inject constructor(
         if (usingNative) {
             val (roles, contents) = buildChatMessages(request)
             if (roles.size > 1) {
+                // generateChatStream 的回调是非 suspend lambda，用 Channel 桥接 flow emit
+                val channel = Channel<String>(Channel.UNLIMITED)
                 withContext(Dispatchers.IO) {
                     nativeBridge.generateChatStream(roles, contents, maxTokens) { piece ->
-                        emit(piece)
+                        channel.trySend(piece)
                         false
                     }
+                    channel.close()
+                }
+                for (piece in channel) {
+                    emit(piece)
                 }
             } else {
                 val text = withContext(Dispatchers.IO) {
