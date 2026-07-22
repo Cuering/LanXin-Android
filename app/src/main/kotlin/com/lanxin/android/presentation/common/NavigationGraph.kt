@@ -160,8 +160,9 @@ fun NavGraphBuilder.companionScreenNavigation(navController: NavHostController) 
                     activity?.finish()
                 }
             },
+            // 设置齿轮 → 设置主页（含日志查看 / 桌宠 / 本地脑…），不再误跳桌宠页
             onOpenSettings = {
-                navController.navigate(Route.DESKTOP_PET) { launchSingleTop = true }
+                navController.navigate(Route.SETTING_ROUTE) { launchSingleTop = true }
             }
         )
     }

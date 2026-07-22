@@ -18,7 +18,7 @@ package com.lanxin.android.builtin.pet.domain
 
 import com.lanxin.android.builtin.localinference.domain.LocalReplySanitizer
 import com.lanxin.android.builtin.systemtools.domain.DeviceToolBridge
-import com.lanxin.android.builtin.systemtools.domain.DeviceToolInvocation
+import com.lanxin.android.builtin.systemtools.domain.DeviceToolChannel
 import com.lanxin.android.builtin.systemtools.domain.DeviceToolOutcome
 import com.lanxin.android.builtin.systemtools.domain.DeviceToolTurn
 import com.lanxin.android.builtin.voice.domain.TtsEngine
@@ -132,8 +132,19 @@ class VoiceSessionCoordinator @Inject constructor(
         snap = VoiceSessionStateMachine.onAsrDone(snap, text)
         _snapshot.value = snap
 
-        // 办：统一 DeviceToolBridge.voiceTurn（意图未命中 → 纯闲聊）
-        val toolTurn = deviceToolBridge.voiceTurn(text, confirmed = toolConfirmed)
+        // 办：统一 DeviceToolBridge.voiceTurn（意图未命中 → 纯闲聊）；异常不拖垮会话
+        val toolTurn = runCatching {
+            deviceToolBridge.voiceTurn(text, confirmed = toolConfirmed)
+        }.getOrElse { e ->
+            log?.w("voiceTurn failed, continue chat-only: ${e.message}")
+            DeviceToolTurn(
+                channel = DeviceToolChannel.VOICE,
+                plan = null,
+                outcome = null,
+                needsTools = false,
+                summary = null
+            )
+        }
 
         val chatReply = runCatching { responder.respond(text) }
             .getOrElse { e ->
@@ -291,14 +302,17 @@ class VoiceSessionCoordinator @Inject constructor(
 
     /**
      * 设置页试运行：固定 stub 一轮「听→想→说」（不强制工具）。
+     * TTS 未就绪时自动 skipTts，避免未装 so / 未下载模型时 native 路径踩雷。
      */
     suspend fun runDemoRound(): VoiceSessionResult {
+        val skipTts = !ttsEngine.isReady
         return runRound(
-            VoiceSessionInput(
+            input = VoiceSessionInput(
                 asrText = "兰心，你好呀",
                 isStub = true,
                 source = "demo"
-            )
+            ),
+            skipTts = skipTts
         )
     }
 

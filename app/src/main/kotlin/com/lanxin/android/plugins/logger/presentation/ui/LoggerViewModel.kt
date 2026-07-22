@@ -58,10 +58,14 @@ class LoggerViewModel @Inject constructor(
     }
 
     fun openCurrentOrLatest() {
+        val files = logManager.listLogFiles()
+        // 优先打开最新崩溃日志，方便无 adb 排障
+        val crash = files.firstOrNull { it.name.startsWith("crash-") }
         val current = logManager.getLogDir()?.let { File(it, LogManager.CURRENT_LOG_NAME) }
         val target = when {
+            crash != null -> crash
             current != null && current.exists() -> current
-            else -> logManager.listLogFiles().firstOrNull()
+            else -> files.firstOrNull()
         }
         if (target != null) {
             openFile(target)

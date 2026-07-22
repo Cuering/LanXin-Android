@@ -598,30 +598,46 @@ class DesktopPetViewModel @Inject constructor(
     /** stub 一轮听→想→说（无需真 so / 真麦）。 */
     fun runDemoRound() {
         viewModelScope.launch {
-            if (!petSettings.getConfig().enabled) {
-                _uiState.update { it.copy(snackbarMessage = "请先打开桌宠总开关") }
-                return@launch
-            }
-            _uiState.update { it.copy(isBusy = true) }
-            if (!ttsEngine.isReady) {
-                ttsSettings.setEnabled(true)
-                ttsEngine.load(ttsSettings.getConfig())
-            }
-            val result = sessionCoordinator.runDemoRound()
-            _uiState.update {
-                it.copy(
-                    isBusy = false,
-                    snackbarMessage = if (result.error != null) {
-                        "演示失败：${result.error}"
-                    } else {
-                        val demoText = MoodTagMapper.stripTags(
-                            result.subtitle.ifBlank { result.replyText }
-                        )
-                        "演示完成：$demoText"
+            runCatching {
+                if (!petSettings.getConfig().enabled) {
+                    _uiState.update { it.copy(snackbarMessage = "请先打开桌宠总开关") }
+                    return@launch
+                }
+                _uiState.update { it.copy(isBusy = true) }
+                if (!ttsEngine.isReady) {
+                    runCatching {
+                        ttsSettings.setEnabled(true)
+                        ttsEngine.load(ttsSettings.getConfig())
+                    }.onFailure { e ->
+                        // TTS 加载失败不阻断 stub 演示（协调器会 skip/degrade）
+                        _uiState.update {
+                            it.copy(snackbarMessage = "TTS 未就绪，将仅文字：${e.message}")
+                        }
                     }
-                )
+                }
+                val result = sessionCoordinator.runDemoRound()
+                _uiState.update {
+                    it.copy(
+                        isBusy = false,
+                        snackbarMessage = if (result.error != null) {
+                            "演示失败：${result.error}"
+                        } else {
+                            val demoText = MoodTagMapper.stripTags(
+                                result.subtitle.ifBlank { result.replyText }
+                            )
+                            "演示完成：$demoText"
+                        }
+                    )
+                }
+                refresh()
+            }.getOrElse { e ->
+                _uiState.update {
+                    it.copy(
+                        isBusy = false,
+                        snackbarMessage = "演示异常：${e.message ?: e.javaClass.simpleName}"
+                    )
+                }
             }
-            refresh()
         }
     }
 
@@ -643,36 +659,46 @@ class DesktopPetViewModel @Inject constructor(
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return
         viewModelScope.launch {
-            if (!petSettings.getConfig().enabled) {
-                petSettings.setEnabled(true)
-            }
-            _uiState.update { it.copy(isBusy = true) }
-            if (!ttsEngine.isReady) {
-                runCatching {
-                    ttsSettings.setEnabled(true)
-                    ttsEngine.load(ttsSettings.getConfig())
+            runCatching {
+                if (!petSettings.getConfig().enabled) {
+                    petSettings.setEnabled(true)
+                }
+                _uiState.update { it.copy(isBusy = true) }
+                if (!ttsEngine.isReady) {
+                    runCatching {
+                        ttsSettings.setEnabled(true)
+                        ttsEngine.load(ttsSettings.getConfig())
+                    }
+                }
+                val result = sessionCoordinator.runRound(
+                    input = com.lanxin.android.builtin.pet.domain.VoiceSessionInput(
+                        asrText = trimmed,
+                        isStub = true,
+                        source = "companion"
+                    ),
+                    skipTts = !ttsEngine.isReady
+                )
+                _uiState.update {
+                    it.copy(
+                        isBusy = false,
+                        snackbarMessage = result.error?.let { e ->
+                            if (e.startsWith("tts_failed")) {
+                                "TTS 暂不可用，已显示文字回复"
+                            } else {
+                                "失败：$e"
+                            }
+                        }
+                    )
+                }
+                refresh()
+            }.getOrElse { e ->
+                _uiState.update {
+                    it.copy(
+                        isBusy = false,
+                        snackbarMessage = "发送失败：${e.message ?: e.javaClass.simpleName}"
+                    )
                 }
             }
-            val result = sessionCoordinator.runRound(
-                com.lanxin.android.builtin.pet.domain.VoiceSessionInput(
-                    asrText = trimmed,
-                    isStub = true,
-                    source = "companion"
-                )
-            )
-            _uiState.update {
-                it.copy(
-                    isBusy = false,
-                    snackbarMessage = result.error?.let { e ->
-                        if (e.startsWith("tts_failed")) {
-                            "TTS 暂不可用，已显示文字回复"
-                        } else {
-                            "失败：$e"
-                        }
-                    }
-                )
-            }
-            refresh()
         }
     }
 
