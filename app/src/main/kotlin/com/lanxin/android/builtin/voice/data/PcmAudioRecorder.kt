@@ -417,6 +417,7 @@ class PcmAudioRecorder @Inject constructor() {
         private const val TAG = "PcmAudioRecorder"
         const val DEFAULT_STUB_DURATION_MS = 500L
         const val MAX_RECORD_MS = 60_000L
+
         /** 低于此峰值视为「假录音/全静音」。 */
         const val MIN_LIVE_PEAK = 32L
 

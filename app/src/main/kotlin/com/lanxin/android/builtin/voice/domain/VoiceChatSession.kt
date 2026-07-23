@@ -538,6 +538,7 @@ class VoiceChatSession @Inject constructor(
 
     companion object {
         const val MIN_USEFUL_MS = 200L
+
         /** 峰值低于此阈值视为「麦克风没采到声」。 */
         const val SILENCE_PEAK_THRESHOLD = 48
     }
