@@ -121,8 +121,9 @@ class StubLocalLlmEngine @Inject constructor(
         val preview = prompt.take(80).replace('\n', ' ')
         val text = buildString {
             append("[local-stub] ")
-            request.systemPrompt?.takeIf { it.isNotBlank() }?.let {
-                append("(sys=${it.take(24)}) ")
+            // 不回显 system 原文：约束文案含「思考过程」等清洗关键词，echo 会被 sanitizer 整行丢弃
+            if (!request.systemPrompt.isNullOrBlank()) {
+                append("(sys=yes) ")
             }
             append("echo: ")
             append(preview)

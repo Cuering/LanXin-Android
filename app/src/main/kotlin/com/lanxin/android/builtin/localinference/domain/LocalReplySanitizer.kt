@@ -110,7 +110,7 @@ object LocalReplySanitizer {
         "chain of thought",
         "step by step",
         // 约束原文泄漏：模型把 system prompt 里的输出约束原样抄进回复
-        "【输出约束】",
+        // 注意：短约束里的「思考过程」等词也可能出现在正常正文，仅用长/专属短语
         "禁止思考外泄",
         "不要输出任何思考过程",
         "不输出思考过程",
@@ -124,7 +124,18 @@ object LocalReplySanitizer {
         "表情符号或颜文字",
         "编号拆解用户意图",
         "工具检查",
-        "Markdown 报告"
+        "Markdown 报告",
+        "协议标签（[[…]]",
+        "直接对用户说短句"
+    )
+
+    /**
+     * 仅当行首匹配时丢弃。
+     * 不用 contains：stub/调试回复可能在行中带 `(sys=【输出约束】…)`，误伤会清空正文。
+     */
+    private val META_LINE_PREFIXES = listOf(
+        "【输出约束】",
+        "【输出约束·强制】"
     )
 
     /** 编号列表式元分析。 */
@@ -285,6 +296,9 @@ object LocalReplySanitizer {
             if (META_LEAD_LINE.containsMatchIn(trimmed)) {
                 continue
             }
+            if (META_LINE_PREFIXES.any { trimmed.startsWith(it) }) {
+                continue
+            }
             if (META_LINE_MARKERS.any { trimmed.contains(it, ignoreCase = true) }) {
                 continue
             }
@@ -314,6 +328,7 @@ object LocalReplySanitizer {
 
         fun isBareThink(line: String): Boolean {
             if (META_LEAD_LINE.containsMatchIn(line)) return true
+            if (META_LINE_PREFIXES.any { line.startsWith(it) }) return true
             if (META_LINE_MARKERS.any { line.contains(it, ignoreCase = true) }) return true
             if (NUMBERED_META.containsMatchIn(line)) return true
             if ((line.startsWith("首先") || line.startsWith("其次") || line.startsWith("然后") ||
@@ -366,6 +381,7 @@ object LocalReplySanitizer {
                     t != "---" &&
                     !META_SECTION_HEADER.containsMatchIn(t) &&
                     !META_LEAD_LINE.containsMatchIn(t) &&
+                    META_LINE_PREFIXES.none { t.startsWith(it) } &&
                     META_LINE_MARKERS.none { t.contains(it, ignoreCase = true) }
             }
             .joinToString("\n")

@@ -184,4 +184,14 @@ class LocalReplySanitizerTest {
         assertFalse(d.contains("不要先写内部推理"))
         assertTrue(d.contains("哥哥你好呀"))
     }
+
+    @Test
+    fun `inline constraint marker in stub echo is not wiped`() {
+        // 旧 stub 会把 system 前缀 echo 成单行：`(sys=【输出约束】…)`
+        // 行中带约束标记时不能整行丢弃，否则 Success 会变空
+        val raw = "[local-stub] (sys=yes) echo: hello | maxTokens=128 | model=demo"
+        val d = LocalReplySanitizer.forDisplay(raw, showThinking = false)
+        assertTrue(d.isNotBlank())
+        assertTrue(d.contains("echo:") || d.contains("hello"))
+    }
 }
