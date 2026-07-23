@@ -97,17 +97,26 @@ std::string resolveConfigPath(const std::string& path) {
 }
 
 /**
- * 对齐 MNN Chat 默认运行时：多线程 CPU、低精度、低内存。
+ * 对齐 MNN Chat 运行时：
+ * - 硬件：多线程 CPU、低精度、低内存
+ * - 采样：mixed + penalty 前置，抑制 phrase loop（官方默认 mixed 不含 penalty）
  * 失败不致命（旧 so / 旧 config 可能不认部分键）。
+ *
+ * 注意：set_config 会 merge 进当前配置；模型包 config.json 的路径类字段仍由 createLLM 读取。
  */
 void applyRuntimeConfigLocked(Llm* llm) {
     if (llm == nullptr) return;
-    // thread_num=4 与官方 Android 默认接近；backend_type=0 → CPU
+    // thread_num=4 与官方 Android 默认接近
+    // mixed_samplers 把 penalty 放最前；repetition_penalty≈1.15 是小模型防复读常用值
     const char* cfg =
-        R"({"thread_num":4,"backend_type":"cpu","precision":"low","memory":"low","tmp_path":""})";
+        R"({"thread_num":4,"backend_type":"cpu","precision":"low","memory":"low","tmp_path":"",)"
+        R"("sampler_type":"mixed",)"
+        R"("mixed_samplers":["penalty","topK","topP","temperature"],)"
+        R"("temperature":0.7,"top_k":40,"top_p":0.9,)"
+        R"("repetition_penalty":1.15,"presence_penalty":0.1,"frequency_penalty":0.1})";
     try {
         bool ok = llm->set_config(cfg);
-        ALOGI("set_config ok=%d", ok ? 1 : 0);
+        ALOGI("set_config ok=%d (hw+sampler+penalty)", ok ? 1 : 0);
     } catch (...) {
         ALOGW("set_config threw; continue with model defaults");
     }

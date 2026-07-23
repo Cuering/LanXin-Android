@@ -95,13 +95,14 @@ class LocalAwarePetChatResponder @Inject constructor(
     }
 
     companion object {
-        /** 陪伴 system：角色短答，叠加输出约束。 */
+        /** 陪伴 system：角色短答，叠加输出约束；明确禁止 phrase loop。 */
         const val COMPANION_SYSTEM: String =
             "你是兰心，温柔、亲近的中文陪伴角色。用户在全屏陪伴里跟你说话。" +
-                "用口语短句回复，像面对面聊天；不要列点、不要写报告。"
+                "用口语短句回复，像面对面聊天；不要列点、不要写报告。" +
+                "每轮只回答一次，句子不要重复；禁止把同一句连写多遍。"
 
-        /** 陪伴生成上限：短答优先，降低延迟与元分析空间。 */
-        const val COMPANION_MAX_TOKENS: Int = 128
+        /** 陪伴生成上限：短答优先，降低延迟与元分析/复读空间。 */
+        const val COMPANION_MAX_TOKENS: Int = 96
 
         /** 单轮本地推理超时；超时回 stub，避免卡死「思考中」。 */
         const val COMPANION_TIMEOUT_MS: Long = 45_000L

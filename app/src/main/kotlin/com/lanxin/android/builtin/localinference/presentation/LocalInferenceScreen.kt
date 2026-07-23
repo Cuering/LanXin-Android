@@ -125,7 +125,47 @@ fun LocalInferenceScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "Phase 6.2 · 离线兜底 + MNN 骨架（stub）",
+                        text = "本地脑 · 安装与语音对话引导",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = """
+步骤 1 · 准备模型包（完整文件夹，不要只拷一个 llm.mnn）
+  需要：config.json + llm.mnn + llm.mnn.weight + tokenizer（.mtok 等）
+  推荐：Qwen 0.5B / 1.5B 等 MNN 导出包；机型内存不足勿上 7B。
+
+步骤 2 · 导入并开启
+  点下方「一键开启本地对话」→ 选模型文件夹 → 等「本地对话已就绪」。
+  也可手动「选择文件夹」后打开「启用本地推理」。
+
+步骤 3 · 验证文字对话
+  新建会话勾选「本地模型」，或开「优先本地路由」后发「你好」。
+  状态应出现本地生成；若仍走云端，看本页「当前路由预览」。
+
+步骤 4 · 语音对话（可选）
+  设置 → 语音 ASR：导入/启用识别模型，授予麦克风权限。
+  设置 → 语音 TTS：启用播报。
+  全屏陪伴：对着麦克风说 → 本地脑回复 → TTS 读出。
+
+报错时请复制本页 Snackbar / 路由预览 / 引擎状态整段反馈。
+失败常见原因：模型包缺文件、只选了单文件、内存不足、未授权麦克风。
+                        """.trimIndent(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "本地推理 · 能力说明",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
