@@ -60,6 +60,7 @@ import com.lanxin.android.builtin.systemtools.domain.UserFileEntry
 import com.lanxin.android.builtin.systemtools.domain.UserFileIoGateway
 import com.lanxin.android.builtin.systemtools.domain.UserFileIoResult
 import com.lanxin.android.builtin.systemtools.domain.UserFileProbe
+import com.lanxin.android.builtin.voice.data.PcmAudioPlayer
 import com.lanxin.android.builtin.voice.data.StubTtsEngine
 import com.lanxin.android.builtin.voice.domain.TtsConfig
 import com.lanxin.android.builtin.voice.domain.TtsSettings
@@ -217,7 +218,8 @@ class VoiceSessionToolBridgeTest {
             ttsEngine = tts,
             ttsSettings = FakeTtsSettings(),
             petSettings = FakePetSettings(PetConfig(enabled = true)),
-            deviceToolBridge = bridge
+            deviceToolBridge = bridge,
+            pcmPlayer = PcmAudioPlayer()
         )
     }
 

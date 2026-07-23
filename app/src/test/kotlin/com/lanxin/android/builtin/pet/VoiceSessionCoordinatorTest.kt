@@ -43,6 +43,7 @@ import com.lanxin.android.builtin.systemtools.domain.UserFileEntry
 import com.lanxin.android.builtin.systemtools.domain.UserFileIoGateway
 import com.lanxin.android.builtin.systemtools.domain.UserFileIoResult
 import com.lanxin.android.builtin.systemtools.domain.UserFileProbe
+import com.lanxin.android.builtin.voice.data.PcmAudioPlayer
 import com.lanxin.android.builtin.voice.data.StubTtsEngine
 import com.lanxin.android.builtin.voice.domain.TtsEngine
 import com.lanxin.android.builtin.voice.domain.TtsEngineState
@@ -61,6 +62,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class VoiceSessionCoordinatorTest {
+
+    private fun testPlayer(): PcmAudioPlayer = PcmAudioPlayer()
 
     private class FakeTtsSettings(
         private var config: TtsConfig = TtsConfig(enabled = true)
@@ -215,7 +218,8 @@ class VoiceSessionCoordinatorTest {
             ttsEngine = tts,
             ttsSettings = FakeTtsSettings(),
             petSettings = FakePetSettings(pet),
-            deviceToolBridge = defaultBridge()
+            deviceToolBridge = defaultBridge(),
+            pcmPlayer = testPlayer()
         )
     }
 
@@ -275,7 +279,8 @@ class VoiceSessionCoordinatorTest {
             ttsEngine = tts,
             ttsSettings = FakeTtsSettings(),
             petSettings = FakePetSettings(PetConfig(enabled = true)),
-            deviceToolBridge = defaultBridge()
+            deviceToolBridge = defaultBridge(),
+            pcmPlayer = testPlayer()
         )
         val r = c.runRound(
             input = VoiceSessionInput("测试", isStub = true, source = "companion_text"),
@@ -297,12 +302,34 @@ class VoiceSessionCoordinatorTest {
             ttsEngine = tts,
             ttsSettings = FakeTtsSettings(),
             petSettings = FakePetSettings(PetConfig(enabled = true)),
-            deviceToolBridge = defaultBridge()
+            deviceToolBridge = defaultBridge(),
+            pcmPlayer = testPlayer()
         )
         val r = c.runRound(VoiceSessionInput("测试", isStub = true))
         assertTrue(r.error!!.startsWith("tts_failed"))
         assertEquals("有字可显示", r.replyText)
         assertEquals("有字可显示", r.subtitle)
+    }
+
+    @Test
+    fun `pcm path attempts play and still returns text when AudioTrack unavailable`() = runBlocking {
+        // JVM 单测无 Android AudioTrack：非空 PCM 会走 play 并 soft-fail，文字仍返回
+        val tts = PcmTtsEngine()
+        tts.load(TtsConfig(enabled = true))
+        val c = VoiceSessionCoordinator(
+            responder = FixedResponder("可播文字"),
+            ttsEngine = tts,
+            ttsSettings = FakeTtsSettings(),
+            petSettings = FakePetSettings(PetConfig(enabled = true)),
+            deviceToolBridge = defaultBridge(),
+            pcmPlayer = testPlayer()
+        )
+        val r = c.runRound(VoiceSessionInput("测试", isStub = true))
+        assertEquals(null, r.error)
+        assertEquals(VoiceSessionPhase.IDLE, r.phase)
+        assertEquals("可播文字", r.replyText)
+        assertEquals("可播文字", r.subtitle)
+        assertFalse(r.isStub) // 有真 PCM 时 isStub=false
     }
 
     /** 统计 synthesize 调用次数，验证 skipTts 短路。 */
@@ -344,6 +371,33 @@ class VoiceSessionCoordinatorTest {
         override suspend fun unload() = Unit
         override suspend fun synthesize(request: TtsSynthesizeRequest): TtsSynthesizeResult {
             error("tts_not_ready")
+        }
+    }
+
+    /** 返回非空 PCM，验证 coordinator 会走 play 路径且不因播放失败崩溃。 */
+    private class PcmTtsEngine : TtsEngine {
+        private val _state = MutableStateFlow(TtsEngineState.DISABLED)
+        override val state: StateFlow<TtsEngineState> = _state.asStateFlow()
+        override val isReady: Boolean get() = _state.value == TtsEngineState.READY
+        override val isAvailable: Boolean = true
+        override val lastError: String? = null
+        override suspend fun load(config: TtsConfig): Boolean {
+            _state.value = TtsEngineState.READY
+            return true
+        }
+        override suspend fun unload() {
+            _state.value = TtsEngineState.DISABLED
+        }
+        override suspend fun synthesize(request: TtsSynthesizeRequest): TtsSynthesizeResult {
+            // 约 20ms @ 16kHz mono s16le
+            val pcm = ByteArray(640) { 0 }
+            return TtsSynthesizeResult(
+                pcm16leMono = pcm,
+                sampleRateHz = 16_000,
+                durationMs = 20L,
+                isStub = false,
+                subtitle = request.text
+            )
         }
     }
 }

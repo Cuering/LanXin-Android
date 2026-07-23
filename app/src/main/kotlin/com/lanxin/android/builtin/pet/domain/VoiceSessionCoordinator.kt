@@ -21,6 +21,7 @@ import com.lanxin.android.builtin.systemtools.domain.DeviceToolBridge
 import com.lanxin.android.builtin.systemtools.domain.DeviceToolChannel
 import com.lanxin.android.builtin.systemtools.domain.DeviceToolOutcome
 import com.lanxin.android.builtin.systemtools.domain.DeviceToolTurn
+import com.lanxin.android.builtin.voice.data.PcmAudioPlayer
 import com.lanxin.android.builtin.voice.domain.TtsEngine
 import com.lanxin.android.builtin.voice.domain.TtsSettings
 import com.lanxin.android.builtin.voice.domain.TtsSynthesizeRequest
@@ -47,7 +48,7 @@ import kotlinx.coroutines.sync.withLock
  * - 输入：ASR 文本（可 stub）
  * - 思考：[PetChatResponder]（stub / 后续 ChatRouter）
  * - 办事：[DeviceToolBridge]（Registry + Gate，与 Chat/MCP 同一路径）
- * - 输出：[TtsEngine] + 字幕气泡（**不**塞 Chat 输入框）
+ * - 输出：[TtsEngine] 合成 → [PcmAudioPlayer] 真播放 + 字幕气泡（**不**塞 Chat 输入框）
  * - 落盘：每轮 user/assistant 写入跨会话历史 + 文件日志（不依赖 logcat）
  *
  * 默认不录音、不截屏；仅用户 / 设置页显式触发。
@@ -56,7 +57,7 @@ import kotlinx.coroutines.sync.withLock
  * ## Phase 7.5 一体接入
  *
  * ```
- * 听 → 想 → DeviceToolBridge.resolveAndInvoke → 结果并入回复 → 说
+ * 听 → 想 → DeviceToolBridge.resolveAndInvoke → 结果并入回复 → 说(合成+播放)
  * ```
  *
  * Chat / MCP / VoiceSession 共用同一套系统工具与确认门闸，见 `docs/system-tools.md` §7.5。
@@ -68,6 +69,7 @@ class VoiceSessionCoordinator @Inject constructor(
     private val ttsSettings: TtsSettings,
     private val petSettings: PetSettings,
     private val deviceToolBridge: DeviceToolBridge,
+    private val pcmPlayer: PcmAudioPlayer,
     private val logManager: LogManager? = null,
     private val crossSessionRepository: CrossSessionRepository? = null
 ) {
@@ -272,6 +274,26 @@ class VoiceSessionCoordinator @Inject constructor(
         // 匹配仍读 replyText(raw)；气泡优先 subtitle(已剥)
         snap = snap.copy(subtitle = spokenSubtitle)
         _snapshot.value = snap
+
+        // 关键链路：synthesize 之后必须 play；空 PCM / stub 则 no-op，不崩
+        if (tts.pcm16leMono.isNotEmpty()) {
+            val playResult = runCatching {
+                pcmPlayer.play(tts.pcm16leMono, tts.sampleRateHz)
+            }.getOrElse { e ->
+                log?.w("tts play failed: ${e.message}")
+                Result.failure(e)
+            }
+            if (playResult.isFailure) {
+                log?.w("tts play soft-fail: ${playResult.exceptionOrNull()?.message}")
+            } else {
+                log?.i("tts play ok bytes=${tts.pcm16leMono.size} rate=${tts.sampleRateHz} stub=${tts.isStub}")
+            }
+        } else {
+            log?.i(
+                "tts no pcm (stub=${tts.isStub} ready=${ttsEngine.isReady}); " +
+                    "subtitle only, skip AudioTrack"
+            )
+        }
 
         snap = VoiceSessionStateMachine.onSpeakDone(snap)
         // 说完后历史快照统一剥离，避免标签进 UI / 预览
