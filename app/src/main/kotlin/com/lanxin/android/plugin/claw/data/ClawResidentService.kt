@@ -31,9 +31,11 @@ import com.lanxin.android.plugin.PluginManager
 import com.lanxin.android.plugin.claw.domain.ClawHostGate
 import com.lanxin.android.plugin.claw.domain.ClawHostSettings
 import com.lanxin.android.plugin.claw.domain.ResidentCapablePlugin
+import com.lanxin.android.presentation.CrashHandler
 import com.lanxin.android.presentation.ui.main.MainActivity
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -59,7 +61,13 @@ class ClawResidentService : Service() {
     @Inject
     lateinit var pluginManager: PluginManager
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val clawExceptionHandler = CoroutineExceptionHandler { _, t ->
+        Log.e(TAG, "claw coroutine failed", t)
+        CrashHandler.reportNonFatal("ClawResidentService.coroutine", t)
+    }
+    private val scope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Default + clawExceptionHandler
+    )
     private var residentPluginsNotified = false
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -79,6 +87,11 @@ class ClawResidentService : Service() {
             }
         } catch (e: Exception) {
             Log.w(TAG, "startForeground denied, running as background service", e)
+            CrashHandler.reportNonFatal(
+                "ClawResidentService.startForeground",
+                e,
+                detail = "FGS denied; continue background if possible"
+            )
         }
         platformHost.setResidentRunning(true)
     }

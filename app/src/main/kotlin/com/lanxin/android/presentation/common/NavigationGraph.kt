@@ -127,7 +127,9 @@ fun NavGraphBuilder.smartCapabilitiesScreenNavigation(navController: NavHostCont
 fun NavGraphBuilder.localInferenceScreenNavigation(navController: NavHostController) {
     composable(Route.LOCAL_INFERENCE) {
         LocalInferenceScreen(
-            onBackAction = { navController.navigateUp() }
+            onBackAction = { navController.navigateUp() },
+            onNavigateToOfflineAsr = { navController.navigate(Route.OFFLINE_ASR) },
+            onNavigateToDesktopPet = { navController.navigate(Route.DESKTOP_PET) }
         )
     }
 }

@@ -52,9 +52,11 @@ import com.lanxin.android.builtin.pet.domain.PetSettings
 import com.lanxin.android.builtin.pet.domain.TextExpressionMotionMapper
 import com.lanxin.android.builtin.pet.domain.VoiceSessionCoordinator
 import com.lanxin.android.builtin.pet.domain.VoiceSessionPhase
+import com.lanxin.android.presentation.CrashHandler
 import com.lanxin.android.presentation.ui.main.MainActivity
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -78,7 +80,13 @@ class FloatingPetService : Service() {
     @Inject
     lateinit var petSettings: PetSettings
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val petExceptionHandler = CoroutineExceptionHandler { _, t ->
+        Log.e(TAG, "pet coroutine failed", t)
+        CrashHandler.reportNonFatal("FloatingPetService.coroutine", t)
+    }
+    private val scope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Main.immediate + petExceptionHandler
+    )
     private var windowManager: WindowManager? = null
     private var webView: WebView? = null
     private var layoutParams: WindowManager.LayoutParams? = null
@@ -115,12 +123,28 @@ class FloatingPetService : Service() {
             }
         } catch (e: Exception) {
             Log.w(TAG, "startForeground denied, continue as background service", e)
+            CrashHandler.reportNonFatal(
+                "FloatingPetService.startForeground",
+                e,
+                detail = "FGS denied; continue background if possible"
+            )
         }
         if (!OverlayPermissionHelper.canDrawOverlays(this)) {
+            CrashHandler.reportNonFatal(
+                "FloatingPetService.onCreate",
+                detail = "SYSTEM_ALERT_WINDOW missing; stopSelf"
+            )
             stopSelf()
             return
         }
-        attachOverlay()
+        try {
+            attachOverlay()
+        } catch (t: Throwable) {
+            Log.e(TAG, "attachOverlay failed", t)
+            CrashHandler.reportNonFatal("FloatingPetService.attachOverlay", t)
+            stopSelf()
+            return
+        }
         // 会话相位变化 → 推表情/口型（生命周期内 collect，onDestroy cancel）
         sessionCollectJob = scope.launch {
             sessionCoordinator.snapshot.collectLatest {
@@ -130,28 +154,37 @@ class FloatingPetService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
-            ACTION_STOP -> {
-                scope.launch { petSettings.setOverlayRunning(false) }
-                stopSelf()
-            }
-            ACTION_DEMO_ROUND -> {
-                scope.launch {
-                    val result = sessionCoordinator.runDemoRound()
-                    pushSessionToWeb()
-                    val demoBubble = MoodTagMapper.stripTags(
-                        result.subtitle.ifBlank { result.replyText }
-                    )
-                    if (demoBubble.isNotBlank()) {
-                        desktopBridge?.encodeBubble(demoBubble)?.let { pushRawToWeb(it) }
+        try {
+            when (intent?.action) {
+                ACTION_STOP -> {
+                    scope.launch { petSettings.setOverlayRunning(false) }
+                    stopSelf()
+                }
+                ACTION_DEMO_ROUND -> {
+                    scope.launch {
+                        val result = sessionCoordinator.runDemoRound()
+                        pushSessionToWeb()
+                        val demoBubble = MoodTagMapper.stripTags(
+                            result.subtitle.ifBlank { result.replyText }
+                        )
+                        if (demoBubble.isNotBlank()) {
+                            desktopBridge?.encodeBubble(demoBubble)?.let { pushRawToWeb(it) }
+                        }
                     }
                 }
+                ACTION_RELOAD_LIVE2D -> {
+                    pushLive2dPathToWeb()
+                    pushSessionToWeb()
+                }
+                else -> pushSessionToWeb()
             }
-            ACTION_RELOAD_LIVE2D -> {
-                pushLive2dPathToWeb()
-                pushSessionToWeb()
-            }
-            else -> pushSessionToWeb()
+        } catch (t: Throwable) {
+            Log.e(TAG, "onStartCommand failed action=${intent?.action}", t)
+            CrashHandler.reportNonFatal(
+                "FloatingPetService.onStartCommand",
+                t,
+                detail = "action=${intent?.action}"
+            )
         }
         return START_STICKY
     }
@@ -555,7 +588,11 @@ class FloatingPetService : Service() {
                 }
             }.onFailure {
                 Log.w(TAG, "startForegroundService denied", it)
+                CrashHandler.reportNonFatal("FloatingPetService.start", it)
                 runCatching { context.startService(i) }
+                    .onFailure { e2 ->
+                        CrashHandler.reportNonFatal("FloatingPetService.startService", e2)
+                    }
             }
         }
 

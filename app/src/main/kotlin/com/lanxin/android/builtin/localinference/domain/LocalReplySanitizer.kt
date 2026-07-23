@@ -36,7 +36,8 @@ object LocalReplySanitizer {
      */
     const val NO_THINK_OR_TAGS_INSTRUCTION: String =
         "【输出约束】直接对用户说短句，不输出思考过程、" +
-            "分析报告、协议标签（[[…]]、<…>、<think>）或元话术。"
+            "分析报告、协议标签（[[…]]、<…>、<think>）或元话术。" +
+            "同一句话只说一次，禁止复读、禁止把同一句连写多遍。"
 
     /** 已闭合的 `<think>…</think>`（跨行、大小写不敏感）。 */
     private val CLOSED_THINK_REGEX = Regex(
@@ -111,6 +112,7 @@ object LocalReplySanitizer {
         "step by step",
         // 约束原文泄漏：模型把 system prompt 里的输出约束原样抄进回复
         // 注意：短约束里的「思考过程」等词也可能出现在正常正文，仅用长/专属短语
+        // 「【输出约束】」放 META_LINE_PREFIXES 行首匹配，避免 stub 行中带该串被整行清空
         "禁止思考外泄",
         "不要输出任何思考过程",
         "不输出思考过程",
@@ -173,7 +175,9 @@ object LocalReplySanitizer {
         val thinking = extractThinking(raw)?.trim()?.takeIf { it.isNotEmpty() }
         val withoutThink = stripThinkingBlocks(raw)
         val withoutMeta = stripMetaAnalysis(withoutThink)
-        val display = stripHiddenTags(withoutMeta)
+        val withoutTags = stripHiddenTags(withoutMeta)
+        // 小模型常见 phrase loop：同一短句连刷到 maxTokens
+        val display = collapseRepeatedPhrase(withoutTags)
         val speech = stripEmojiAndDecorations(display)
         return if (showThinking) {
             CleanedReply(displayText = display, speechText = speech, thinkingText = thinking)
@@ -366,8 +370,148 @@ object LocalReplySanitizer {
     }
 
     /**
-     * 从「## 回应建议」块抽出真正回复；失败返回 null。
+     * 折叠小模型 phrase loop / 行级复读（所有问答出口共用）。
+     *
+     * 例：`你叫什么名字？你叫什么名字？…` → `你叫什么名字？`
+     * - 连续相同行只保留一行
+     * - 整段/前缀由短单元连刷 ≥2 次 → 只留 1 次（最短单元优先）
+     * - 空白分隔的相同词块连刷折叠
+     *
+     * 不用「回溯正则 greedy 捕获」：中文无词界时 \1 会把多句当成单元。
      */
+    fun collapseRepeatedPhrase(text: String): String {
+        if (text.isEmpty() || text.length < 4) return text
+        var result = text.replace("\r\n", "\n")
+
+        // 1) 连续相同行折叠
+        val lines = result.split('\n')
+        if (lines.size >= 2) {
+            val folded = ArrayList<String>(lines.size)
+            var prev: String? = null
+            for (line in lines) {
+                val t = line.trimEnd()
+                if (prev != null && t == prev) continue
+                folded += t
+                prev = t
+            }
+            result = folded.joinToString("\n")
+        }
+
+        // 2) 按行折叠「最短重复单元」连刷（从行首）
+        result = result.split('\n').joinToString("\n") { collapseUnitRuns(it) }
+
+        // 3) 行内任意位置：以 ？！。 结尾的短句连刷折叠
+        //    覆盖截图样本「前缀介绍 + 你叫什么名字？×N」
+        result = result.split('\n').joinToString("\n") { collapseSentenceRunsAnywhere(it) }
+
+        // 4) 空白分隔词块：连续相同 token 折叠
+        result = collapseWhitespaceTokens(result)
+
+        return collapseWhitespace(result)
+    }
+
+    /**
+     * 若 [line] 由长度 2..32 的单元连续重复 ≥2 次构成（或前缀如此），折叠为单次。
+     * 优先最短单元，避免把「ABABAB」误判成「ABAB」+「AB」。
+     */
+    private fun collapseUnitRuns(line: String): String {
+        val s = line.trim()
+        if (s.length < 4) return line
+        val punctEnd = "？?！!。．.…~，,、"
+        val maxUnit = minOf(32, s.length / 2)
+        for (len in 2..maxUnit) {
+            if (s.length < len * 2) break
+            val unit = s.substring(0, len)
+            var count = 0
+            var i = 0
+            while (i + len <= s.length && s.regionMatches(i, unit, 0, len)) {
+                count++
+                i += len
+            }
+            if (count < 2) continue
+            val looksSentence = unit.last() in punctEnd
+            // 短无标点单元（如「哈哈」）要求更高次数，避免误伤正常叠词
+            val strongEnough = when {
+                looksSentence -> count >= 2
+                len >= 4 -> count >= 2
+                else -> count >= 5
+            }
+            if (!strongEnough) continue
+            if (i == s.length) {
+                return unit
+            }
+            // 前缀连刷后还有尾巴：仅折叠「像完整句」的前缀
+            if (looksSentence || count >= 5) {
+                return unit + s.substring(i)
+            }
+        }
+        return line
+    }
+
+    /**
+     * 扫描行内以句读结尾的短单元（2..24 字）是否连续出现 ≥2 次，折叠为 1 次。
+     * 解决 [collapseUnitRuns] 只从行首匹配、漏掉「前缀 + 复读」的问题。
+     */
+    private fun collapseSentenceRunsAnywhere(line: String): String {
+        if (line.length < 6) return line
+        val punctEnd = charArrayOf('？', '?', '！', '!', '。', '．', '…')
+        // 反复扫到不再变化（可能有多段 loop）
+        var s = line
+        var guard = 0
+        while (guard++ < 8) {
+            val next = foldOneSentenceRun(s, punctEnd) ?: break
+            if (next == s) break
+            s = next
+        }
+        return s
+    }
+
+    /** 找到第一处「句读结尾单元」连刷 ≥2，折叠后返回；无则 null。 */
+    private fun foldOneSentenceRun(s: String, punctEnd: CharArray): String? {
+        var i = 0
+        while (i < s.length) {
+            var j = i
+            while (j < s.length) {
+                if (s[j] in punctEnd) {
+                    val len = j - i + 1
+                    if (len in 2..24) {
+                        val unit = s.substring(i, i + len)
+                        var count = 0
+                        var k = i
+                        while (k + len <= s.length && s.regionMatches(k, unit, 0, len)) {
+                            count++
+                            k += len
+                        }
+                        if (count >= 2) {
+                            return s.substring(0, i) + unit + s.substring(k)
+                        }
+                    }
+                    break // 本起点只取第一个句读
+                }
+                j++
+                if (j - i > 24) break
+            }
+            i++
+        }
+        return null
+    }
+
+    /** 折叠「token token token」式空白分隔复读。 */
+    private fun collapseWhitespaceTokens(text: String): String {
+        if (!text.contains(' ') && !text.contains('\t')) return text
+        val parts = text.split(Regex("""\s+"""))
+        if (parts.size < 2) return text
+        val out = ArrayList<String>(parts.size)
+        var prev: String? = null
+        for (p in parts) {
+            if (p.isEmpty()) continue
+            if (prev != null && p == prev) continue
+            out += p
+            prev = p
+        }
+        return out.joinToString(" ")
+    }
+
     fun extractSuggestedReply(text: String): String? {
         val m = Regex(
             """(?is)(?:^|\n)\s{0,3}#{1,6}\s*回应建议\s*\n+(.*?)(?=\n\s*---|\n\s*\*\*分析|\n\s*#{1,6}\s*分析|\z)"""

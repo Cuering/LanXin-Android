@@ -194,4 +194,52 @@ class LocalReplySanitizerTest {
         assertTrue(d.isNotBlank())
         assertTrue(d.contains("echo:") || d.contains("hello"))
     }
+
+    @Test
+    fun `collapseRepeatedPhrase folds chinese question loop`() {
+        val loop = "你叫什么名字？".repeat(20)
+        val d = LocalReplySanitizer.forDisplay(loop, showThinking = false)
+        assertEquals("你叫什么名字？", d)
+    }
+
+    @Test
+    fun `collapseRepeatedPhrase folds spaced word loop`() {
+        val loop = "你好呀 你好呀 你好呀 你好呀"
+        val d = LocalReplySanitizer.collapseRepeatedPhrase(loop)
+        assertEquals("你好呀", d)
+    }
+
+    @Test
+    fun `collapseRepeatedPhrase folds identical lines`() {
+        val raw = """嗯嗯好的
+嗯嗯好的
+嗯嗯好的"""
+        val d = LocalReplySanitizer.collapseRepeatedPhrase(raw)
+        assertEquals("嗯嗯好的", d)
+    }
+
+    @Test
+    fun `collapseRepeatedPhrase folds mixed intro plus question loop`() {
+        // 截图样本：自我介绍后跟 phrase loop
+        val raw = "我是兰心，温柔的陪伴。你叫什么名字？".let { head ->
+            "我是兰心，温柔的陪伴。" + "你叫什么名字？".repeat(15)
+        }
+        val d = LocalReplySanitizer.forDisplay(raw, showThinking = false)
+        assertTrue(d.contains("我是兰心") || d.contains("你叫什么名字"))
+        assertFalse(d.contains("你叫什么名字？你叫什么名字？"))
+        // 同一问句不应再连刷
+        assertEquals(1, Regex("你叫什么名字？").findAll(d).count())
+    }
+
+    @Test
+    fun `collapseRepeatedPhrase keeps normal short reply`() {
+        val raw = "哥哥你好呀，今天想聊什么？"
+        assertEquals(raw, LocalReplySanitizer.collapseRepeatedPhrase(raw))
+    }
+
+    @Test
+    fun `appendOutputConstraint forbids phrase loop`() {
+        val off = LocalReplySanitizer.appendOutputConstraint(null, showThinking = false)
+        assertTrue(off!!.contains("禁止复读") || off.contains("只说一次"))
+    }
 }

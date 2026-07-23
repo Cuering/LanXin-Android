@@ -18,6 +18,9 @@ import java.util.Locale
  * 1. 同步写入 filesDir/logs/crash-*.log（方便无 adb 时从 App 内导出）
  * 2. 跳转 [CrashDisplayActivity] 展示堆栈，支持一键复制
  *
+ * 另提供 [reportNonFatal]：Service/Overlay 等软失败写 error-*.log + lanxin.log，
+ * 不杀进程、不弹崩溃页，便于复现「闪一下就没了」的场景。
+ *
  * 注意：JNI Abort / SIGABRT **不会**走本 handler，只覆盖 Java/Kotlin 未捕获异常。
  * native 侧已改用 NewString(UTF-16)，不再用 NewStringUTF（后者对 emoji 会 abort）。
  */
@@ -32,17 +35,25 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
         this.appContext = context.applicationContext
         this.defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler(this)
-        Log.i(TAG, "installed")
+        logI("installed")
     }
 
     override fun uncaughtException(thread: Thread, ex: Throwable) {
         val crashInfo = getCrashInfo(ex)
         val deviceInfo = getDeviceInfo()
-        val time = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
-            .format(Date())
+        val time = now()
 
         // 1) 写崩溃文件（同步，进程即将退出）
-        writeCrashFile(deviceInfo, time, thread.name, crashInfo)
+        writeLogFile(
+            prefix = "crash",
+            header = "=== LanXin Crash ===",
+            deviceInfo = deviceInfo,
+            time = time,
+            threadName = thread.name,
+            body = crashInfo,
+            level = "CRITICAL",
+            tag = "uncaught on ${thread.name}"
+        )
 
         // 2) 尽量弹展示页
         val ctx = appContext
@@ -61,7 +72,7 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
                 }
                 ctx.startActivity(intent)
             } catch (t: Throwable) {
-                Log.e(TAG, "start CrashDisplayActivity failed", t)
+                logE("start CrashDisplayActivity failed", t)
             }
         }
 
@@ -73,38 +84,74 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
         }
     }
 
-    private fun writeCrashFile(
+    /**
+     * 非致命错误上报：写 error-*.log + 追加 lanxin.log。
+     * 用于 FGS 被拒、悬浮窗 attach 失败、协程内异常等「进程不一定死但功能挂了」的场景。
+     *
+     * @param where 短标签，如 `FloatingPetService.onCreate`
+     * @param error 异常；可与 [detail] 二选一
+     * @param detail 无异常时的文字说明
+     */
+    fun reportNonFatal(
+        where: String,
+        error: Throwable? = null,
+        detail: String? = null
+    ) {
+        val body = buildString {
+            appendLine("where: $where")
+            if (!detail.isNullOrBlank()) appendLine(detail)
+            if (error != null) {
+                appendLine("--- stack ---")
+                append(getCrashInfo(error))
+            }
+        }
+        logE("non-fatal [$where]: ${error?.message ?: detail}")
+        writeLogFile(
+            prefix = "error",
+            header = "=== LanXin Non-Fatal ===",
+            deviceInfo = getDeviceInfo(),
+            time = now(),
+            threadName = Thread.currentThread().name,
+            body = body,
+            level = "ERROR",
+            tag = "non-fatal [$where]"
+        )
+    }
+
+    private fun writeLogFile(
+        prefix: String,
+        header: String,
         deviceInfo: String,
         time: String,
         threadName: String,
-        crashInfo: String
+        body: String,
+        level: String,
+        tag: String
     ) {
         val ctx = appContext ?: return
         try {
             val dir = File(ctx.filesDir, "logs")
             if (!dir.exists()) dir.mkdirs()
             val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
-            val file = File(dir, "crash-$stamp.log")
+            val file = File(dir, "$prefix-$stamp.log")
             file.writeText(
                 buildString {
-                    appendLine("=== LanXin Crash ===")
+                    appendLine(header)
                     appendLine("time: $time")
                     appendLine("thread: $threadName")
                     appendLine(deviceInfo)
-                    appendLine("--- stack ---")
-                    appendLine(crashInfo)
+                    appendLine(body)
                 },
                 Charsets.UTF_8
             )
-            // 同步追加到当前滚动日志，方便日志页看到
             val current = File(dir, "lanxin.log")
             current.appendText(
-                "\n[$time] [CRITICAL] [CrashHandler]: uncaught on $threadName\n$crashInfo\n",
+                "\n[$time] [$level] [CrashHandler]: $tag\n$body\n",
                 Charsets.UTF_8
             )
-            Log.e(TAG, "crash written: ${file.absolutePath}")
+            logE("$prefix written: ${file.absolutePath}")
         } catch (t: Throwable) {
-            Log.e(TAG, "writeCrashFile failed", t)
+            logE("writeLogFile($prefix) failed", t)
         }
     }
 
@@ -127,5 +174,19 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
         appendLine("品牌：${Build.BRAND}")
         appendLine("系统版本：Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
         appendLine("应用包名：${appContext?.packageName}")
+    }
+
+    private fun now(): String =
+        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
+
+    /** JVM 单测 android.jar 上 Log 为 stub，会抛 RuntimeException，全部包一层。 */
+    private fun logI(msg: String) {
+        runCatching { Log.i(TAG, msg) }
+    }
+
+    private fun logE(msg: String, t: Throwable? = null) {
+        runCatching {
+            if (t != null) Log.e(TAG, msg, t) else Log.e(TAG, msg)
+        }
     }
 }
