@@ -324,12 +324,13 @@ class VoiceSessionCoordinatorTest {
             deviceToolBridge = defaultBridge(),
             pcmPlayer = testPlayer()
         )
-        val r = c.runRound(VoiceSessionInput("测试", isStub = true))
+        // isStub=false：验证 result.isStub 跟随 tts（真 PCM → false），且 play soft-fail 不写 error
+        val r = c.runRound(VoiceSessionInput("测试", isStub = false, source = "companion"))
         assertEquals(null, r.error)
         assertEquals(VoiceSessionPhase.IDLE, r.phase)
         assertEquals("可播文字", r.replyText)
         assertEquals("可播文字", r.subtitle)
-        assertFalse(r.isStub) // 有真 PCM 时 isStub=false
+        assertFalse(r.isStub)
     }
 
     /** 统计 synthesize 调用次数，验证 skipTts 短路。 */
