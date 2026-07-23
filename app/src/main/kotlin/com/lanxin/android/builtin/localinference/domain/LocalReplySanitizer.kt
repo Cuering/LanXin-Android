@@ -31,20 +31,12 @@ object LocalReplySanitizer {
     private const val THINK_CLOSE = "</think>"
 
     /**
-     * 默认 system 侧引导：短答、角色正文、不输出 think / 隐藏标签 / 元分析 / emoji。
-     * 模型「不学标签」——输出约束明确禁止内部协议外泄。
+     * 默认 system 侧引导（极短）：只留硬禁止项，避免长约束被小模型原样泄漏。
      * （[LocalInferenceConfig.showThinking] 关闭时注入）。
      */
     const val NO_THINK_OR_TAGS_INSTRUCTION: String =
-        "【输出约束·强制】你是陪伴角色「兰心/兰儿」，用第一人称直接对用户说话。" +
-            "只输出面向用户的可见短正文（问候约 1～2 句，日常不超过 4 句）。" +
-            "【禁止思考外泄】不要输出任何思考过程——无论是否带 <think> 标签。" +
-            "禁止：分析/理由/判断/步骤推理、工具检查、Markdown 报告、编号拆解用户意图。" +
-            "禁止无标签思考句式，例如「让我分析」「首先…其次…」「用户说的是…所以我…」" +
-            "「我应该…」「检查工具」「回应建议」「没有 xxx_tool」等。" +
-            "不要输出 <think>、</think>，不要输出 [[mood=…]]、[[listen]] 等双方括号隐藏标签。" +
-            "不要写「系统已明确角色设定」等元话术。不要使用 emoji、表情符号或颜文字。" +
-            "开场第一句就必须是对用户说的话，不要先写内部推理。"
+        "【输出约束】直接对用户说短句，不输出思考过程、" +
+            "分析报告、协议标签（[[…]]、<…>、<think>）或元话术。"
 
     /** 已闭合的 `<think>…</think>`（跨行、大小写不敏感）。 */
     private val CLOSED_THINK_REGEX = Regex(
@@ -116,7 +108,23 @@ object LocalReplySanitizer {
         "思考过程",
         "内部推理",
         "chain of thought",
-        "step by step"
+        "step by step",
+        // 约束原文泄漏：模型把 system prompt 里的输出约束原样抄进回复
+        "【输出约束】",
+        "禁止思考外泄",
+        "不要输出任何思考过程",
+        "不输出思考过程",
+        "用第一人称直接对用户说话",
+        "只输出面向用户的可见短正文",
+        "不要先写内部推理",
+        "开场第一句就必须是对用户说的话",
+        "不要写「系统已明确角色设定」",
+        "不要输出 [[mood",
+        "双方括号隐藏标签",
+        "表情符号或颜文字",
+        "编号拆解用户意图",
+        "工具检查",
+        "Markdown 报告"
     )
 
     /** 编号列表式元分析。 */
@@ -399,7 +407,7 @@ object LocalReplySanitizer {
             return systemPrompt?.trim()?.takeIf { it.isNotEmpty() }
         }
         val base = systemPrompt?.trim().orEmpty()
-        if (base.contains("【输出约束】") && base.contains("不要输出")) {
+        if (base.contains("【输出约束】") && base.contains("元话术")) {
             return base.ifEmpty { null }
         }
         return if (base.isEmpty()) {
