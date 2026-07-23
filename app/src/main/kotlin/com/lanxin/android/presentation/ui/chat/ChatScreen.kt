@@ -46,6 +46,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.MenuBook
@@ -367,7 +368,6 @@ fun ChatScreen(
                 selectedAttachments = selectedAttachments,
                 micUiState = chatMicUi,
                 voiceChatUiState = voiceChatUi,
-                onMicClick = chatViewModel::onMicClick,
                 onMicPressStart = chatViewModel::onMicPressStart,
                 onMicPressEnd = chatViewModel::onMicPressEnd,
                 onToggleVoiceChat = chatViewModel::toggleVoiceChatMode,
@@ -800,7 +800,6 @@ fun ChatInputBox(
     selectedAttachments: List<ChatAttachmentDraft> = emptyList(),
     micUiState: ChatMicUiState = ChatMicUiState(),
     voiceChatUiState: VoiceChatUiState = VoiceChatUiState(),
-    onMicClick: () -> Unit = {},
     onMicPressStart: () -> Unit = {},
     onMicPressEnd: () -> Unit = {},
     onToggleVoiceChat: () -> Unit = {},
@@ -925,38 +924,30 @@ fun ChatInputBox(
                             innerTextField()
                         }
                     }
-                    // 点按：语音对话开关；长按按住：听写录音（验证硬件麦）
-                    // 注意：onPress 在 pointer 协程里，不能直接改 Compose state；
-                    // 长按确认后用 scope 切主线程更新 holdRecording。
+                    // 双入口：
+                    // 1) 麦键：按住说话 → 听写填输入框（按下即录，松手收口）
+                    // 2) 语音对话键：点按开关连续听说（自动发 + TTS）
                     val holdRecording = remember { mutableStateOf(false) }
+                    val voiceChatOn = voiceChatUiState.enabled
+                    // 麦键：仅按住听写；连续语音对话占用时禁用，避免互抢
+                    val holdMicEnabled = micEnabled && !voiceChatOn && !voiceBusy
                     Box(
                         modifier = Modifier
                             .size(48.dp)
                             .clip(RoundedCornerShape(24.dp))
                             .then(
-                                if (micEnabled) {
-                                    Modifier.pointerInput(micEnabled) {
+                                if (holdMicEnabled) {
+                                    Modifier.pointerInput(holdMicEnabled) {
                                         detectTapGestures(
                                             onPress = {
-                                                // 短按 → 语音对话；按住 ≥350ms → 听写，松手收口
-                                                var isHold = false
-                                                val longPressJob = scope.launch {
-                                                    delay(350)
-                                                    isHold = true
-                                                    holdRecording.value = true
-                                                    onMicPressStart()
-                                                }
+                                                // 按下即开始听写；松手收口。单击不触发连续对话。
+                                                holdRecording.value = true
+                                                onMicPressStart()
                                                 try {
                                                     tryAwaitRelease()
                                                 } finally {
-                                                    longPressJob.cancel()
-                                                    if (isHold) {
-                                                        // 先收口录音，再清 UI 态
-                                                        onMicPressEnd()
-                                                        holdRecording.value = false
-                                                    } else {
-                                                        onMicClick()
-                                                    }
+                                                    onMicPressEnd()
+                                                    holdRecording.value = false
                                                 }
                                             }
                                         )
@@ -967,29 +958,53 @@ fun ChatInputBox(
                             ),
                         contentAlignment = Alignment.Center
                     ) {
-                        if (micBusy && !micRecording) {
+                        if (micBusy && !micRecording && !voiceChatOn) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(22.dp),
                                 strokeWidth = 2.dp
                             )
                         } else {
-                            val voiceOn = voiceChatUiState.enabled ||
-                                micUiState.voiceChatEnabled ||
-                                micRecording ||
-                                holdRecording.value
+                            val holding = holdRecording.value ||
+                                micUiState.phase == ChatMicPhase.RECORDING
                             Icon(
-                                imageVector = if (voiceOn) Icons.Filled.Mic else Icons.Filled.MicOff,
+                                imageVector = if (holding) Icons.Filled.Mic else Icons.Filled.MicOff,
+                                contentDescription = stringResource(
+                                    if (holding) R.string.chat_mic_stop else R.string.chat_mic_hold_to_talk
+                                ),
+                                tint = when {
+                                    holding -> MaterialTheme.colorScheme.error
+                                    holdMicEnabled -> LocalContentColor.current
+                                    else -> LocalContentColor.current.copy(alpha = 0.38f)
+                                }
+                            )
+                        }
+                    }
+                    // 独立入口：连续语音对话（听→识别→自动发→TTS→下一轮）
+                    IconButton(
+                        enabled = chatEnabled && micUiState.micToggleEnabled &&
+                            !holdRecording.value &&
+                            micUiState.phase != ChatMicPhase.RECORDING &&
+                            micUiState.phase != ChatMicPhase.TRANSCRIBING,
+                        onClick = onToggleVoiceChat
+                    ) {
+                        if (voiceBusy && !voiceListening) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(22.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Filled.RecordVoiceOver,
                                 contentDescription = stringResource(
                                     when {
-                                        micRecording || holdRecording.value -> R.string.chat_mic_stop
-                                        voiceOn -> R.string.chat_mic_voice_off
+                                        voiceListening -> R.string.chat_mic_stop
+                                        voiceChatOn -> R.string.chat_mic_voice_off
                                         else -> R.string.chat_voice_start
                                     }
                                 ),
                                 tint = when {
-                                    micRecording || holdRecording.value ->
-                                        MaterialTheme.colorScheme.error
-                                    voiceOn -> MaterialTheme.colorScheme.primary
+                                    voiceListening -> MaterialTheme.colorScheme.error
+                                    voiceChatOn -> MaterialTheme.colorScheme.primary
                                     else -> LocalContentColor.current.copy(alpha = 0.55f)
                                 }
                             )
