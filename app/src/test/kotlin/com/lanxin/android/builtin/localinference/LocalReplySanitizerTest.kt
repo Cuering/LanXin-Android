@@ -46,8 +46,8 @@ class LocalReplySanitizerTest {
     @Test
     fun `appendOutputConstraint only when thinking off`() {
         val off = LocalReplySanitizer.appendOutputConstraint(null, showThinking = false)
-        assertTrue(off!!.contains("不要输出"))
-        assertTrue(off.contains("元话术") || off.contains("兰心"))
+        assertTrue(off!!.contains("输出约束"))
+        assertTrue(off.contains("元话术"))
         val on = LocalReplySanitizer.appendOutputConstraint("sys", showThinking = true)
         assertEquals("sys", on)
     }
@@ -170,5 +170,28 @@ class LocalReplySanitizerTest {
         assertFalse(cleaned.speechText.contains("🎉"))
         assertTrue(cleaned.speechText.contains("真棒"))
     }
-}
 
+    @Test
+    fun `constraint text leaked into reply is stripped`() {
+        val raw = """
+            【输出约束】直接对用户说短句，不输出思考过程、分析报告、协议标签或元话术。
+            禁止思考外泄。不要先写内部推理。
+            哥哥你好呀，今天天气不错呢。
+        """.trimIndent()
+        val d = LocalReplySanitizer.forDisplay(raw, showThinking = false)
+        assertFalse(d.contains("【输出约束】"))
+        assertFalse(d.contains("禁止思考外泄"))
+        assertFalse(d.contains("不要先写内部推理"))
+        assertTrue(d.contains("哥哥你好呀"))
+    }
+
+    @Test
+    fun `inline constraint marker in stub echo is not wiped`() {
+        // 旧 stub 会把 system 前缀 echo 成单行：`(sys=【输出约束】…)`
+        // 行中带约束标记时不能整行丢弃，否则 Success 会变空
+        val raw = "[local-stub] (sys=yes) echo: hello | maxTokens=128 | model=demo"
+        val d = LocalReplySanitizer.forDisplay(raw, showThinking = false)
+        assertTrue(d.isNotBlank())
+        assertTrue(d.contains("echo:") || d.contains("hello"))
+    }
+}

@@ -23,9 +23,11 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.ViewConfiguration
@@ -100,7 +102,20 @@ class FloatingPetService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        startForeground(NOTIFICATION_ID, buildNotification())
+        // Android 12+ 后台启动前台服务可能被拒，catch 后降级，避免无 crash 页的闪退
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    buildNotification(),
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, buildNotification())
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "startForeground denied, continue as background service", e)
+        }
         if (!OverlayPermissionHelper.canDrawOverlays(this)) {
             stopSelf()
             return
@@ -513,6 +528,7 @@ class FloatingPetService : Service() {
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 
     companion object {
+        private const val TAG = "FloatingPetService"
         const val ACTION_STOP = "com.lanxin.android.pet.STOP"
         const val ACTION_DEMO_ROUND = "com.lanxin.android.pet.DEMO_ROUND"
 
@@ -531,25 +547,37 @@ class FloatingPetService : Service() {
 
         fun start(context: Context) {
             val i = Intent(context, FloatingPetService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(i)
-            } else {
-                context.startService(i)
+            runCatching {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(i)
+                } else {
+                    context.startService(i)
+                }
+            }.onFailure {
+                Log.w(TAG, "startForegroundService denied", it)
+                runCatching { context.startService(i) }
             }
         }
 
         fun stop(context: Context) {
-            context.startService(
-                Intent(context, FloatingPetService::class.java).setAction(ACTION_STOP)
-            )
+            runCatching {
+                context.startService(
+                    Intent(context, FloatingPetService::class.java).setAction(ACTION_STOP)
+                )
+            }
         }
 
         fun demoRound(context: Context) {
             val i = Intent(context, FloatingPetService::class.java).setAction(ACTION_DEMO_ROUND)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(i)
-            } else {
-                context.startService(i)
+            runCatching {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(i)
+                } else {
+                    context.startService(i)
+                }
+            }.onFailure {
+                Log.w(TAG, "demoRound startForegroundService denied", it)
+                runCatching { context.startService(i) }
             }
         }
 

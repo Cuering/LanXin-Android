@@ -39,7 +39,12 @@ class LocalAwarePetChatResponderTest {
             stub = StubPetChatResponder()
         )
         val out = responder.respond("你好")
-        assertTrue(out.contains("听到了") || out.contains("你好"))
+        // stub 问候池：不回声用户原话，只出短答 + mood 标签
+        assertTrue(out.contains("[[mood="))
+        assertTrue(
+            out.contains("你好") || out.contains("嗨") || out.contains("看到你") ||
+                out.contains("我在") || out.contains("嗯嗯")
+        )
         assertEquals(0, provider.calls)
     }
 
@@ -98,8 +103,11 @@ class LocalAwarePetChatResponderTest {
             stub = StubPetChatResponder()
         )
         val out = responder.respond("在吗")
-        assertTrue(out.contains("听到了") || out.contains("在吗"))
+        assertTrue(out.contains("[[mood="))
+        assertTrue(out.isNotBlank())
         assertFalse(out.contains("boom"))
+        // 不再回声用户原话
+        assertFalse(out.contains("在吗") && out.contains("听到了"))
     }
 
     private class FakeLocalSettings(
