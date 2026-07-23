@@ -125,16 +125,47 @@ fun VoiceAsrScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "Phase 6.4 · Sherpa-ONNX 骨架（stub）",
+                        text = "语音识别 · 设置引导",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
                     Spacer(modifier = Modifier.height(8.dp))
+                    // 步骤 1
+                    val asrPathDone = state.modelPath.isNotBlank()
+                    val asrReady = state.engineState == AsrEngineState.READY
+                    val micOk = state.micPermission == MicPermissionState.GRANTED
+                    GuideLine(
+                        done = asrPathDone,
+                        index = 1,
+                        title = "导入 ASR 模型",
+                        detail = if (asrPathDone) "已选：${state.modelPath.takeLast(40)}"
+                        else "优先在「桌宠 / 语音陪伴」一键下载；或本页选择含模型文件的文件夹。"
+                    )
+                    GuideLine(
+                        done = asrReady,
+                        index = 2,
+                        title = "启用并加载",
+                        detail = if (asrReady) "引擎就绪"
+                        else "打开「启用离线语音识别」→「加载模型」。"
+                    )
+                    GuideLine(
+                        done = micOk,
+                        index = 3,
+                        title = "授予麦克风权限",
+                        detail = if (micOk) "已授权"
+                        else "点下方「申请麦克风权限」；若永久拒绝请到系统设置开启。"
+                    )
+                    GuideLine(
+                        done = asrReady && micOk,
+                        index = 4,
+                        title = "试转写 / 全屏陪伴说话",
+                        detail = "本页「试转写」验证识别；全屏陪伴说话走完整 ASR→本地脑→TTS。"
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "总开关默认关闭；关闭时不 load so、不占用麦克风。" +
-                            "模型自备（小模型优先），请选择含模型文件的文件夹。" +
-                            "「试转写」走 stub PCM，不偷偷后台录音。",
-                        style = MaterialTheme.typography.bodyMedium
+                        text = "报错时复制本页「状态」卡全文反馈。常见：模型缺文件、权限被拒、引擎未加载。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -302,4 +333,48 @@ private fun micLabel(state: MicPermissionState): String = when (state) {
     MicPermissionState.DENIED -> "未授权"
     MicPermissionState.PERMANENTLY_DENIED -> "已永久拒绝"
     MicPermissionState.UNKNOWN -> "未知"
+}
+
+@Composable
+private fun GuideLine(
+    done: Boolean,
+    index: Int,
+    title: String,
+    detail: String
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Text(
+            text = if (done) "✓" else "$index.",
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = if (done) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            modifier = Modifier.padding(end = 8.dp)
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = if (done) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                }
+            )
+            Text(
+                text = detail,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
 }

@@ -60,15 +60,23 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lanxin.android.builtin.localinference.domain.LocalEngineState
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceConfig
 import com.lanxin.android.presentation.common.PathPickerField
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LocalInferenceScreen(
     onBackAction: () -> Unit,
+    onNavigateToOfflineAsr: () -> Unit = {},
+    onNavigateToDesktopPet: () -> Unit = {},
     viewModel: LocalInferenceViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val clipboard = LocalClipboardManager.current
+    val scope = rememberCoroutineScope()
 
     val modelTreePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
@@ -118,43 +126,105 @@ fun LocalInferenceScreen(
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
 
+            // ---- 分步引导（随状态实时刷新 ✅）----
+            val guideSteps = listOf(
+                SetupStep(
+                    title = "准备模型包",
+                    isDone = state.modelPath.isNotBlank(),
+                    doneHint = "已选路径",
+                    detail = "需要完整文件夹：config.json + llm.mnn + llm.mnn.weight + tokenizer（.mtok）。推荐 Qwen 0.5B / 1.5B MNN 导出包；内存不足勿上 7B。",
+                    actionLabel = "选择文件夹",
+                    actionIcon = StepIconModel,
+                    actionEnabled = !state.pathImportBusy && !state.isBusy,
+                    onAction = { modelTreePicker.launch(null) }
+                ),
+                SetupStep(
+                    title = "启用并加载模型",
+                    isDone = state.engineState == LocalEngineState.READY,
+                    doneHint = "引擎就绪",
+                    detail = "点「一键开启本地对话」自动开开关+选文件夹+加载；" +
+                        "或手动开「启用本地推理」→「加载模型」。",
+                    actionLabel = if (state.engineState == LocalEngineState.READY) "已就绪" else "一键开启",
+                    actionIcon = StepIconPlay,
+                    actionEnabled = !state.isBusy && !state.pathImportBusy,
+                    onAction = viewModel::oneClickEnableLocalChat
+                ),
+                SetupStep(
+                    title = "验证文字对话",
+                    isDone = state.engineState == LocalEngineState.READY && state.enabled,
+                    doneHint = "可对话",
+                    detail = "新建会话勾选「本地模型」，或开「优先本地路由」后发「你好」。\n" +
+                        "下方「当前路由预览」应显示本地生成；若仍走云端请检查开关。",
+                    actionLabel = if (state.preferLocal) "已优先本地" else "开优先本地",
+                    actionIcon = StepIconSettings,
+                    actionEnabled = state.engineState == LocalEngineState.READY,
+                    onAction = { viewModel.setPreferLocal(!state.preferLocal) }
+                ),
+                SetupStep(
+                    title = "语音识别（ASR）",
+                    isDone = false,
+                    detail = "前往「离线语音识别」页：导入 ASR 模型、启用引擎、授予麦克风权限。\n" +
+                        "也可在「桌宠 / 语音陪伴」页一键下载。",
+                    actionLabel = "前往 ASR 设置",
+                    actionIcon = StepIconMic,
+                    actionEnabled = true,
+                    onAction = onNavigateToOfflineAsr
+                ),
+                SetupStep(
+                    title = "语音播报（TTS）",
+                    isDone = false,
+                    detail = "在「桌宠 / 语音陪伴」页配置 TTS 模型目录与参考音频。\n" +
+                        "全屏陪伴里说话 → ASR 识别 → 本地脑生成 → TTS 读出。",
+                    actionLabel = "前往桌宠设置",
+                    actionIcon = StepIconTts,
+                    actionEnabled = true,
+                    onAction = onNavigateToDesktopPet
+                )
+            )
+            SetupGuideCard(steps = guideSteps)
+
+            // 报错一键复制反馈
             Card(
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer
                 )
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "本地脑 · 安装与语音对话引导",
-                        style = MaterialTheme.typography.titleMedium,
+                        text = "遇到报错？一键复制反馈",
+                        style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = """
-步骤 1 · 准备模型包（完整文件夹，不要只拷一个 llm.mnn）
-  需要：config.json + llm.mnn + llm.mnn.weight + tokenizer（.mtok 等）
-  推荐：Qwen 0.5B / 1.5B 等 MNN 导出包；机型内存不足勿上 7B。
-
-步骤 2 · 导入并开启
-  点下方「一键开启本地对话」→ 选模型文件夹 → 等「本地对话已就绪」。
-  也可手动「选择文件夹」后打开「启用本地推理」。
-
-步骤 3 · 验证文字对话
-  新建会话勾选「本地模型」，或开「优先本地路由」后发「你好」。
-  状态应出现本地生成；若仍走云端，看本页「当前路由预览」。
-
-步骤 4 · 语音对话（可选）
-  设置 → 语音 ASR：导入/启用识别模型，授予麦克风权限。
-  设置 → 语音 TTS：启用播报。
-  全屏陪伴：对着麦克风说 → 本地脑回复 → TTS 读出。
-
-报错时请复制本页 Snackbar / 路由预览 / 引擎状态整段反馈。
-失败常见原因：模型包缺文件、只选了单文件、内存不足、未授权麦克风。
-                        """.trimIndent(),
+                        text = "会复制：引擎状态 / 路由预览 / 最后错误 / 模型路径摘要。\n" +
+                            "常见失败：模型包缺文件、只选了单文件、内存不足、未授权麦克风。",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onTertiaryContainer
                     )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = {
+                            val report = buildString {
+                                appendLine("=== 兰心本地脑反馈 ===")
+                                appendLine("引擎: ${stateLabel(state.engineState)}")
+                                appendLine("启用: ${state.enabled}")
+                                appendLine("优先本地: ${state.preferLocal}")
+                                appendLine("路由: ${state.routePreview}")
+                                appendLine("模型路径: ${state.modelPath.ifBlank { "(空)" }}")
+                                appendLine("最后错误: ${state.lastError ?: "(无)"}")
+                                appendLine("网络: ${if (state.networkAvailable) "有" else "无"}")
+                                appendLine("上下文窗口: ${state.contextWindowTokens}")
+                                appendLine("maxTokens: ${state.maxTokens}")
+                            }
+                            clipboard.setText(AnnotatedString(report))
+                            scope.launch {
+                                snackbarHostState.showSnackbar("已复制到剪贴板，可粘贴反馈")
+                            }
+                        }
+                    ) {
+                        Text("复制诊断信息")
+                    }
                 }
             }
 

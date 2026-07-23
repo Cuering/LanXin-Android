@@ -166,6 +166,52 @@ fun DesktopPetScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
+            // 本地语音对话就绪清单（可点击跳转）
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        "本地语音对话 · 就绪清单",
+                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    Text(
+                        buildString {
+                            append(if (state.live2dReady) "✓" else "○")
+                            append(" Live2D  ")
+                            append(if (state.asrReady) "✓" else "○")
+                            append(" ASR  ")
+                            append(if (state.ttsReady) "✓" else "○")
+                            append(" TTS  ")
+                            val llmOk = state.localLlmReadyLabel.contains("就绪")
+                            append(if (llmOk) "✓" else "○")
+                            append(" 本地脑")
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                    Text(
+                        "① 下方一键下载 ASR/TTS（可选 Live2D）→ ② 跳转本地模型导入/加载 → " +
+                            "③ 开总开关 → ④ 全屏陪伴说话。报错复制各页状态卡反馈。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                    OutlinedButton(
+                        onClick = onOpenLocalInference,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("② 前往本地模型设置")
+                    }
+                }
+            }
+
             Button(
                 onClick = onOpenCompanion,
                 modifier = Modifier.fillMaxWidth()
