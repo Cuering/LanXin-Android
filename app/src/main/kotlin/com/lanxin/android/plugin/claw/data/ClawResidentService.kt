@@ -24,6 +24,7 @@ import android.app.Service
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.lanxin.android.R
 import com.lanxin.android.plugin.PluginManager
@@ -65,7 +66,20 @@ class ClawResidentService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        startForeground(NOTIFICATION_ID, buildNotification("机器人宿主常驻中", "动态插件可保持存活"))
+        // Android 12+ 可能拒绝后台启动前台服务，try-catch 降级避免闪退
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    buildNotification("机器人宿主常驻中", "动态插件可保持存活"),
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, buildNotification("机器人宿主常驻中", "动态插件可保持存活"))
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "startForeground denied, running as background service", e)
+        }
         platformHost.setResidentRunning(true)
     }
 
@@ -179,6 +193,7 @@ class ClawResidentService : Service() {
     }
 
     companion object {
+        private const val TAG = "ClawResidentService"
         const val CHANNEL_ID = "lanxin_claw_resident"
         const val NOTIFICATION_ID = 7101
         const val ACTION_START = "com.lanxin.android.claw.ACTION_START"
