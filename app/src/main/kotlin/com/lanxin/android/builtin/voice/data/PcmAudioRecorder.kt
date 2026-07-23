@@ -96,10 +96,10 @@ class PcmAudioRecorder @Inject constructor() {
         // 模拟采集耗时（短）
         delay(5)
         val samples = ((rate * clampedMs) / 1000L).toInt().coerceAtLeast(1)
-        // 16-bit mono → 2 bytes/sample；填入极低幅值正弦近似（非纯 0，便于校验非空）
+        // 16-bit mono → 2 bytes/sample；幅值需高于 ChatMicSession 静音阈值，避免 stub 被误判无声
         val pcm = ByteArray(samples * 2)
         for (i in 0 until samples) {
-            val sample = ((i % 32) - 16).toShort()
+            val sample = (((i % 64) - 32) * 8).toShort() // peak ≈ 256
             pcm[i * 2] = (sample.toInt() and 0xFF).toByte()
             pcm[i * 2 + 1] = (sample.toInt() shr 8).toByte()
         }
@@ -141,11 +141,19 @@ class PcmAudioRecorder @Inject constructor() {
             return@withContext Result.success(Unit)
         }
 
-        val minBuf = AudioRecord.getMinBufferSize(
-            rate,
-            AudioFormat.CHANNEL_IN_MONO,
-            AudioFormat.ENCODING_PCM_16BIT
-        )
+        // 自定义工厂（单测）优先：不依赖 AudioRecord.getMinBufferSize（JVM 上不可用）
+        val customFactory = audioRecordFactory
+        val usingCustomFactory =
+            customFactory != null && customFactory !== DEFAULT_AUDIO_RECORD_FACTORY
+        val minBuf = if (usingCustomFactory) {
+            4096
+        } else {
+            AudioRecord.getMinBufferSize(
+                rate,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT
+            )
+        }
         if (minBuf <= 0) {
             resetCaptureState()
             return@withContext Result.failure(
@@ -402,7 +410,8 @@ class PcmAudioRecorder @Inject constructor() {
         val samples = ((sampleRateHz * clampedMs) / 1000L).toInt().coerceAtLeast(1)
         val pcm = ByteArray(samples * 2)
         for (i in 0 until samples) {
-            val sample = ((i % 32) - 16).toShort()
+            // 与 recordStubPcm 一致：peak 明显高于静音阈值
+            val sample = (((i % 64) - 32) * 8).toShort()
             pcm[i * 2] = (sample.toInt() and 0xFF).toByte()
             pcm[i * 2 + 1] = (sample.toInt() shr 8).toByte()
         }
