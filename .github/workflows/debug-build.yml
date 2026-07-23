@@ -79,7 +79,7 @@ jobs:
         id: artifact-upload-step
         with:
           name: debug-${{ github.sha }}
-          path: ${{ github.workspace }}/app/build/outputs/apk/signedDebug/app-signed-debug.apk
+          path: ${{ github.workspace }}/app/build/outputs/apk/signedDebug/*.apk
 
       - name: Comment APK Link
         if: github.event_name == 'pull_request_target'
