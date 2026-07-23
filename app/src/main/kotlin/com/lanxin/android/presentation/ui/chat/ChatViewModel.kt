@@ -18,7 +18,6 @@ import com.lanxin.android.builtin.statistics.domain.ChatTurnStatEvent
 import com.lanxin.android.builtin.statistics.domain.ProviderStat
 import com.lanxin.android.builtin.statistics.domain.StatisticsRepository
 import com.lanxin.android.builtin.unifiedsearch.domain.UnifiedSearchService
-import com.lanxin.android.builtin.voice.domain.ChatMicPhase
 import com.lanxin.android.builtin.voice.domain.ChatMicSession
 import com.lanxin.android.builtin.voice.domain.ChatMicUiState
 import com.lanxin.android.builtin.voice.domain.VoiceChatSession
@@ -268,29 +267,29 @@ class ChatViewModel @Inject constructor(
     /**
      * 按住说话（听写模式，不自动发送）：
      * 按下 → 开麦录音；松手 → 停麦转写并填入输入框。
-     * 用于验证麦克风硬件是否真的在采声。
+     * 不点亮「语音对话」开关，避免与点按路径互抢。
+     *
+     * 用 [holdDictationJob] 串行化 start/end，避免松手协程先于开麦执行。
      */
+    private var holdDictationJob: kotlinx.coroutines.Job? = null
+
     fun onMicPressStart() {
-        viewModelScope.launch {
+        holdDictationJob?.cancel()
+        holdDictationJob = viewModelScope.launch {
             // 与连续语音对话互斥
             voiceChatSession.cancel()
-            val st = chatMicSession.uiState.value
-            if (st.phase == ChatMicPhase.IDLE && !st.voiceChatEnabled) {
-                chatMicSession.onMicClick { text ->
-                    appendDictationToInput(text)
-                }
-            }
+            chatMicSession.startHoldDictation()
         }
     }
 
     /** 松手结束按住说话。 */
     fun onMicPressEnd() {
         viewModelScope.launch {
-            val st = chatMicSession.uiState.value
-            if (st.phase == ChatMicPhase.RECORDING) {
-                chatMicSession.onMicClick { text ->
-                    appendDictationToInput(text)
-                }
+            // 等开麦完成（含心跳），再停录；避免 end 抢先看到 IDLE
+            holdDictationJob?.join()
+            holdDictationJob = null
+            chatMicSession.stopHoldDictation { text ->
+                appendDictationToInput(text)
             }
         }
     }

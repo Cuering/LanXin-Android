@@ -926,6 +926,8 @@ fun ChatInputBox(
                         }
                     }
                     // 点按：语音对话开关；长按按住：听写录音（验证硬件麦）
+                    // 注意：onPress 在 pointer 协程里，不能直接改 Compose state；
+                    // 长按确认后用 scope 切主线程更新 holdRecording。
                     val holdRecording = remember { mutableStateOf(false) }
                     Box(
                         modifier = Modifier
@@ -949,6 +951,7 @@ fun ChatInputBox(
                                                 } finally {
                                                     longPressJob.cancel()
                                                     if (isHold) {
+                                                        // 先收口录音，再清 UI 态
                                                         onMicPressEnd()
                                                         holdRecording.value = false
                                                     } else {

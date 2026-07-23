@@ -90,6 +90,35 @@ class ChatMicSession @Inject constructor(
     }
 
     /**
+     * 按住听写：开麦录音，**不**点亮 voiceChatEnabled。
+     * 与点按「语音对话模式」互斥，适合长按验证硬件麦。
+     */
+    suspend fun startHoldDictation() {
+        mutex.withLock {
+            val st = _uiState.value
+            if (st.phase != ChatMicPhase.IDLE) return
+            // 按住路径不改 voiceChatEnabled；失败只 snackbar
+            startRecordingLocked()
+        }
+    }
+
+    /**
+     * 松手结束按住听写：停录转写；若尚未进入 RECORDING（心跳中）则取消。
+     */
+    suspend fun stopHoldDictation(onTranscript: (String) -> Unit) {
+        mutex.withLock {
+            when (_uiState.value.phase) {
+                ChatMicPhase.RECORDING -> stopAndTranscribeLocked(onTranscript)
+                ChatMicPhase.TRANSCRIBING -> return
+                ChatMicPhase.IDLE -> {
+                    // 可能还在 startRecording/heartbeat 中途失败后回 IDLE，或已 cancel
+                    runCatching { recorder.cancelRecording() }
+                }
+            }
+        }
+    }
+
+    /**
      * 运行时权限结果。
      *
      * @param granted 是否授予
