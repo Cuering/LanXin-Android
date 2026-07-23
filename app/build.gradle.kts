@@ -268,9 +268,26 @@ extensions.configure<ApplicationExtension> {
                 keyPassword = "android"
             }
         }
+        // 正式签名配置（Debug APK 可用，提升系统信任级）
+        create("releaseSigned") {
+            val keystoreFile = rootProject.file("release-keystore.jks")
+            if (keystoreFile.exists()) {
+                storeFile = keystoreFile
+                storePassword = System.getenv("LANXIN_KEYSTORE_PASSWORD") ?: "lanxin123"
+                keyAlias = System.getenv("LANXIN_KEY_ALIAS") ?: "lanxin"
+                keyPassword = System.getenv("LANXIN_KEY_PASSWORD") ?: "lanxin123"
+            }
+        }
     }
 
     buildTypes {
+        // Debug 用正式签名的变体（debuggable=true + release keystore）
+        create("signedDebug") {
+            initWith(getByName("debug"))
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("releaseSigned")
+            matchingFallbacks += listOf("debug")
+        }
         release {
             isMinifyEnabled = true
             vcsInfo.include = false

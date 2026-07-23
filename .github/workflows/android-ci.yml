@@ -40,15 +40,27 @@ jobs:
           rm -f debug-keystore.jks
           keytool -genkeypair -v -keystore debug-keystore.jks -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Android Debug,O=Android,C=US"
 
+      - name: Setup release keystore for signed Debug APK
+        env:
+          RELEASE_KEYSTORE_B64: ${{ secrets.LANXIN_RELEASE_KEYSTORE }}
+        run: |
+          if [ -n "$RELEASE_KEYSTORE_B64" ]; then
+            echo "$RELEASE_KEYSTORE_B64" | base64 -d > release-keystore.jks
+          else
+            keytool -genkeypair -v -keystore release-keystore.jks -alias lanxin \
+              -keyalg RSA -keysize 2048 -validity 10000 -storepass lanxin123 -keypass lanxin123 \
+              -dname "CN=兰心,O=兰心,C=CN"
+          fi
+
       - name: Run Lint
         run: ./gradlew lint --no-daemon --build-cache -Pci
 
-      - name: Build debug APK
-        run: ./gradlew assembleDebug --no-daemon --build-cache -Pci
+      - name: Build signed debug APK
+        run: ./gradlew assembleSignedDebug --no-daemon --build-cache -Pci
 
       - name: Upload APK on success
         if: success()
         uses: actions/upload-artifact@v7
         with:
           name: debug-apk-${{ github.sha }}
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/signedDebug/app-signed-debug.apk
