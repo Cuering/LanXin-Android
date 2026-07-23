@@ -109,9 +109,11 @@ class VoiceChatSession @Inject constructor(
                         // 已开且空闲 → 关
                         disableLocked()
                     } else {
-                        _uiState.update { it.copy(enabled = true) }
+                        // 注意：enabled 只在真正开麦成功后才置 true，避免「图标亮了但没开麦」
                         val ok = startListeningLocked(onAutoSend = onAutoSend)
-                        if (!ok && !_uiState.value.needRequestPermission) {
+                        if (ok) {
+                            _uiState.update { it.copy(enabled = true) }
+                        } else if (!_uiState.value.needRequestPermission) {
                             _uiState.update { it.copy(enabled = false) }
                         }
                     }
@@ -158,12 +160,13 @@ class VoiceChatSession @Inject constructor(
                 return@withLock
             }
             autoSendHandler = onAutoSend
-            _uiState.update { it.copy(enabled = true) }
             val ok = startListeningLocked(
                 skipPermissionCheck = true,
                 onAutoSend = onAutoSend
             )
-            if (!ok) {
+            if (ok) {
+                _uiState.update { it.copy(enabled = true) }
+            } else {
                 _uiState.update { it.copy(enabled = false) }
             }
         }
@@ -337,6 +340,21 @@ class VoiceChatSession @Inject constructor(
             }
             return false
         }
+        // 真机开麦后确认捕获线程有数据，避免「UI 在听但麦克风没流」
+        val heartbeat = recorder.awaitCaptureHeartbeat()
+        if (heartbeat != null) {
+            streamingActive = false
+            recorder.onPcmChunk = null
+            runCatching { nativeBridge.cancelStreaming() }
+            runCatching { recorder.cancelRecording() }
+            _uiState.update {
+                it.copy(
+                    phase = VoiceChatPhase.IDLE,
+                    snackbarMessage = heartbeat
+                )
+            }
+            return false
+        }
         _uiState.update {
             it.copy(
                 phase = VoiceChatPhase.LISTENING,
@@ -418,6 +436,17 @@ class VoiceChatSession @Inject constructor(
                 }
                 return
             }
+            // 有时长但几乎全静音 → 麦克风没真正采到声
+            if (looksLikeSilentCapture(audio.pcm16leMono)) {
+                _uiState.update {
+                    it.copy(
+                        phase = VoiceChatPhase.IDLE,
+                        snackbarMessage = "麦克风似乎没有收到声音。请检查系统麦克风权限，" +
+                            "或到「设置 → 应用 → 兰心 → 权限」确认已允许录音。"
+                    )
+                }
+                return
+            }
             val result = runCatching {
                 engine.transcribe(
                     AsrTranscribeRequest(
@@ -491,7 +520,25 @@ class VoiceChatSession @Inject constructor(
             ?: "请先下载/开启离线语音"
     }
 
+    private fun looksLikeSilentCapture(pcm: ByteArray): Boolean {
+        if (pcm.size < 4) return true
+        var peak = 0
+        var i = 0
+        // 抽样扫描，避免长音频拖慢主路径
+        val step = ((pcm.size / 2) / 4000).coerceAtLeast(1) * 2
+        while (i + 1 < pcm.size) {
+            val sample = ((pcm[i + 1].toInt() shl 8) or (pcm[i].toInt() and 0xFF)).toShort()
+            val abs = kotlin.math.abs(sample.toInt())
+            if (abs > peak) peak = abs
+            if (peak >= SILENCE_PEAK_THRESHOLD) return false
+            i += step
+        }
+        return peak < SILENCE_PEAK_THRESHOLD
+    }
+
     companion object {
         const val MIN_USEFUL_MS = 200L
+        /** 峰值低于此阈值视为「麦克风没采到声」。 */
+        const val SILENCE_PEAK_THRESHOLD = 48
     }
 }

@@ -18,6 +18,7 @@ import com.lanxin.android.builtin.statistics.domain.ChatTurnStatEvent
 import com.lanxin.android.builtin.statistics.domain.ProviderStat
 import com.lanxin.android.builtin.statistics.domain.StatisticsRepository
 import com.lanxin.android.builtin.unifiedsearch.domain.UnifiedSearchService
+import com.lanxin.android.builtin.voice.domain.ChatMicPhase
 import com.lanxin.android.builtin.voice.domain.ChatMicSession
 import com.lanxin.android.builtin.voice.domain.ChatMicUiState
 import com.lanxin.android.builtin.voice.domain.VoiceChatSession
@@ -260,6 +261,36 @@ class ChatViewModel @Inject constructor(
             chatMicSession.cancel()
             voiceChatSession.onMicClick(continuousListen = true) { text ->
                 sendQuestionFromVoice(text)
+            }
+        }
+    }
+
+    /**
+     * 按住说话（听写模式，不自动发送）：
+     * 按下 → 开麦录音；松手 → 停麦转写并填入输入框。
+     * 用于验证麦克风硬件是否真的在采声。
+     */
+    fun onMicPressStart() {
+        viewModelScope.launch {
+            // 与连续语音对话互斥
+            voiceChatSession.cancel()
+            val st = chatMicSession.uiState.value
+            if (st.phase == ChatMicPhase.IDLE && !st.voiceChatEnabled) {
+                chatMicSession.onMicClick { text ->
+                    appendDictationToInput(text)
+                }
+            }
+        }
+    }
+
+    /** 松手结束按住说话。 */
+    fun onMicPressEnd() {
+        viewModelScope.launch {
+            val st = chatMicSession.uiState.value
+            if (st.phase == ChatMicPhase.RECORDING) {
+                chatMicSession.onMicClick { text ->
+                    appendDictationToInput(text)
+                }
             }
         }
     }

@@ -9,6 +9,7 @@ import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -80,6 +81,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
@@ -366,6 +368,8 @@ fun ChatScreen(
                 micUiState = chatMicUi,
                 voiceChatUiState = voiceChatUi,
                 onMicClick = chatViewModel::onMicClick,
+                onMicPressStart = chatViewModel::onMicPressStart,
+                onMicPressEnd = chatViewModel::onMicPressEnd,
                 onToggleVoiceChat = chatViewModel::toggleVoiceChatMode,
                 onFileSelected = { filePath -> chatViewModel.addSelectedFile(filePath) },
                 onFileRemoved = { filePath -> chatViewModel.removeSelectedFile(filePath) }
@@ -797,6 +801,8 @@ fun ChatInputBox(
     micUiState: ChatMicUiState = ChatMicUiState(),
     voiceChatUiState: VoiceChatUiState = VoiceChatUiState(),
     onMicClick: () -> Unit = {},
+    onMicPressStart: () -> Unit = {},
+    onMicPressEnd: () -> Unit = {},
     onToggleVoiceChat: () -> Unit = {},
     onFileSelected: (String) -> Unit = {},
     onFileRemoved: (String) -> Unit = {},
@@ -919,10 +925,44 @@ fun ChatInputBox(
                             innerTextField()
                         }
                     }
-                    IconButton(
-                        enabled = micEnabled,
-                        // 点按：开语音对话 / 听中收口发送 / 空闲再点关
-                        onClick = onMicClick
+                    // 点按：语音对话开关；长按按住：听写录音（验证硬件麦）
+                    val holdRecording = remember { mutableStateOf(false) }
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(24.dp))
+                            .then(
+                                if (micEnabled) {
+                                    Modifier.pointerInput(micEnabled) {
+                                        detectTapGestures(
+                                            onPress = {
+                                                // 短按 → 语音对话；按住 ≥350ms → 听写，松手收口
+                                                var isHold = false
+                                                val longPressJob = scope.launch {
+                                                    delay(350)
+                                                    isHold = true
+                                                    holdRecording.value = true
+                                                    onMicPressStart()
+                                                }
+                                                try {
+                                                    tryAwaitRelease()
+                                                } finally {
+                                                    longPressJob.cancel()
+                                                    if (isHold) {
+                                                        onMicPressEnd()
+                                                        holdRecording.value = false
+                                                    } else {
+                                                        onMicClick()
+                                                    }
+                                                }
+                                            }
+                                        )
+                                    }
+                                } else {
+                                    Modifier
+                                }
+                            ),
+                        contentAlignment = Alignment.Center
                     ) {
                         if (micBusy && !micRecording) {
                             CircularProgressIndicator(
@@ -930,21 +970,22 @@ fun ChatInputBox(
                                 strokeWidth = 2.dp
                             )
                         } else {
-                            // 关=MicOff；语音对话开/听中=Mic
                             val voiceOn = voiceChatUiState.enabled ||
                                 micUiState.voiceChatEnabled ||
-                                micRecording
+                                micRecording ||
+                                holdRecording.value
                             Icon(
                                 imageVector = if (voiceOn) Icons.Filled.Mic else Icons.Filled.MicOff,
                                 contentDescription = stringResource(
                                     when {
-                                        micRecording -> R.string.chat_mic_stop
+                                        micRecording || holdRecording.value -> R.string.chat_mic_stop
                                         voiceOn -> R.string.chat_mic_voice_off
                                         else -> R.string.chat_voice_start
                                     }
                                 ),
                                 tint = when {
-                                    micRecording -> MaterialTheme.colorScheme.error
+                                    micRecording || holdRecording.value ->
+                                        MaterialTheme.colorScheme.error
                                     voiceOn -> MaterialTheme.colorScheme.primary
                                     else -> LocalContentColor.current.copy(alpha = 0.55f)
                                 }
