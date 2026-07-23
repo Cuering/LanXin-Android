@@ -1,7 +1,7 @@
 # LanXin Android 架构设计（定稿 v1.0）
 
 > 基于 GPT Mobile 源码改造，引入插件化架构，借鉴 AstrBot 设计思路。
-> 当前状态：**Phase 1 ✅ → Phase 2 ✅ → Phase 3 ✅ → Phase 4 ✅ → Phase 5.1–5.7 ✅ → Phase 6.1 ✅ → Phase 6.2 ✅ → Phase 6.3 ✅ → Phase 6.4 ✅ 骨架 → 桌宠 M1 ✅ → M2a ✅ → M2b Live2D 壳 ✅ → M2b 打磨 ✅ → Live2D Mao 进仓 ✅（#65）→ App 内一键下载 + 国内镜像 ✅** → **Phase 7.1 系统工具骨架 ✅ → 7.2 日历+闹钟 ✅ → 7.3 笔记 ✅ → 7.4 用户文件 ✅ → 7.5 对话/桌宠一体 ✅** · **桌宠 + 操控手机 = 陪伴操控一体**
+> 当前状态：**Phase 1 ✅ → Phase 2 ✅ → Phase 3 ✅ → Phase 4 ✅ → Phase 5.1–5.7 ✅ → Phase 6.1 ✅ → Phase 6.2 ✅ → Phase 6.3 ✅ → Phase 6.4 ✅ 骨架 → 桌宠 M1 ✅ → M2a ✅ → M2b Live2D 壳 ✅ → M2b 打磨 ✅ → Live2D Mao 进仓 ✅（#65）→ App 内一键下载 + 国内镜像 ✅** → **Phase 7.1 系统工具骨架 ✅ → 7.2 日历+闹钟 ✅ → 7.3 笔记 ✅ → 7.4 用户文件 ✅ → 7.5 对话/桌宠一体 ✅** · **桌宠 + 操控手机 = 陪伴操控一体** → **Phase 8 多模态视觉 🔲**
 > - Step①~⑧ 全部完成
 > - 知识库 P0~P6、Unified Inbox 均已落地
 > - Phase 4：品牌换皮 + Memory 编辑 UI + UnifiedSearch 四路 RRF
@@ -31,6 +31,7 @@
 > - 联网搜索（WebSearch）：配置门闸 + 设置页 + Agent 按开关启用 ✅（`feat/websearch-config`）——默认关；不改 ChatRouter needsTools
 > - 设备感知（system_info）：配置门闸 + 设置页 + Agent 按开关启用 ✅（`feat/device-sensing-gate`）——默认关；只读；不改 ChatRouter needsTools
 > - 场景识别（摄像头→陪伴背景/mood）：默认关 + 确认 Gate + 本地启发式 ✅（`feat/camera-scene-recognition`）——不偷拍；只映射现有资源
+> - **Phase 8 多模态视觉**：截屏/拍照/相册 → 本地多模态模型理解（MNN+Qwen2-VL）🔲 未开始（P2）
 > - 机器人 / Claw 宿主：动态插件常驻 + PlatformHost 扩展点 ✅（`feat/claw-host-dynamic-plugins`）——默认关；签名/市场沿用 5.3–5.6
 
 ---
@@ -866,6 +867,72 @@ Phase 4（基础夯实）   Phase 5（平台扩展）     Phase 6（端侧智能
 预计总工时：约 45~50 人天（Phase 6）+ 约 10~15 人天（Phase 7 视权限与厂商差异）
 （各阶段可并行推进，具体排期由兰心按当前进度灵活调整）
 ```
+
+### Phase 8 — 多模态视觉（Multimodal Vision）🔲 未开始
+
+**状态：P2（本地脑就绪后推进）**
+
+让兰心 App 能「看见」—— 截屏/拍照/相册 → 本地多模态模型理解 → 回复。不上传云端，全离线。
+
+#### 8.0 能力范围
+
+| 能力 | 说明 | 优先级 |
+|------|------|--------|
+| **截屏理解** | 主动触发「看屏幕」→ MediaProjection 抓屏 → 模型描述 | P0 |
+| **拍照理解** | CameraX 拍一张 → 模型理解画面内容 | P0 |
+| **相册选图** | 用户从相册选已有图片分析 | P1 |
+| **连续视觉对话** | 多轮追问画面细节（图片 token 保持在上下文） | P1 |
+| **实时画面**（远期） | 摄像头流式帧 → 每 N 秒理解（桌宠场景感知） | P2 |
+
+#### 8.1 技术选型
+
+| 方案 | 模型 | 说明 |
+|------|------|------|
+| **MNN + Qwen2-VL** | Qwen2-VL-2B-Instruct (int4) | MNN 已支持多模态；Qwen2-VL 端侧可用（~3GB） |
+| **llama.cpp**（备选） | LLaVA / MiniCPM-V | MNN 多模态进展慢时切换，社区模型更丰富 |
+| **Sherpa-ONNX** | — | 纯语音，不支持视觉 |
+
+#### 8.2 架构要点
+
+```
+用户触发「视觉回合」
+    │
+    ├─ 截屏 → ImageReader (MediaProjection) ──┐
+    ├─ 拍照 → CameraX + 临时文件              ├→ 统一 VisionProcessor
+    ├─ 相册 → SAF / ActivityResult            ┘       │
+    └─ 用户确认弹窗（Gate 复用 Phase 7.1）            │
+                                                       ▼
+                                              ① 图像预处理（resize→归一化→Tensor）
+                                              ② 注入图像 token 到 prompt
+                                              ③ MNN extension：generate(prompt+imageEmbeds)
+                                              ④ 回复 → LocalReplySanitizer 清洗 → 气泡/TTS
+```
+
+#### 8.3 里程碑
+
+| Step | 内容 | 分支 |
+|------|------|------|
+| **M1** | VisionModelCapability 检测 + 设置页显示 + stub 兜底提示 | `feat/vision-m1-capability` |
+| **M2** | 截屏权申请 + ImageReader Bitmap → 预览缩略图 + 确认弹窗 | `feat/vision-m2-screenshot` |
+| **M3** | Qwen2-VL int4 模型下载/加载 + MNN 多模态 extension | `feat/vision-m3-mnn-vision` |
+| **M4** | 拍照/相册入口 + 统一 VisionProcessor（截屏/拍照/相册→同一路径） | `feat/vision-m4-camera-gallery` |
+| **M5** | 连续视觉对话 + 桌宠上下文感知 | `feat/vision-m5-continuous` |
+
+#### 8.4 依赖关系
+
+- MNN 引擎（Phase 6.1 / P2 ✅）：需升级至支持多模态（MNN ≥ 2.8.0+）
+- 本地脑路径（Phase 6.1 ✅）：模型文件更大（~3-4GB int4），下载/存储复用
+- 系统工具门闸（Phase 7.1 ✅）：截屏/拍照复用 DeviceTool Gate 确认流
+- Live2D 桌宠（Phase 6 M2b ✅）：视觉结果可影响表情（看到→惊讶/开心）
+
+#### 8.5 安全与隐私
+
+- 截屏/拍照：**每次必须用户弹窗确认**，不后台偷拍
+- 相册：只读用户主动选的单张，不遍历
+- 图像数据：纯本地处理，**不上传任何服务器**
+- 权限：MediaProjection + CAMERA 运行时权限；拒绝后优雅降级「看不到画面」
+
+---
 
 ### 遗留设计补对照
 

@@ -118,4 +118,57 @@ class LocalReplySanitizerTest {
         assertFalse(d.contains("让我分析"))
         assertFalse(d.contains("查看可用工具"))
     }
+
+    @Test
+    fun `forSpeech strips emoji and kaomoji but forDisplay keeps them`() {
+        val raw = "你好呀～☀️ 今天开心吗？(^^) 让哥哥抱抱～★"
+        val display = LocalReplySanitizer.forDisplay(raw, showThinking = false)
+        val speech = LocalReplySanitizer.forSpeech(raw, showThinking = false)
+        assertTrue(display.contains("☀️") || display.contains("★"))
+        assertFalse(speech.contains("☀️"))
+        assertFalse(speech.contains("★"))
+        assertTrue(speech.contains("你好呀"))
+        assertTrue(speech.contains("今天开心吗"))
+        assertTrue(speech.contains("让哥哥抱抱"))
+    }
+
+    @Test
+    fun `forSpeech strips angle bracket meta tags`() {
+        val raw = "好的呀 <好感变化:+1> 哥哥最好了"
+        val speech = LocalReplySanitizer.forSpeech(raw, showThinking = false)
+        assertTrue(speech.contains("好的呀"))
+        assertTrue(speech.contains("哥哥最好了"))
+        assertFalse(speech.contains("<好感变化"))
+    }
+
+    @Test
+    fun `dropLeadingBareThinking removes leading thought lines`() {
+        val raw = """
+            首先分析用户说的是问候语，我应该礼貌回应。
+            其次检查是否有可用工具，没有 greeting_tool。
+            最后，我应该回复一个温暖的问候。
+            哥哥你好呀，今天想聊什么？
+        """.trimIndent()
+        val d = LocalReplySanitizer.forDisplay(raw, showThinking = false)
+        assertFalse(d.contains("首先分析"))
+        assertTrue(d.contains("哥哥你好呀"))
+    }
+
+    @Test
+    fun `forSpeech returns empty speechText for empty input`() {
+        val cleaned = LocalReplySanitizer.clean("")
+        assertEquals("", cleaned.displayText)
+        assertEquals("", cleaned.speechText)
+    }
+
+    @Test
+    fun `CleanedReply speechText differs from displayText when emoji present`() {
+        val raw = "<think>想好了</think>\n真棒！🌟🎉"
+        val cleaned = LocalReplySanitizer.clean(raw, showThinking = false)
+        assertTrue(cleaned.displayText.contains("🌟") || cleaned.displayText.contains("🎉"))
+        assertFalse(cleaned.speechText.contains("🌟"))
+        assertFalse(cleaned.speechText.contains("🎉"))
+        assertTrue(cleaned.speechText.contains("真棒"))
+    }
 }
+

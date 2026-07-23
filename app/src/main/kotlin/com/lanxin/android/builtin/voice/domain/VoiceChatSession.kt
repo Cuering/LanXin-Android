@@ -16,6 +16,7 @@
 
 package com.lanxin.android.builtin.voice.domain
 
+import com.lanxin.android.builtin.localinference.domain.LocalReplySanitizer
 import com.lanxin.android.builtin.voice.data.PcmAudioPlayer
 import com.lanxin.android.builtin.voice.data.PcmAudioRecorder
 import com.lanxin.android.builtin.voice.data.SherpaAsrEngine
@@ -173,7 +174,8 @@ class VoiceChatSession @Inject constructor(
      * 播完后若 [continuous] 且仍 enabled → 自动下一轮听。
      */
     suspend fun onReplyReady(replyText: String) {
-        val text = replyText.trim()
+        // TTS 统一走 forSpeech：剥 think/标签/emoji/装饰，避免念出内部协议
+        val text = LocalReplySanitizer.forSpeech(replyText, showThinking = false).trim()
         if (text.isEmpty() || !_uiState.value.enabled) {
             _uiState.update {
                 it.copy(
@@ -186,7 +188,7 @@ class VoiceChatSession @Inject constructor(
         _uiState.update {
             it.copy(phase = VoiceChatPhase.SPEAKING, snackbarMessage = null)
         }
-        // 确保 TTS
+        // 确保 TTS（主路径 Sherpa OfflineTts；系统 TTS 仅作可选兜底，默认不依赖）
         if (!ttsEngine.isReady) {
             runCatching {
                 val cfg = ttsSettings.getConfig()

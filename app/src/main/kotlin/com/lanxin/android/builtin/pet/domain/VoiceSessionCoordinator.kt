@@ -182,8 +182,10 @@ class VoiceSessionCoordinator @Inject constructor(
                 }
             }
         }
+        // TTS 走 forSpeech 而非 forDisplay：剥离 emoji / 颜文字 / 装饰，不念标签
+        val speechText = LocalReplySanitizer.forSpeech(displayReply, showThinking = false)
         val tts = runCatching {
-            ttsEngine.synthesize(TtsSynthesizeRequest(text = displayReply))
+            ttsEngine.synthesize(TtsSynthesizeRequest(text = speechText))
         }.getOrElse { e ->
             // 合成失败：文字结果仍返回；error 仅作状态提示，调用方不应崩溃
             snap = VoiceSessionStateMachine.fail(snap, e.message ?: "tts_failed")
@@ -207,8 +209,8 @@ class VoiceSessionCoordinator @Inject constructor(
             )
         }
 
-        val spokenSubtitle = LocalReplySanitizer.forDisplay(
-            tts.subtitle.ifBlank { displayReply },
+        val spokenSubtitle = LocalReplySanitizer.forSpeech(
+            tts.subtitle.ifBlank { speechText },
             showThinking = false
         )
         // 匹配仍读 replyText(raw)；气泡优先 subtitle(已剥)
