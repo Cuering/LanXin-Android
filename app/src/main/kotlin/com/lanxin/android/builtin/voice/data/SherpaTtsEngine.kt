@@ -141,20 +141,30 @@ class SherpaTtsEngine @Inject constructor(
     }
 
     override suspend fun synthesize(request: TtsSynthesizeRequest): TtsSynthesizeResult {
-        if (!isReady && _state.value != TtsEngineState.SPEAKING) {
-            if (_state.value != TtsEngineState.READY) {
-                error("TtsEngine not ready: state=${_state.value}, error=$error")
-            }
-        }
         val text = request.text.trim()
         val sampleRate = request.sampleRateHz
             ?: config.sampleRateHz.let { if (it > 0) it else TtsConfig.DEFAULT_SAMPLE_RATE_HZ }
         val sid = parseSpeakerId(request.voiceId ?: config.voiceId)
 
+        // 未就绪：绝不抛错闪退，直接 stub 字幕结果
+        if (!isReady && _state.value != TtsEngineState.SPEAKING) {
+            val durationMs = (text.length * 80L).coerceAtLeast(400L).coerceAtMost(8_000L)
+            error = "not_ready:state=${_state.value}"
+            return TtsSynthesizeResult(
+                pcm16leMono = ByteArray(0),
+                sampleRateHz = sampleRate,
+                durationMs = durationMs,
+                isStub = true,
+                subtitle = text
+            )
+        }
+
         if (usingNative) {
             _state.value = TtsEngineState.SPEAKING
             val audio = withContext(Dispatchers.IO) {
-                nativeBridge.synthesize(text = text, speakerId = sid, speed = 1.0f)
+                runCatching {
+                    nativeBridge.synthesize(text = text, speakerId = sid, speed = 1.0f)
+                }.getOrNull()
             }
             _state.value = TtsEngineState.READY
             if (audio != null) {

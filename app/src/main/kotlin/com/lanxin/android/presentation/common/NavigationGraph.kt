@@ -60,7 +60,8 @@ fun SetupNavGraph(navController: NavHostController) {
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
         navController = navController,
-        startDestination = Route.CHAT_LIST
+        // 启动即全屏陪伴；会话列表/欢迎页不再作为入口
+        startDestination = Route.COMPANION
     ) {
         homeScreenNavigation(navController)
         migrationScreenNavigation(navController)
@@ -151,9 +152,18 @@ fun NavGraphBuilder.desktopPetScreenNavigation(navController: NavHostController)
 
 fun NavGraphBuilder.companionScreenNavigation(navController: NavHostController) {
     composable(Route.COMPANION) {
+        val activity = androidx.activity.compose.LocalActivity.current
         CompanionScreen(
-            onBackAction = { navController.navigateUp() },
-            onOpenSettings = { navController.navigate(Route.DESKTOP_PET) }
+            // 根页面：返回 = 退出 App，不回到会话列表/欢迎页
+            onBackAction = {
+                if (!navController.navigateUp()) {
+                    activity?.finish()
+                }
+            },
+            // 设置齿轮 → 设置主页（含日志查看 / 桌宠 / 本地脑…），不再误跳桌宠页
+            onOpenSettings = {
+                navController.navigate(Route.SETTING_ROUTE) { launchSingleTop = true }
+            }
         )
     }
 }
@@ -363,7 +373,7 @@ fun NavGraphBuilder.loggerScreenNavigation(navController: NavHostController) {
 fun NavGraphBuilder.migrationScreenNavigation(navController: NavHostController) {
     composable(Route.MIGRATE_V2) {
         MigrateScreen {
-            navController.navigate(Route.CHAT_LIST) {
+            navController.navigate(Route.COMPANION) {
                 popUpTo(Route.MIGRATE_V2) { inclusive = true }
             }
         }
@@ -371,8 +381,13 @@ fun NavGraphBuilder.migrationScreenNavigation(navController: NavHostController) 
 }
 
 fun NavGraphBuilder.startScreenNavigation(navController: NavHostController) {
+    // 欢迎页保留路由兼容旧 deep link，一点「开始」直接进全屏陪伴
     composable(Route.GET_STARTED) {
-        StartScreen { navController.navigate(Route.CHAT_LIST) { popUpTo(Route.GET_STARTED) { inclusive = true } } }
+        StartScreen {
+            navController.navigate(Route.COMPANION) {
+                popUpTo(Route.GET_STARTED) { inclusive = true }
+            }
+        }
     }
 }
 

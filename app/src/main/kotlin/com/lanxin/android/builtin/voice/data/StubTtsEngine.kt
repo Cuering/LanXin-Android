@@ -82,14 +82,22 @@ class StubTtsEngine @Inject constructor() : TtsEngine {
     }
 
     override suspend fun synthesize(request: TtsSynthesizeRequest): TtsSynthesizeResult {
-        if (!isReady && _state.value != TtsEngineState.READY) {
-            // allow synthesize when READY; if SPEAKING still ok for sequential sessions
-            if (_state.value != TtsEngineState.SPEAKING && _state.value != TtsEngineState.READY) {
-                error("TtsEngine not ready: state=${_state.value}, error=$error")
-            }
-        }
         val text = request.text.trim()
         val sampleRate = request.sampleRateHz ?: config.sampleRateHz
+        // 未就绪：不抛异常，返回 stub 字幕
+        if (!isReady && _state.value != TtsEngineState.SPEAKING &&
+            _state.value != TtsEngineState.READY
+        ) {
+            error = "not_ready:state=${_state.value}"
+            val durationMs = (text.length * 80L).coerceAtLeast(400L).coerceAtMost(8_000L)
+            return TtsSynthesizeResult(
+                pcm16leMono = ByteArray(0),
+                sampleRateHz = sampleRate,
+                durationMs = durationMs,
+                isStub = true,
+                subtitle = text
+            )
+        }
         // ~80ms / CJK char, min 400ms
         val durationMs = (text.length * 80L).coerceAtLeast(400L).coerceAtMost(8_000L)
         _state.value = TtsEngineState.SPEAKING

@@ -35,18 +35,11 @@ class MainViewModel @Inject constructor(private val settingRepository: SettingRe
             val platformV2s = settingRepository.fetchPlatformV2s()
 
             when {
-                (platforms.all { it.enabled.not() } && platforms.all { it.token == null }) &&
-                    (platformV2s.isEmpty())
-                -> {
-                    // Initialize
-                    sendSplashEvent(SplashEvent.OpenIntro)
-                }
-
-                platformV2s.isEmpty() -> {
-                    // Migrate to V2
+                // 有 V1 平台数据但未迁 V2：仍走迁移页
+                platforms.any { it.enabled || it.token != null } && platformV2s.isEmpty() -> {
                     sendSplashEvent(SplashEvent.OpenMigrate)
                 }
-
+                // 其余情况（含首次安装、无平台）：直接全屏陪伴，不再欢迎页/会话列表
                 else -> {
                     sendSplashEvent(SplashEvent.OpenHome)
                 }

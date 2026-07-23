@@ -85,9 +85,8 @@ class DefaultLocalInferenceProvider @Inject constructor(
             showThinking = config.showThinking
         )
         val effectiveMax = (maxTokens ?: config.maxTokens).coerceAtLeast(16)
-        // 本地现为整段 emit；累积后一次清洗，避免流式半标签泄漏
-        val rawBuilder = StringBuilder()
-        engine.stream(
+        // 陪伴/Chat 门面：整段 generate，避免流式半标签 + 降低 JNI 回调面
+        val raw = engine.generate(
             LocalGenerateRequest(
                 prompt = prompt,
                 systemPrompt = effectiveSystem,
@@ -95,11 +94,9 @@ class DefaultLocalInferenceProvider @Inject constructor(
                 temperature = config.temperature,
                 history = history
             )
-        ).collect { chunk ->
-            rawBuilder.append(chunk)
-        }
+        ).text
         val cleaned = LocalReplySanitizer.clean(
-            raw = rawBuilder.toString(),
+            raw = raw,
             showThinking = config.showThinking
         )
         if (config.showThinking) {

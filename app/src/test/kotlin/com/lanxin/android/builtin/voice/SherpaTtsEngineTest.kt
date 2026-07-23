@@ -89,14 +89,12 @@ class SherpaTtsEngineTest {
     }
 
     @Test
-    fun `synthesize without load throws`() = runBlocking {
+    fun `synthesize without load returns stub not crash`() = runBlocking {
         val e = engine()
-        try {
-            e.synthesize(TtsSynthesizeRequest(text = "x"))
-            throw AssertionError("expected IllegalStateException")
-        } catch (ex: IllegalStateException) {
-            assertTrue(ex.message!!.contains("not ready"))
-        }
+        val r = e.synthesize(TtsSynthesizeRequest(text = "x"))
+        assertTrue(r.isStub)
+        assertEquals("x", r.subtitle)
+        assertTrue(e.lastError!!.startsWith("not_ready:"))
     }
 
     @Test
