@@ -111,6 +111,7 @@ object LocalReplySanitizer {
         "step by step",
         // 约束原文泄漏：模型把 system prompt 里的输出约束原样抄进回复
         // 注意：短约束里的「思考过程」等词也可能出现在正常正文，仅用长/专属短语
+        // 「【输出约束】」放 META_LINE_PREFIXES 行首匹配，避免 stub 行中带该串被整行清空
         "禁止思考外泄",
         "不要输出任何思考过程",
         "不输出思考过程",
