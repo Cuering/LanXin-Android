@@ -56,10 +56,14 @@ class ClawResidentController @Inject constructor(
         val intent = Intent(appContext, ClawResidentService::class.java).apply {
             action = ClawResidentService.ACTION_START
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            appContext.startForegroundService(intent)
-        } else {
-            appContext.startService(intent)
+        runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                appContext.startForegroundService(intent)
+            } else {
+                appContext.startService(intent)
+            }
+        }.onFailure {
+            android.util.Log.w("ClawResidentController", "startForegroundService denied", it)
         }
     }
 
