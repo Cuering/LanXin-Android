@@ -76,15 +76,43 @@ class ChatMicSession @Inject constructor(
                             )
                         }
                     } else {
-                        _uiState.update { it.copy(voiceChatEnabled = true) }
+                        // 只在真正开麦成功后亮「语音开」
                         startRecordingLocked()
-                        // 未能进入录音（权限/引擎）则回关，避免假开占位
-                        if (_uiState.value.phase != ChatMicPhase.RECORDING &&
-                            !_uiState.value.needRequestPermission
-                        ) {
+                        if (_uiState.value.phase == ChatMicPhase.RECORDING) {
+                            _uiState.update { it.copy(voiceChatEnabled = true) }
+                        } else if (!_uiState.value.needRequestPermission) {
                             _uiState.update { it.copy(voiceChatEnabled = false) }
                         }
                     }
+                }
+            }
+        }
+    }
+
+    /**
+     * 按住听写：开麦录音，**不**点亮 voiceChatEnabled。
+     * 与点按「语音对话模式」互斥，适合长按验证硬件麦。
+     */
+    suspend fun startHoldDictation() {
+        mutex.withLock {
+            val st = _uiState.value
+            if (st.phase != ChatMicPhase.IDLE) return
+            // 按住路径不改 voiceChatEnabled；失败只 snackbar
+            startRecordingLocked()
+        }
+    }
+
+    /**
+     * 松手结束按住听写：停录转写；若尚未进入 RECORDING（心跳中）则取消。
+     */
+    suspend fun stopHoldDictation(onTranscript: (String) -> Unit) {
+        mutex.withLock {
+            when (_uiState.value.phase) {
+                ChatMicPhase.RECORDING -> stopAndTranscribeLocked(onTranscript)
+                ChatMicPhase.TRANSCRIBING -> return
+                ChatMicPhase.IDLE -> {
+                    // 可能还在 startRecording/heartbeat 中途失败后回 IDLE，或已 cancel
+                    runCatching { recorder.cancelRecording() }
                 }
             }
         }
@@ -119,9 +147,10 @@ class ChatMicSession @Inject constructor(
                 return@withLock
             }
             // 授权后自动开录（用户刚点过麦）；保持语音模式开
-            _uiState.update { it.copy(voiceChatEnabled = true) }
             startRecordingLocked(skipPermissionCheck = true)
-            if (_uiState.value.phase != ChatMicPhase.RECORDING) {
+            if (_uiState.value.phase == ChatMicPhase.RECORDING) {
+                _uiState.update { it.copy(voiceChatEnabled = true) }
+            } else {
                 _uiState.update { it.copy(voiceChatEnabled = false) }
             }
         }
@@ -195,6 +224,17 @@ class ChatMicSession @Inject constructor(
             }
             return
         }
+        val heartbeat = recorder.awaitCaptureHeartbeat()
+        if (heartbeat != null) {
+            runCatching { recorder.cancelRecording() }
+            _uiState.update {
+                it.copy(
+                    phase = ChatMicPhase.IDLE,
+                    snackbarMessage = heartbeat
+                )
+            }
+            return
+        }
         _uiState.update {
             it.copy(phase = ChatMicPhase.RECORDING, snackbarMessage = null)
         }
@@ -219,6 +259,16 @@ class ChatMicSession @Inject constructor(
                 it.copy(
                     phase = ChatMicPhase.IDLE,
                     snackbarMessage = "录音太短，请按住/点按麦克风再说一会儿。"
+                )
+            }
+            return
+        }
+        if (looksLikeSilentCapture(audio.pcm16leMono)) {
+            _uiState.update {
+                it.copy(
+                    phase = ChatMicPhase.IDLE,
+                    snackbarMessage = "麦克风似乎没有收到声音。请检查系统麦克风权限，" +
+                        "或到「设置 → 应用 → 兰心 → 权限」确认已允许录音。"
                 )
             }
             return
@@ -287,8 +337,24 @@ class ChatMicSession @Inject constructor(
             ?: "请先下载/开启离线语音"
     }
 
+    private fun looksLikeSilentCapture(pcm: ByteArray): Boolean {
+        if (pcm.size < 4) return true
+        var peak = 0
+        var i = 0
+        val step = ((pcm.size / 2) / 4000).coerceAtLeast(1) * 2
+        while (i + 1 < pcm.size) {
+            val sample = ((pcm[i + 1].toInt() shl 8) or (pcm[i].toInt() and 0xFF)).toShort()
+            val abs = kotlin.math.abs(sample.toInt())
+            if (abs > peak) peak = abs
+            if (peak >= SILENCE_PEAK_THRESHOLD) return false
+            i += step
+        }
+        return peak < SILENCE_PEAK_THRESHOLD
+    }
+
     companion object {
         /** 过短录音（误触）阈值。 */
         const val MIN_USEFUL_MS = 200L
+        const val SILENCE_PEAK_THRESHOLD = 48
     }
 }

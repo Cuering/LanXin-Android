@@ -9,6 +9,7 @@ import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -45,6 +46,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.MenuBook
@@ -80,6 +82,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
@@ -365,7 +368,8 @@ fun ChatScreen(
                 selectedAttachments = selectedAttachments,
                 micUiState = chatMicUi,
                 voiceChatUiState = voiceChatUi,
-                onMicClick = chatViewModel::onMicClick,
+                onMicPressStart = chatViewModel::onMicPressStart,
+                onMicPressEnd = chatViewModel::onMicPressEnd,
                 onToggleVoiceChat = chatViewModel::toggleVoiceChatMode,
                 onFileSelected = { filePath -> chatViewModel.addSelectedFile(filePath) },
                 onFileRemoved = { filePath -> chatViewModel.removeSelectedFile(filePath) }
@@ -796,7 +800,8 @@ fun ChatInputBox(
     selectedAttachments: List<ChatAttachmentDraft> = emptyList(),
     micUiState: ChatMicUiState = ChatMicUiState(),
     voiceChatUiState: VoiceChatUiState = VoiceChatUiState(),
-    onMicClick: () -> Unit = {},
+    onMicPressStart: () -> Unit = {},
+    onMicPressEnd: () -> Unit = {},
     onToggleVoiceChat: () -> Unit = {},
     onFileSelected: (String) -> Unit = {},
     onFileRemoved: (String) -> Unit = {},
@@ -919,33 +924,87 @@ fun ChatInputBox(
                             innerTextField()
                         }
                     }
-                    IconButton(
-                        enabled = micEnabled,
-                        // 点按：开语音对话 / 听中收口发送 / 空闲再点关
-                        onClick = onMicClick
+                    // 双入口：
+                    // 1) 麦键：按住说话 → 听写填输入框（按下即录，松手收口）
+                    // 2) 语音对话键：点按开关连续听说（自动发 + TTS）
+                    val holdRecording = remember { mutableStateOf(false) }
+                    val voiceChatOn = voiceChatUiState.enabled
+                    // 麦键：仅按住听写；连续语音对话占用时禁用，避免互抢
+                    val holdMicEnabled = micEnabled && !voiceChatOn && !voiceBusy
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(24.dp))
+                            .then(
+                                if (holdMicEnabled) {
+                                    Modifier.pointerInput(holdMicEnabled) {
+                                        detectTapGestures(
+                                            onPress = {
+                                                // 按下即开始听写；松手收口。单击不触发连续对话。
+                                                holdRecording.value = true
+                                                onMicPressStart()
+                                                try {
+                                                    tryAwaitRelease()
+                                                } finally {
+                                                    onMicPressEnd()
+                                                    holdRecording.value = false
+                                                }
+                                            }
+                                        )
+                                    }
+                                } else {
+                                    Modifier
+                                }
+                            ),
+                        contentAlignment = Alignment.Center
                     ) {
-                        if (micBusy && !micRecording) {
+                        if (micBusy && !micRecording && !voiceChatOn) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(22.dp),
                                 strokeWidth = 2.dp
                             )
                         } else {
-                            // 关=MicOff；语音对话开/听中=Mic
-                            val voiceOn = voiceChatUiState.enabled ||
-                                micUiState.voiceChatEnabled ||
-                                micRecording
+                            val holding = holdRecording.value ||
+                                micUiState.phase == ChatMicPhase.RECORDING
                             Icon(
-                                imageVector = if (voiceOn) Icons.Filled.Mic else Icons.Filled.MicOff,
+                                imageVector = if (holding) Icons.Filled.Mic else Icons.Filled.MicOff,
+                                contentDescription = stringResource(
+                                    if (holding) R.string.chat_mic_stop else R.string.chat_mic_hold_to_talk
+                                ),
+                                tint = when {
+                                    holding -> MaterialTheme.colorScheme.error
+                                    holdMicEnabled -> LocalContentColor.current
+                                    else -> LocalContentColor.current.copy(alpha = 0.38f)
+                                }
+                            )
+                        }
+                    }
+                    // 独立入口：连续语音对话（听→识别→自动发→TTS→下一轮）
+                    IconButton(
+                        enabled = chatEnabled && micUiState.micToggleEnabled &&
+                            !holdRecording.value &&
+                            micUiState.phase != ChatMicPhase.RECORDING &&
+                            micUiState.phase != ChatMicPhase.TRANSCRIBING,
+                        onClick = onToggleVoiceChat
+                    ) {
+                        if (voiceBusy && !voiceListening) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(22.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Filled.RecordVoiceOver,
                                 contentDescription = stringResource(
                                     when {
-                                        micRecording -> R.string.chat_mic_stop
-                                        voiceOn -> R.string.chat_mic_voice_off
+                                        voiceListening -> R.string.chat_mic_stop
+                                        voiceChatOn -> R.string.chat_mic_voice_off
                                         else -> R.string.chat_voice_start
                                     }
                                 ),
                                 tint = when {
-                                    micRecording -> MaterialTheme.colorScheme.error
-                                    voiceOn -> MaterialTheme.colorScheme.primary
+                                    voiceListening -> MaterialTheme.colorScheme.error
+                                    voiceChatOn -> MaterialTheme.colorScheme.primary
                                     else -> LocalContentColor.current.copy(alpha = 0.55f)
                                 }
                             )

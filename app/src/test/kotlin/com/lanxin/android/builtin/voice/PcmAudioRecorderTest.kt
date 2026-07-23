@@ -65,4 +65,29 @@ class PcmAudioRecorderTest {
         recorder.cancelRecording()
         assertFalse(recorder.isRecording())
     }
+
+    @Test
+    fun `awaitCaptureHeartbeat is null in stub mode`() = runBlocking {
+        val recorder = PcmAudioRecorder().apply { forceStubHardware = true }
+        assertTrue(recorder.startRecording().isSuccess)
+        // stub 不碰硬件，不应报「无数据」
+        assertEquals(null, recorder.awaitCaptureHeartbeat(timeoutMs = 100))
+        recorder.cancelRecording()
+    }
+
+    @Test
+    fun `custom factory is preferred over multi-source fallback`() = runBlocking {
+        var factoryCalls = 0
+        val recorder = PcmAudioRecorder().apply {
+            forceStubHardware = false
+            audioRecordFactory = { _, _ ->
+                factoryCalls++
+                null // 返回 null → start 应失败（工厂优先，不走默认多源）
+            }
+        }
+        val start = recorder.startRecording(sampleRateHz = 16_000)
+        assertTrue(start.isFailure)
+        assertEquals(1, factoryCalls)
+        assertFalse(recorder.isRecording())
+    }
 }

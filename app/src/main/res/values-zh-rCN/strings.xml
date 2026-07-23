@@ -290,8 +290,9 @@
     <string name="model_list_error_network">网络错误（URL / 连通性）</string>
     <string name="chat_mic_start">开始语音输入</string>
     <string name="chat_mic_stop">停止听写</string>
-    <string name="chat_mic_listening">正在听写…再点麦克风结束</string>
+    <string name="chat_mic_listening">正在听写…松手结束</string>
     <string name="chat_mic_transcribing">识别中…</string>
+    <string name="chat_mic_hold_to_talk">按住说话</string>
     <string name="chat_mic_voice_off">关闭语音聊天</string>
     <string name="chat_voice_start">开始语音对话</string>
     <string name="chat_voice_listening">正在听…请说话</string>

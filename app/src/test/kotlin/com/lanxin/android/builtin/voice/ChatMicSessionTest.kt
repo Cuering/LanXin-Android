@@ -128,6 +128,23 @@ class ChatMicSessionTest {
     }
 
     @Test
+    fun `hold dictation does not enable voice chat flag`() = runBlocking {
+        settings.config = AsrConfig(enabled = true, modelPath = "stub://demo", language = "zh")
+        val s = session(MicPermissionState.GRANTED)
+
+        s.startHoldDictation()
+        assertEquals(ChatMicPhase.RECORDING, s.uiState.value.phase)
+        assertFalse(s.uiState.value.voiceChatEnabled)
+        assertTrue(recorder.isRecording())
+
+        delay(250)
+        s.stopHoldDictation { transcripts += it }
+        assertEquals(ChatMicPhase.IDLE, s.uiState.value.phase)
+        assertFalse(s.uiState.value.voiceChatEnabled)
+        assertEquals(1, transcripts.size)
+    }
+
+    @Test
     fun `toggle record then stop fills transcript`() = runBlocking {
         settings.config = AsrConfig(enabled = true, modelPath = "stub://demo", language = "zh")
         val s = session(MicPermissionState.GRANTED)

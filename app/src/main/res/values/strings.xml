@@ -358,8 +358,9 @@
     <string name="model_list_error_network">Network error (URL / connectivity)</string>
     <string name="chat_mic_start">Start voice input</string>
     <string name="chat_mic_stop">Stop listening</string>
-    <string name="chat_mic_listening">Listening… tap mic to stop</string>
+    <string name="chat_mic_listening">Listening… hold to talk</string>
     <string name="chat_mic_transcribing">Transcribing…</string>
+    <string name="chat_mic_hold_to_talk">Hold to talk</string>
     <string name="chat_mic_voice_off">Turn off voice chat</string>
     <string name="chat_voice_start">Start voice chat</string>
     <string name="chat_voice_listening">Listening… speak now</string>

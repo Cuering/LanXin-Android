@@ -20,10 +20,12 @@ import android.annotation.SuppressLint
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.util.Log
 import com.lanxin.android.builtin.voice.domain.AsrConfig
 import com.lanxin.android.builtin.voice.domain.RecordedAudio
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
@@ -65,6 +67,9 @@ class PcmAudioRecorder @Inject constructor() {
     private var captureStartedAtMs: Long = 0L
     private var captureThread: Thread? = null
     private var stubMode: Boolean = false
+    private val capturedBytes = AtomicLong(0L)
+    private val peakAbsSample = AtomicLong(0L)
+    private val lastChunkAtMs = AtomicLong(0L)
 
     /**
      * 流式 PCM chunk 回调（捕获线程调用）。
@@ -91,10 +96,10 @@ class PcmAudioRecorder @Inject constructor() {
         // 模拟采集耗时（短）
         delay(5)
         val samples = ((rate * clampedMs) / 1000L).toInt().coerceAtLeast(1)
-        // 16-bit mono → 2 bytes/sample；填入极低幅值正弦近似（非纯 0，便于校验非空）
+        // 16-bit mono → 2 bytes/sample；幅值需高于 ChatMicSession 静音阈值，避免 stub 被误判无声
         val pcm = ByteArray(samples * 2)
         for (i in 0 until samples) {
-            val sample = ((i % 32) - 16).toShort()
+            val sample = (((i % 64) - 32) * 8).toShort() // peak ≈ 256
             pcm[i * 2] = (sample.toInt() and 0xFF).toByte()
             pcm[i * 2 + 1] = (sample.toInt() shr 8).toByte()
         }
@@ -125,18 +130,30 @@ class PcmAudioRecorder @Inject constructor() {
         captureSampleRate = rate
         captureStartedAtMs = System.currentTimeMillis()
         captureBuffer = ByteArrayOutputStream()
+        capturedBytes.set(0L)
+        peakAbsSample.set(0L)
+        lastChunkAtMs.set(0L)
         stubMode = forceStubHardware || audioRecordFactory == null
 
         if (stubMode) {
             // stub：不占硬件；PCM 在 stop 时按时长合成
+            Log.i(TAG, "startRecording stubMode=true rate=$rate")
             return@withContext Result.success(Unit)
         }
 
-        val minBuf = AudioRecord.getMinBufferSize(
-            rate,
-            AudioFormat.CHANNEL_IN_MONO,
-            AudioFormat.ENCODING_PCM_16BIT
-        )
+        // 自定义工厂（单测）优先：不依赖 AudioRecord.getMinBufferSize（JVM 上不可用）
+        val customFactory = audioRecordFactory
+        val usingCustomFactory =
+            customFactory != null && customFactory !== DEFAULT_AUDIO_RECORD_FACTORY
+        val minBuf = if (usingCustomFactory) {
+            4096
+        } else {
+            AudioRecord.getMinBufferSize(
+                rate,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT
+            )
+        }
         if (minBuf <= 0) {
             resetCaptureState()
             return@withContext Result.failure(
@@ -145,7 +162,7 @@ class PcmAudioRecorder @Inject constructor() {
         }
         val bufferSize = (minBuf * 2).coerceAtLeast(minBuf)
         val record = try {
-            audioRecordFactory?.invoke(rate, bufferSize)
+            openAudioRecord(rate, bufferSize)
         } catch (t: Throwable) {
             resetCaptureState()
             return@withContext Result.failure(
@@ -161,6 +178,15 @@ class PcmAudioRecorder @Inject constructor() {
         }
         try {
             record.startRecording()
+            // 部分机型 startRecording() 不抛异常但 recordingState 仍非 RECORDING
+            if (record.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
+                runCatching { record.stop() }
+                runCatching { record.release() }
+                resetCaptureState()
+                return@withContext Result.failure(
+                    IllegalStateException("麦克风未真正进入录音状态，请检查系统麦克风占用/权限。")
+                )
+            }
         } catch (t: Throwable) {
             runCatching { record.release() }
             resetCaptureState()
@@ -171,7 +197,6 @@ class PcmAudioRecorder @Inject constructor() {
         activeRecord = record
         val localBuffer = captureBuffer!!
         val stopFlag = recording
-        val chunkListener = onPcmChunk
         captureThread = Thread(
             {
                 val chunk = ByteArray(bufferSize)
@@ -182,14 +207,19 @@ class PcmAudioRecorder @Inject constructor() {
                         break
                     }
                     if (n > 0) {
+                        capturedBytes.addAndGet(n.toLong())
+                        lastChunkAtMs.set(System.currentTimeMillis())
+                        updatePeakAbsSample(chunk, n)
                         synchronized(localBuffer) {
                             localBuffer.write(chunk, 0, n)
                         }
-                        if (chunkListener != null) {
+                        val listener = onPcmChunk
+                        if (listener != null) {
                             val copy = chunk.copyOf(n)
-                            runCatching { chunkListener.invoke(copy) }
+                            runCatching { listener.invoke(copy) }
                         }
                     } else if (n < 0) {
+                        Log.w(TAG, "AudioRecord.read error code=$n")
                         break
                     }
                 }
@@ -199,6 +229,7 @@ class PcmAudioRecorder @Inject constructor() {
             it.isDaemon = true
             it.start()
         }
+        Log.i(TAG, "startRecording hardware ok rate=$rate bufferSize=$bufferSize")
         Result.success(Unit)
     }
 
@@ -242,6 +273,18 @@ class PcmAudioRecorder @Inject constructor() {
         val pcm = synchronized(captureBuffer ?: ByteArrayOutputStream()) {
             captureBuffer?.toByteArray() ?: ByteArray(0)
         }
+        val peak = peakAbsSample.get()
+        val bytes = capturedBytes.get()
+        Log.i(
+            TAG,
+            "stopRecording durationMs=$durationMs bytes=$bytes peakAbs=$peak rate=$rate"
+        )
+        if (!stubMode && (pcm.isEmpty() || peak < MIN_LIVE_PEAK)) {
+            Log.w(
+                TAG,
+                "microphone capture looks silent/empty: bytes=${pcm.size} peakAbs=$peak"
+            )
+        }
         resetCaptureState()
         Result.success(
             RecordedAudio(
@@ -277,6 +320,79 @@ class PcmAudioRecorder @Inject constructor() {
     /** 当前是否正在录音。 */
     fun isRecording(): Boolean = recording.get()
 
+    /** 是否走 stub（未碰硬件）。调试用。 */
+    fun isStubMode(): Boolean = stubMode && recording.get()
+
+    /** 已捕获 PCM 字节数（含当前会话）。 */
+    fun capturedByteCount(): Long = capturedBytes.get()
+
+    /** 当前会话峰值绝对采样值（0..32767）。 */
+    fun peakAbsAmplitude(): Long = peakAbsSample.get()
+
+    /**
+     * 真机开麦后短等，确认捕获线程确实读到数据。
+     * @return null 表示正常；否则为用户可见诊断文案
+     */
+    suspend fun awaitCaptureHeartbeat(timeoutMs: Long = 700L): String? =
+        withContext(Dispatchers.IO) {
+            if (stubMode || !recording.get()) return@withContext null
+            val deadline = System.currentTimeMillis() + timeoutMs.coerceIn(100L, 3_000L)
+            while (System.currentTimeMillis() < deadline) {
+                if (capturedBytes.get() > 0L) return@withContext null
+                delay(40)
+            }
+            if (capturedBytes.get() > 0L) return@withContext null
+            "麦克风已打开，但没有收到音频数据。请检查：① 系统麦克风权限；② 是否被其他 App 占用；③ 小米隐私/录音管控。"
+        }
+
+    @SuppressLint("MissingPermission")
+    private fun openAudioRecord(rate: Int, bufferSize: Int): AudioRecord? {
+        val factory = audioRecordFactory
+        if (factory != null && factory !== DEFAULT_AUDIO_RECORD_FACTORY) {
+            // 单测 / 自定义工厂：尊重注入，不强制 fallback
+            return factory.invoke(rate, bufferSize)
+        }
+        // 真机：VOICE_RECOGNITION → VOICE_COMMUNICATION → MIC 逐级回退
+        // 部分小米/HyperOS 对 VOICE_RECOGNITION 静默拒绝或给空流
+        val sources = intArrayOf(
+            MediaRecorder.AudioSource.VOICE_RECOGNITION,
+            MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+            MediaRecorder.AudioSource.MIC
+        )
+        for (source in sources) {
+            val candidate = try {
+                AudioRecord(
+                    source,
+                    rate,
+                    AudioFormat.CHANNEL_IN_MONO,
+                    AudioFormat.ENCODING_PCM_16BIT,
+                    bufferSize
+                )
+            } catch (t: Throwable) {
+                Log.w(TAG, "AudioRecord create failed source=$source: ${t.message}")
+                null
+            }
+            if (candidate != null && candidate.state == AudioRecord.STATE_INITIALIZED) {
+                Log.i(TAG, "AudioRecord initialized with source=$source")
+                return candidate
+            }
+            runCatching { candidate?.release() }
+        }
+        return null
+    }
+
+    private fun updatePeakAbsSample(chunk: ByteArray, n: Int) {
+        var peak = peakAbsSample.get()
+        var i = 0
+        while (i + 1 < n) {
+            val sample = ((chunk[i + 1].toInt() shl 8) or (chunk[i].toInt() and 0xFF)).toShort()
+            val abs = kotlin.math.abs(sample.toInt()).toLong()
+            if (abs > peak) peak = abs
+            i += 2
+        }
+        peakAbsSample.set(peak)
+    }
+
     private fun resetCaptureState() {
         recording.set(false)
         activeRecord = null
@@ -284,6 +400,9 @@ class PcmAudioRecorder @Inject constructor() {
         captureThread = null
         stubMode = false
         captureStartedAtMs = 0L
+        capturedBytes.set(0L)
+        peakAbsSample.set(0L)
+        lastChunkAtMs.set(0L)
     }
 
     private fun synthesizeStubPcm(durationMs: Long, sampleRateHz: Int): RecordedAudio {
@@ -291,7 +410,8 @@ class PcmAudioRecorder @Inject constructor() {
         val samples = ((sampleRateHz * clampedMs) / 1000L).toInt().coerceAtLeast(1)
         val pcm = ByteArray(samples * 2)
         for (i in 0 until samples) {
-            val sample = ((i % 32) - 16).toShort()
+            // 与 recordStubPcm 一致：peak 明显高于静音阈值
+            val sample = (((i % 64) - 32) * 8).toShort()
             pcm[i * 2] = (sample.toInt() and 0xFF).toByte()
             pcm[i * 2 + 1] = (sample.toInt() shr 8).toByte()
         }
@@ -303,24 +423,18 @@ class PcmAudioRecorder @Inject constructor() {
     }
 
     companion object {
+        private const val TAG = "PcmAudioRecorder"
         const val DEFAULT_STUB_DURATION_MS = 500L
         const val MAX_RECORD_MS = 60_000L
 
-        val DEFAULT_AUDIO_RECORD_FACTORY: (Int, Int) -> AudioRecord? =
-            { rate, bufferSize -> createDefaultAudioRecord(rate, bufferSize) }
+        /** 低于此峰值视为「假录音/全静音」。 */
+        const val MIN_LIVE_PEAK = 32L
 
         /**
-         * 创建默认 AudioRecord。
-         * RECORD_AUDIO 由 MicPermissionGate / UI 在 [startRecording] 前校验。
+         * 默认工厂占位：实际开麦走 [openAudioRecord] 多源回退。
+         * 单测可替换整个 factory。
          */
-        @SuppressLint("MissingPermission")
-        private fun createDefaultAudioRecord(rate: Int, bufferSize: Int): AudioRecord =
-            AudioRecord(
-                MediaRecorder.AudioSource.VOICE_RECOGNITION,
-                rate,
-                AudioFormat.CHANNEL_IN_MONO,
-                AudioFormat.ENCODING_PCM_16BIT,
-                bufferSize
-            )
+        val DEFAULT_AUDIO_RECORD_FACTORY: (Int, Int) -> AudioRecord? =
+            { _, _ -> null }
     }
 }

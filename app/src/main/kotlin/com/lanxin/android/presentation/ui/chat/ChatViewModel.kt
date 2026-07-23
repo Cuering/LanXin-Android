@@ -251,11 +251,11 @@ class ChatViewModel @Inject constructor(
     }
 
     /**
-     * 主聊天麦克风 = 语音对话开关：
-     * - 点一下：开启并自动听 → 识别 → 自动发送 → TTS 回复 → 连续下一轮
-     * - 再点：听中则收口发送；空闲则关闭语音对话
+     * 连续语音对话入口（独立按钮，不与麦键手势混用）：
+     * - 关 → 开：自动听 → 识别 → 自动发送 → TTS → 连续下一轮
+     * - 听中 → 收口发送；空闲已开 → 关闭
      */
-    fun onMicClick() {
+    fun toggleVoiceChatMode() {
         viewModelScope.launch {
             chatMicSession.cancel()
             voiceChatSession.onMicClick(continuousListen = true) { text ->
@@ -264,11 +264,39 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /** @deprecated 语义已拆：请用 [toggleVoiceChatMode] / 按住听写。保留兼容旧调用。 */
+    fun onMicClick() {
+        toggleVoiceChatMode()
+    }
+
     /**
-     * 与 [onMicClick] 同语义：开/关真语音对话（自动发送 + TTS）。
+     * 麦键按住说话（听写，不自动发送）：
+     * 按下 → 开麦；松手 → 转写填入输入框。
+     * 与连续语音对话互斥，不点亮 voiceChat.enabled。
+     *
+     * 用 [holdDictationJob] 串行化 start/end，避免松手协程先于开麦执行。
      */
-    fun toggleVoiceChatMode() {
-        onMicClick()
+    private var holdDictationJob: kotlinx.coroutines.Job? = null
+
+    fun onMicPressStart() {
+        holdDictationJob?.cancel()
+        holdDictationJob = viewModelScope.launch {
+            // 与连续语音对话互斥
+            voiceChatSession.cancel()
+            chatMicSession.startHoldDictation()
+        }
+    }
+
+    /** 松手结束按住说话。 */
+    fun onMicPressEnd() {
+        viewModelScope.launch {
+            // 等开麦完成（含心跳），再停录；避免 end 抢先看到 IDLE
+            holdDictationJob?.join()
+            holdDictationJob = null
+            chatMicSession.stopHoldDictation { text ->
+                appendDictationToInput(text)
+            }
+        }
     }
 
     /**
