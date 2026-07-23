@@ -211,9 +211,9 @@ class LocalReplySanitizerTest {
 
     @Test
     fun `collapseRepeatedPhrase folds identical lines`() {
-        val raw = "嗯嗯好的
+        val raw = """嗯嗯好的
 嗯嗯好的
-嗯嗯好的"
+嗯嗯好的"""
         val d = LocalReplySanitizer.collapseRepeatedPhrase(raw)
         assertEquals("嗯嗯好的", d)
     }

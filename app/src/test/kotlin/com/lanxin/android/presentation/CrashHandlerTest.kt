@@ -24,7 +24,7 @@ class CrashHandlerTest {
 
     @Test
     fun `reportNonFatal writes error log after init`() {
-        val tmp = createTempDir(prefix = "lanxin-crash-test-")
+        val tmp = java.nio.file.Files.createTempDirectory("lanxin-crash-test-").toFile()
         try {
             setAppContext(FakeFilesContext(tmp))
             CrashHandler.reportNonFatal(
