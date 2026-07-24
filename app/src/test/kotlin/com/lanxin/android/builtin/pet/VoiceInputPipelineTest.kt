@@ -42,6 +42,7 @@ import com.lanxin.android.builtin.systemtools.data.files.InMemoryUserFileCatalog
 import com.lanxin.android.builtin.systemtools.domain.AlarmClockGateway
 import com.lanxin.android.builtin.systemtools.domain.AlarmClockResult
 import com.lanxin.android.builtin.systemtools.domain.DeviceToolBridge
+import com.lanxin.android.builtin.systemtools.domain.DeviceToolIds
 import com.lanxin.android.builtin.systemtools.domain.DeviceToolOutcome
 import com.lanxin.android.builtin.systemtools.domain.IntentLaunchResult
 import com.lanxin.android.builtin.systemtools.domain.IntentLaunchSpec
@@ -97,7 +98,7 @@ class VoiceInputPipelineTest {
             deviceToolBridge = bridgeWithTools()
         )
         val r = pipe.process("打开闹钟列表")
-        assertEquals("com.lanxin.builtin.alarm.show", r.toolName)
+        assertEquals(DeviceToolIds.ALARM_SHOW, r.toolName)
         assertTrue(r.toolOutcome is DeviceToolOutcome.Ok)
         assertTrue(r.toolDurMs >= 0)
         assertNull(r.toolError)
