@@ -422,10 +422,7 @@ object LocalReplySanitizer {
         val s = collapseWhitespace(text)
         if (s.isEmpty() || s.length < 2) return s
         // 多行：只取第一行非空
-        val firstLine = s.replace("
-", "
-").split('
-')
+        val firstLine = s.replace("\r\n", "\n").split('\n')
             .map { it.trim() }
             .firstOrNull { it.isNotEmpty() }
             ?: return s
