@@ -1468,6 +1468,16 @@ class CompanionViewModel @Inject constructor(
             val ttsSoftFail = result.error?.let {
                 it.startsWith("tts_failed") || it.startsWith("tts_skipped")
             } == true && reply.isNotBlank()
+            // 提取 TTS 具体错误原因给用户看，而不是笼统的"语音未就绪"
+            val ttsDetail = result.error?.let { err ->
+                if (err.startsWith("tts_skipped:not_ready:")) {
+                    err.removePrefix("tts_skipped:not_ready:")
+                } else if (err.startsWith("tts_failed:")) {
+                    err.removePrefix("tts_failed:")
+                } else {
+                    null
+                }
+            }
             _uiState.update {
                 it.copy(
                     busy = false,
@@ -1475,6 +1485,7 @@ class CompanionViewModel @Inject constructor(
                     voiceChatEnabled = voiceChatSession.uiState.value.enabled,
                     statusLine = when {
                         result.error != null && !ttsSoftFail -> "出错：${result.error}"
+                        ttsSoftFail && ttsDetail != null -> "已回复（语音跳过：$ttsDetail）"
                         ttsSoftFail -> "已回复（语音未就绪，仅文字）"
                         reply.isBlank() -> "没有听清/无回复"
                         else -> "已回复"
@@ -1553,6 +1564,16 @@ class CompanionViewModel @Inject constructor(
                 val ttsSoftFail = result.error?.let {
                     it.startsWith("tts_failed") || it.startsWith("tts_skipped")
                 } == true && reply.isNotBlank()
+                // 提取 TTS 具体错误原因给用户看
+                val ttsDetail = result.error?.let { err ->
+                    if (err.startsWith("tts_skipped:not_ready:")) {
+                        err.removePrefix("tts_skipped:not_ready:")
+                    } else if (err.startsWith("tts_failed:")) {
+                        err.removePrefix("tts_failed:")
+                    } else {
+                        null
+                    }
+                }
                 _uiState.update {
                     it.copy(
                         busy = false,
@@ -1560,6 +1581,7 @@ class CompanionViewModel @Inject constructor(
                         voiceChatEnabled = voiceChatSession.uiState.value.enabled || voiceEnabled,
                         statusLine = when {
                             result.error != null && !ttsSoftFail -> "出错：${result.error}"
+                            ttsSoftFail && ttsDetail != null -> "已回复（语音跳过：$ttsDetail）"
                             ttsSoftFail -> "已回复（语音未就绪，仅文字）"
                             !voiceEnabled -> "已回复（仅文字）"
                             else -> "已回复"
