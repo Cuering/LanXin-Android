@@ -149,18 +149,29 @@ class VoiceOutputPipeline @Inject constructor(
 
     /**
      * 确保 TTS 就绪，返回 (ready, errorOrNull)。
+     *
+     * 无模型路径时仍尝试 load：stub 不需要真实文件；真引擎失败后回 lastError / no_tts_model。
      */
     private suspend fun ensureTtsReady(): Pair<Boolean, String?> {
         if (ttsEngine.isReady) return Pair(true, null)
         val config = ttsSettings.getConfig()
-        if (config.modelDir.isBlank() && config.modelPath.isBlank()) {
-            return Pair(false, "no_tts_model")
-        }
         val toLoad = if (config.enabled) config else config.copy(enabled = true)
         return runCatching {
             val loaded = ttsEngine.load(toLoad)
-            if (loaded && !config.enabled) ttsSettings.setEnabled(true)
-            Pair(loaded && ttsEngine.isReady, null)
+            if (loaded && !config.enabled) {
+                ttsSettings.setEnabled(true)
+            }
+            if (loaded && ttsEngine.isReady) {
+                Pair(true, null)
+            } else {
+                val err = ttsEngine.lastError
+                    ?: if (config.modelDir.isBlank() && config.modelPath.isBlank()) {
+                        "no_tts_model"
+                    } else {
+                        "tts_not_ready"
+                    }
+                Pair(false, err)
+            }
         }.getOrElse { e ->
             Pair(false, e.message)
         }
