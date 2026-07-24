@@ -35,7 +35,7 @@ object LocalReplySanitizer {
      * （[LocalInferenceConfig.showThinking] 关闭时注入）。
      */
     const val NO_THINK_OR_TAGS_INSTRUCTION: String =
-        "【输出约束】直接对用户说短句，不输出思考过程、" +
+        "【输出约束】直接对用户说短句，每次只回一句话，不输出思考过程、" +
             "分析报告、协议标签（[[…]]、<…>、<think>）或元话术。" +
             "同一句话只说一次，禁止复读、禁止把同一句连写多遍。"
 
@@ -128,7 +128,8 @@ object LocalReplySanitizer {
         "工具检查",
         "Markdown 报告",
         "协议标签（[[…]]",
-        "直接对用户说短句"
+        "直接对用户说短句",
+        "每次只回一句话"
     )
 
     /**
@@ -177,6 +178,7 @@ object LocalReplySanitizer {
         val withoutMeta = stripMetaAnalysis(withoutThink)
         val withoutTags = stripHiddenTags(withoutMeta)
         // 小模型常见 phrase loop：同一短句连刷到 maxTokens
+        // 陪伴「每次只回一句话」由 [limitToOneSentence] 在陪伴出口单独调用，不在此全局截断
         val display = collapseRepeatedPhrase(withoutTags)
         val speech = stripEmojiAndDecorations(display)
         return if (showThinking) {
@@ -408,6 +410,50 @@ object LocalReplySanitizer {
         result = collapseWhitespaceTokens(result)
 
         return collapseWhitespace(result)
+    }
+
+    /**
+     * 硬截「每次只回一句话」：取首个完整句（到 。！？… 或换行），去掉后续句子。
+     * 无句读时若过长（>48 字）则按逗号/顿号截半；再无则原样返回（短答不动）。
+     *
+     * 与 [collapseRepeatedPhrase] 配合：先折叠复读，再只留一句。
+     */
+    fun limitToOneSentence(text: String): String {
+        val s = collapseWhitespace(text)
+        if (s.isEmpty() || s.length < 2) return s
+        // 多行：只取第一行非空
+        val firstLine = s.replace("
+", "
+").split('
+')
+            .map { it.trim() }
+            .firstOrNull { it.isNotEmpty() }
+            ?: return s
+        // 找首个句末标点
+        val enders = charArrayOf('。', '！', '？', '…', '.', '!', '?')
+        var endIdx = -1
+        for (i in firstLine.indices) {
+            if (firstLine[i] in enders) {
+                // 省略号 …… 取连续
+                var j = i
+                while (j + 1 < firstLine.length && firstLine[j + 1] == '…') j++
+                endIdx = j
+                break
+            }
+        }
+        if (endIdx >= 0) {
+            return firstLine.substring(0, endIdx + 1).trim()
+        }
+        // 无句读但过长：按逗号截首半
+        if (firstLine.length > 48) {
+            val commaIdx = firstLine.indexOfAny(charArrayOf('，', ',', '、', '；', ';'))
+            if (commaIdx in 8 until firstLine.length) {
+                return firstLine.substring(0, commaIdx).trim()
+            }
+            // 硬截 48 字
+            return firstLine.take(48).trim()
+        }
+        return firstLine
     }
 
     /**

@@ -238,8 +238,30 @@ class LocalReplySanitizerTest {
     }
 
     @Test
+    fun `limitToOneSentence keeps only first sentence`() {
+        val raw = "你好呀～我是兰心。今天想聊点什么？或者出去走走？"
+        assertEquals("你好呀～我是兰心。", LocalReplySanitizer.limitToOneSentence(raw))
+    }
+
+    @Test
+    fun `limitToOneSentence keeps short single sentence without period`() {
+        val raw = "哥哥你好呀"
+        assertEquals(raw, LocalReplySanitizer.limitToOneSentence(raw))
+    }
+
+    @Test
+    fun `forDisplay does not force one sentence globally`() {
+        // 全局清洗不截句；陪伴路径才调 limitToOneSentence
+        val raw = "嗯，我在呢。你想说什么都可以。"
+        val d = LocalReplySanitizer.forDisplay(raw, showThinking = false)
+        assertTrue(d.contains("嗯，我在呢。"))
+        assertTrue(d.contains("你想说什么都可以。"))
+    }
+
+    @Test
     fun `appendOutputConstraint forbids phrase loop`() {
         val off = LocalReplySanitizer.appendOutputConstraint(null, showThinking = false)
         assertTrue(off!!.contains("禁止复读") || off.contains("只说一次"))
+        assertTrue(off.contains("每次只回一句话"))
     }
 }

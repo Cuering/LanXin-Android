@@ -368,16 +368,30 @@ class VoiceChatSession @Inject constructor(
 
     /**
      * 流式 ASR 可用时轮询 [SherpaOnnxBridge.isEndpoint]，检测到端点后自动收口发送。
-     * 非流式模式不做自动端点（整段录音，用户再点麦结束）。
+     * 同时施加 [MAX_LISTEN_MS] 最长听麦超时：超时自动收口，避免一直「正在听」卡住。
+     * 非流式模式也开超时（整段录音超时后自动转写）。
      */
     private fun startEndpointPollingLocked(onAutoSend: suspend (String) -> Unit) {
         cancelEndpointPolling()
-        if (!streamingActive) return
+        val listenStartedAt = System.currentTimeMillis()
         endpointPollJob = sessionScope.launch {
             // 给用户一点开口时间，避免刚开麦就误触发
             delay(800)
             while (isActive) {
                 delay(200)
+                // 最长听麦超时：有/无流式都生效
+                val timedOut = System.currentTimeMillis() - listenStartedAt >= MAX_LISTEN_MS
+                if (timedOut) {
+                    mutex.withLock {
+                        if (_uiState.value.phase != VoiceChatPhase.LISTENING) return@withLock
+                        _uiState.update {
+                            it.copy(snackbarMessage = "听太久了，先帮你收口识别～")
+                        }
+                        stopListenAndSendLocked(onAutoSend)
+                    }
+                    return@launch
+                }
+                if (!streamingActive) continue
                 val hit = withContext(Dispatchers.Default) {
                     try {
                         streamingActive && nativeBridge.isEndpoint()
@@ -541,5 +555,8 @@ class VoiceChatSession @Inject constructor(
 
         /** 峰值低于此阈值视为「麦克风没采到声」。 */
         const val SILENCE_PEAK_THRESHOLD = 48
+
+        /** 单轮最长听麦时长；超时自动收口转写，避免永远停在「正在听」。 */
+        const val MAX_LISTEN_MS = 30_000L
     }
 }
