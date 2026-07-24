@@ -1404,16 +1404,34 @@ class CompanionViewModel @Inject constructor(
     }
 
     private fun syncVoiceEnabledFromSession() {
-        val enabled = voiceChatSession.uiState.value.enabled
+        val st = voiceChatSession.uiState.value
+        val enabled = st.enabled
+        // 语音忙阶段：进度交给 companionVoiceBadge；statusLine 同步阶段，不覆盖「思考/已回复/出错」
+        val phaseLine = when (st.phase) {
+            VoiceChatPhase.LISTENING ->
+                if (st.partialText.isNotBlank()) "听：${st.partialText}" else "正在听…"
+            VoiceChatPhase.TRANSCRIBING -> "识别中…"
+            VoiceChatPhase.WAITING_REPLY -> "思考中…"
+            VoiceChatPhase.SPEAKING -> "正在说…"
+            VoiceChatPhase.IDLE -> null
+        }
         _uiState.update {
+            val preserveProgress = it.busy ||
+                it.statusLine.startsWith("思考") ||
+                it.statusLine.startsWith("已回复") ||
+                it.statusLine.startsWith("出错") ||
+                it.statusLine.startsWith("识别：") ||
+                it.statusLine.startsWith("开麦失败") ||
+                it.statusLine.startsWith("发送失败")
             it.copy(
                 voiceChatEnabled = enabled,
                 statusLine = when {
-                    voiceChatSession.uiState.value.isListening -> "正在听…"
+                    phaseLine != null && !preserveProgress -> phaseLine
+                    preserveProgress -> it.statusLine
                     enabled -> "语音聊天已开"
-                    it.statusLine.startsWith("开麦失败") -> it.statusLine
-                    it.statusLine.contains("语音") || it.statusLine == "内置 Live2D · 可直接打字" ->
-                        if (enabled) "语音聊天已开" else "语音聊天已关（仅文字）"
+                    it.statusLine.contains("语音") ||
+                        it.statusLine == "内置 Live2D · 可直接打字" ->
+                        "语音聊天已关（仅文字）"
                     else -> it.statusLine
                 }
             )
@@ -1431,12 +1449,17 @@ class CompanionViewModel @Inject constructor(
         if (trimmed.isEmpty()) return
         voiceChatSession.markWaitingReply()
         viewModelScope.launch {
+            // 进度分两步：先闪「识别到…」，再「思考中…」，避免一直卡在识别文案
             _uiState.update {
                 it.copy(
                     busy = true,
                     statusLine = "识别：$trimmed",
                     voiceChatEnabled = true
                 )
+            }
+            kotlinx.coroutines.delay(280)
+            _uiState.update {
+                if (it.busy) it.copy(statusLine = "思考中…") else it
             }
             val result = runCatching {
                 if (!petSettings.getConfig().enabled) {
