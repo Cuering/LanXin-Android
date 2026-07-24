@@ -50,8 +50,30 @@ class SherpaTtsBridgeTest {
         File(dir, "tokens.txt").writeText("a\n")
         File(dir, "model-steps-3.onnx").writeBytes(ByteArray(100))
         File(dir, "vocos-22khz-univ.onnx").writeBytes(ByteArray(100))
+        File(dir, "lexicon.txt").writeText("a 1\n")
+        File(dir, "dict").mkdirs()
+        File(File(dir, "dict"), "jieba.dict.utf8").writeText("x")
         assertFalse(bridge.loadModel(dir.absolutePath))
         assertTrue(bridge.lastError() != null)
+    }
+
+    @Test
+    fun `loadModel rejects matcha without vocoder and does not crash`() {
+        // 缺 vocoder 时旧逻辑会把 matcha acoustic 误识别成 VITS → native abort
+        val dir = tmp.newFolder("matcha-icefall-zh-baker")
+        File(dir, "tokens.txt").writeText("a\n")
+        File(dir, "lexicon.txt").writeText("a 1\n")
+        File(dir, "model-steps-3.onnx").writeBytes(ByteArray(100))
+        File(dir, "dict").mkdirs()
+        File(File(dir, "dict"), "jieba.dict.utf8").writeText("x")
+        assertFalse(bridge.loadModel(dir.absolutePath))
+        val err = bridge.lastError()
+        assertTrue("lastError should be non-null after failed loadModel, got null", err != null)
+        // 任何非空 error 都算通过——关键是不崩、不 abort。
+        // JVM 无 so → native_unavailable；
+        // 有 so + 缺 vocoder → unsupported_tts_layout；
+        // 有 so + OfflineTts() 构造抛了 → load_failed:...
+        System.err.println("[DEBUG] loadModel rejected matcha (no vocoder), lastError=$err")
     }
 
     @Test

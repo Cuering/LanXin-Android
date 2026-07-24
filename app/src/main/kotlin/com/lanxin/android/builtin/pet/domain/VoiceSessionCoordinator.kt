@@ -214,6 +214,7 @@ class VoiceSessionCoordinator @Inject constructor(
 
         // TTS：未就绪时用 DataStore 配置 auto-load（含 modelDir）；绝不把标签念出来
         if (!ttsEngine.isReady) {
+            log?.i("tts not ready, attempting auto-load...")
             runCatching {
                 val stored = ttsSettings.getConfig()
                 val toLoad = if (stored.enabled) {
@@ -222,14 +223,49 @@ class VoiceSessionCoordinator @Inject constructor(
                     // 会话需要发音时临时 enable；路径仍读 prefs / 下载结果
                     stored.copy(enabled = true)
                 }
-                ttsEngine.load(toLoad)
-                if (!stored.enabled) {
+                log?.i("tts auto-load config: enabled=${toLoad.enabled} modelDir=${toLoad.modelDir} voiceId=${toLoad.voiceId}")
+                val loaded = ttsEngine.load(toLoad)
+                log?.i("tts auto-load result: $loaded, isReady=${ttsEngine.isReady}, lastError=${ttsEngine.lastError}")
+                if (loaded && !stored.enabled) {
                     ttsSettings.setEnabled(true)
                 }
             }.onFailure { e ->
-                log?.w("tts auto-load failed: ${e.message}")
+                log?.w("tts auto-load exception: ${e.javaClass.simpleName}: ${e.message}")
             }
         }
+        // 防闪退核心：如果 auto-load 后仍 not ready，绝对不调 synthesize，文字仍返回
+        if (!ttsEngine.isReady) {
+            log?.w("tts still not ready after auto-load (lastError=${ttsEngine.lastError}); skip synthesize, text-only reply")
+            snap = VoiceSessionStateMachine.reset(snap).copy(
+                replyText = displayReply,
+                subtitle = displayReply,
+                asrText = text
+            )
+            _snapshot.value = snap
+            val err = "tts_skipped:not_ready:${ttsEngine.lastError ?: "unknown"}"
+            persistRound(
+                userText = text,
+                assistantText = displayReply,
+                source = input.source,
+                error = err,
+                durationMs = System.currentTimeMillis() - started,
+                toolName = toolTurn.plan?.toolName
+            )
+            // TTS 未就绪，直接返回文字结果
+            return@withLock VoiceSessionResult(
+                asrText = text,
+                replyText = displayReply,
+                subtitle = displayReply,
+                phase = snap.phase,
+                isStub = input.isStub,
+                error = err,
+                durationMs = System.currentTimeMillis() - started,
+                toolName = toolTurn.plan?.toolName,
+                toolOutcome = toolTurn.outcome
+            )
+        }
+        // TTS ready，继续正常合成
+        log?.i("tts is ready, proceeding with synthesize")
         // TTS 走 forSpeech 而非 forDisplay：剥离 emoji / 颜文字 / 装饰，不念标签
         val speechText = LocalReplySanitizer.forSpeech(displayReply, showThinking = false)
         val tts = runCatching {

@@ -150,7 +150,10 @@ import com.lanxin.android.builtin.pet.domain.VisionModelCapability
 import com.lanxin.android.builtin.pet.domain.VoiceSessionCoordinator
 import com.lanxin.android.builtin.pet.domain.VoiceSessionInput
 import com.lanxin.android.builtin.pet.domain.VoiceSessionPhase
+import com.lanxin.android.builtin.pet.domain.VoiceSessionResult
 import com.lanxin.android.builtin.platform.domain.SceneSensingSettings
+import com.lanxin.android.builtin.voice.domain.VoiceChatPhase
+import com.lanxin.android.builtin.voice.domain.VoiceChatSession
 import com.lanxin.android.util.PathImportHelper
 
 import java.io.File
@@ -168,7 +171,7 @@ import kotlinx.coroutines.withContext
 /**
  * 妹居式 App 内全屏陪伴页：Live2D 铺满 + 顶/底浮层（无白框小窗）。
  *
- * 不依赖悬浮权限 / ASR / TTS 下载；发送走 [VoiceSessionCoordinator] + stub 回复。
+ * 语音：麦键接 [VoiceChatSession] 真听→ASR→本地脑/会话→TTS；失败必提示，不静默闪退。
  * 设置入口仍进 [DesktopPetScreen]。
  */
 @Composable
@@ -178,6 +181,7 @@ fun CompanionScreen(
     viewModel: CompanionViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val voiceUi by viewModel.voiceChatUiState.collectAsStateWithLifecycle()
     val keyboard = LocalSoftwareKeyboardController.current
     val context = LocalContext.current
     var draft by remember { mutableStateOf("") }
@@ -207,6 +211,12 @@ fun CompanionScreen(
         viewModel.onCameraPermissionResult(granted)
     }
 
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        viewModel.onMicPermissionResult(granted = granted, permanentlyDenied = !granted)
+    }
+
     LaunchedEffect(Unit) {
         viewModel.ensureReady()
         val granted = ContextCompat.checkSelfPermission(
@@ -214,6 +224,20 @@ fun CompanionScreen(
             Manifest.permission.CAMERA
         ) == PackageManager.PERMISSION_GRANTED
         viewModel.onCameraPermissionResult(granted)
+    }
+
+    LaunchedEffect(voiceUi.needRequestPermission) {
+        if (voiceUi.needRequestPermission) {
+            viewModel.consumeMicPermissionRequest()
+            micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    LaunchedEffect(voiceUi.snackbarMessage) {
+        voiceUi.snackbarMessage?.let { msg ->
+            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
+            viewModel.clearVoiceSnackbar()
+        }
     }
 
     DisposableEffect(Unit) {
@@ -340,8 +364,13 @@ fun CompanionScreen(
             }
         }
 
-        // 状态角标：轻量浮层（Cubism·闲置 / 看世界 / 提示）
-        if (state.statusLine.isNotBlank() || state.visionLooking || !state.visionHint.isNullOrBlank()) {
+        // 状态角标：轻量浮层（语音阶段 / Cubism·闲置 / 看世界 / 提示）
+        val voiceBadge = companionVoiceBadge(voiceUi.phase, voiceUi.partialText, voiceUi.enabled)
+        if (state.statusLine.isNotBlank() ||
+            state.visionLooking ||
+            !state.visionHint.isNullOrBlank() ||
+            voiceBadge != null
+        ) {
             Surface(
                 modifier = Modifier
                     .align(Alignment.TopStart)
@@ -353,6 +382,7 @@ fun CompanionScreen(
                 tonalElevation = 0.dp
             ) {
                 val badge = when {
+                    voiceBadge != null -> voiceBadge
                     !state.visionHint.isNullOrBlank() && !state.visionLooking ->
                         state.visionHint!!
                     state.visionLooking ->
@@ -458,24 +488,42 @@ fun CompanionScreen(
                         }
                     )
                 )
-                // 语音聊天开关：点一次开，再点关；关=仅文字、不占麦
+                // 语音聊天：点麦 听→识别→自动说；再点听中收口/关；关=仅文字
                 IconButton(
                     onClick = { viewModel.toggleVoiceChat() },
-                    enabled = !state.busy
+                    enabled = !state.busy || voiceUi.enabled || voiceUi.isListening
                 ) {
-                    Icon(
-                        imageVector = if (state.voiceChatEnabled) Icons.Filled.Mic else Icons.Filled.MicOff,
-                        contentDescription = if (state.voiceChatEnabled) {
-                            "关闭语音聊天"
-                        } else {
-                            "开启语音聊天"
-                        },
-                        tint = if (state.voiceChatEnabled) {
-                            Color(0xFFE85D8E)
-                        } else {
-                            Color(0xFF5A2038).copy(alpha = 0.55f)
+                    when {
+                        voiceUi.phase == VoiceChatPhase.TRANSCRIBING ||
+                            voiceUi.phase == VoiceChatPhase.WAITING_REPLY -> {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(22.dp),
+                                strokeWidth = 2.dp,
+                                color = Color(0xFFE85D8E)
+                            )
                         }
-                    )
+                        else -> {
+                            val listening = voiceUi.isListening
+                            val on = voiceUi.enabled || state.voiceChatEnabled
+                            Icon(
+                                imageVector = when {
+                                    listening -> Icons.Filled.Mic
+                                    on -> Icons.Filled.Mic
+                                    else -> Icons.Filled.MicOff
+                                },
+                                contentDescription = when {
+                                    listening -> "正在听，点一下结束"
+                                    on -> "关闭语音聊天"
+                                    else -> "开启语音聊天"
+                                },
+                                tint = when {
+                                    listening -> Color(0xFFD32F2F)
+                                    on -> Color(0xFFE85D8E)
+                                    else -> Color(0xFF5A2038).copy(alpha = 0.55f)
+                                }
+                            )
+                        }
+                    }
                 }
                 IconButton(
                     onClick = {
@@ -1000,6 +1048,20 @@ private fun CompanionLive2dWebView(
 
 private const val ASSET_URL = "file:///android_asset/pet/desktop-pet.html"
 
+/** 语音阶段角标文案；无语音活动时返回 null。 */
+internal fun companionVoiceBadge(
+    phase: VoiceChatPhase,
+    partial: String,
+    enabled: Boolean
+): String? = when (phase) {
+    VoiceChatPhase.LISTENING ->
+        if (partial.isNotBlank()) "听：$partial" else "正在听…"
+    VoiceChatPhase.TRANSCRIBING -> "识别中…"
+    VoiceChatPhase.WAITING_REPLY -> "想回复…"
+    VoiceChatPhase.SPEAKING -> "正在说…"
+    VoiceChatPhase.IDLE -> if (enabled) "语音已开" else null
+}
+
 data class CompanionUiState(
     val busy: Boolean = false,
     val statusLine: String = "内置 Live2D · 可直接打字",
@@ -1034,6 +1096,7 @@ data class CompanionUiState(
 @HiltViewModel
 class CompanionViewModel @Inject constructor(
     private val sessionCoordinator: VoiceSessionCoordinator,
+    private val voiceChatSession: VoiceChatSession,
     private val petSettings: PetSettings,
     private val sceneSensingSettings: SceneSensingSettings,
     private val visionExplainClient: VisionExplainClient,
@@ -1045,6 +1108,9 @@ class CompanionViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(CompanionUiState())
     val uiState: StateFlow<CompanionUiState> = _uiState.asStateFlow()
+
+    /** 真语音会话态（听/识别/说）；与 [uiState.voiceChatEnabled] 同步。 */
+    val voiceChatUiState = voiceChatSession.uiState
 
     private val bridge = DesktopPetBridge { /* outbound only helper */ }
 
@@ -1120,12 +1186,16 @@ class CompanionViewModel @Inject constructor(
     fun onLeavePage() {
         musicPlayer?.release()
         musicPlayer = null
-        // 关开关即停预览+释放相机
+        // 关开关即停预览+释放相机；语音会话也收口
+        viewModelScope.launch {
+            runCatching { voiceChatSession.cancel() }
+        }
         _uiState.update {
             it.copy(
                 visionLooking = false,
                 visionPreviewReady = false,
-                showVisionConsentDialog = false
+                showVisionConsentDialog = false,
+                voiceChatEnabled = false
             )
         }
     }
@@ -1288,16 +1358,137 @@ class CompanionViewModel @Inject constructor(
     }
 
     /**
-     * 语音聊天模式开关：开=听→想→说(TTS)，关=仅文字。
-     * 会话态，不持久化。关时状态仅影响后续轮次（不占麦）。
+     * 语音聊天：点麦 → [VoiceChatSession] 真听/识别/自动送出；再点听中收口或关。
+     * 失败必 snackbar，绝不因 native/权限异常闪退。
      */
     fun toggleVoiceChat() {
-        _uiState.update { st ->
-            val next = !st.voiceChatEnabled
-            st.copy(
-                voiceChatEnabled = next,
-                statusLine = if (next) "语音聊天已开" else "语音聊天已关（仅文字）"
+        viewModelScope.launch {
+            try {
+                voiceChatSession.onMicClick(continuousListen = true) { text ->
+                    handleVoiceRecognized(text)
+                }
+            } catch (t: Throwable) {
+                android.util.Log.e("CompanionViewModel", "toggleVoiceChat failed", t)
+                _uiState.update {
+                    it.copy(statusLine = "开麦失败：${t.message ?: t.javaClass.simpleName}")
+                }
+            } finally {
+                syncVoiceEnabledFromSession()
+            }
+        }
+    }
+
+    fun onMicPermissionResult(granted: Boolean, permanentlyDenied: Boolean = false) {
+        viewModelScope.launch {
+            try {
+                voiceChatSession.onPermissionResult(
+                    granted = granted,
+                    permanentlyDenied = permanentlyDenied
+                ) { text ->
+                    handleVoiceRecognized(text)
+                }
+            } catch (t: Throwable) {
+                android.util.Log.e("CompanionViewModel", "onMicPermissionResult failed", t)
+            } finally {
+                syncVoiceEnabledFromSession()
+            }
+        }
+    }
+
+    fun clearVoiceSnackbar() {
+        voiceChatSession.clearSnackbar()
+    }
+
+    fun consumeMicPermissionRequest() {
+        voiceChatSession.consumePermissionRequest()
+    }
+
+    private fun syncVoiceEnabledFromSession() {
+        val enabled = voiceChatSession.uiState.value.enabled
+        _uiState.update {
+            it.copy(
+                voiceChatEnabled = enabled,
+                statusLine = when {
+                    voiceChatSession.uiState.value.isListening -> "正在听…"
+                    enabled -> "语音聊天已开"
+                    it.statusLine.startsWith("开麦失败") -> it.statusLine
+                    it.statusLine.contains("语音") || it.statusLine == "内置 Live2D · 可直接打字" ->
+                        if (enabled) "语音聊天已开" else "语音聊天已关（仅文字）"
+                    else -> it.statusLine
+                }
             )
+        }
+    }
+
+    /**
+     * ASR 最终文本 → 本地脑/会话回复（含 TTS 若语音开着）。
+     *
+     * 注意：由 [VoiceChatSession] 在 mutex 内回调，必须立刻返回；
+     * 真正思考/TTS 投到 viewModelScope，避免死锁与卡麦。
+     */
+    private fun handleVoiceRecognized(text: String) {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return
+        voiceChatSession.markWaitingReply()
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    busy = true,
+                    statusLine = "识别：$trimmed",
+                    voiceChatEnabled = true
+                )
+            }
+            val result = runCatching {
+                if (!petSettings.getConfig().enabled) {
+                    petSettings.setEnabled(true)
+                }
+                sessionCoordinator.runRound(
+                    input = VoiceSessionInput(
+                        asrText = trimmed,
+                        isStub = false,
+                        source = "companion_voice"
+                    ),
+                    // 真语音轮：需要 TTS；失败由 coordinator 软失败
+                    skipTts = false
+                )
+            }.getOrElse { e ->
+                VoiceSessionResult(
+                    asrText = trimmed,
+                    replyText = "",
+                    subtitle = "",
+                    phase = VoiceSessionPhase.ERROR,
+                    isStub = false,
+                    error = e.message ?: "voice_send_failed"
+                )
+            }
+            val reply = LocalReplySanitizer.forDisplay(
+                result.subtitle.ifBlank { result.replyText },
+                showThinking = false
+            )
+            val ttsSoftFail = result.error?.let {
+                it.startsWith("tts_failed") || it.startsWith("tts_skipped")
+            } == true && reply.isNotBlank()
+            _uiState.update {
+                it.copy(
+                    busy = false,
+                    lastReply = reply.ifBlank { it.lastReply },
+                    voiceChatEnabled = voiceChatSession.uiState.value.enabled,
+                    statusLine = when {
+                        result.error != null && !ttsSoftFail -> "出错：${result.error}"
+                        ttsSoftFail -> "已回复（语音未就绪，仅文字）"
+                        reply.isBlank() -> "没有听清/无回复"
+                        else -> "已回复"
+                    }
+                )
+            }
+            bumpWeb()
+            // coordinator 已负责 TTS play；这里只把 session 从 WAITING 收口到 IDLE，
+            // 空文本避免 session 再 synthesize 一遍。
+            runCatching {
+                if (voiceChatSession.uiState.value.enabled) {
+                    voiceChatSession.onReplyReady("")
+                }
+            }
         }
     }
 
@@ -1331,7 +1522,7 @@ class CompanionViewModel @Inject constructor(
                     bumpWeb()
                     return@runCatching
                 }
-                val voiceEnabled = st.voiceChatEnabled
+                val voiceEnabled = voiceChatSession.uiState.value.enabled || st.voiceChatEnabled
                 val result = runCatching {
                     sessionCoordinator.runRound(
                         input = VoiceSessionInput(
@@ -1344,7 +1535,7 @@ class CompanionViewModel @Inject constructor(
                     )
                 }.getOrElse { e ->
                     // runRound 本身抛异常 → 不崩溃，构造一个 error result
-                    com.lanxin.android.builtin.pet.domain.VoiceSessionResult(
+                    VoiceSessionResult(
                         asrText = trimmed,
                         replyText = "",
                         subtitle = "",
@@ -1359,14 +1550,17 @@ class CompanionViewModel @Inject constructor(
                     showThinking = false
                 )
                 // TTS 失败仍可能有文字：优先展示 reply，仅在 status 提示
-                val ttsSoftFail = result.error?.startsWith("tts_failed") == true && reply.isNotBlank()
+                val ttsSoftFail = result.error?.let {
+                    it.startsWith("tts_failed") || it.startsWith("tts_skipped")
+                } == true && reply.isNotBlank()
                 _uiState.update {
                     it.copy(
                         busy = false,
                         lastReply = reply,
+                        voiceChatEnabled = voiceChatSession.uiState.value.enabled || voiceEnabled,
                         statusLine = when {
                             result.error != null && !ttsSoftFail -> "出错：${result.error}"
-                            ttsSoftFail -> "已回复（语音播放失败）"
+                            ttsSoftFail -> "已回复（语音未就绪，仅文字）"
                             !voiceEnabled -> "已回复（仅文字）"
                             else -> "已回复"
                         }
@@ -1410,7 +1604,7 @@ class CompanionViewModel @Inject constructor(
                         isStub = true,
                         source = "companion_text_no_vision"
                     ),
-                    skipTts = !_uiState.value.voiceChatEnabled
+                    skipTts = !(voiceChatSession.uiState.value.enabled || _uiState.value.voiceChatEnabled)
                 )
             }.getOrNull()
             val chat = stub?.let {
