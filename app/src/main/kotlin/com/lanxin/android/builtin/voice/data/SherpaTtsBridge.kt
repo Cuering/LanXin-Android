@@ -108,8 +108,19 @@ class SherpaTtsBridge @Inject constructor() {
             val layout = detectLayout(root)
             if (layout == null) {
                 lastLoadError = "unsupported_tts_layout:$modelDir"
+                Log.e(TAG, "load: detectLayout returned null for $modelDir; listing: ${root.listFiles()?.map { it.name }}")
                 return false
             }
+            // ── 关键：调 OfflineTts() 前严格校验所有路径，防止 native abort() ──
+            val missing = validateLayoutFiles(layout)
+            if (missing.isNotEmpty()) {
+                lastLoadError = "missing_files:${missing.joinToString(";")}"
+                Log.e(TAG, "load ABORTED before native, missing files: $missing")
+                Log.e(TAG, "load: layout=$layout")
+                Log.e(TAG, "load: dir listing=${root.listFiles()?.map { "${it.name}(${it.length()}B)" }}")
+                return false
+            }
+            Log.i(TAG, "load: layout=$layout, all files verified, calling OfflineTts()...")
             val config = buildConfig(layout)
             val engine = OfflineTts(assetManager = null, config = config)
             tts = engine
@@ -127,9 +138,61 @@ class SherpaTtsBridge @Inject constructor() {
         } catch (t: Throwable) {
             unloadInternal()
             lastLoadError = "load_failed:${t.javaClass.simpleName}:${t.message}"
-            Log.e(TAG, "loadModel failed", t)
+            Log.e(TAG, "loadModel failed (native OfflineTts ctor threw)", t)
             false
         }
+    }
+
+    /**
+     * 在调 [OfflineTts] 构造前校验所有路径指向的文件真实存在且非空。
+     * 任一必需文件缺失或空 → 返回缺失列表，调用方不得进 native。
+     */
+    private fun validateLayoutFiles(layout: TtsLayout): List<String> {
+        val missing = mutableListOf<String>()
+
+        fun checkFile(path: String, label: String, required: Boolean) {
+            if (!required && path.isBlank()) return
+            if (path.isBlank()) {
+                missing.add("$label:empty_path")
+                return
+            }
+            val f = File(path)
+            if (!f.isFile || f.length() == 0L) {
+                missing.add("$label:${if (!f.exists()) "not_found" else if (f.isDirectory) "is_dir" else "empty"}:$path")
+            }
+        }
+
+        fun checkDir(path: String, label: String, required: Boolean) {
+            if (!required && path.isBlank()) return
+            if (path.isBlank()) {
+                missing.add("$label:empty_path")
+                return
+            }
+            val f = File(path)
+            if (!f.isDirectory || f.listFiles()?.isNotEmpty() != true) {
+                missing.add("$label:${if (!f.exists()) "not_found" else "empty_dir"}:$path")
+            }
+        }
+
+        when (layout) {
+            is TtsLayout.Matcha -> {
+                // matcha-icefall-zh-baker：缺任一关键文件都会在 Offline_tts.cc 里 abort
+                checkFile(layout.acousticModel, "acousticModel", required = true)
+                checkFile(layout.vocoder, "vocoder", required = true)
+                checkFile(layout.tokens, "tokens", required = true)
+                checkFile(layout.lexicon, "lexicon", required = true)
+                checkDir(layout.dictDir, "dictDir", required = true)
+            }
+            is TtsLayout.Vits -> {
+                checkFile(layout.model, "model", required = true)
+                checkFile(layout.tokens, "tokens", required = true)
+                // lexicon / dataDir / dictDir 视具体 vits 变体，有则校验非空
+                checkFile(layout.lexicon, "lexicon", required = false)
+                checkDir(layout.dataDir, "dataDir", required = false)
+                checkDir(layout.dictDir, "dictDir", required = false)
+            }
+        }
+        return missing
     }
 
     /**
@@ -222,28 +285,54 @@ class SherpaTtsBridge @Inject constructor() {
             }
 
         val vocoder = findVocoder(root)
-        if (acoustic != null && vocoder != null && looksLikeMatcha(acoustic, root)) {
+        val matchaLike = acoustic != null && looksLikeMatcha(acoustic, root)
+        if (matchaLike) {
+            // Matcha 布局：缺 vocoder 时绝不能降级成 VITS（会把 acoustic 当 vits 模型 → native abort）
+            if (vocoder == null) {
+                Log.e(
+                    TAG,
+                    "detectLayout: matcha-like dir=${root.name} but vocoder missing. " +
+                        "Need vocos-22khz-univ.onnx under model dir or parent (LanXin/tts/). " +
+                        "listing=${root.listFiles()?.map { it.name }}"
+                )
+                return null
+            }
+            if (lexicon == null) {
+                Log.e(TAG, "detectLayout: matcha requires lexicon.txt in ${root.absolutePath}")
+                return null
+            }
+            if (dictDir == null) {
+                Log.e(TAG, "detectLayout: matcha-zh requires dict/ (jieba) in ${root.absolutePath}")
+                return null
+            }
             return TtsLayout.Matcha(
-                acousticModel = acoustic.absolutePath,
+                acousticModel = acoustic!!.absolutePath,
                 vocoder = vocoder.absolutePath,
                 tokens = tokens.absolutePath,
-                lexicon = lexicon?.absolutePath.orEmpty(),
+                lexicon = lexicon.absolutePath,
                 ruleFsts = ruleFsts,
-                dictDir = dictDir?.absolutePath.orEmpty()
+                dictDir = dictDir.absolutePath
             )
         }
 
-        // VITS: single model.onnx / *vits* / *melo*
+        // VITS: single model.onnx / *vits* / *melo*（排除 matcha acoustic 误入）
         val vitsModel = findNamedOnnx(
             root,
-            preferredSubstrings = listOf("model", "vits", "melo")
+            preferredSubstrings = listOf("vits", "melo")
         ) ?: root.listFiles()
             ?.firstOrNull {
                 it.isFile &&
                     it.name.endsWith(".onnx", true) &&
                     !it.name.contains("vocos", true) &&
-                    !it.name.contains("hifigan", true)
+                    !it.name.contains("hifigan", true) &&
+                    !it.name.contains("vocoder", true) &&
+                    !it.name.contains("model-steps", true) &&
+                    !it.name.contains("matcha", true)
             }
+            ?: findNamedOnnx(root, preferredSubstrings = listOf("model"))
+                ?.takeUnless {
+                    it.name.contains("model-steps", true) || it.name.contains("matcha", true)
+                }
         if (vitsModel != null) {
             val dataDir = firstExistingDir(
                 File(root, "espeak-ng-data"),

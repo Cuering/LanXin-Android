@@ -50,8 +50,32 @@ class SherpaTtsBridgeTest {
         File(dir, "tokens.txt").writeText("a\n")
         File(dir, "model-steps-3.onnx").writeBytes(ByteArray(100))
         File(dir, "vocos-22khz-univ.onnx").writeBytes(ByteArray(100))
+        File(dir, "lexicon.txt").writeText("a 1\n")
+        File(dir, "dict").mkdirs()
+        File(File(dir, "dict"), "jieba.dict.utf8").writeText("x")
         assertFalse(bridge.loadModel(dir.absolutePath))
         assertTrue(bridge.lastError() != null)
+    }
+
+    @Test
+    fun `loadModel rejects matcha without vocoder and does not crash`() {
+        // 缺 vocoder 时旧逻辑会把 matcha acoustic 误识别成 VITS → native abort
+        val dir = tmp.newFolder("matcha-icefall-zh-baker")
+        File(dir, "tokens.txt").writeText("a\n")
+        File(dir, "lexicon.txt").writeText("a 1\n")
+        File(dir, "model-steps-3.onnx").writeBytes(ByteArray(100))
+        File(dir, "dict").mkdirs()
+        File(File(dir, "dict"), "jieba.dict.utf8").writeText("x")
+        assertFalse(bridge.loadModel(dir.absolutePath))
+        val err = bridge.lastError()
+        assertTrue("expected layout/native error, got $err", err != null)
+        // JVM 无 so → native_unavailable；有 so 时则为 unsupported_tts_layout
+        assertTrue(
+            err!!.contains("unsupported_tts_layout") ||
+                err.contains("native_unavailable") ||
+                err.contains("stub_path") ||
+                err.contains("missing_files")
+        )
     }
 
     @Test
