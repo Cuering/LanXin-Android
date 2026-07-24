@@ -19,6 +19,7 @@ package com.lanxin.android.builtin.pet
 import com.lanxin.android.builtin.pet.domain.SpeakResult
 import com.lanxin.android.builtin.pet.domain.VoiceOutputPipeline
 import com.lanxin.android.builtin.voice.data.PcmAudioPlayer
+import com.lanxin.android.builtin.voice.domain.SystemTtsSpeaker
 import com.lanxin.android.builtin.voice.data.StubTtsEngine
 import com.lanxin.android.builtin.voice.domain.TtsConfig
 import com.lanxin.android.builtin.voice.domain.TtsEngine
@@ -47,7 +48,7 @@ class VoiceOutputPipelineTest {
     fun `speak with pre-loaded stub returns success=true and isStub=true`() = runBlocking {
         val tts = StubTtsEngine()
         tts.load(TtsConfig(enabled = true))
-        val pipe = VoiceOutputPipeline(tts, FakeTtsSettings(), PcmAudioPlayer())
+        val pipe = VoiceOutputPipeline(tts, FakeTtsSettings(), PcmAudioPlayer(), FakeAndroidTts())
         val r = pipe.speak("你好，兰心")
         assertTrue(r.success)
         assertTrue(r.isStub)
@@ -62,7 +63,7 @@ class VoiceOutputPipelineTest {
     fun `speak does auto-load when engine is idle`() = runBlocking {
         val tts = StubTtsEngine()
         val pipe = VoiceOutputPipeline(
-            tts, FakeTtsSettings(TtsConfig(enabled = true)), PcmAudioPlayer()
+            tts, FakeTtsSettings(TtsConfig(enabled = true)), PcmAudioPlayer(), FakeAndroidTts()
         )
         val r = pipe.speak("测试文本")
         assertTrue(r.success)
@@ -76,7 +77,7 @@ class VoiceOutputPipelineTest {
     fun `speak with empty text returns empty_after_sanitize`() = runBlocking {
         val tts = StubTtsEngine()
         tts.load(TtsConfig(enabled = true))
-        val pipe = VoiceOutputPipeline(tts, FakeTtsSettings(), PcmAudioPlayer())
+        val pipe = VoiceOutputPipeline(tts, FakeTtsSettings(), PcmAudioPlayer(), FakeAndroidTts())
         val r = pipe.speak("")
         assertEquals(false, r.success)
         assertEquals("empty_after_sanitize", r.synthError)
@@ -86,7 +87,7 @@ class VoiceOutputPipelineTest {
     fun `speak with only tags returns empty_after_sanitize`() = runBlocking {
         val tts = StubTtsEngine()
         tts.load(TtsConfig(enabled = true))
-        val pipe = VoiceOutputPipeline(tts, FakeTtsSettings(), PcmAudioPlayer())
+        val pipe = VoiceOutputPipeline(tts, FakeTtsSettings(), PcmAudioPlayer(), FakeAndroidTts())
         val r = pipe.speak("[[mood=joy]]\n*笑*")
         assertEquals(false, r.success)
         assertEquals("empty_after_sanitize", r.synthError)
@@ -96,7 +97,7 @@ class VoiceOutputPipelineTest {
     fun `speak calls onPlayStarted and onPlayEnded`() = runBlocking {
         val tts = StubTtsEngine()
         tts.load(TtsConfig(enabled = true))
-        val pipe = VoiceOutputPipeline(tts, FakeTtsSettings(), PcmAudioPlayer())
+        val pipe = VoiceOutputPipeline(tts, FakeTtsSettings(), PcmAudioPlayer(), FakeAndroidTts())
         var started = false
         var ended = false
         pipe.speak("铃响", onPlayStarted = { started = true }, onPlayEnded = { ended = true })
@@ -109,7 +110,7 @@ class VoiceOutputPipelineTest {
     @Test
     fun `speak when tts load fails returns error`() = runBlocking {
         val tts = FailingTtsEngine()
-        val pipe = VoiceOutputPipeline(tts, FakeTtsSettings(TtsConfig(enabled = true)), PcmAudioPlayer())
+        val pipe = VoiceOutputPipeline(tts, FakeTtsSettings(TtsConfig(enabled = true)), PcmAudioPlayer(), FakeAndroidTts())
         val r = pipe.speak("你好")
         assertEquals(false, r.success)
         assertNotNull(r.ttsLoadError)
@@ -120,7 +121,7 @@ class VoiceOutputPipelineTest {
     fun `speak when synthesize fails returns synthError`() = runBlocking {
         val tts = FailingSynthTtsEngine()
         tts.load(TtsConfig(enabled = true))
-        val pipe = VoiceOutputPipeline(tts, FakeTtsSettings(), PcmAudioPlayer())
+        val pipe = VoiceOutputPipeline(tts, FakeTtsSettings(), PcmAudioPlayer(), FakeAndroidTts())
         val r = pipe.speak("你好")
         assertEquals(false, r.success)
         assertNotNull(r.synthError)
@@ -131,14 +132,17 @@ class VoiceOutputPipelineTest {
         val tts = PcmTtsEngine()
         tts.load(TtsConfig(enabled = true))
         // PcmAudioPlayer 在 JVM 上 play 会抛异常
-        val pipe = VoiceOutputPipeline(tts, FakeTtsSettings(), PcmAudioPlayer())
+        val pipe = VoiceOutputPipeline(tts, FakeTtsSettings(), PcmAudioPlayer(), FakeAndroidTts())
         val r = pipe.speak("你好")
         assertEquals(false, r.success)
         assertNotNull(r.playError)
         assertTrue(r.playDurMs >= 0)
     }
 
-    // ── Fake / 辅助实现 ──
+    private class FakeAndroidTts : SystemTtsSpeaker {
+        override val available: Boolean = true
+        override suspend fun speak(text: String): Boolean = false
+    }
 
     private class FakeTtsSettings(
         private var config: TtsConfig = TtsConfig(enabled = true)

@@ -17,8 +17,8 @@
 package com.lanxin.android.builtin.pet.domain
 
 import com.lanxin.android.builtin.localinference.domain.LocalReplySanitizer
-import com.lanxin.android.builtin.voice.data.AndroidTtsFallback
 import com.lanxin.android.builtin.voice.data.PcmAudioPlayer
+import com.lanxin.android.builtin.voice.domain.SystemTtsSpeaker
 import com.lanxin.android.builtin.voice.domain.TtsConfig
 import com.lanxin.android.builtin.voice.domain.TtsEngine
 import com.lanxin.android.builtin.voice.domain.TtsSettings
@@ -50,7 +50,7 @@ class VoiceOutputPipeline @Inject constructor(
     private val ttsEngine: TtsEngine,
     private val ttsSettings: TtsSettings,
     private val pcmPlayer: PcmAudioPlayer,
-    private val androidTts: AndroidTtsFallback,
+    private val androidTts: SystemTtsSpeaker,
     private val logManager: LogManager? = null
 ) {
     private val log = logManager?.getLogger(TAG)

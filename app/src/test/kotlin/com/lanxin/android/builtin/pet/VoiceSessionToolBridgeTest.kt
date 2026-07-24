@@ -64,6 +64,7 @@ import com.lanxin.android.builtin.systemtools.domain.UserFileIoResult
 import com.lanxin.android.builtin.systemtools.domain.UserFileProbe
 import com.lanxin.android.builtin.voice.data.PcmAudioPlayer
 import com.lanxin.android.builtin.voice.data.StubTtsEngine
+import com.lanxin.android.builtin.voice.domain.SystemTtsSpeaker
 import com.lanxin.android.builtin.voice.domain.TtsConfig
 import com.lanxin.android.builtin.voice.domain.TtsSettings
 import kotlinx.coroutines.runBlocking
@@ -181,6 +182,11 @@ class VoiceSessionToolBridgeTest {
         override fun probe(uriString: String): UserFileProbe? = null
     }
 
+    private class FakeAndroidTts : SystemTtsSpeaker {
+        override val available: Boolean = true
+        override suspend fun speak(text: String): Boolean = false
+    }
+
     private fun registry(): DeviceToolRegistry {
         val gateway = StubCalendarGateway()
         val notes = StubNotesStore()
@@ -223,7 +229,8 @@ class VoiceSessionToolBridgeTest {
             outputPipeline = VoiceOutputPipeline(
                 ttsEngine = tts,
                 ttsSettings = FakeTtsSettings(),
-                pcmPlayer = PcmAudioPlayer()
+                pcmPlayer = PcmAudioPlayer(),
+                androidTts = FakeAndroidTts()
             ),
             petSettings = FakePetSettings(PetConfig(enabled = true)),
             deviceToolBridge = bridge

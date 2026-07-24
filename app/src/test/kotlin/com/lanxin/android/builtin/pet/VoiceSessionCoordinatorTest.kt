@@ -48,6 +48,7 @@ import com.lanxin.android.builtin.systemtools.domain.UserFileIoResult
 import com.lanxin.android.builtin.systemtools.domain.UserFileProbe
 import com.lanxin.android.builtin.voice.data.PcmAudioPlayer
 import com.lanxin.android.builtin.voice.data.StubTtsEngine
+import com.lanxin.android.builtin.voice.domain.SystemTtsSpeaker
 import com.lanxin.android.builtin.voice.domain.TtsConfig
 import com.lanxin.android.builtin.voice.domain.TtsEngine
 import com.lanxin.android.builtin.voice.domain.TtsEngineState
@@ -240,6 +241,11 @@ class VoiceSessionCoordinatorTest {
         )
     }
 
+    private class FakeAndroidTts : SystemTtsSpeaker {
+        override val available: Boolean = true
+        override suspend fun speak(text: String): Boolean = false
+    }
+
     private fun coordinator(
         responder: PetChatResponder = StubPetChatResponder(),
         pet: PetConfig = PetConfig(enabled = true)
@@ -255,7 +261,8 @@ class VoiceSessionCoordinatorTest {
             outputPipeline = VoiceOutputPipeline(
                 ttsEngine = tts,
                 ttsSettings = FakeTtsSettings(),
-                pcmPlayer = testPlayer()
+                pcmPlayer = testPlayer(),
+                androidTts = FakeAndroidTts()
             ),
             petSettings = FakePetSettings(pet),
             deviceToolBridge = bridge
@@ -322,7 +329,8 @@ class VoiceSessionCoordinatorTest {
             outputPipeline = VoiceOutputPipeline(
                 ttsEngine = tts,
                 ttsSettings = FakeTtsSettings(),
-                pcmPlayer = testPlayer()
+                pcmPlayer = testPlayer(),
+                androidTts = FakeAndroidTts()
             ),
             petSettings = FakePetSettings(PetConfig(enabled = true)),
             deviceToolBridge = bridge

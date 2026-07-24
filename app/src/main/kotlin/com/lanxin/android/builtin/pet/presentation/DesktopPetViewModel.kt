@@ -46,7 +46,7 @@ import com.lanxin.android.builtin.pet.domain.PetSettings
 import com.lanxin.android.builtin.pet.domain.TextExpressionMotionMapper
 import com.lanxin.android.builtin.pet.domain.VoiceSessionCoordinator
 import com.lanxin.android.builtin.pet.domain.VoiceSessionPhase
-import com.lanxin.android.builtin.voice.data.AndroidTtsFallback
+import com.lanxin.android.builtin.voice.domain.SystemTtsSpeaker
 import com.lanxin.android.builtin.voice.domain.AsrSettings
 import com.lanxin.android.builtin.voice.domain.TtsEngine
 import com.lanxin.android.builtin.voice.domain.TtsSettings
@@ -148,7 +148,7 @@ class DesktopPetViewModel @Inject constructor(
     private val sessionCoordinator: VoiceSessionCoordinator,
     private val ttsSettings: TtsSettings,
     private val ttsEngine: TtsEngine,
-    private val androidTts: AndroidTtsFallback,
+    private val androidTts: SystemTtsSpeaker,
     private val asrSettings: AsrSettings,
     private val localInferenceSettings: LocalInferenceSettings,
     private val assetDownloader: DebugAssetDownloader,

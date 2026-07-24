@@ -196,7 +196,8 @@ def main():
             "pos_dict/prob_trans.utf8",
         ]
         for f in dict_files:
-            dest = os.path.join(tts_dir, f)
+            # verify_tts 期望路径为 model_dir/dict/...
+            dest = os.path.join(tts_dir, "dict", f)
             if not os.path.exists(dest):
                 os.makedirs(os.path.dirname(dest), exist_ok=True)
                 download(f"{dict_base}/{f}", dest)

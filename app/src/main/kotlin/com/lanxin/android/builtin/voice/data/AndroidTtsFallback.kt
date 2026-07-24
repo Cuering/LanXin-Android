@@ -21,6 +21,7 @@ import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
+import com.lanxin.android.builtin.voice.domain.SystemTtsSpeaker
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.Locale
 import java.util.UUID
@@ -46,13 +47,13 @@ import kotlinx.coroutines.withContext
 @Singleton
 class AndroidTtsFallback @Inject constructor(
     @ApplicationContext private val context: Context
-) {
+) : SystemTtsSpeaker {
     private var tts: TextToSpeech? = null
     private val lock = Any()
     private var initOk = false
 
     /** 引擎是否可用（初始化成功）。 */
-    val available: Boolean
+    override val available: Boolean
         get() = synchronized(lock) { initOk && tts != null }
 
     /** 尝试初始化（幂等）。 */
@@ -96,9 +97,12 @@ class AndroidTtsFallback @Inject constructor(
      *
      * @return true 正常播完；false 初始化失败 / 引擎不支持
      */
-    suspend fun speak(
+    override suspend fun speak(text: String): Boolean =
+        speakInternal(text, UUID.randomUUID().toString())
+
+    private suspend fun speakInternal(
         text: String,
-        utteranceId: String = UUID.randomUUID().toString()
+        utteranceId: String
     ): Boolean = withContext(Dispatchers.IO) {
         val engine = synchronized(lock) { tts }
         if (engine == null) {
