@@ -21,7 +21,24 @@ import json
 
 def download(url, dest):
     print(f"  ↓ {url}")
-    urllib.request.urlretrieve(url, dest)
+    import ssl
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    with urllib.request.urlopen(url, context=ctx, timeout=60) as resp:
+        total = resp.length if hasattr(resp, 'length') else None
+        downloaded = 0
+        chunk_size = 1024 * 1024
+        with open(dest, 'wb') as f:
+            while True:
+                chunk = resp.read(chunk_size)
+                if not chunk:
+                    break
+                f.write(chunk)
+                downloaded += len(chunk)
+                if total:
+                    print(f"  {downloaded/1024/1024:.1f}/{total/1024/1024:.1f} MB", end='', flush=True)
+        print()
 
 def verify_asr(model_dir):
     """Verify ASR model files exist and are valid ONNX."""
@@ -125,8 +142,16 @@ def main():
             "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/"
             "sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23.tar.bz2"
         )
-        if not os.path.exists(asr_archive):
-            download(asr_url, asr_archive)
+        # Fallback to HF mirror if GitHub is unreachable
+        asr_urls = [asr_url, "https://hf-mirror.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23.tar.bz2"]
+        for u in asr_urls:
+            if not os.path.exists(asr_archive):
+                try:
+                    download(u, asr_archive)
+                    break
+                except Exception as e:
+                    print(f"  ⚠️ Failed {u}: {e}")
+                    continue
         print("  Extracting...")
         with tarfile.open(asr_archive, "r:bz2") as tar:
             tar.extractall(path=workdir)
