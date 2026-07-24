@@ -54,7 +54,8 @@ class VoiceInputPipeline @Inject constructor(
      */
     suspend fun process(
         text: String,
-        toolConfirmed: Boolean = false
+        toolConfirmed: Boolean = false,
+        precomputedTurn: DeviceToolTurn? = null
     ): VoiceInputResult {
         val trimmed = text.trim()
         if (trimmed.isEmpty()) {
@@ -63,17 +64,21 @@ class VoiceInputPipeline @Inject constructor(
 
         // === 环节 1：DeviceTool ===
         val t0 = System.currentTimeMillis()
-        val toolTurn = runCatching {
-            deviceToolBridge.voiceTurn(trimmed, confirmed = toolConfirmed)
-        }.getOrElse { e ->
-            log?.w("toolTurn failed, continue chat-only: ${e.message}")
-            DeviceToolTurn(
-                channel = DeviceToolChannel.VOICE,
-                plan = null,
-                outcome = null,
-                needsTools = false,
-                summary = null
-            )
+        val toolTurn = if (precomputedTurn != null) {
+            precomputedTurn
+        } else {
+            runCatching {
+                deviceToolBridge.voiceTurn(trimmed, confirmed = toolConfirmed)
+            }.getOrElse { e ->
+                log?.w("toolTurn failed, continue chat-only: ${e.message}")
+                DeviceToolTurn(
+                    channel = DeviceToolChannel.VOICE,
+                    plan = null,
+                    outcome = null,
+                    needsTools = false,
+                    summary = null
+                )
+            }
         }
         val toolDurMs = System.currentTimeMillis() - t0
 

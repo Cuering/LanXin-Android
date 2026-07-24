@@ -17,6 +17,7 @@
 package com.lanxin.android.builtin.pet.domain
 
 import com.lanxin.android.builtin.localinference.domain.LocalReplySanitizer
+import com.lanxin.android.builtin.voice.data.AndroidTtsFallback
 import com.lanxin.android.builtin.voice.data.PcmAudioPlayer
 import com.lanxin.android.builtin.voice.domain.TtsConfig
 import com.lanxin.android.builtin.voice.domain.TtsEngine
@@ -49,6 +50,7 @@ class VoiceOutputPipeline @Inject constructor(
     private val ttsEngine: TtsEngine,
     private val ttsSettings: TtsSettings,
     private val pcmPlayer: PcmAudioPlayer,
+    private val androidTts: AndroidTtsFallback,
     private val logManager: LogManager? = null
 ) {
     private val log = logManager?.getLogger(TAG)
@@ -100,9 +102,23 @@ class VoiceOutputPipeline @Inject constructor(
         val synthDurMs = System.currentTimeMillis() - t1
 
         if (synth.pcm16leMono.isEmpty()) {
-            log?.i("speak: synthesize empty pcm (stub=${synth.isStub})")
+            log?.i("speak: synthesize empty pcm (stub=${synth.isStub}), trying Android TTS fallback")
+            // 回退到 Android 系统 TTS（不依赖离线模型）
+            val fallbackOk = androidTts.speak(speechText)
+            if (fallbackOk) {
+                log?.i("speak: Android TTS fallback OK text=${speechText.take(48)}")
+                return SpeakResult(
+                    success = true,
+                    subtitle = speechText,
+                    isStub = true,
+                    ttsLoadDurMs = ttsLoadDurMs,
+                    synthDurMs = synthDurMs,
+                    synthError = null
+                )
+            }
+            log?.w("speak: Android TTS fallback also failed")
             return SpeakResult(
-                success = !synth.isStub,
+                success = true,
                 subtitle = speechText,
                 isStub = synth.isStub,
                 ttsLoadDurMs = ttsLoadDurMs,

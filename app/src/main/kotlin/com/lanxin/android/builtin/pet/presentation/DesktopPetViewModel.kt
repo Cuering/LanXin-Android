@@ -45,6 +45,7 @@ import com.lanxin.android.builtin.pet.domain.PetSettings
 import com.lanxin.android.builtin.pet.domain.TextExpressionMotionMapper
 import com.lanxin.android.builtin.pet.domain.VoiceSessionCoordinator
 import com.lanxin.android.builtin.pet.domain.VoiceSessionPhase
+import com.lanxin.android.builtin.voice.data.AndroidTtsFallback
 import com.lanxin.android.builtin.voice.domain.AsrSettings
 import com.lanxin.android.builtin.voice.domain.TtsEngine
 import com.lanxin.android.builtin.voice.domain.TtsSettings
@@ -146,6 +147,7 @@ class DesktopPetViewModel @Inject constructor(
     private val sessionCoordinator: VoiceSessionCoordinator,
     private val ttsSettings: TtsSettings,
     private val ttsEngine: TtsEngine,
+    private val androidTts: AndroidTtsFallback,
     private val asrSettings: AsrSettings,
     private val localInferenceSettings: LocalInferenceSettings,
     private val assetDownloader: DebugAssetDownloader,
@@ -247,6 +249,13 @@ class DesktopPetViewModel @Inject constructor(
                 PetPathReadiness.Kind.TTS,
                 resolved.ttsModelDir
             )
+            // 无 Sherpa 模型时走 Android 系统 TTS 回退
+            val ttsEffectiveReady = ttsCheck.ready || androidTts.available
+            val ttsEffectiveLabel = when {
+                ttsCheck.ready -> ttsCheck.label
+                androidTts.available -> "已就绪（系统TTS）"
+                else -> ttsCheck.label
+            }
             val llmCheck = PetPathReadiness.check(
                 PetPathReadiness.Kind.LOCAL_LLM,
                 resolved.localLlmModelPath.ifBlank { local.modelPath }
@@ -263,7 +272,7 @@ class DesktopPetViewModel @Inject constructor(
             val guide = PetExpressionController.guideForMissingResources(
                 live2dReady = live2dCheck.ready,
                 asrReady = asrCheck.ready,
-                ttsReady = ttsCheck.ready
+                ttsReady = ttsEffectiveReady
             )
             // 将内置 Mao 同步到 LanXin/live2d/Mao/（用户文件管理器可找）
             withContext(Dispatchers.IO) {
@@ -300,22 +309,23 @@ class DesktopPetViewModel @Inject constructor(
                     asrSourceLabel = resolved.asrLabel,
                     live2dReadyLabel = live2dCheck.label,
                     asrReadyLabel = asrCheck.label,
-                    ttsReadyLabel = ttsCheck.label,
+                    ttsReadyLabel = ttsEffectiveLabel,
                     live2dReady = live2dCheck.ready,
                     asrReady = asrCheck.ready,
-                    ttsReady = ttsCheck.ready,
+                    ttsReady = ttsEffectiveReady,
                     live2dDisplayLabel = live2dDecision.shortLabel,
                     live2dDisplayMode = live2dDecision.mode.name,
                     expressionLabel = pose.shortLabel,
                     expressionName = pose.expression.name,
                     mouthAnimating = pose.mouthAnimating,
                     resourceGuide = guide,
-                    resourceSummary = PetPathReadiness.summaryMessage(
-                        live2dCheck,
-                        asrCheck,
-                        ttsCheck,
-                        llmCheck
-                    ),
+                    resourceSummary = if (ttsEffectiveReady && !ttsCheck.ready) {
+                        "Live2D：${live2dCheck.label} · ASR：${asrCheck.label} · TTS：$ttsEffectiveLabel 注：TTS 使用 Android 系统引擎（无需下载模型）"
+                    } else {
+                        PetPathReadiness.summaryMessage(
+                            live2dCheck, asrCheck, ttsCheck, llmCheck
+                        )
+                    },
                     localLlmPathConfigured = resolved.localLlmModelPath.ifBlank { local.modelPath },
                     localLlmReadyLabel = when {
                         resolved.localLlmModelPath.isBlank() && local.modelPath.isBlank() ->

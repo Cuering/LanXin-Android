@@ -137,9 +137,12 @@ class VoiceSessionCoordinatorTest {
         override val isAvailable: Boolean = true
         override val lastError: String? = null
         override suspend fun load(config: TtsConfig): Boolean {
-            _state.value = TtsEngineState.READY; return true
+            _state.value = TtsEngineState.READY
+            return true
         }
-        override suspend fun unload() { _state.value = TtsEngineState.DISABLED }
+        override suspend fun unload() {
+            _state.value = TtsEngineState.DISABLED
+        }
         override suspend fun synthesize(request: TtsSynthesizeRequest): TtsSynthesizeResult {
             return TtsSynthesizeResult(
                 pcm16leMono = ByteArray(640) { 0 },
