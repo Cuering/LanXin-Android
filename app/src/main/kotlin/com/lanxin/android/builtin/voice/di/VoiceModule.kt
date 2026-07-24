@@ -17,6 +17,7 @@
 package com.lanxin.android.builtin.voice.di
 
 import com.lanxin.android.builtin.voice.data.AndroidMicPermissionChecker
+import com.lanxin.android.builtin.voice.data.AndroidTtsFallback
 import com.lanxin.android.builtin.voice.data.AsrPreferences
 import com.lanxin.android.builtin.voice.data.SherpaAsrEngine
 import com.lanxin.android.builtin.voice.data.SherpaTtsEngine
