@@ -147,10 +147,22 @@ class VoiceOutputPipelineTest {
         override suspend fun setEnabled(enabled: Boolean) {
             config = config.copy(enabled = enabled)
         }
-        override suspend fun setModelPath(path: String?) { config = config.copy(modelPath = path.orEmpty()) }
-        override suspend fun setModelDir(path: String?) { config = config.copy(modelDir = path.orEmpty()) }
-        override suspend fun setReferenceAudio(path: String?) { config = config.copy(referenceAudio = path.orEmpty()) }
-        override suspend fun setVoiceId(voiceId: String) { config = config.copy(voiceId = voiceId) }
+
+        override suspend fun setModelPath(path: String?) {
+            config = config.copy(modelPath = path.orEmpty())
+        }
+
+        override suspend fun setModelDir(path: String?) {
+            config = config.copy(modelDir = path.orEmpty())
+        }
+
+        override suspend fun setReferenceAudio(path: String?) {
+            config = config.copy(referenceAudio = path.orEmpty())
+        }
+
+        override suspend fun setVoiceId(voiceId: String) {
+            config = config.copy(voiceId = voiceId)
+        }
     }
 
     /** load 必失败，检验 ensureTtsReady 报错路径。 */
@@ -161,7 +173,11 @@ class VoiceOutputPipelineTest {
         override val isAvailable: Boolean = true
         override val lastError: String? = "simulated_load_fail"
         override suspend fun load(config: TtsConfig): Boolean = false
-        override suspend fun unload() { _state.value = TtsEngineState.DISABLED }
+
+        override suspend fun unload() {
+            _state.value = TtsEngineState.DISABLED
+        }
+
         override suspend fun synthesize(request: TtsSynthesizeRequest): TtsSynthesizeResult {
             error("should_not_reach")
         }
@@ -174,10 +190,16 @@ class VoiceOutputPipelineTest {
         override val isReady: Boolean = true
         override val isAvailable: Boolean = true
         override val lastError: String? = null
+
         override suspend fun load(config: TtsConfig): Boolean {
-            _state.value = TtsEngineState.READY; return true
+            _state.value = TtsEngineState.READY
+            return true
         }
-        override suspend fun unload() { _state.value = TtsEngineState.DISABLED }
+
+        override suspend fun unload() {
+            _state.value = TtsEngineState.DISABLED
+        }
+
         override suspend fun synthesize(request: TtsSynthesizeRequest): TtsSynthesizeResult {
             error("simulated_synth_fail")
         }
@@ -187,13 +209,20 @@ class VoiceOutputPipelineTest {
     private class PcmTtsEngine : TtsEngine {
         private val _state = MutableStateFlow(TtsEngineState.DISABLED)
         override val state: StateFlow<TtsEngineState> = _state.asStateFlow()
-        override val isReady: Boolean get() = _state.value == TtsEngineState.READY
+        override val isReady: Boolean
+            get() = _state.value == TtsEngineState.READY
         override val isAvailable: Boolean = true
         override val lastError: String? = null
+
         override suspend fun load(config: TtsConfig): Boolean {
-            _state.value = TtsEngineState.READY; return true
+            _state.value = TtsEngineState.READY
+            return true
         }
-        override suspend fun unload() { _state.value = TtsEngineState.DISABLED }
+
+        override suspend fun unload() {
+            _state.value = TtsEngineState.DISABLED
+        }
+
         override suspend fun synthesize(request: TtsSynthesizeRequest): TtsSynthesizeResult {
             return TtsSynthesizeResult(
                 pcm16leMono = ByteArray(640) { 0 },

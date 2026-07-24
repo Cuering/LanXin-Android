@@ -51,6 +51,8 @@ import com.lanxin.android.builtin.voice.data.StubTtsEngine
 import com.lanxin.android.builtin.voice.domain.TtsConfig
 import com.lanxin.android.builtin.voice.domain.TtsEngine
 import com.lanxin.android.builtin.voice.domain.TtsEngineState
+import com.lanxin.android.builtin.voice.domain.TtsSynthesizeResult
+import kotlinx.coroutines.delay
 import com.lanxin.android.builtin.voice.domain.TtsSettings
 import com.lanxin.android.builtin.voice.domain.TtsSynthesizeRequest
 import com.lanxin.android.builtin.voice.domain.TtsSynthesizeResult
@@ -126,6 +128,28 @@ class VoiceSessionCoordinatorTest {
         private val text: String
     ) : PetChatResponder {
         override suspend fun respond(userText: String): String = text
+    }
+
+    /** 返回非空 PCM，用于检验 play 路径不崩。 */
+    private class PcmTtsEngine : TtsEngine {
+        private val _state = MutableStateFlow(TtsEngineState.DISABLED)
+        override val state: StateFlow<TtsEngineState> = _state.asStateFlow()
+        override val isReady: Boolean get() = _state.value == TtsEngineState.READY
+        override val isAvailable: Boolean = true
+        override val lastError: String? = null
+        override suspend fun load(config: TtsConfig): Boolean {
+            _state.value = TtsEngineState.READY; return true
+        }
+        override suspend fun unload() { _state.value = TtsEngineState.DISABLED }
+        override suspend fun synthesize(request: TtsSynthesizeRequest): TtsSynthesizeResult {
+            return TtsSynthesizeResult(
+                pcm16leMono = ByteArray(640) { 0 },
+                sampleRateHz = 16_000,
+                durationMs = 20L,
+                isStub = false,
+                subtitle = request.text
+            )
+        }
     }
 
     private class OkAlarmClock : AlarmClockGateway {

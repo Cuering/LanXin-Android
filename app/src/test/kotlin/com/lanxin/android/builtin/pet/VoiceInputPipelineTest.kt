@@ -69,7 +69,7 @@ class VoiceInputPipelineTest {
     fun `process returns reply from responder`() = runBlocking {
         val pipe = VoiceInputPipeline(
             responder = StubResponder("你好呀"),
-            deviceToolBridge = bridge(withTools = true)
+            deviceToolBridge = bridgeWithTools()
         )
         val r = pipe.process("你好")
         assertEquals("你好呀", r.replyText)
@@ -84,7 +84,7 @@ class VoiceInputPipelineTest {
     fun `process with empty text returns empty reply`() = runBlocking {
         val pipe = VoiceInputPipeline(
             responder = StubResponder("不应到达"),
-            deviceToolBridge = bridge()
+            deviceToolBridge = bridgeWithTools()
         )
         val r = pipe.process("   ")
         assertEquals("", r.replyText)
@@ -94,7 +94,7 @@ class VoiceInputPipelineTest {
     fun `tool round triggers toolName and outcome`() = runBlocking {
         val pipe = VoiceInputPipeline(
             responder = StubResponder("打开中"),
-            deviceToolBridge = bridge(withTools = true)
+            deviceToolBridge = bridgeWithTools()
         )
         val r = pipe.process("打开闹钟列表")
         assertEquals("com.lanxin.builtin.alarm.show", r.toolName)
@@ -107,7 +107,7 @@ class VoiceInputPipelineTest {
     fun `responder failure returns empty reply with llmError`() = runBlocking {
         val pipe = VoiceInputPipeline(
             responder = FailingResponder(),
-            deviceToolBridge = bridge()
+            deviceToolBridge = bridgeWithTools()
         )
         val r = pipe.process("测试")
         assertEquals("", r.replyText)
@@ -119,9 +119,8 @@ class VoiceInputPipelineTest {
     fun `tool bridge failure falls back to chat-only`() = runBlocking {
         val pipe = VoiceInputPipeline(
             responder = StubResponder("免工具闲聊"),
-            deviceToolBridge = bridge(withTools = false)
+            deviceToolBridge = bridgeWithoutTools()
         )
-        // 无工具注册，bridge 不崩，返回纯聊
         val r = pipe.process("随便聊聊")
         assertEquals("免工具闲聊", r.replyText)
         assertNull(r.toolName)
@@ -140,29 +139,120 @@ class VoiceInputPipelineTest {
         }
     }
 
-    private fun bridge(withTools: Boolean = false): DeviceToolBridge {
+    private fun bridgeWithTools(): DeviceToolBridge {
+        val launcher = object : SystemToolsIntentLauncher {
+            override fun launch(spec: IntentLaunchSpec) = IntentLaunchResult.Ok(
+                action = spec.action, launched = true, description = spec.description
+            )
+        }
+        val alarmClock = object : AlarmClockGateway {
+            override fun canScheduleExactAlarms() = true
+            override fun setAlarmClock(request: SetAlarmClockRequest) = AlarmClockResult.Ok(
+                triggerAtEpochMs = request.triggerAtEpochMs,
+                requestCode = 1,
+                message = request.message
+            )
+        }
+        val calendar = StubCalendarGateway()
+        val notes = StubNotesStore()
+        val saf = object : NotesSafGateway {
+            override fun writeText(u: String, t: String, m: String) = NotesIoResult.Ok("ok", bytes = t.length, uri = u)
+            override fun readText(u: String) = NotesIoResult.Ok("{}", bytes = 2, uri = u)
+            override fun shareText(t: String, m: String, c: String) = NotesIoResult.Ok("shared", bytes = t.length)
+        }
+        val fileIo = object : UserFileIoGateway {
+            override fun readText(u: String, m: Int) = UserFileIoResult.Ok("", uri = u)
+            override fun writeText(u: String, t: String, m: String) = UserFileIoResult.Ok("ok", bytes = t.length, uri = u)
+            override fun copyToAppPrivate(u: String, n: String?) = UserFileIoResult.Ok("ok", uri = "/x", name = n ?: "x")
+            override fun writeAppPrivateText(n: String, t: String, m: String) = UserFileIoResult.Ok("ok", bytes = t.length, uri = "/x/$n", name = n)
+            override fun listAppPrivateFiles(): List<UserFileEntry> = emptyList()
+            override fun deleteAppPrivate(p: String) = UserFileIoResult.Ok("deleted", uri = p)
+            override fun shareUri(u: String, m: String?, c: String) = UserFileIoResult.Ok("shared", uri = u)
+            override fun shareText(t: String, m: String, c: String) = UserFileIoResult.Ok("shared", bytes = t.length)
+            override fun probe(u: String): UserFileProbe? = null
+        }
+        val catalog = InMemoryUserFileCatalog()
         val registry = DeviceToolRegistry(
-            alarmShow = if (withTools) AlarmShowDeviceTool(object : AlarmClockGateway {
-                override suspend fun list(): List<AlarmClockResult> = emptyList()
-                override suspend fun set(request: SetAlarmClockRequest): AlarmClockResult =
-                    AlarmClockResult.Ok
-                override suspend fun delete(id: Long): Boolean = true
-            }) else null,
-            alarmSet = if (withTools) AlarmSetDeviceTool(object : AlarmClockGateway {
-                override suspend fun list(): List<AlarmClockResult> = emptyList()
-                override suspend fun set(request: SetAlarmClockRequest): AlarmClockResult =
-                    AlarmClockResult.Ok
-                override suspend fun delete(id: Long): Boolean = true
-            }) else null,
-            calendarCreate = null, calendarList = null,
-            noteCreate = null, noteAppend = null, noteList = null,
-            noteUpdate = null, noteDelete = null, noteExport = null, noteImport = null,
-            filePick = null, fileList = null, fileReadText = null,
-            fileWrite = null, fileShare = null, fileDelete = null
+            alarmSet = AlarmSetDeviceTool(alarmClock, launcher),
+            alarmShow = AlarmShowDeviceTool(launcher),
+            calendarList = CalendarListUpcomingDeviceTool(calendar),
+            calendarCreate = CalendarCreateEventDeviceTool(calendar, calendar),
+            noteCreate = NoteCreateDeviceTool(notes),
+            noteList = NoteListDeviceTool(notes),
+            noteAppend = NoteAppendDeviceTool(notes),
+            noteUpdate = NoteUpdateDeviceTool(notes),
+            noteDelete = NoteDeleteDeviceTool(notes),
+            noteExport = NoteExportDeviceTool(notes, saf),
+            noteImport = NoteImportDeviceTool(notes, saf),
+            filePick = FilePickDeviceTool(catalog, fileIo),
+            fileList = FileListDeviceTool(catalog, fileIo),
+            fileReadText = FileReadTextDeviceTool(catalog, fileIo),
+            fileWrite = FileWriteDeviceTool(catalog, fileIo),
+            fileShare = FileShareDeviceTool(catalog, fileIo),
+            fileDelete = FileDeleteDeviceTool(catalog, fileIo)
         )
         return DeviceToolBridge.forTest(
             registry = registry,
-            configProvider = { SystemToolsConfig(masterEnabled = true, alarmEnabled = withTools) }
+            configProvider = { SystemToolsConfig(masterEnabled = true, alarmEnabled = true) }
+        )
+    }
+
+    private fun bridgeWithoutTools(): DeviceToolBridge {
+        val launcher = object : SystemToolsIntentLauncher {
+            override fun launch(spec: IntentLaunchSpec) = IntentLaunchResult.Ok(
+                action = spec.action, launched = true, description = spec.description
+            )
+        }
+        val alarmClock = object : AlarmClockGateway {
+            override fun canScheduleExactAlarms() = true
+            override fun setAlarmClock(request: SetAlarmClockRequest) = AlarmClockResult.Ok(
+                triggerAtEpochMs = request.triggerAtEpochMs,
+                requestCode = 1,
+                message = request.message
+            )
+        }
+        val calendar = StubCalendarGateway()
+        val notes = StubNotesStore()
+        val saf = object : NotesSafGateway {
+            override fun writeText(u: String, t: String, m: String) = NotesIoResult.Ok("ok", bytes = t.length, uri = u)
+            override fun readText(u: String) = NotesIoResult.Ok("{}", bytes = 2, uri = u)
+            override fun shareText(t: String, m: String, c: String) = NotesIoResult.Ok("shared", bytes = t.length)
+        }
+        val fileIo = object : UserFileIoGateway {
+            override fun readText(u: String, m: Int) = UserFileIoResult.Ok("", uri = u)
+            override fun writeText(u: String, t: String, m: String) = UserFileIoResult.Ok("ok", bytes = t.length, uri = u)
+            override fun copyToAppPrivate(u: String, n: String?) = UserFileIoResult.Ok("ok", uri = "/x", name = n ?: "x")
+            override fun writeAppPrivateText(n: String, t: String, m: String) = UserFileIoResult.Ok("ok", bytes = t.length, uri = "/x/$n", name = n)
+            override fun listAppPrivateFiles(): List<UserFileEntry> = emptyList()
+            override fun deleteAppPrivate(p: String) = UserFileIoResult.Ok("deleted", uri = p)
+            override fun shareUri(u: String, m: String?, c: String) = UserFileIoResult.Ok("shared", uri = u)
+            override fun shareText(t: String, m: String, c: String) = UserFileIoResult.Ok("shared", bytes = t.length)
+            override fun probe(u: String): UserFileProbe? = null
+        }
+        val catalog = InMemoryUserFileCatalog()
+        val registry = DeviceToolRegistry(
+            alarmSet = AlarmSetDeviceTool(alarmClock, launcher),
+            alarmShow = AlarmShowDeviceTool(launcher),
+            calendarList = CalendarListUpcomingDeviceTool(calendar),
+            calendarCreate = CalendarCreateEventDeviceTool(calendar, calendar),
+            noteCreate = NoteCreateDeviceTool(notes),
+            noteList = NoteListDeviceTool(notes),
+            noteAppend = NoteAppendDeviceTool(notes),
+            noteUpdate = NoteUpdateDeviceTool(notes),
+            noteDelete = NoteDeleteDeviceTool(notes),
+            noteExport = NoteExportDeviceTool(notes, saf),
+            noteImport = NoteImportDeviceTool(notes, saf),
+            filePick = FilePickDeviceTool(catalog, fileIo),
+            fileList = FileListDeviceTool(catalog, fileIo),
+            fileReadText = FileReadTextDeviceTool(catalog, fileIo),
+            fileWrite = FileWriteDeviceTool(catalog, fileIo),
+            fileShare = FileShareDeviceTool(catalog, fileIo),
+            fileDelete = FileDeleteDeviceTool(catalog, fileIo)
+        )
+        // masterEnabled=false 让 bridge 拒绝所有工具
+        return DeviceToolBridge.forTest(
+            registry = registry,
+            configProvider = { SystemToolsConfig(masterEnabled = false) }
         )
     }
 }
