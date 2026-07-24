@@ -49,7 +49,8 @@ class DefaultLocalInferenceProvider @Inject constructor(
         prompt: String,
         systemPrompt: String?,
         maxTokens: Int?,
-        history: List<LocalChatMessage>
+        history: List<LocalChatMessage>,
+        skipOutputConstraint: Boolean
     ): Flow<ApiState> = flow {
         val config = settings.getConfig()
         if (!config.enabled) {
@@ -80,12 +81,17 @@ class DefaultLocalInferenceProvider @Inject constructor(
                 return@flow
             }
         }
-        val effectiveSystem = LocalReplySanitizer.appendOutputConstraint(
-            systemPrompt = systemPrompt,
-            showThinking = config.showThinking
-        )
+        // 默认仍叠短输出约束；陪伴可 skip 以贴近 MNN 官方裸 ChatMessages
+        val effectiveSystem = if (skipOutputConstraint) {
+            systemPrompt?.trim()?.takeIf { it.isNotEmpty() }
+        } else {
+            LocalReplySanitizer.appendOutputConstraint(
+                systemPrompt = systemPrompt,
+                showThinking = config.showThinking
+            )
+        }
         val effectiveMax = (maxTokens ?: config.maxTokens).coerceAtLeast(16)
-        // 陪伴/Chat 门面：整段 generate，避免流式半标签 + 降低 JNI 回调面
+        // 整段 generate（对齐 MNN response）；引擎侧 generate 前会 reset KV
         val raw = engine.generate(
             LocalGenerateRequest(
                 prompt = prompt,

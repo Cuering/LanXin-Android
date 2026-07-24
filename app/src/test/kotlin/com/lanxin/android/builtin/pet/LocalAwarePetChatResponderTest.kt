@@ -78,7 +78,10 @@ class LocalAwarePetChatResponderTest {
         )
         val out = responder.respond("你好")
         assertEquals(1, provider.calls)
-        assertEquals(LocalAwarePetChatResponder.COMPANION_MAX_TOKENS, provider.lastMaxTokens)
+        // 对齐 MNN：不覆盖 maxTokens / 不塞 system / 跳过输出约束
+        assertEquals(null, provider.lastMaxTokens)
+        assertEquals(null, provider.lastSystem)
+        assertTrue(provider.lastSkipConstraint)
         assertTrue(out.contains("你好呀"))
         assertFalse(out.contains("让我分析"))
         assertFalse(out.contains("**分析**"))
@@ -166,6 +169,10 @@ class LocalAwarePetChatResponderTest {
             private set
         var lastMaxTokens: Int? = null
             private set
+        var lastSystem: String? = "unset"
+            private set
+        var lastSkipConstraint: Boolean = false
+            private set
 
         override fun canServe(): Boolean = canServe
 
@@ -173,10 +180,13 @@ class LocalAwarePetChatResponderTest {
             prompt: String,
             systemPrompt: String?,
             maxTokens: Int?,
-            history: List<LocalChatMessage>
+            history: List<LocalChatMessage>,
+            skipOutputConstraint: Boolean
         ): Flow<ApiState> {
             calls += 1
             lastMaxTokens = maxTokens
+            lastSystem = systemPrompt
+            lastSkipConstraint = skipOutputConstraint
             return flow {
                 for (s in states) emit(s)
             }

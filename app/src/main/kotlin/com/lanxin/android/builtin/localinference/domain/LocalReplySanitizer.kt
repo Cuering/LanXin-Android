@@ -178,7 +178,7 @@ object LocalReplySanitizer {
         val withoutMeta = stripMetaAnalysis(withoutThink)
         val withoutTags = stripHiddenTags(withoutMeta)
         // 小模型常见 phrase loop：同一短句连刷到 maxTokens
-        // 陪伴「每次只回一句话」由 [limitToOneSentence] 在陪伴出口单独调用，不在此全局截断
+        // 句级硬截 [limitToOneSentence] 可选；陪伴已对齐 MNN 不再默认调用
         val display = collapseRepeatedPhrase(withoutTags)
         val speech = stripEmojiAndDecorations(display)
         return if (showThinking) {

@@ -59,6 +59,13 @@ interface LocalLlmEngine {
     suspend fun unload()
 
     /**
+     * 清空 KV / 会话状态（对齐 MNN `Llm::reset`）。
+     * 单轮或完整 history 重建前调用，避免上一轮污染。
+     * 默认空实现；native 引擎覆盖。
+     */
+    suspend fun reset() = Unit
+
+    /**
      * 同步生成完整回复。
      *
      * @throws IllegalStateException 引擎未就绪

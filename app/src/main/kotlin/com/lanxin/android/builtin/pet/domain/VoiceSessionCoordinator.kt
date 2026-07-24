@@ -173,12 +173,9 @@ class VoiceSessionCoordinator @Inject constructor(
                 )
             }
 
-        // rawReply 保留 [[mood=…]] 供 SPEAKING 相位匹配；展示/TTS/历史统一剥标签
-        // 陪伴硬约束：展示层再截「每次只回一句话」（stub/本地脑共用）
+        // rawReply 保留 [[mood=…]] 供 SPEAKING 相位匹配；展示/TTS/历史只做轻量清洗（对齐 MNN，不硬截一句）
         val rawReply = composeReply(chatReply, toolTurn)
-        val displayReply = LocalReplySanitizer.limitToOneSentence(
-            LocalReplySanitizer.forDisplay(rawReply, showThinking = false)
-        )
+        val displayReply = LocalReplySanitizer.forDisplay(rawReply, showThinking = false)
 
         // SPEAKING：replyText=raw（匹配），subtitle=剥后（气泡立刻干净）
         snap = VoiceSessionStateMachine.onThinkDone(snap, rawReply).copy(
