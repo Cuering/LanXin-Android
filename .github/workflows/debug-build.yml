@@ -56,6 +56,10 @@ jobs:
             -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android \
             -dname "CN=Android Debug,O=Android,C=US"
 
+      - name: Bundle built-in voice models (ASR) into APK assets
+        run: |
+          bash scripts/ci-bundle-voice-assets.sh
+
       - name: Setup release keystore for signed Debug APK
         env:
           RELEASE_KEYSTORE_B64: ${{ secrets.LANXIN_RELEASE_KEYSTORE }}

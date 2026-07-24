@@ -22,6 +22,7 @@ RELEASE_TTS="https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models"
 # matcha-baker 运行必需（跳过训练脚本 / 无关 README）
 TTS_FILES=(
   "model-steps-3.onnx"
+  "vocos-22khz-univ.onnx"
   "tokens.txt"
   "lexicon.txt"
   "date.fst"
@@ -38,6 +39,9 @@ TTS_FILES=(
   "dict/pos_dict/prob_trans.utf8"
 )
 
+# vocoder 从独立仓库下载：不在 HF_TTS_REPO 里
+VOCODER_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/vocoder-models/vocos-22khz-univ.onnx"
+
 mkdir -p "$OUT_DIR" "$TMP_DIR"
 
 download_file() {
@@ -53,17 +57,24 @@ download_hf_files() {
   mkdir -p "$target"
   local f
   for f in "${TTS_FILES[@]}"; do
-    echo "  ← $base/$f"
-    download_file "$base/$f" "$target/$f"
+    # vocoder 不在 HF 模型仓库，从 GitHub vocoder-models 单独拉
+    if [[ "$f" == "vocos-22khz-univ.onnx" ]]; then
+      echo "  ← $VOCODER_URL"
+      download_file "$VOCODER_URL" "$target/$f"
+    else
+      echo "  ← $base/$f"
+      download_file "$base/$f" "$target/$f"
+    fi
   done
 }
 
 is_ready() {
   local d="$1"
   [[ -d "$d" ]] || return 1
-  # 至少一个 onnx + tokens
+  # 必需文件：acoustic model + vocoder + tokens
   [[ -f "$d/tokens.txt" ]] || return 1
-  find "$d" -maxdepth 1 -type f \( -name '*.onnx' \) | head -1 | grep -q .
+  [[ -f "$d/vocos-22khz-univ.onnx" ]] || return 1
+  find "$d" -maxdepth 1 -type f \( -name 'model-steps-*.onnx' -o -name '*matcha*.onnx' \) | head -1 | grep -q .
 }
 
 github_archive_urls() {

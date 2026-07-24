@@ -24,6 +24,7 @@ import com.lanxin.android.builtin.localinference.domain.LocalInferenceSettings
 import com.lanxin.android.builtin.pet.data.FloatingPetService
 import com.lanxin.android.builtin.pet.data.OverlayPermissionHelper
 import com.lanxin.android.builtin.pet.domain.BuiltInLive2dAssets
+import com.lanxin.android.builtin.pet.domain.BuiltInVoiceAssets
 import com.lanxin.android.builtin.pet.domain.DebugAssetCatalog
 import com.lanxin.android.builtin.pet.domain.DebugAssetDownloadEvent
 import com.lanxin.android.builtin.pet.domain.DebugAssetDownloader
@@ -213,6 +214,8 @@ class DesktopPetViewModel @Inject constructor(
             val app = getApplication<Application>()
             // 仓内 Mao → filesDir，设置页与悬浮层共用
             BuiltInLive2dAssets.ensureInstalled(app)
+            // 仓内 ASR 模型 → filesDir，开箱离线听写
+            BuiltInVoiceAssets.ensureAsrInstalled(app)
             val config = petSettings.getConfig()
             val storageRoot = DebugAssetStorage.resolve(app, config.lanXinSafTreeUri)
             val tts = ttsSettings.getConfig()
