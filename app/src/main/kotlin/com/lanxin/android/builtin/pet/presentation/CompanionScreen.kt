@@ -1542,6 +1542,10 @@ class CompanionViewModel @Inject constructor(
                         )
                     }
                     bumpWeb()
+                    // vision 回复也走 TTS
+                    if (display.isNotBlank()) {
+                        sessionCoordinator.speakReply(display)
+                    }
                     return@runCatching
                 }
                 val result = runCatching {
@@ -1583,7 +1587,7 @@ class CompanionViewModel @Inject constructor(
                 // 文字生成默认走输出链（TTS+播放）；TTS 未就绪自动软失败，不影响文字展示
                 if (result.error == null && reply.isNotBlank()) {
                     runCatching {
-                        voiceChatSession.onReplyReady(reply)
+                        sessionCoordinator.speakReply(reply)
                     }
                 }
             }.getOrElse { e ->
