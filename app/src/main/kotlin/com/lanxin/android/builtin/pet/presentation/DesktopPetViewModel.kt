@@ -24,6 +24,7 @@ import com.lanxin.android.builtin.localinference.domain.LocalInferenceSettings
 import com.lanxin.android.builtin.pet.data.FloatingPetService
 import com.lanxin.android.builtin.pet.data.OverlayPermissionHelper
 import com.lanxin.android.builtin.pet.domain.BuiltInLive2dAssets
+import com.lanxin.android.builtin.pet.domain.BuiltInVoiceAssets
 import com.lanxin.android.builtin.pet.domain.DebugAssetCatalog
 import com.lanxin.android.builtin.pet.domain.DebugAssetDownloadEvent
 import com.lanxin.android.builtin.pet.domain.DebugAssetDownloader
@@ -45,6 +46,7 @@ import com.lanxin.android.builtin.pet.domain.PetSettings
 import com.lanxin.android.builtin.pet.domain.TextExpressionMotionMapper
 import com.lanxin.android.builtin.pet.domain.VoiceSessionCoordinator
 import com.lanxin.android.builtin.pet.domain.VoiceSessionPhase
+import com.lanxin.android.builtin.voice.domain.SystemTtsSpeaker
 import com.lanxin.android.builtin.voice.domain.AsrSettings
 import com.lanxin.android.builtin.voice.domain.TtsEngine
 import com.lanxin.android.builtin.voice.domain.TtsSettings
@@ -146,6 +148,7 @@ class DesktopPetViewModel @Inject constructor(
     private val sessionCoordinator: VoiceSessionCoordinator,
     private val ttsSettings: TtsSettings,
     private val ttsEngine: TtsEngine,
+    private val androidTts: SystemTtsSpeaker,
     private val asrSettings: AsrSettings,
     private val localInferenceSettings: LocalInferenceSettings,
     private val assetDownloader: DebugAssetDownloader,
@@ -211,6 +214,8 @@ class DesktopPetViewModel @Inject constructor(
             val app = getApplication<Application>()
             // 仓内 Mao → filesDir，设置页与悬浮层共用
             BuiltInLive2dAssets.ensureInstalled(app)
+            // 仓内 ASR 模型 → filesDir，开箱离线听写
+            BuiltInVoiceAssets.ensureAsrInstalled(app)
             val config = petSettings.getConfig()
             val storageRoot = DebugAssetStorage.resolve(app, config.lanXinSafTreeUri)
             val tts = ttsSettings.getConfig()
@@ -247,6 +252,13 @@ class DesktopPetViewModel @Inject constructor(
                 PetPathReadiness.Kind.TTS,
                 resolved.ttsModelDir
             )
+            // 无 Sherpa 模型时走 Android 系统 TTS 回退
+            val ttsEffectiveReady = ttsCheck.ready || androidTts.available
+            val ttsEffectiveLabel = when {
+                ttsCheck.ready -> ttsCheck.label
+                androidTts.available -> "已就绪（系统TTS）"
+                else -> ttsCheck.label
+            }
             val llmCheck = PetPathReadiness.check(
                 PetPathReadiness.Kind.LOCAL_LLM,
                 resolved.localLlmModelPath.ifBlank { local.modelPath }
@@ -263,7 +275,7 @@ class DesktopPetViewModel @Inject constructor(
             val guide = PetExpressionController.guideForMissingResources(
                 live2dReady = live2dCheck.ready,
                 asrReady = asrCheck.ready,
-                ttsReady = ttsCheck.ready
+                ttsReady = ttsEffectiveReady
             )
             // 将内置 Mao 同步到 LanXin/live2d/Mao/（用户文件管理器可找）
             withContext(Dispatchers.IO) {
@@ -300,22 +312,23 @@ class DesktopPetViewModel @Inject constructor(
                     asrSourceLabel = resolved.asrLabel,
                     live2dReadyLabel = live2dCheck.label,
                     asrReadyLabel = asrCheck.label,
-                    ttsReadyLabel = ttsCheck.label,
+                    ttsReadyLabel = ttsEffectiveLabel,
                     live2dReady = live2dCheck.ready,
                     asrReady = asrCheck.ready,
-                    ttsReady = ttsCheck.ready,
+                    ttsReady = ttsEffectiveReady,
                     live2dDisplayLabel = live2dDecision.shortLabel,
                     live2dDisplayMode = live2dDecision.mode.name,
                     expressionLabel = pose.shortLabel,
                     expressionName = pose.expression.name,
                     mouthAnimating = pose.mouthAnimating,
                     resourceGuide = guide,
-                    resourceSummary = PetPathReadiness.summaryMessage(
-                        live2dCheck,
-                        asrCheck,
-                        ttsCheck,
-                        llmCheck
-                    ),
+                    resourceSummary = if (ttsEffectiveReady && !ttsCheck.ready) {
+                        "Live2D：${live2dCheck.label} · ASR：${asrCheck.label} · TTS：$ttsEffectiveLabel 注：TTS 使用 Android 系统引擎（无需下载模型）"
+                    } else {
+                        PetPathReadiness.summaryMessage(
+                            live2dCheck, asrCheck, ttsCheck, llmCheck
+                        )
+                    },
                     localLlmPathConfigured = resolved.localLlmModelPath.ifBlank { local.modelPath },
                     localLlmReadyLabel = when {
                         resolved.localLlmModelPath.isBlank() && local.modelPath.isBlank() ->
@@ -664,31 +677,24 @@ class DesktopPetViewModel @Inject constructor(
                     petSettings.setEnabled(true)
                 }
                 _uiState.update { it.copy(isBusy = true) }
-                if (!ttsEngine.isReady) {
-                    runCatching {
-                        ttsSettings.setEnabled(true)
-                        ttsEngine.load(ttsSettings.getConfig())
-                    }
-                }
                 val result = sessionCoordinator.runRound(
                     input = com.lanxin.android.builtin.pet.domain.VoiceSessionInput(
                         asrText = trimmed,
                         isStub = true,
                         source = "companion"
-                    ),
-                    skipTts = !ttsEngine.isReady
+                    )
                 )
                 _uiState.update {
                     it.copy(
                         isBusy = false,
-                        snackbarMessage = result.error?.let { e ->
-                            if (e.startsWith("tts_failed")) {
-                                "TTS 暂不可用，已显示文字回复"
-                            } else {
-                                "失败：$e"
-                            }
-                        }
+                        snackbarMessage = result.error?.let { e -> "失败：$e" }
                     )
+                }
+                // 输出链：TTS 有就绪则发音
+                if (result.error == null && result.replyText.isNotBlank()) {
+                    runCatching {
+                        sessionCoordinator.speakReply(result.replyText)
+                    }
                 }
                 refresh()
             }.getOrElse { e ->
