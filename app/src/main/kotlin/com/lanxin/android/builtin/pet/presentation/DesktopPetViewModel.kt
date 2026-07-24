@@ -664,31 +664,24 @@ class DesktopPetViewModel @Inject constructor(
                     petSettings.setEnabled(true)
                 }
                 _uiState.update { it.copy(isBusy = true) }
-                if (!ttsEngine.isReady) {
-                    runCatching {
-                        ttsSettings.setEnabled(true)
-                        ttsEngine.load(ttsSettings.getConfig())
-                    }
-                }
                 val result = sessionCoordinator.runRound(
                     input = com.lanxin.android.builtin.pet.domain.VoiceSessionInput(
                         asrText = trimmed,
                         isStub = true,
                         source = "companion"
-                    ),
-                    skipTts = !ttsEngine.isReady
+                    )
                 )
                 _uiState.update {
                     it.copy(
                         isBusy = false,
-                        snackbarMessage = result.error?.let { e ->
-                            if (e.startsWith("tts_failed")) {
-                                "TTS 暂不可用，已显示文字回复"
-                            } else {
-                                "失败：$e"
-                            }
-                        }
+                        snackbarMessage = result.error?.let { e -> "失败：$e" }
                     )
+                }
+                // 输出链：TTS 有就绪则发音
+                if (result.error == null && result.replyText.isNotBlank()) {
+                    runCatching {
+                        sessionCoordinator.speakReply(result.replyText)
+                    }
                 }
                 refresh()
             }.getOrElse { e ->

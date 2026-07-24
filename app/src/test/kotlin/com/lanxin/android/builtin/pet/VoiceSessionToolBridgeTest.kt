@@ -20,6 +20,8 @@ import com.lanxin.android.builtin.pet.domain.OverlayPosition
 import com.lanxin.android.builtin.pet.domain.PetConfig
 import com.lanxin.android.builtin.pet.domain.PetSettings
 import com.lanxin.android.builtin.pet.domain.StubPetChatResponder
+import com.lanxin.android.builtin.pet.domain.VoiceInputPipeline
+import com.lanxin.android.builtin.pet.domain.VoiceOutputPipeline
 import com.lanxin.android.builtin.pet.domain.VoiceSessionCoordinator
 import com.lanxin.android.builtin.pet.domain.VoiceSessionInput
 import com.lanxin.android.builtin.pet.domain.VoiceSessionPhase
@@ -214,12 +216,17 @@ class VoiceSessionToolBridgeTest {
         val tts = StubTtsEngine()
         runBlocking { tts.load(TtsConfig(enabled = true)) }
         return VoiceSessionCoordinator(
-            responder = StubPetChatResponder(),
-            ttsEngine = tts,
-            ttsSettings = FakeTtsSettings(),
+            inputPipeline = VoiceInputPipeline(
+                responder = StubPetChatResponder(),
+                deviceToolBridge = bridge
+            ),
+            outputPipeline = VoiceOutputPipeline(
+                ttsEngine = tts,
+                ttsSettings = FakeTtsSettings(),
+                pcmPlayer = PcmAudioPlayer()
+            ),
             petSettings = FakePetSettings(PetConfig(enabled = true)),
-            deviceToolBridge = bridge,
-            pcmPlayer = PcmAudioPlayer()
+            deviceToolBridge = bridge
         )
     }
 

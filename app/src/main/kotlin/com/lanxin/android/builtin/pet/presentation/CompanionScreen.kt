@@ -1470,9 +1470,7 @@ class CompanionViewModel @Inject constructor(
                         asrText = trimmed,
                         isStub = false,
                         source = "companion_voice"
-                    ),
-                    // 真语音轮：需要 TTS；失败由 coordinator 软失败
-                    skipTts = false
+                    )
                 )
             }.getOrElse { e ->
                 VoiceSessionResult(
@@ -1488,39 +1486,29 @@ class CompanionViewModel @Inject constructor(
                 result.subtitle.ifBlank { result.replyText },
                 showThinking = false
             )
-            val ttsSoftFail = result.error?.let {
-                it.startsWith("tts_failed") || it.startsWith("tts_skipped")
-            } == true && reply.isNotBlank()
-            // 提取 TTS 具体错误原因给用户看，而不是笼统的"语音未就绪"
-            val ttsDetail = result.error?.let { err ->
-                if (err.startsWith("tts_skipped:not_ready:")) {
-                    err.removePrefix("tts_skipped:not_ready:")
-                } else if (err.startsWith("tts_failed:")) {
-                    err.removePrefix("tts_failed:")
-                } else {
-                    null
-                }
-            }
             _uiState.update {
                 it.copy(
                     busy = false,
                     lastReply = reply.ifBlank { it.lastReply },
                     voiceChatEnabled = voiceChatSession.uiState.value.enabled,
                     statusLine = when {
-                        result.error != null && !ttsSoftFail -> "出错：${result.error}"
-                        ttsSoftFail && ttsDetail != null -> "已回复（语音跳过：$ttsDetail）"
-                        ttsSoftFail -> "已回复（语音未就绪，仅文字）"
+                        result.error != null -> "出错：${result.error}"
                         reply.isBlank() -> "没有听清/无回复"
                         else -> "已回复"
                     }
                 )
             }
             bumpWeb()
-            // coordinator 已负责 TTS play；这里只把 session 从 WAITING 收口到 IDLE，
-            // 空文本避免 session 再 synthesize 一遍。
-            runCatching {
-                if (voiceChatSession.uiState.value.enabled) {
-                    voiceChatSession.onReplyReady("")
+            // 输出链：TTS + 播放 + 收口 session 状态
+            if (result.error == null && reply.isNotBlank()) {
+                runCatching {
+                    voiceChatSession.onReplyReady(reply)
+                }
+            } else {
+                runCatching {
+                    if (voiceChatSession.uiState.value.enabled) {
+                        voiceChatSession.onReplyReady("")
+                    }
                 }
             }
         }
@@ -1556,16 +1544,13 @@ class CompanionViewModel @Inject constructor(
                     bumpWeb()
                     return@runCatching
                 }
-                val voiceEnabled = voiceChatSession.uiState.value.enabled || st.voiceChatEnabled
                 val result = runCatching {
                     sessionCoordinator.runRound(
                         input = VoiceSessionInput(
                             asrText = trimmed,
                             isStub = true,
                             source = "companion_text"
-                        ),
-                        // 关语音聊天：跳过 TTS，纯文字不因合成失败而失败
-                        skipTts = !voiceEnabled
+                        )
                     )
                 }.getOrElse { e ->
                     // runRound 本身抛异常 → 不崩溃，构造一个 error result
@@ -1583,35 +1568,24 @@ class CompanionViewModel @Inject constructor(
                     result.subtitle.ifBlank { result.replyText },
                     showThinking = false
                 )
-                // TTS 失败仍可能有文字：优先展示 reply，仅在 status 提示
-                val ttsSoftFail = result.error?.let {
-                    it.startsWith("tts_failed") || it.startsWith("tts_skipped")
-                } == true && reply.isNotBlank()
-                // 提取 TTS 具体错误原因给用户看
-                val ttsDetail = result.error?.let { err ->
-                    if (err.startsWith("tts_skipped:not_ready:")) {
-                        err.removePrefix("tts_skipped:not_ready:")
-                    } else if (err.startsWith("tts_failed:")) {
-                        err.removePrefix("tts_failed:")
-                    } else {
-                        null
-                    }
-                }
                 _uiState.update {
                     it.copy(
                         busy = false,
                         lastReply = reply,
-                        voiceChatEnabled = voiceChatSession.uiState.value.enabled || voiceEnabled,
+                        voiceChatEnabled = voiceChatSession.uiState.value.enabled,
                         statusLine = when {
-                            result.error != null && !ttsSoftFail -> "出错：${result.error}"
-                            ttsSoftFail && ttsDetail != null -> "已回复（语音跳过：$ttsDetail）"
-                            ttsSoftFail -> "已回复（语音未就绪，仅文字）"
-                            !voiceEnabled -> "已回复（仅文字）"
+                            result.error != null -> "出错：${result.error}"
                             else -> "已回复"
                         }
                     )
                 }
                 bumpWeb()
+                // 文字生成默认走输出链（TTS+播放）；TTS 未就绪自动软失败，不影响文字展示
+                if (result.error == null && reply.isNotBlank()) {
+                    runCatching {
+                        voiceChatSession.onReplyReady(reply)
+                    }
+                }
             }.getOrElse { e ->
                 // 全路径兜底：任何未预期异常 → 用户可见错误，绝不闪退
                 _uiState.update {
@@ -1642,14 +1616,13 @@ class CompanionViewModel @Inject constructor(
         if (!cap.available) {
             // 无 vision：友好提示 + 仍可用 stub 闲聊（不注入假画面描述）
             val stub = runCatching {
-                // 看世界降级闲聊：默认不强制 TTS，避免未就绪闪退/占麦
+                // 看世界降级闲聊：输入链仅返回文字，TTS 由调用方决定
                 sessionCoordinator.runRound(
                     input = VoiceSessionInput(
                         asrText = enrichedQuestion,
                         isStub = true,
                         source = "companion_text_no_vision"
-                    ),
-                    skipTts = !(voiceChatSession.uiState.value.enabled || _uiState.value.voiceChatEnabled)
+                    )
                 )
             }.getOrNull()
             val chat = stub?.let {

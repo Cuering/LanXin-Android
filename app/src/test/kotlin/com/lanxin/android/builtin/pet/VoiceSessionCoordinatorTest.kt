@@ -1,10 +1,13 @@
 package com.lanxin.android.builtin.pet
 
+import com.lanxin.android.builtin.localinference.domain.LocalReplySanitizer
 import com.lanxin.android.builtin.pet.domain.OverlayPosition
 import com.lanxin.android.builtin.pet.domain.PetChatResponder
 import com.lanxin.android.builtin.pet.domain.PetConfig
 import com.lanxin.android.builtin.pet.domain.PetSettings
 import com.lanxin.android.builtin.pet.domain.StubPetChatResponder
+import com.lanxin.android.builtin.pet.domain.VoiceInputPipeline
+import com.lanxin.android.builtin.pet.domain.VoiceOutputPipeline
 import com.lanxin.android.builtin.pet.domain.VoiceSessionCoordinator
 import com.lanxin.android.builtin.pet.domain.VoiceSessionInput
 import com.lanxin.android.builtin.pet.domain.VoiceSessionPhase
@@ -45,15 +48,15 @@ import com.lanxin.android.builtin.systemtools.domain.UserFileIoResult
 import com.lanxin.android.builtin.systemtools.domain.UserFileProbe
 import com.lanxin.android.builtin.voice.data.PcmAudioPlayer
 import com.lanxin.android.builtin.voice.data.StubTtsEngine
+import com.lanxin.android.builtin.voice.domain.TtsConfig
 import com.lanxin.android.builtin.voice.domain.TtsEngine
 import com.lanxin.android.builtin.voice.domain.TtsEngineState
+import com.lanxin.android.builtin.voice.domain.TtsSettings
 import com.lanxin.android.builtin.voice.domain.TtsSynthesizeRequest
 import com.lanxin.android.builtin.voice.domain.TtsSynthesizeResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import com.lanxin.android.builtin.voice.domain.TtsConfig
-import com.lanxin.android.builtin.voice.domain.TtsSettings
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -61,6 +64,11 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/**
+ * VoiceSessionCoordinator 测试：验证输入链（文字→LLM）与状态机。
+ *
+ * 输出链（TTS+播放）由 [VoiceOutputPipelineTest] 覆盖。
+ */
 class VoiceSessionCoordinatorTest {
 
     private fun testPlayer(): PcmAudioPlayer = PcmAudioPlayer()
@@ -174,7 +182,6 @@ class VoiceSessionCoordinatorTest {
         override fun probe(uriString: String): UserFileProbe? = null
     }
 
-    /** 默认全关：闲聊路径不触发工具执行（即使关键词命中也会 Denied，但 demo 句不命中）。 */
     private fun defaultBridge(): DeviceToolBridge {
         val gateway = StubCalendarGateway()
         val notes = StubNotesStore()
@@ -211,15 +218,21 @@ class VoiceSessionCoordinatorTest {
         responder: PetChatResponder = StubPetChatResponder(),
         pet: PetConfig = PetConfig(enabled = true)
     ): VoiceSessionCoordinator {
+        val bridge = defaultBridge()
         val tts = StubTtsEngine()
         runBlocking { tts.load(TtsConfig(enabled = true)) }
         return VoiceSessionCoordinator(
-            responder = responder,
-            ttsEngine = tts,
-            ttsSettings = FakeTtsSettings(),
+            inputPipeline = VoiceInputPipeline(
+                responder = responder,
+                deviceToolBridge = bridge
+            ),
+            outputPipeline = VoiceOutputPipeline(
+                ttsEngine = tts,
+                ttsSettings = FakeTtsSettings(),
+                pcmPlayer = testPlayer()
+            ),
             petSettings = FakePetSettings(pet),
-            deviceToolBridge = defaultBridge(),
-            pcmPlayer = testPlayer()
+            deviceToolBridge = bridge
         )
     }
 
@@ -260,7 +273,7 @@ class VoiceSessionCoordinatorTest {
     }
 
     @Test
-    fun `mood tags stripped from TTS result and final snapshot`() = runBlocking {
+    fun `mood tags stripped from final snapshot`() = runBlocking {
         val c = coordinator(responder = FixedResponder("[[mood=joy]]\n今天真开心"))
         val r = c.runRound(VoiceSessionInput("测试", isStub = true))
         assertEquals("今天真开心", r.replyText)
@@ -271,134 +284,28 @@ class VoiceSessionCoordinatorTest {
     }
 
     @Test
-    fun `skipTts returns text without synthesizing and ends IDLE`() = runBlocking {
-        val tts = CountingTtsEngine()
-        tts.load(TtsConfig(enabled = true))
-        val c = VoiceSessionCoordinator(
-            responder = FixedResponder("仅文字回复"),
-            ttsEngine = tts,
-            ttsSettings = FakeTtsSettings(),
-            petSettings = FakePetSettings(PetConfig(enabled = true)),
-            deviceToolBridge = defaultBridge(),
-            pcmPlayer = testPlayer()
-        )
-        val r = c.runRound(
-            input = VoiceSessionInput("测试", isStub = true, source = "companion_text"),
-            skipTts = true
-        )
-        assertEquals(null, r.error)
-        assertEquals(VoiceSessionPhase.IDLE, r.phase)
-        assertEquals("仅文字回复", r.replyText)
-        assertEquals("仅文字回复", r.subtitle)
-        assertEquals(0, tts.synthesizeCount)
-    }
-
-    @Test
-    fun `tts failure still returns display text for caller soft-handle`() = runBlocking {
-        val tts = FailingTtsEngine()
-        tts.load(TtsConfig(enabled = true))
-        val c = VoiceSessionCoordinator(
-            responder = FixedResponder("有字可显示"),
-            ttsEngine = tts,
-            ttsSettings = FakeTtsSettings(),
-            petSettings = FakePetSettings(PetConfig(enabled = true)),
-            deviceToolBridge = defaultBridge(),
-            pcmPlayer = testPlayer()
-        )
-        val r = c.runRound(VoiceSessionInput("测试", isStub = true))
-        assertTrue(r.error!!.startsWith("tts_failed"))
-        assertEquals("有字可显示", r.replyText)
-        assertEquals("有字可显示", r.subtitle)
-    }
-
-    @Test
-    fun `pcm path attempts play and still returns text when AudioTrack unavailable`() = runBlocking {
-        // JVM 单测无 Android AudioTrack：非空 PCM 会走 play 并 soft-fail，文字仍返回
+    fun `speakReply delegates to output pipeline`() = runBlocking {
         val tts = PcmTtsEngine()
         tts.load(TtsConfig(enabled = true))
+        val bridge = defaultBridge()
         val c = VoiceSessionCoordinator(
-            responder = FixedResponder("可播文字"),
-            ttsEngine = tts,
-            ttsSettings = FakeTtsSettings(),
+            inputPipeline = VoiceInputPipeline(
+                responder = StubPetChatResponder(),
+                deviceToolBridge = bridge
+            ),
+            outputPipeline = VoiceOutputPipeline(
+                ttsEngine = tts,
+                ttsSettings = FakeTtsSettings(),
+                pcmPlayer = testPlayer()
+            ),
             petSettings = FakePetSettings(PetConfig(enabled = true)),
-            deviceToolBridge = defaultBridge(),
-            pcmPlayer = testPlayer()
+            deviceToolBridge = bridge
         )
-        // isStub=false：验证 result.isStub 跟随 tts（真 PCM → false），且 play soft-fail 不写 error
-        val r = c.runRound(VoiceSessionInput("测试", isStub = false, source = "companion"))
+        // 输入链正常
+        val r = c.runRound(VoiceSessionInput("测试", isStub = true))
         assertEquals(null, r.error)
         assertEquals(VoiceSessionPhase.IDLE, r.phase)
-        assertEquals("可播文字", r.replyText)
-        assertEquals("可播文字", r.subtitle)
-        assertFalse(r.isStub)
-    }
-
-    /** 统计 synthesize 调用次数，验证 skipTts 短路。 */
-    private class CountingTtsEngine : TtsEngine {
-        private val _state = MutableStateFlow(TtsEngineState.DISABLED)
-        var synthesizeCount: Int = 0
-            private set
-        override val state: StateFlow<TtsEngineState> = _state.asStateFlow()
-        override val isReady: Boolean get() = _state.value == TtsEngineState.READY
-        override val isAvailable: Boolean = true
-        override val lastError: String? = null
-        override suspend fun load(config: TtsConfig): Boolean {
-            _state.value = TtsEngineState.READY
-            return true
-        }
-        override suspend fun unload() {
-            _state.value = TtsEngineState.DISABLED
-        }
-        override suspend fun synthesize(request: TtsSynthesizeRequest): TtsSynthesizeResult {
-            synthesizeCount += 1
-            return TtsSynthesizeResult(
-                pcm16leMono = ByteArray(0),
-                sampleRateHz = 22050,
-                durationMs = 100L,
-                isStub = true,
-                subtitle = request.text
-            )
-        }
-    }
-
-    /** synthesize 必失败，模拟 TTS 未就绪路径。 */
-    private class FailingTtsEngine : TtsEngine {
-        private val _state = MutableStateFlow(TtsEngineState.READY)
-        override val state: StateFlow<TtsEngineState> = _state.asStateFlow()
-        override val isReady: Boolean = true
-        override val isAvailable: Boolean = true
-        override val lastError: String? = "tts_not_ready"
-        override suspend fun load(config: TtsConfig): Boolean = true
-        override suspend fun unload() = Unit
-        override suspend fun synthesize(request: TtsSynthesizeRequest): TtsSynthesizeResult {
-            error("tts_not_ready")
-        }
-    }
-
-    /** 返回非空 PCM，验证 coordinator 会走 play 路径且不因播放失败崩溃。 */
-    private class PcmTtsEngine : TtsEngine {
-        private val _state = MutableStateFlow(TtsEngineState.DISABLED)
-        override val state: StateFlow<TtsEngineState> = _state.asStateFlow()
-        override val isReady: Boolean get() = _state.value == TtsEngineState.READY
-        override val isAvailable: Boolean = true
-        override val lastError: String? = null
-        override suspend fun load(config: TtsConfig): Boolean {
-            _state.value = TtsEngineState.READY
-            return true
-        }
-        override suspend fun unload() {
-            _state.value = TtsEngineState.DISABLED
-        }
-        override suspend fun synthesize(request: TtsSynthesizeRequest): TtsSynthesizeResult {
-            // 约 20ms @ 16kHz mono s16le
-            val pcm = ByteArray(640) { 0 }
-            return TtsSynthesizeResult(
-                pcm16leMono = pcm,
-                sampleRateHz = 16_000,
-                durationMs = 20L,
-                isStub = false,
-                subtitle = request.text
-            )
-        }
+        // 输出链：单独 speakReply（空 PCM → 无播放，不崩）
+        c.speakReply(r.replyText)
     }
 }
