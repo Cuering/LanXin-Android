@@ -130,7 +130,16 @@ class VoiceSessionCoordinator @Inject constructor(
         _snapshot.value = snap
 
         // === 输入链：工具 + LLM ===
-        val inputResult = inputPipeline.process(text, toolConfirmed = toolConfirmed)
+        val toolTurn = deviceToolBridge.voiceTurn(text, confirmed = toolConfirmed)
+        val inputResult = if (toolTurn.needsTools && toolTurn.outcome != null && toolTurn.plan != null) {
+            VoiceInputResult(
+                replyText = "",
+                toolName = toolTurn.plan.toolName,
+                toolOutcome = toolTurn.outcome
+            )
+        } else {
+            inputPipeline.process(text, toolConfirmed = toolConfirmed)
+        }
         val rawReply = composeReply(inputResult.replyText, inputResult)
         val displayReply = LocalReplySanitizer.forDisplay(rawReply, showThinking = false)
 
