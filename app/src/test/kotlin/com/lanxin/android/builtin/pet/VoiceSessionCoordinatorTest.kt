@@ -55,7 +55,6 @@ import com.lanxin.android.builtin.voice.domain.TtsSynthesizeResult
 import kotlinx.coroutines.delay
 import com.lanxin.android.builtin.voice.domain.TtsSettings
 import com.lanxin.android.builtin.voice.domain.TtsSynthesizeRequest
-import com.lanxin.android.builtin.voice.domain.TtsSynthesizeResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
