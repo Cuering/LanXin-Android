@@ -58,6 +58,10 @@ object LocalReplySanitizer {
     /** 装饰符号连续串。 */
     private val DECOR_RUN_REGEX = Regex("""[★☆♪♫※＊✦✧✩✪✫✬✭✮✯✰]{1,}""")
 
+    /** *动作* / *表情* 标记（星号包裹的 1-8 字短文本，如 *笑*、*点头*、*微微一笑*）。 */
+    private val ACTION_MARKER_REGEX = Regex("""\*[^*
+]{1,8}\*""")
+
     /** 常见「分析报告」分节标题行。 */
     private val META_SECTION_HEADER = Regex(
         """(?im)^\s{0,3}(?:#{1,6}\s*)?(?:\*\*)?(?:回应建议|分析|理由|判断|工具可用性|检查工具|注意事项)(?:\*\*)?[：:\s]*$"""
@@ -197,7 +201,7 @@ object LocalReplySanitizer {
      * 气泡用 [forDisplay]；播报必须走本方法，避免 TTS 念出标签/笑脸。
      */
     fun forSpeech(raw: String, showThinking: Boolean = false): String =
-        clean(raw, showThinking = showThinking).speechText
+        limitToOneSentence(clean(raw, showThinking = showThinking).speechText)
 
     /**
      * 从已清洗展示正文再剥离 emoji/装饰，供 TTS。
@@ -216,7 +220,9 @@ object LocalReplySanitizer {
         }
         val withoutKaomoji = KAOMOJI_REGEX.replace(withoutEmoji, " ")
         val withoutDecor = DECOR_RUN_REGEX.replace(withoutKaomoji, " ")
-        return collapseWhitespace(withoutDecor)
+        // 剥离 *动作* / *表情* 标记（星号包裹的短文本，如 *笑*、*点头*）
+        val withoutAction = ACTION_MARKER_REGEX.replace(withoutDecor, " ")
+        return collapseWhitespace(withoutAction)
     }
 
     /**

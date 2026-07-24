@@ -103,6 +103,9 @@ class VoiceOutputPipeline @Inject constructor(
 
         if (synth.pcm16leMono.isEmpty()) {
             log?.i("speak: synthesize empty pcm (stub=${synth.isStub}), trying Android TTS fallback")
+            // 触发回调（即使走 fallback，UI 仍需知道开始/结束）
+            onPlayStarted?.invoke()
+            onPlayEnded?.invoke()
             // 回退到 Android 系统 TTS（不依赖离线模型）
             val fallbackOk = androidTts.speak(speechText)
             if (fallbackOk) {
