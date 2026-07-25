@@ -3,18 +3,16 @@
 #
 # 用法:
 #   bash scripts/ci-bundle-voice-assets.sh
-#   BUNDLE_TTS=1 bash scripts/ci-bundle-voice-assets.sh   # 同时打包 Matcha+vocoder（装完零下载）
+#   BUNDLE_TTS=1 bash scripts/ci-bundle-voice-assets.sh
 #
 # 环境变量:
 #   SKIP_DOWNLOAD=1  仅打印路径，不实际下载
-#   BUNDLE_TTS=1     打包 TTS（默认 1：装完零下载；设 0 可跳过以减小 APK）
+#   BUNDLE_TTS=1     打包 TTS（默认 1）
+#   TTS_VARIANT      melo（默认）| matcha-baker
 #
 # 产物:
 #   app/src/main/assets/voice/asr/sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23/
-#   app/src/main/assets/voice/tts/matcha-icefall-zh-baker/   # BUNDLE_TTS=1
-#     ├── model-steps-3.onnx
-#     ├── vocos-22khz-univ.onnx
-#     ├── tokens.txt / lexicon.txt / dict/...
+#   app/src/main/assets/voice/tts/vits-melo-tts-zh_en/   # 默认 VITS
 #
 # 权重不进 git（*.onnx gitignore）；仅构建期写入 assets。
 set -euo pipefail
@@ -23,6 +21,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ASSETS_DIR="$ROOT/app/src/main/assets/voice"
 TMP_DIR="$ROOT/debug-assets/.tmp"
 BUNDLE_TTS="${BUNDLE_TTS:-1}"
+TTS_VARIANT="${TTS_VARIANT:-melo}"
 
 HF_REPO_ASR="csukuangfj/sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23"
 HF_MIRROR_ASR="https://hf-mirror.com/${HF_REPO_ASR}/resolve/main"
@@ -37,39 +36,44 @@ ASR_FILES=(
 )
 ASR_TARGET="$ASSETS_DIR/asr/sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23"
 
-HF_REPO_TTS="csukuangfj/matcha-icefall-zh-baker"
-HF_MIRROR_TTS="https://hf-mirror.com/${HF_REPO_TTS}/resolve/main"
-HF_OFFICIAL_TTS="https://huggingface.co/${HF_REPO_TTS}/resolve/main"
 RELEASE_TTS="https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models"
-VOCODER_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/vocoder-models/vocos-22khz-univ.onnx"
 
-TTS_FILES=(
-  "model-steps-3.onnx"
-  "tokens.txt"
-  "lexicon.txt"
-  "date.fst"
-  "number.fst"
-  "phone.fst"
-  "dict/jieba.dict.utf8"
-  "dict/hmm_model.utf8"
-  "dict/idf.utf8"
-  "dict/stop_words.utf8"
-  "dict/user.dict.utf8"
-  "dict/pos_dict/char_state_tab.utf8"
-  "dict/pos_dict/prob_emit.utf8"
-  "dict/pos_dict/prob_start.utf8"
-  "dict/pos_dict/prob_trans.utf8"
-)
-TTS_TARGET="$ASSETS_DIR/tts/matcha-icefall-zh-baker"
+case "$TTS_VARIANT" in
+  melo|vits-melo|melo-zh-en|vits|default)
+    TTS_DIR_NAME="vits-melo-tts-zh_en"
+    TTS_TAR_CANDIDATES=(
+      "${RELEASE_TTS}/vits-melo-tts-zh_en.tar.bz2"
+      "${RELEASE_TTS}/sherpa-onnx-vits-melo-tts-zh_en.tar.bz2"
+    )
+    HF_TTS_REPO="csukuangfj/vits-melo-tts-zh_en"
+    ;;
+  matcha-baker|matcha|baker)
+    TTS_DIR_NAME="matcha-icefall-zh-baker"
+    TTS_TAR_CANDIDATES=(
+      "${RELEASE_TTS}/matcha-icefall-zh-baker.tar.bz2"
+      "${RELEASE_TTS}/sherpa-onnx-matcha-icefall-zh-baker.tar.bz2"
+    )
+    HF_TTS_REPO="csukuangfj/matcha-icefall-zh-baker"
+    ;;
+  *)
+    echo "未知 TTS_VARIANT=$TTS_VARIANT（melo|matcha-baker）" >&2
+    exit 2
+    ;;
+esac
+
+TTS_TARGET="$ASSETS_DIR/tts/$TTS_DIR_NAME"
+HF_MIRROR_TTS="https://hf-mirror.com/${HF_TTS_REPO}/resolve/main"
+HF_OFFICIAL_TTS="https://huggingface.co/${HF_TTS_REPO}/resolve/main"
+VOCODER_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/vocoder-models/vocos-22khz-univ.onnx"
 
 echo "==> CI Bundle Voice Assets"
 echo "    asr target: $ASR_TARGET"
-echo "    tts target: $TTS_TARGET (BUNDLE_TTS=$BUNDLE_TTS)"
+echo "    tts target: $TTS_TARGET (BUNDLE_TTS=$BUNDLE_TTS variant=$TTS_VARIANT)"
 
 if [[ "${SKIP_DOWNLOAD:-0}" == "1" ]]; then
   echo "SKIP_DOWNLOAD=1，跳过下载。请手动放模型到:"
   echo "  $ASR_TARGET/"
-  echo "  $TTS_TARGET/  (含 vocos-22khz-univ.onnx)"
+  echo "  $TTS_TARGET/"
   exit 0
 fi
 
@@ -142,16 +146,26 @@ fi
 # ---------- TTS ----------
 tts_ready() {
   local d="$1"
-  [[ -f "$d/vocos-22khz-univ.onnx" ]] || return 1
-  find "$d" -maxdepth 1 -type f \( -name 'model-steps-*.onnx' -o -name '*matcha*.onnx' \) | head -1 | grep -q .
+  [[ -d "$d" ]] || return 1
+  [[ -f "$d/tokens.txt" ]] || return 1
+  # 至少一个非 vocoder 的 onnx
+  find "$d" -maxdepth 1 -type f -name '*.onnx' ! -name '*vocos*' ! -name '*vocoder*' ! -name '*hifigan*' | head -1 | grep -q .
+  local has_onnx=$?
+  [[ $has_onnx -eq 0 ]] || return 1
+  # Matcha 额外要求 vocoder
+  if [[ "$(basename "$d")" == *matcha* ]] || find "$d" -maxdepth 1 -name 'model-steps*.onnx' | head -1 | grep -q .; then
+    [[ -f "$d/vocos-22khz-univ.onnx" ]] || \
+      find "$(dirname "$d")" -maxdepth 1 -name 'vocos*.onnx' | head -1 | grep -q . || return 1
+  fi
+  return 0
 }
 
 if [[ "$BUNDLE_TTS" != "1" ]]; then
-  echo "BUNDLE_TTS=$BUNDLE_TTS，跳过 TTS 打包（用户需设置页下载）。"
+  echo "BUNDLE_TTS=$BUNDLE_TTS，跳过 TTS 打包。"
   exit 0
 fi
 
-mkdir -p "$TTS_TARGET"
+mkdir -p "$(dirname "$TTS_TARGET")"
 
 if tts_ready "$TTS_TARGET"; then
   echo "TTS 模型已存在，跳过: $TTS_TARGET"
@@ -159,99 +173,45 @@ if tts_ready "$TTS_TARGET"; then
   exit 0
 fi
 
-echo "下载 TTS Matcha+vocoder 到 $TTS_TARGET …"
+echo "下载 TTS ($TTS_VARIANT) 到 $TTS_TARGET …"
 ok=0
 
-# CI / GH Actions：优先 release tar
-if [[ "${CI:-}" == "true" || "${GITHUB_ACTIONS:-}" == "true" ]]; then
-  echo "CI：优先 GitHub release tar.bz2 …"
-  for url in \
-    "${RELEASE_TTS}/matcha-icefall-zh-baker.tar.bz2" \
-    "${RELEASE_TTS}/sherpa-onnx-matcha-icefall-zh-baker.tar.bz2"
-  do
-    ARCHIVE="$TMP_DIR/tts-bundle.tar.bz2"
-    echo "  ← $url"
-    if download_file "$url" "$ARCHIVE"; then
-      echo "  解压…"
-      mkdir -p "$(dirname "$TTS_TARGET")"
-      tar -xjf "$ARCHIVE" -C "$(dirname "$TTS_TARGET")" || true
-      if [[ ! -d "$TTS_TARGET" ]]; then
-        found="$(find "$(dirname "$TTS_TARGET")" -maxdepth 2 -type d -name '*matcha*baker*' | head -1 || true)"
-        if [[ -n "${found:-}" && "$found" != "$TTS_TARGET" ]]; then
-          mv "$found" "$TTS_TARGET" || true
-        fi
-      fi
-      rm -f "$ARCHIVE"
-      if [[ -d "$TTS_TARGET" ]] && ! [[ -f "$TTS_TARGET/vocos-22khz-univ.onnx" ]]; then
-        download_file "$VOCODER_URL" "$TTS_TARGET/vocos-22khz-univ.onnx" || true
-      fi
-      if tts_ready "$TTS_TARGET"; then
-        ok=1
-        echo "✅ CI tar TTS 就绪"
-        break
+# 优先 GitHub release tar（CI 更稳）
+echo "GitHub release tar.bz2 …"
+for url in "${TTS_TAR_CANDIDATES[@]}"; do
+  ARCHIVE="$TMP_DIR/tts-bundle.tar.bz2"
+  echo "  ← $url"
+  if download_file "$url" "$ARCHIVE"; then
+    echo "  解压…"
+    mkdir -p "$(dirname "$TTS_TARGET")"
+    tar -xjf "$ARCHIVE" -C "$(dirname "$TTS_TARGET")" || true
+    # 归一目录名
+    if [[ ! -d "$TTS_TARGET" ]]; then
+      found="$(find "$(dirname "$TTS_TARGET")" -maxdepth 2 -type d \( -name '*melo*' -o -name '*vits*' -o -name '*matcha*baker*' \) | head -1 || true)"
+      if [[ -n "${found:-}" && "$found" != "$TTS_TARGET" ]]; then
+        mv "$found" "$TTS_TARGET" || true
       fi
     fi
-  done
-fi
-
-if [[ "$ok" != "1" ]]; then
-  echo "HF 镜像逐文件 TTS…"
-  hf_ok=0
-  for f in "${TTS_FILES[@]}"; do
-    echo "  ← $HF_MIRROR_TTS/$f"
-    download_file "$HF_MIRROR_TTS/$f" "$TTS_TARGET/$f" || { hf_ok=1; break; }
-  done
-  if [[ "$hf_ok" == "0" ]]; then
-    download_file "$VOCODER_URL" "$TTS_TARGET/vocos-22khz-univ.onnx" || hf_ok=1
-  fi
-  if [[ "$hf_ok" == "0" ]] && tts_ready "$TTS_TARGET"; then
-    ok=1
-    echo "hf-mirror TTS 完成"
-  fi
-fi
-
-if [[ "$ok" != "1" ]]; then
-  echo "huggingface.co 逐文件 TTS…"
-  hf_ok=0
-  for f in "${TTS_FILES[@]}"; do
-    echo "  ← $HF_OFFICIAL_TTS/$f"
-    download_file "$HF_OFFICIAL_TTS/$f" "$TTS_TARGET/$f" || { hf_ok=1; break; }
-  done
-  if [[ "$hf_ok" == "0" ]]; then
-    download_file "$VOCODER_URL" "$TTS_TARGET/vocos-22khz-univ.onnx" || hf_ok=1
-  fi
-  if [[ "$hf_ok" == "0" ]] && tts_ready "$TTS_TARGET"; then
-    ok=1
-    echo "huggingface.co TTS 完成"
-  fi
-fi
-
-if [[ "$ok" != "1" ]]; then
-  echo "回退 GitHub TTS tar + vocoder…"
-  for url in \
-    "${RELEASE_TTS}/matcha-icefall-zh-baker.tar.bz2" \
-    "${RELEASE_TTS}/sherpa-onnx-matcha-icefall-zh-baker.tar.bz2"
-  do
-    ARCHIVE="$TMP_DIR/tts-bundle.tar.bz2"
-    echo "  ← $url"
-    if download_file "$url" "$ARCHIVE"; then
-      tar -xjf "$ARCHIVE" -C "$(dirname "$TTS_TARGET")" || true
-      rm -f "$ARCHIVE"
+    rm -f "$ARCHIVE"
+    # Matcha 补 vocoder
+    if [[ "$TTS_DIR_NAME" == *matcha* ]] && [[ -d "$TTS_TARGET" ]] && ! [[ -f "$TTS_TARGET/vocos-22khz-univ.onnx" ]]; then
       download_file "$VOCODER_URL" "$TTS_TARGET/vocos-22khz-univ.onnx" || true
-      if tts_ready "$TTS_TARGET"; then
-        ok=1
-        break
-      fi
     fi
-  done
-fi
+    if tts_ready "$TTS_TARGET"; then
+      ok=1
+      echo "✅ tar TTS 就绪"
+      break
+    fi
+  fi
+done
 
-if [[ "$ok" != "1" ]] || ! tts_ready "$TTS_TARGET"; then
-  echo >&2 "❌ TTS 模型下载失败（需 model-steps + vocos）。请手动放入: $TTS_TARGET"
+if [[ "$ok" != "1" ]]; then
+  echo "回退失败：无法下载 TTS $TTS_VARIANT" >&2
+  echo "请手动放入: $TTS_TARGET" >&2
   exit 1
 fi
 
-echo "✅ TTS 模型已打包（含 vocoder）:"
+echo "✅ TTS 模型已打包 ($TTS_VARIANT):"
 ls -lh "$TTS_TARGET/"*.onnx "$TTS_TARGET/tokens.txt" 2>/dev/null | head
 echo ""
 echo "装完零下载：APK assets → 首次启动 BuiltInVoiceAssets.ensureTtsInstalled()"
