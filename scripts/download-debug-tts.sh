@@ -11,7 +11,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_DIR="${OUT_DIR:-$ROOT/debug-assets/tts}"
 TMP_DIR="${TMP_DIR:-$ROOT/debug-assets/.tmp}"
-TTS_VARIANT="${TTS_VARIANT:-matcha-baker}"
+TTS_VARIANT="${TTS_VARIANT:-melo}"
 
 # 用户实测：hf-mirror 可打开 matcha-icefall-zh-baker model card 与 Files
 HF_REPO="csukuangfj/matcha-icefall-zh-baker"
@@ -74,10 +74,14 @@ download_hf_files() {
 is_ready() {
   local d="$1"
   [[ -d "$d" ]] || return 1
-  # 必需文件：acoustic model + vocoder + tokens
   [[ -f "$d/tokens.txt" ]] || return 1
-  [[ -f "$d/vocos-22khz-univ.onnx" ]] || return 1
-  find "$d" -maxdepth 1 -type f \( -name 'model-steps-*.onnx' -o -name '*matcha*.onnx' \) | head -1 | grep -q .
+  # 至少一个非 vocoder onnx
+  find "$d" -maxdepth 1 -type f -name '*.onnx' ! -name '*vocos*' ! -name '*vocoder*' ! -name '*hifigan*' | head -1 | grep -q . || return 1
+  # Matcha 才强制 vocoder
+  if [[ "$(basename "$d")" == *matcha* ]] || find "$d" -maxdepth 1 -name 'model-steps*.onnx' | head -1 | grep -q .; then
+    [[ -f "$d/vocos-22khz-univ.onnx" ]] || return 1
+  fi
+  return 0
 }
 
 github_archive_urls() {
@@ -156,7 +160,7 @@ if [[ "${SKIP_DOWNLOAD:-0}" == "1" ]]; then
   echo
   echo "---- 设置页应填路径（下载后）----"
   echo "tts_model_dir = $OUT_DIR/<解压目录>"
-  echo "App 内落盘等价路径: LanXin/tts/matcha-icefall-zh-baker"
+  echo "App 内落盘等价路径: LanXin/tts/vits-melo-tts-zh_en"
   echo "文档: docs/debug-assets.md"
   exit 0
 fi
@@ -236,7 +240,7 @@ echo "---- 设置页应填路径 ----"
 echo "tts_model_dir = ${RESOLVED:-$OUT_DIR/<解压目录>}"
 echo "tts_enabled   = true   # M1 默认 false；debug 真机时再开"
 echo
-echo "App 内落盘等价路径: LanXin/tts/matcha-icefall-zh-baker"
-echo "推荐模型: matcha-icefall-zh-baker（女声）/ vits-melo-tts-zh_en"
+echo "App 内落盘等价路径: LanXin/tts/vits-melo-tts-zh_en"
+echo "推荐模型: vits-melo-tts-zh_en（默认，更自然）/ matcha-icefall-zh-baker"
 echo "文档: docs/debug-assets.md"
 echo "✅ TTS debug 资源步骤完成"
