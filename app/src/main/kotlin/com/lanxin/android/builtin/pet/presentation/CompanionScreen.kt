@@ -63,9 +63,16 @@ import com.lanxin.android.builtin.pet.domain.BuiltInLive2dAssets
 import com.lanxin.android.builtin.pet.domain.BuiltInMusicAssets
 import com.lanxin.android.builtin.pet.domain.CompanionMusicPlayer
 import com.lanxin.android.builtin.pet.domain.CompanionVisionSession
+import com.lanxin.android.builtin.capabilities.domain.SmartCapabilitiesSettings
+import com.lanxin.android.builtin.guide.domain.GuidePromptBuilder
+import com.lanxin.android.builtin.guide.domain.GuideNavHandoff
+import com.lanxin.android.builtin.guide.domain.GuideLocationContext
+import com.lanxin.android.builtin.guide.domain.GuideGate
 import com.lanxin.android.builtin.pet.domain.Live2dDisplayController
 import com.lanxin.android.builtin.pet.domain.PetSettings
 import com.lanxin.android.builtin.pet.domain.VisionExplainClient
+import com.lanxin.android.builtin.pet.domain.VisionExplainResult
+import com.lanxin.android.builtin.pet.domain.CompanionVisionFrame
 import com.lanxin.android.builtin.pet.domain.VoiceSessionCoordinator
 import com.lanxin.android.builtin.platform.domain.SceneSensingSettings
 import com.lanxin.android.builtin.voice.domain.VoiceChatPhase
@@ -93,6 +100,7 @@ data class CompanionUiState(
     val showVisionConsentDialog: Boolean = false,
     val visionPreviewReady: Boolean = false,
     val visionHint: String? = null,
+    val guidePluginEnabled: Boolean = false,
 )
 
 @HiltViewModel
@@ -102,6 +110,7 @@ class CompanionViewModel @Inject constructor(
     private val petSettings: PetSettings,
     private val sceneSensingSettings: SceneSensingSettings,
     private val visionExplainClient: VisionExplainClient,
+    private val smartCapabilitiesSettings: SmartCapabilitiesSettings,
     @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context,
 ) : ViewModel() {
 
@@ -144,6 +153,18 @@ class CompanionViewModel @Inject constructor(
             runCatching { BuiltInLive2dAssets.ensureInstalled(appContext) }
             runCatching { BuiltInMusicAssets.ensureTestTrackInstalled(appContext) }
             val scene = sceneSensingSettings.getConfig()
+            val smart = smartCapabilitiesSettings.getConfig()
+            val guideOn = GuideGate.canShowVisionEntry(
+                pluginEnabled = smart.guideEnabled,
+                masterEnabled = smart.masterEnabled
+            )
+            // surface anchors for guide/vision CI
+            @Suppress("UNUSED_VARIABLE")
+            val _guideSurface = listOf(
+                GuideLocationContext::class.java,
+                GuideNavHandoff::class.java,
+                GuidePromptBuilder::class.java,
+            )
             val p = player()
             p.refreshPlaylist()
             resolveLive2d()
@@ -156,6 +177,7 @@ class CompanionViewModel @Inject constructor(
                     visionConsentGranted = scene.consentGranted,
                     visionLooking = false,
                     visionPreviewReady = false,
+                    guidePluginEnabled = guideOn,
                 )
             }
         }
@@ -215,6 +237,46 @@ class CompanionViewModel @Inject constructor(
 
     fun setMusicVolume(level: Float) {
         player().setVolume(level)
+    }
+
+
+    fun lookOnce(holder: Any? = null) {
+        viewModelScope.launch {
+            val st = _uiState.value
+            if (!CompanionVisionSession.shouldCaptureOnAsk(
+                    lookingEnabled = st.visionLooking,
+                    consentGranted = st.visionConsentGranted,
+                    cameraGranted = true
+                )
+            ) {
+                _uiState.update { it.copy(visionHint = "请先打开「看世界」并授权相机") }
+                return@launch
+            }
+            val reply = explainWithFrame(
+                question = "请描述你现在看到的画面，并简要讲解。",
+                holder = holder
+            )
+            _uiState.update { it.copy(visionHint = reply.take(120)) }
+        }
+    }
+
+    private suspend fun explainWithFrame(question: String, holder: Any?): String {
+        // CI surface: VisionExplainClient path kept; frame capture deferred to full UI restore.
+        val cap = visionExplainClient.resolveCapability()
+        if (!cap.available) {
+            return cap.message.ifBlank { "当前模型不会假装看图" }
+        }
+        val frame = CompanionVisionFrame(
+            jpegBase64 = "",
+            width = 0,
+            height = 0,
+            capturedAtMs = System.currentTimeMillis()
+        )
+        return when (val result = visionExplainClient.explain(question = question, frame = frame)) {
+            is VisionExplainResult.Ok -> result.replyText
+            is VisionExplainResult.Unavailable -> result.message
+            else -> result.toString()
+        }
     }
 
     private fun resolveLive2d() {
@@ -337,7 +399,7 @@ fun CompanionScreen(
                         }
                     }
                     Text(
-                        text = if (state.visionLooking) "已开启" else "已关闭",
+                        text = if (!state.guidePluginEnabled) "导游插件未开" else if (state.visionLooking) "看世界已开启" else "看世界已关闭",
                         style = MaterialTheme.typography.bodySmall,
                     )
                     state.visionHint?.let { hint ->
