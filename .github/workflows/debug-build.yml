@@ -26,7 +26,7 @@ jobs:
   run:
     name: Build debug APK
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 60
 
     permissions:
       pull-requests: write
@@ -56,9 +56,17 @@ jobs:
             -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android \
             -dname "CN=Android Debug,O=Android,C=US"
 
-      - name: Bundle built-in voice models (ASR) into APK assets
+      - name: Bundle built-in voice models (ASR+TTS) into APK assets
+        env:
+          BUNDLE_TTS: "1"
+          CI: "true"
         run: |
           bash scripts/ci-bundle-voice-assets.sh
+          echo "== bundled assets =="
+          find app/src/main/assets/voice -type f | head -40
+          test -f app/src/main/assets/voice/tts/matcha-icefall-zh-baker/vocos-22khz-univ.onnx
+          test -f app/src/main/assets/voice/tts/matcha-icefall-zh-baker/model-steps-3.onnx
+          ls -lh app/src/main/assets/voice/tts/matcha-icefall-zh-baker/*.onnx | head
 
       - name: Setup release keystore for signed Debug APK
         env:
