@@ -80,7 +80,17 @@ object PetPathReadiness {
         val f = File(trimmed)
         val ready = when (kind) {
             Kind.LIVE2D -> f.isFile
-            Kind.ASR, Kind.TTS, Kind.LOCAL_LLM ->
+            Kind.ASR ->
+                (f.isDirectory && (f.listFiles()?.isNotEmpty() == true)) || f.isFile
+            // Matcha 缺 vocoder 时只能 stub，不能标「已就绪」
+            Kind.TTS -> {
+                if (f.isDirectory) {
+                    DebugOpenSourcePaths.isTtsModelDirReady(f)
+                } else {
+                    f.isFile
+                }
+            }
+            Kind.LOCAL_LLM ->
                 (f.isDirectory && (f.listFiles()?.isNotEmpty() == true)) || f.isFile
         }
         return if (ready) {
@@ -97,17 +107,25 @@ object PetPathReadiness {
                         "Live2D model3 文件存在（M2b 渲染壳可加载）"
                     }
                     Kind.ASR -> "ASR 模型路径存在（待 sherpa 引擎 / so）"
-                    Kind.TTS -> "TTS 模型路径存在（待引擎 / so）"
+                    Kind.TTS -> "TTS 模型完整（含 vocoder，可真合成）"
                     Kind.LOCAL_LLM -> "本地模型路径存在（待 MNN 引擎）"
                 }
             )
         } else {
+            val incompleteTts = kind == Kind.TTS && f.isDirectory &&
+                DebugOpenSourcePaths.isModelDirReady(f) &&
+                !DebugOpenSourcePaths.isTtsModelDirReady(f)
             Check(
                 kind = kind,
                 path = trimmed,
                 ready = false,
-                label = "路径无效",
-                detail = "配置了路径但文件/目录不存在：$trimmed"
+                label = if (incompleteTts) "未就绪（缺 vocoder）" else "路径无效",
+                detail = if (incompleteTts) {
+                    "TTS 目录存在但缺 vocos/vocoder（Matcha 无法真合成）。" +
+                        "请重新下载 TTS 或手动放入 vocos-22khz-univ.onnx：$trimmed"
+                } else {
+                    "配置了路径但文件/目录不存在：$trimmed"
+                }
             )
         }
     }
