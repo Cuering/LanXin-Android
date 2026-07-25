@@ -114,43 +114,72 @@ EOF
 }
 
 TARGET_MATCHA="$OUT_DIR/matcha-icefall-zh-baker"
+TARGET_MELO="$OUT_DIR/vits-melo-tts-zh_en"
 
 echo "==> Debug TTS"
 echo "    variant : $TTS_VARIANT"
 echo "    out     : $OUT_DIR"
 echo "    strategy: hf-mirror → huggingface → github tar.bz2（仅 matcha-baker 走 HF 逐文件）"
-# GitHub Actions：优先 release tar（对 GH 出口更稳），再补 vocoder
+# 当前 variant 目标目录（CI/本地共用）
+case "$TTS_VARIANT" in
+  matcha-baker|matcha|baker|default) TARGET="$TARGET_MATCHA" ;;
+  melo|vits-melo|melo-zh-en) TARGET="$TARGET_MELO" ;;
+  vits-zh-ll|multi) TARGET="$OUT_DIR/vits-zh-ll" ;;
+  *) TARGET="$OUT_DIR/$TTS_VARIANT" ;;
+esac
+echo "    target  : $TARGET"
+
+normalize_extracted_dir() {
+  local want_basename found
+  want_basename="$(basename "$TARGET")"
+  [[ -d "$TARGET" ]] && return 0
+  found="$(find "$OUT_DIR" -maxdepth 2 -type d -name "$want_basename" | head -1 || true)"
+  if [[ -z "$found" ]]; then
+    case "$TTS_VARIANT" in
+      melo|vits-melo|melo-zh-en)
+        found="$(find "$OUT_DIR" -maxdepth 2 -type d \( -name '*melo*' -o -name '*vits*melo*' \) | head -1 || true)"
+        ;;
+      matcha-baker|matcha|baker|default)
+        found="$(find "$OUT_DIR" -maxdepth 2 -type d -name '*matcha*baker*' | head -1 || true)"
+        ;;
+    esac
+  fi
+  if [[ -n "${found:-}" && "$found" != "$TARGET" ]]; then
+    mkdir -p "$(dirname "$TARGET")"
+    mv "$found" "$TARGET" || true
+  fi
+}
+
+# GitHub Actions：按 TTS_VARIANT 拉对应 release tar（禁止硬编码 matcha）
 if [[ "${CI:-}" == "true" || "${GITHUB_ACTIONS:-}" == "true" ]]; then
-  echo "CI 环境：优先 GitHub release tar.bz2 …"
-  if ! is_ready "$TARGET_MATCHA"; then
-    for url in \
-      "${RELEASE_TTS}/matcha-icefall-zh-baker.tar.bz2" \
-      "${RELEASE_TTS}/sherpa-onnx-matcha-icefall-zh-baker.tar.bz2"
-    do
-      ARCHIVE="$TMP_DIR/tts-ci.tar.bz2"
+  echo "CI 环境：按 variant=$TTS_VARIANT 拉 GitHub release tar.bz2 …"
+  if ! is_ready "$TARGET"; then
+    while IFS= read -r url; do
+      [[ -z "$url" ]] && continue
+      ARCHIVE="$TMP_DIR/tts-ci-$(basename "$url")"
       echo "  ← $url"
       if download_file "$url" "$ARCHIVE"; then
         echo "  解压…"
-        mkdir -p "$(dirname "$TARGET_MATCHA")"
-        tar -xjf "$ARCHIVE" -C "$(dirname "$TARGET_MATCHA")" || true
-        # 解压后目录名可能带前缀，归一到 TARGET_MATCHA
-        if [[ ! -d "$TARGET_MATCHA" ]]; then
-          found="$(find "$(dirname "$TARGET_MATCHA")" -maxdepth 2 -type d -name '*matcha*baker*' | head -1 || true)"
-          if [[ -n "$found" && "$found" != "$TARGET_MATCHA" ]]; then
-            mv "$found" "$TARGET_MATCHA" || true
-          fi
-        fi
-        # vocoder 常不在 tar 内
-        if [[ -d "$TARGET_MATCHA" && ! -f "$TARGET_MATCHA/vocos-22khz-univ.onnx" ]]; then
-          download_file "$VOCODER_URL" "$TARGET_MATCHA/vocos-22khz-univ.onnx" || true
+        case "$(basename "$ARCHIVE")" in
+          *.tar.bz2) tar -xjf "$ARCHIVE" -C "$OUT_DIR" || true ;;
+          *.tar.gz|*.tgz) tar -xzf "$ARCHIVE" -C "$OUT_DIR" || true ;;
+          *) tar -xf "$ARCHIVE" -C "$OUT_DIR" 2>/dev/null || true ;;
+        esac
+        normalize_extracted_dir
+        if [[ -d "$TARGET" && "$(basename "$TARGET")" == *matcha* && ! -f "$TARGET/vocos-22khz-univ.onnx" ]]; then
+          download_file "$VOCODER_URL" "$TARGET/vocos-22khz-univ.onnx" || true
         fi
         rm -f "$ARCHIVE"
-        if is_ready "$TARGET_MATCHA"; then
-          echo "✅ CI tar 路径就绪: $TARGET_MATCHA"
+        if is_ready "$TARGET"; then
+          echo "✅ CI tar 路径就绪: $TARGET"
           break
         fi
+      else
+        rm -f "$ARCHIVE" 2>/dev/null || true
       fi
-    done
+    done < <(github_archive_urls)
+  else
+    echo "CI: 当前 variant 已就绪: $TARGET"
   fi
 fi
 
@@ -165,12 +194,9 @@ if [[ "${SKIP_DOWNLOAD:-0}" == "1" ]]; then
   exit 0
 fi
 
-# 若已有就绪模型目录则跳过
-if find "$OUT_DIR" -mindepth 1 -maxdepth 1 -type d ! -name '.*' 2>/dev/null | while read -r d; do
-  is_ready "$d" && echo "$d"
-done | grep -q .; then
-  echo "已存在 TTS 目录，跳过下载:"
-  find "$OUT_DIR" -mindepth 1 -maxdepth 1 -type d ! -name '.*'
+# 仅当前 variant 目标就绪才跳过（matcha 就绪不能挡住 melo）
+if is_ready "$TARGET"; then
+  echo "已存在当前 variant 就绪目录，跳过下载: $TARGET"
 else
   ok=0
   if [[ "$TTS_VARIANT" == "matcha-baker" || "$TTS_VARIANT" == "matcha" || "$TTS_VARIANT" == "baker" || "$TTS_VARIANT" == "default" ]]; then
@@ -230,9 +256,9 @@ else
   fi
 fi
 
-RESOLVED="$(find "$OUT_DIR" -mindepth 1 -maxdepth 1 -type d ! -name '.*' | head -1 || true)"
-if is_ready "$TARGET_MATCHA" 2>/dev/null; then
-  RESOLVED="$TARGET_MATCHA"
+RESOLVED="$TARGET"
+if ! is_ready "$RESOLVED" 2>/dev/null; then
+  RESOLVED="$(find "$OUT_DIR" -mindepth 1 -maxdepth 1 -type d ! -name '.*' | while read -r d; do is_ready "$d" && echo "$d"; done | head -1 || true)"
 fi
 
 echo
