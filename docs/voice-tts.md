@@ -111,7 +111,9 @@ bash scripts/download-debug-tts.sh
 ```
 
 App 内：设置 → Debug 资源 → TTS matcha-baker（见 `docs/debug-assets.md`）。  
-**注意**：当前目录列表不含 vocoder；真合成前请把 `vocos-22khz-univ.onnx` 放到模型目录或 `LanXin/tts/`。
+**注意（已修复）**：App 内一键下载会附带 `vocos-22khz-univ.onnx`（extraFiles）。  
+若你仍是旧包下载的半套模型，请**删除后重新下载 TTS**，或手动放入 vocoder。  
+就绪判定：`isTtsModelDirReady` / 设置页「缺 vocoder」即未就绪。
 
 ## 产品规则
 
