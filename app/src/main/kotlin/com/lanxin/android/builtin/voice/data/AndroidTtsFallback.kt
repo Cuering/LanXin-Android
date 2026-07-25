@@ -104,10 +104,7 @@ class AndroidTtsFallback @Inject constructor(
         text: String,
         utteranceId: String
     ): Boolean = withContext(Dispatchers.IO) {
-        val engine = synchronized(lock) { tts }
-        if (engine == null) {
-            if (!ensureInit()) return@withContext false
-        }
+        if (!ensureInit()) return@withContext false
         val eng = synchronized(lock) { tts } ?: return@withContext false
 
         return@withContext suspendCancellableCoroutine { cont ->
