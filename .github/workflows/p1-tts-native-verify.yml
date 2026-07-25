@@ -149,9 +149,14 @@ jobs:
         run: pip install --upgrade pip && pip install 'sherpa-onnx>=1.10.0'
 
       - name: Download TTS models (script, not git)
+        env:
+          CI: "true"
         run: |
-          mkdir -p debug-assets/tts
+          mkdir -p debug-assets/tts debug-assets/.tmp
+          set -x
           bash scripts/download-debug-tts.sh
+          echo "== tree =="
+          find debug-assets/tts -maxdepth 3 -type f | head -50
           test -f debug-assets/tts/matcha-icefall-zh-baker/model-steps-3.onnx
           test -f debug-assets/tts/matcha-icefall-zh-baker/vocos-22khz-univ.onnx
           ls -lh debug-assets/tts/matcha-icefall-zh-baker/ | head
