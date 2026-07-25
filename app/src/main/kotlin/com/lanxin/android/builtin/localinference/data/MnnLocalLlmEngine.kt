@@ -177,15 +177,27 @@ class MnnLocalLlmEngine @Inject constructor(
         val modelName = loadedPath?.let { File(it).name } ?: "?"
 
         if (usingNative) {
-            // 陪伴目前每轮 history 为空、只带当前 user：必须 reset，否则旧 KV 污染。
-            // 真正的多轮加速应像 MNNChat 一样 keep_history + 追加消息，而不是每轮塞满 system。
-            // 速度关键已在 JNI：response(...,0)+generate(1) 早停，不再一次打满 maxTokens。
-            nativeBridge.reset()
+            // MNNChat：keep_history 时不 reset，生成后 syncPromptCache。
+            // 单轮/无连贯 history 时仍 reset，避免脏 KV。
+            if (!request.reuseKv) {
+                nativeBridge.reset()
+            }
             val (roles, contents) = buildChatMessages(request)
             val text = withContext(Dispatchers.IO) {
                 nativeBridge.generateChat(roles, contents, maxTokens)
             }
             if (text != null) {
+                if (request.reuseKv) {
+                    // 同步完整对话（含本轮 assistant），对齐官方 Response 收尾
+                    val cleaned = text.trim()
+                    if (cleaned.isNotEmpty()) {
+                        val allRoles = roles + "assistant"
+                        val allContents = contents + cleaned
+                        withContext(Dispatchers.IO) {
+                            nativeBridge.syncPromptCache(allRoles, allContents)
+                        }
+                    }
+                }
                 return LocalGenerateResult(
                     text = text,
                     finishReason = "stop",
@@ -226,7 +238,9 @@ class MnnLocalLlmEngine @Inject constructor(
             .coerceIn(LocalInferenceConfig.MIN_MAX_TOKENS, LocalInferenceConfig.MAX_MAX_TOKENS)
 
         if (usingNative) {
-            nativeBridge.reset()
+            if (!request.reuseKv) {
+                nativeBridge.reset()
+            }
             val (roles, contents) = buildChatMessages(request)
             // generateChatStream 的回调是非 suspend lambda，用 Channel 桥接 flow emit
             val channel = Channel<String>(Channel.UNLIMITED)
