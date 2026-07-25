@@ -19,6 +19,8 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #include "llm/llm.hpp"
 
@@ -104,15 +106,24 @@ std::string resolveConfigPath(const std::string& path) {
  *
  * 注意：set_config 会 merge 进当前配置；模型包 config.json 的路径类字段仍由 createLLM 读取。
  */
+// 全局 mmap 缓存目录（由 Java load 时通过 set_config 传入更佳；此处用默认空=关）
+std::string g_mmap_dir;
+
 void applyRuntimeConfigLocked(Llm* llm) {
     if (llm == nullptr) return;
-    // 对齐 MNNChat：只设硬件/runtime，不覆盖模型包 config.json 的采样策略。
-    // 之前强行 mixed+penalty+temperature 会改变小模型行为，和官方 App 不一致。
-    const char* cfg =
-        R"({"thread_num":4,"backend_type":"cpu","precision":"low","memory":"low","tmp_path":""})";
+    // 对齐 MNNChat：硬件 + 可选 mmap；不覆盖模型包采样策略。
+    // mmap 对大模型加载/常驻速度影响极大（官方默认开）。
+    std::string cfg = R"({"thread_num":4,"backend_type":"cpu","precision":"low","memory":"low")";
+    if (!g_mmap_dir.empty()) {
+        cfg += R"(,"use_mmap":true,"tmp_path":")" + g_mmap_dir + R"(")";
+    } else {
+        cfg += R"(,"tmp_path":"")";
+    }
+    cfg += "}";
     try {
-        bool ok = llm->set_config(cfg);
-        ALOGI("set_config ok=%d (hw-only, sampler from model config)", ok ? 1 : 0);
+        bool ok = llm->set_config(cfg.c_str());
+        ALOGI("set_config ok=%d mmap_dir=%s", ok ? 1 : 0,
+              g_mmap_dir.empty() ? "(off)" : g_mmap_dir.c_str());
     } catch (...) {
         ALOGW("set_config threw; continue with model defaults");
     }
@@ -485,7 +496,21 @@ Java_com_lanxin_android_builtin_localinference_data_MnnNativeBridge_nativeLoadMo
     clearError();
 
     const std::string configPath = resolveConfigPath(path);
-    ALOGI("nativeLoadModel path=%s config=%s", path.c_str(), configPath.c_str());
+    // mmap 缓存：放在模型目录旁 .lanxin_mmap/（对齐 MNNChat use_mmap + tmp_path）
+    {
+        std::string base = path;
+        // if path is file, use parent
+        auto slash = base.find_last_of("/\\");
+        if (slash != std::string::npos &&
+            (base.size() > 5 && (base.substr(base.size()-5)==".json" ||
+                                 base.substr(base.size()-4)==".mnn"))) {
+            base = base.substr(0, slash);
+        }
+        g_mmap_dir = base + "/.lanxin_mmap";
+        // best-effort mkdir
+        ::mkdir(g_mmap_dir.c_str(), 0755);
+    }
+    ALOGI("nativeLoadModel path=%s config=%s mmap=%s", path.c_str(), configPath.c_str(), g_mmap_dir.c_str());
 
     Llm* llm = nullptr;
     try {
@@ -562,9 +587,24 @@ Java_com_lanxin_android_builtin_localinference_data_MnnNativeBridge_nativeGenera
     g_cancel.store(false);
     try {
         std::ostringstream os;
-        // 单轮 user；若 prompt 已含 System: 前缀则仍走 string response
-        //（Kotlin 侧会改走 nativeGenerateChat）
-        g_llm->response(prompt, &os, nullptr, maxNew);
+        // 同 Chat：prefill + 逐步 decode，避免一次打满 maxTokens
+        g_llm->response(prompt, &os, "", /*max_new_tokens=*/0);
+        int produced = 0;
+        while (!g_cancel.load() && produced < maxNew) {
+            if (g_llm->stoped()) break;
+            auto* ctx = g_llm->getContext();
+            if (ctx != nullptr) {
+                using MNN::Transformer::LlmStatus;
+                if (ctx->status == LlmStatus::NORMAL_FINISHED ||
+                    ctx->status == LlmStatus::USER_CANCEL ||
+                    ctx->status == LlmStatus::INTERNAL_ERROR ||
+                    ctx->status == LlmStatus::TIMEOUT) {
+                    break;
+                }
+            }
+            g_llm->generate(1);
+            ++produced;
+        }
         std::string out = os.str();
         if (out.empty() && g_llm->getContext() != nullptr) {
             out = g_llm->getContext()->generate_str;
@@ -638,11 +678,48 @@ Java_com_lanxin_android_builtin_localinference_data_MnnNativeBridge_nativeGenera
 
     g_cancel.store(false);
     try {
+        // === 对齐 MNNChat LlmSession::Response 的核心路径 ===
+        // 官方：response(history, os, "", 0) 只做 prefill
+        //       再 while generate(1) 直到 stop / max / cancel
+        // 兰心旧路径：response(..., maxNew) 一次打满 → 小模型常不早停 → 又慢又长又跑偏
         std::ostringstream os;
-        g_llm->response(messages, &os, nullptr, maxNew);
+        // prefill only
+        g_llm->response(messages, &os, "", /*max_new_tokens=*/0);
+
+        int produced = 0;
+        while (!g_cancel.load() && produced < maxNew) {
+            // 已自然结束（stop token）则退出
+            if (g_llm->stoped()) {
+                break;
+            }
+            auto* ctx = g_llm->getContext();
+            if (ctx != nullptr) {
+                using MNN::Transformer::LlmStatus;
+                if (ctx->status == LlmStatus::NORMAL_FINISHED ||
+                    ctx->status == LlmStatus::USER_CANCEL ||
+                    ctx->status == LlmStatus::INTERNAL_ERROR ||
+                    ctx->status == LlmStatus::TIMEOUT) {
+                    break;
+                }
+            }
+            g_llm->generate(1);
+            ++produced;
+        }
+
         std::string out = os.str();
         if (out.empty() && g_llm->getContext() != nullptr) {
             out = g_llm->getContext()->generate_str;
+        }
+        // 性能日志：对照 MNNChat 的 PERF 行
+        if (auto* ctx = g_llm->getContext()) {
+            float prefill_s = ctx->prefill_us / 1e6f;
+            float decode_s = ctx->decode_us / 1e6f;
+            float prefill_tps = (prefill_s > 0.f) ? (ctx->prompt_len / prefill_s) : 0.f;
+            float decode_tps = (decode_s > 0.f) ? (ctx->gen_seq_len / decode_s) : 0.f;
+            ALOGI("PERF prefill=%d tok/%.2fs (%.1f t/s) decode=%d tok/%.2fs (%.1f t/s) produced=%d max=%d cancel=%d",
+                  ctx->prompt_len, prefill_s, prefill_tps,
+                  ctx->gen_seq_len, decode_s, decode_tps,
+                  produced, maxNew, g_cancel.load() ? 1 : 0);
         }
         clearError();
         return newStringUtfSafe(env, out);
