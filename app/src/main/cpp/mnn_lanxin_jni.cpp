@@ -660,7 +660,6 @@ Java_com_lanxin_android_builtin_localinference_data_MnnNativeBridge_nativeGenera
     g_cancel.store(false);
     try {
         std::ostringstream os;
-        std::ostringstream os;
         g_llm->response(prompt, &os, "", /*max_new_tokens=*/0);
         int produced = stepDecodeLocked(g_llm, maxNew);
         std::string out = os.str();
@@ -876,8 +875,6 @@ Java_com_lanxin_android_builtin_localinference_data_MnnNativeBridge_nativeGenera
     }
 }
 
-JNIEXPORT void JNICALL
-
 JNIEXPORT jboolean JNICALL
 Java_com_lanxin_android_builtin_localinference_data_MnnNativeBridge_nativeSyncPromptCache(
         JNIEnv* env,
@@ -943,6 +940,7 @@ Java_com_lanxin_android_builtin_localinference_data_MnnNativeBridge_nativeLastPe
     return newStringUtfSafe(env, g_last_perf);
 }
 
+JNIEXPORT void JNICALL
 Java_com_lanxin_android_builtin_localinference_data_MnnNativeBridge_nativeCancel(
         JNIEnv* /* env */,
         jobject /* thiz */) {
