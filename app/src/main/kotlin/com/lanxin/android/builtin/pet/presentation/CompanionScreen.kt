@@ -123,14 +123,14 @@ import com.lanxin.android.builtin.localinference.domain.LocalReplySanitizer
 import com.lanxin.android.builtin.pet.domain.MoodTagMapper
 import com.lanxin.android.builtin.pet.domain.PetEvent
 import com.lanxin.android.builtin.pet.domain.PetSettings
+import com.lanxin.android.builtin.pet.domain.VisionExplainClient
 import com.lanxin.android.builtin.platform.domain.SceneSensingSettings
 import com.lanxin.android.builtin.guide.domain.GuideGate
 import com.lanxin.android.builtin.voice.domain.VoiceChatSession
 import com.lanxin.android.builtin.pet.domain.VoiceSessionCoordinator
-import com.lanxin.android.builtin.settings.domain.LocationSettings
-import com.lanxin.android.builtin.settings.domain.SmartCapabilitiesSettings
-import com.lanxin.android.builtin.tools.location.LocationTool
-import com.lanxin.android.builtin.vision.domain.VisionExplainClient
+import com.lanxin.android.builtin.capabilities.domain.LocationSettings
+import com.lanxin.android.builtin.capabilities.domain.SmartCapabilitiesSettings
+import com.lanxin.android.builtin.capabilities.tools.LocationTool
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
