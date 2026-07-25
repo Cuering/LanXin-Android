@@ -16,6 +16,7 @@
 
 package com.lanxin.android.builtin.voice.data
 
+import android.util.Log
 import com.lanxin.android.builtin.voice.domain.TtsConfig
 import com.lanxin.android.builtin.voice.domain.TtsEngine
 import com.lanxin.android.builtin.voice.domain.TtsEngineState
@@ -44,6 +45,10 @@ import kotlinx.coroutines.withContext
 class SherpaTtsEngine @Inject constructor(
     private val nativeBridge: SherpaTtsBridge
 ) : TtsEngine {
+
+    companion object {
+        private const val TAG = "SherpaTtsEngine"
+    }
 
     private val mutex = Mutex()
     private val _state = MutableStateFlow(TtsEngineState.DISABLED)
@@ -84,6 +89,7 @@ class SherpaTtsEngine @Inject constructor(
             val modelDir = resolveModelDir(config)
             // 无路径：仍允许 stub READY（与 StubTtsEngine 兼容；桌宠可演示字幕）
             if (modelDir.isBlank()) {
+                Log.w(TAG, "load: modelDir is blank, config=${config.toDebugString()} — degraded to stub")
                 loadedPath = null
                 usingNative = false
                 error = null
@@ -92,6 +98,7 @@ class SherpaTtsEngine @Inject constructor(
             }
             val pathOk = nativeBridge.validateModelPath(modelDir)
             if (!pathOk) {
+                Log.w(TAG, "load: validateModelPath failed for dir=$modelDir")
                 error = "model_dir_missing:$modelDir"
                 loadedPath = null
                 _state.value = TtsEngineState.ERROR
@@ -99,6 +106,7 @@ class SherpaTtsEngine @Inject constructor(
             }
 
             if (modelDir.startsWith(SherpaOnnxBridge.STUB_SCHEME)) {
+                Log.w(TAG, "load: stub scheme path=$modelDir, not a real model")
                 loadedPath = modelDir
                 usingNative = false
                 error = null
@@ -106,8 +114,20 @@ class SherpaTtsEngine @Inject constructor(
                 return@withLock true
             }
 
-            val nativeOk = nativeBridge.isNativeAvailable() && nativeBridge.loadModel(modelDir)
-            if (nativeOk) {
+            val nativeAvailable = nativeBridge.isNativeAvailable()
+            if (!nativeAvailable) {
+                val why = nativeBridge.nativeLoadError() ?: "native_unavailable"
+                Log.w(TAG, "load: native unavailable, reason=$why, modelDir=$modelDir — degraded to stub")
+                loadedPath = modelDir
+                usingNative = false
+                error = "native_degraded:$why"
+                _state.value = TtsEngineState.READY
+                return@withLock true
+            }
+
+            val loaded = nativeBridge.loadModel(modelDir)
+            if (loaded) {
+                Log.i(TAG, "load: OK, mode= ${nativeBridge.mode} rate=${nativeBridge.sampleRateHz} dir=$modelDir")
                 loadedPath = modelDir
                 usingNative = true
                 error = null
@@ -115,9 +135,8 @@ class SherpaTtsEngine @Inject constructor(
                 return@withLock true
             }
 
-            val reason = nativeBridge.lastError()
-                ?: nativeBridge.nativeLoadError()
-                ?: "native_load_failed"
+            val reason = nativeBridge.lastError() ?: "loadModel_returned_false"
+            Log.w(TAG, "load: native loadModel failed, reason=$reason, modelDir=$modelDir — degraded to stub")
             loadedPath = modelDir
             usingNative = false
             error = "native_degraded:$reason"
@@ -149,7 +168,9 @@ class SherpaTtsEngine @Inject constructor(
         // 未就绪：绝不抛错闪退，直接 stub 字幕结果
         if (!isReady && _state.value != TtsEngineState.SPEAKING) {
             val durationMs = (text.length * 80L).coerceAtLeast(400L).coerceAtMost(8_000L)
-            error = "not_ready:state=${_state.value}"
+            val errMsg = "not_ready:state=${_state.value}"
+            Log.w(TAG, "synthesize: $errMsg text=${text.take(48)} — stub result")
+            error = errMsg
             return TtsSynthesizeResult(
                 pcm16leMono = ByteArray(0),
                 sampleRateHz = sampleRate,
