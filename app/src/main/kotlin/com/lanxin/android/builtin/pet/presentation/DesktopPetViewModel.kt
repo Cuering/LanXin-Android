@@ -985,6 +985,16 @@ class DesktopPetViewModel @Inject constructor(
             (ttsConfigured.isBlank() || !MeijuDebugPaths.pathExists(ttsConfigured))
         ) {
             ttsSettings.setModelDir(ttsResolved)
+            // 发现完整模型时自动启用并加载，避免「目录有了仍 stub」
+            if (DebugOpenSourcePaths.isTtsModelDirReady(java.io.File(ttsResolved))) {
+                ttsSettings.setEnabled(true)
+                runCatching {
+                    ttsEngine.unload()
+                    ttsEngine.load(
+                        ttsSettings.getConfig().copy(enabled = true, modelDir = ttsResolved)
+                    )
+                }
+            }
         }
         if (llmResolved.isNotBlank() &&
             llmResolved != llmConfigured.trim() &&
@@ -1004,8 +1014,15 @@ class DesktopPetViewModel @Inject constructor(
             DebugAssetKind.ASR -> asrSettings.setModelPath(readyPath)
             DebugAssetKind.TTS -> {
                 ttsSettings.setModelDir(readyPath)
-                if (ttsSettings.getConfig().enabled && !ttsEngine.isReady) {
-                    runCatching { ttsEngine.load(ttsSettings.getConfig()) }
+                // 始终启用并强制 reload：旧 stub READY 不会自动切到真模型
+                ttsSettings.setEnabled(true)
+                runCatching {
+                    ttsEngine.unload()
+                    val cfg = ttsSettings.getConfig().copy(
+                        enabled = true,
+                        modelDir = readyPath
+                    )
+                    ttsEngine.load(cfg)
                 }
             }
             DebugAssetKind.LOCAL_LLM -> localInferenceSettings.setModelPath(readyPath)
