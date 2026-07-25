@@ -583,7 +583,8 @@ class ChatRepositoryImplTest {
             systemPrompt: String?,
             maxTokens: Int?,
             history: List<LocalChatMessage>,
-            skipOutputConstraint: Boolean
+            skipOutputConstraint: Boolean,
+            reuseKv: Boolean
         ): Flow<ApiState> {
             calls += 1
             return flowOf(*states.toTypedArray())
