@@ -127,7 +127,7 @@ class SherpaTtsEngine @Inject constructor(
 
             val loaded = nativeBridge.loadModel(modelDir)
             if (loaded) {
-                Log.i(TAG, "load: OK, mode= ${nativeBridge.mode} rate=${nativeBridge.sampleRateHz} dir=$modelDir")
+                Log.i(TAG, "load: OK, mode=${nativeBridge.currentMode()} rate=${nativeBridge.sampleRate()} dir=$modelDir")
                 loadedPath = modelDir
                 usingNative = true
                 error = null
