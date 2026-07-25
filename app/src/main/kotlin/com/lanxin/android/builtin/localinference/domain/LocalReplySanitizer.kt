@@ -209,7 +209,24 @@ object LocalReplySanitizer {
      * 气泡用 [forDisplay]；播报必须走本方法，避免 TTS 念出标签/笑脸。
      */
     fun forSpeech(raw: String, showThinking: Boolean = false): String =
-        limitToOneSentence(clean(raw, showThinking = showThinking).speechText)
+        clean(raw, showThinking = showThinking).speechText
+
+    /**
+     * 可选：硬截一句。陪伴/MNN 对齐路径不要默认调用。
+     */
+    fun forSpeechOneSentence(raw: String, showThinking: Boolean = false): String =
+        limitToOneSentence(forSpeech(raw, showThinking = showThinking))
+
+    /**
+     * MNNChat 风格极轻清洗：只剥 think 块 / 隐藏 [[tag]]，保留模型自然多句输出。
+     * 不做大纲壳、复读折叠、句级硬截、元分析大段删除以外的激进改写。
+     */
+    fun lightCleanForBareChat(raw: String): String {
+        if (raw.isEmpty()) return raw
+        val withoutThink = stripThinkingBlocks(raw)
+        val withoutTags = stripHiddenTags(withoutThink)
+        return collapseWhitespace(withoutTags).trim()
+    }
 
     /**
      * 从已清洗展示正文再剥离 emoji/装饰，供 TTS。
