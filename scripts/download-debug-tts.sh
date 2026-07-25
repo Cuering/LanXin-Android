@@ -48,7 +48,10 @@ download_file() {
   local url="$1"
   local dest="$2"
   mkdir -p "$(dirname "$dest")"
-  curl -fSL --retry 3 --retry-delay 2 -o "$dest" "$url"
+  # CI / 弱网：更长超时 + 断点续传
+  curl -fSL --retry 5 --retry-delay 3 --retry-all-errors \
+    --connect-timeout 30 --max-time 900 \
+    -C - -o "$dest" "$url"
 }
 
 download_hf_files() {
@@ -112,6 +115,41 @@ echo "==> Debug TTS"
 echo "    variant : $TTS_VARIANT"
 echo "    out     : $OUT_DIR"
 echo "    strategy: hf-mirror → huggingface → github tar.bz2（仅 matcha-baker 走 HF 逐文件）"
+# GitHub Actions：优先 release tar（对 GH 出口更稳），再补 vocoder
+if [[ "${CI:-}" == "true" || "${GITHUB_ACTIONS:-}" == "true" ]]; then
+  echo "CI 环境：优先 GitHub release tar.bz2 …"
+  if ! is_ready "$TARGET_MATCHA"; then
+    for url in \
+      "${RELEASE_TTS}/matcha-icefall-zh-baker.tar.bz2" \
+      "${RELEASE_TTS}/sherpa-onnx-matcha-icefall-zh-baker.tar.bz2"
+    do
+      ARCHIVE="$TMP_DIR/tts-ci.tar.bz2"
+      echo "  ← $url"
+      if download_file "$url" "$ARCHIVE"; then
+        echo "  解压…"
+        mkdir -p "$(dirname "$TARGET_MATCHA")"
+        tar -xjf "$ARCHIVE" -C "$(dirname "$TARGET_MATCHA")" || true
+        # 解压后目录名可能带前缀，归一到 TARGET_MATCHA
+        if [[ ! -d "$TARGET_MATCHA" ]]; then
+          found="$(find "$(dirname "$TARGET_MATCHA")" -maxdepth 2 -type d -name '*matcha*baker*' | head -1 || true)"
+          if [[ -n "$found" && "$found" != "$TARGET_MATCHA" ]]; then
+            mv "$found" "$TARGET_MATCHA" || true
+          fi
+        fi
+        # vocoder 常不在 tar 内
+        if [[ -d "$TARGET_MATCHA" && ! -f "$TARGET_MATCHA/vocos-22khz-univ.onnx" ]]; then
+          download_file "$VOCODER_URL" "$TARGET_MATCHA/vocos-22khz-univ.onnx" || true
+        fi
+        rm -f "$ARCHIVE"
+        if is_ready "$TARGET_MATCHA"; then
+          echo "✅ CI tar 路径就绪: $TARGET_MATCHA"
+          break
+        fi
+      fi
+    done
+  fi
+fi
+
 
 if [[ "${SKIP_DOWNLOAD:-0}" == "1" ]]; then
   echo "SKIP_DOWNLOAD=1，跳过实际下载。"
