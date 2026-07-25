@@ -50,7 +50,8 @@ class DefaultLocalInferenceProvider @Inject constructor(
         systemPrompt: String?,
         maxTokens: Int?,
         history: List<LocalChatMessage>,
-        skipOutputConstraint: Boolean
+        skipOutputConstraint: Boolean,
+        reuseKv: Boolean
     ): Flow<ApiState> = flow {
         val config = settings.getConfig()
         if (!config.enabled) {
@@ -91,14 +92,15 @@ class DefaultLocalInferenceProvider @Inject constructor(
             )
         }
         val effectiveMax = (maxTokens ?: config.maxTokens).coerceAtLeast(16)
-        // 整段 generate（对齐 MNN response）；引擎侧 generate 前会 reset KV
+        // 整段 generate；reuseKv=true 时对齐 MNNChat 不 reset + syncPromptCache
         val raw = engine.generate(
             LocalGenerateRequest(
                 prompt = prompt,
                 systemPrompt = effectiveSystem,
                 maxTokens = effectiveMax,
                 temperature = config.temperature,
-                history = history
+                history = history,
+                reuseKv = reuseKv
             )
         ).text
         // skipOutputConstraint：贴近 MNNChat，原文出口（仅极轻剥 think 标签，不做大纲/复读/句截）
