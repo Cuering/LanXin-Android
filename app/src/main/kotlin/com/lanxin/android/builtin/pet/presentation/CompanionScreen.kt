@@ -124,6 +124,8 @@ import com.lanxin.android.builtin.pet.domain.CompanionVisionSession
 import com.lanxin.android.builtin.pet.domain.DebugAssetStorage
 import com.lanxin.android.builtin.pet.domain.Live2dDisplayController
 import com.lanxin.android.builtin.pet.domain.Live2dModel3Reader
+import com.lanxin.android.builtin.pet.domain.BuiltInVoiceAssets
+import com.lanxin.android.builtin.pet.domain.DebugOpenSourcePaths
 import com.lanxin.android.builtin.pet.domain.MeijuDebugPaths
 import com.lanxin.android.builtin.pet.domain.PetResourceResolver
 import com.lanxin.android.builtin.pet.domain.PetBridgeCommand
@@ -1194,6 +1196,19 @@ class CompanionViewModel @Inject constructor(
                         "CompanionVM",
                         "auto-discovered TTS: ${resolved.ttsModelDir}"
                     )
+                }
+                // APK 内置 Matcha：提取并绑定（装完零下载）
+                val builtinTts = BuiltInVoiceAssets.ensureTtsInstalled(appContext)
+                if (!builtinTts.isNullOrBlank()) {
+                    val cfg = ttsSettings.getConfig()
+                    val cur = cfg.modelDir.ifBlank { cfg.modelPath }.trim()
+                    if (cur.isBlank() || !MeijuDebugPaths.pathExists(cur) ||
+                        (java.io.File(cur).isDirectory &&
+                            !DebugOpenSourcePaths.isTtsModelDirReady(java.io.File(cur)))
+                    ) {
+                        ttsSettings.setModelDir(builtinTts)
+                        android.util.Log.i("CompanionVM", "bound built-in TTS: $builtinTts")
+                    }
                 }
                 // 陪伴默认打开 TTS（无模型时由 stub/系统 TTS 兜底）
                 if (!ttsSettings.getConfig().enabled) {
