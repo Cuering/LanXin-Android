@@ -19,6 +19,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <cstdio>
 #include <sys/stat.h>
 #include <sys/types.h>
 
@@ -108,6 +109,7 @@ std::string resolveConfigPath(const std::string& path) {
  */
 // 全局 mmap 缓存目录（由 Java load 时通过 set_config 传入更佳；此处用默认空=关）
 std::string g_mmap_dir;
+std::string g_last_perf;
 
 void applyRuntimeConfigLocked(Llm* llm) {
     if (llm == nullptr) return;
@@ -750,10 +752,14 @@ Java_com_lanxin_android_builtin_localinference_data_MnnNativeBridge_nativeGenera
             float decode_s = ctx->decode_us / 1e6f;
             float prefill_tps = (prefill_s > 0.f) ? (ctx->prompt_len / prefill_s) : 0.f;
             float decode_tps = (decode_s > 0.f) ? (ctx->gen_seq_len / decode_s) : 0.f;
-            ALOGI("PERF prefill=%d tok/%.2fs (%.1f t/s) decode=%d tok/%.2fs (%.1f t/s) produced=%d max=%d cancel=%d",
-                  ctx->prompt_len, prefill_s, prefill_tps,
-                  ctx->gen_seq_len, decode_s, decode_tps,
-                  produced, maxNew, g_cancel.load() ? 1 : 0);
+            char perfBuf[256];
+            snprintf(perfBuf, sizeof(perfBuf),
+                     "PERF prefill=%d tok/%.2fs (%.1f t/s) decode=%d tok/%.2fs (%.1f t/s) produced=%d max=%d cancel=%d",
+                     ctx->prompt_len, prefill_s, prefill_tps,
+                     ctx->gen_seq_len, decode_s, decode_tps,
+                     produced, maxNew, g_cancel.load() ? 1 : 0);
+            g_last_perf = perfBuf;
+            ALOGI("%s", perfBuf);
         }
         clearError();
         return newStringUtfSafe(env, out);
@@ -849,8 +855,12 @@ Java_com_lanxin_android_builtin_localinference_data_MnnNativeBridge_nativeGenera
             out = g_llm->getContext()->generate_str;
         }
         if (auto* ctx = g_llm->getContext()) {
-            ALOGI("PERF stream prefill=%d decode=%d produced=%d max=%d",
-                  ctx->prompt_len, ctx->gen_seq_len, produced, maxNew);
+            char perfBuf[192];
+            snprintf(perfBuf, sizeof(perfBuf),
+                     "PERF stream prefill=%d decode=%d produced=%d max=%d",
+                     ctx->prompt_len, ctx->gen_seq_len, produced, maxNew);
+            g_last_perf = perfBuf;
+            ALOGI("%s", perfBuf);
         }
         clearError();
         clearStreamListener(env);
@@ -920,6 +930,17 @@ Java_com_lanxin_android_builtin_localinference_data_MnnNativeBridge_nativeSyncPr
         ALOGW("syncPromptCache exception:unknown");
         return JNI_FALSE;
     }
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_lanxin_android_builtin_localinference_data_MnnNativeBridge_nativeLastPerf(
+        JNIEnv* env,
+        jobject /* thiz */) {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    if (g_last_perf.empty()) {
+        return env->NewStringUTF("");
+    }
+    return newStringUtfSafe(env, g_last_perf);
 }
 
 Java_com_lanxin_android_builtin_localinference_data_MnnNativeBridge_nativeCancel(
