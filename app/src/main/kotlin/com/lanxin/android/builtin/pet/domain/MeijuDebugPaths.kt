@@ -150,7 +150,18 @@ object MeijuDebugPaths {
         openSourceBaseDir: File = filesDir
     ): String {
         val cfg = configured.trim()
-        if (cfg.isNotBlank() && pathExists(cfg)) return cfg
+        // 配置路径存在：若是完整 TTS（含 vocoder）直接用；仅半套 Matcha 则继续探测
+        if (cfg.isNotBlank() && pathExists(cfg)) {
+            val cfgFile = File(cfg)
+            if (!cfgFile.isDirectory || DebugOpenSourcePaths.isTtsModelDirReady(cfgFile)) {
+                return cfg
+            }
+        }
+        for (base in openSourceSearchBases(filesDir, openSourceBaseDir)) {
+            val open = DebugOpenSourcePaths.ttsModelDir(base)
+            if (DebugOpenSourcePaths.isTtsModelDirReady(open)) return open.absolutePath
+        }
+        // 回退：仍返回「有文件」的目录（兼容旧包），由就绪检查标红缺 vocoder
         for (base in openSourceSearchBases(filesDir, openSourceBaseDir)) {
             val open = DebugOpenSourcePaths.ttsModelDir(base)
             if (DebugOpenSourcePaths.isModelDirReady(open)) return open.absolutePath
