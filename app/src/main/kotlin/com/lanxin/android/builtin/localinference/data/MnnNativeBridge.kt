@@ -223,6 +223,23 @@ class MnnNativeBridge @Inject constructor() {
         runCatching { nativeReset() }
     }
 
+    /**
+     * 对齐 MNNChat：decode 结束后把完整对话（含 assistant）同步进 prompt cache，
+     * 使下一轮 prefill 可复用 KV。
+     */
+    @Synchronized
+    fun syncPromptCache(roles: Array<String>, contents: Array<String>): Boolean {
+        if (!sessionLoaded) return false
+        if (roles.size != contents.size || roles.isEmpty()) return false
+        if (!tryLoadNative()) return false
+        return try {
+            nativeSyncPromptCache(roles, contents)
+        } catch (t: Throwable) {
+            Log.w(TAG, "syncPromptCache failed: ${t.message}")
+            false
+        }
+    }
+
     @Synchronized
     fun unload() {
         unloadNativeSafe()
@@ -262,6 +279,7 @@ class MnnNativeBridge @Inject constructor() {
 
     private external fun nativeCancel()
     private external fun nativeReset()
+    private external fun nativeSyncPromptCache(roles: Array<String>, contents: Array<String>): Boolean
     private external fun nativeUnload()
     private external fun nativeLastError(): String?
     private external fun nativeIsLoaded(): Boolean
