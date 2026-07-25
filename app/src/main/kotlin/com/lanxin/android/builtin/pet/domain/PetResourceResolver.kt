@@ -86,9 +86,9 @@ object PetResourceResolver {
         ) {
             ttsDirResolved
         } else {
-            // 外置半套/空 → 回退 APK 内置 Matcha（需已 ensureTtsInstalled）
-            val builtin = BuiltInVoiceAssets.ttsInstalledDir(filesDir)
-            if (DebugOpenSourcePaths.isTtsModelDirReady(builtin)) {
+            // 外置半套/空 → 回退 APK 内置 VITS（兼容旧 Matcha 提取）
+            val builtin = BuiltInVoiceAssets.resolveInstalledTtsDir(filesDir)
+            if (builtin != null) {
                 builtin.absolutePath
             } else {
                 ttsDirResolved
