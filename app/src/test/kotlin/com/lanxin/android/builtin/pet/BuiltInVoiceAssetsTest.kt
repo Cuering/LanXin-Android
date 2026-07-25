@@ -32,20 +32,25 @@ class BuiltInVoiceAssetsTest {
     val tmp = TemporaryFolder()
 
     @Test
-    fun ttsAssetRoot_pointsAtMatchaBaker() {
-        assertEquals("voice/tts/matcha-icefall-zh-baker", BuiltInVoiceAssets.TTS_ASSET_ROOT)
-        assertEquals("vocos-22khz-univ.onnx", BuiltInVoiceAssets.TTS_VOCODER_MARKER)
+    fun ttsAssetRoot_pointsAtVitsMelo() {
+        assertEquals("voice/tts/vits-melo-tts-zh_en", BuiltInVoiceAssets.TTS_ASSET_ROOT)
+        assertEquals("tokens.txt", BuiltInVoiceAssets.TTS_TOKENS_MARKER)
+        assertEquals(
+            "voice/tts/matcha-icefall-zh-baker",
+            BuiltInVoiceAssets.TTS_ASSET_ROOT_LEGACY_MATCHA
+        )
     }
 
     @Test
-    fun isTtsInstalled_requiresVocoderReadyDir() {
+    fun isTtsInstalled_requiresReadyDir() {
         val filesDir = tmp.newFolder("files")
         val dir = BuiltInVoiceAssets.ttsInstalledDir(filesDir)
         dir.mkdirs()
-        File(dir, "model-steps-3.onnx").writeText("m")
-        File(dir, "tokens.txt").writeText("t")
+        // 仅 tokens 不够
+        File(dir, BuiltInVoiceAssets.TTS_TOKENS_MARKER).writeText("t")
         assertFalse(BuiltInVoiceAssets.isTtsInstalled(filesDir))
-        File(dir, BuiltInVoiceAssets.TTS_VOCODER_MARKER).writeText("v")
+        // tokens + 至少一个非空 onnx → ready
+        File(dir, "model.onnx").writeBytes(ByteArray(32) { 1 })
         assertTrue(DebugOpenSourcePaths.isTtsModelDirReady(dir))
         assertTrue(BuiltInVoiceAssets.isTtsInstalled(filesDir))
     }
@@ -55,7 +60,7 @@ class BuiltInVoiceAssetsTest {
         val filesDir = tmp.newFolder("f")
         assertTrue(
             BuiltInVoiceAssets.ttsInstalledDir(filesDir).absolutePath
-                .contains("builtin-voice/tts/matcha-icefall-zh-baker")
+                .contains("builtin-voice/tts/vits-melo-tts-zh_en")
         )
         assertTrue(
             BuiltInVoiceAssets.asrInstalledDir(filesDir).absolutePath
