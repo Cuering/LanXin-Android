@@ -84,7 +84,7 @@ data class TtsConfig(
     /** Debug 辅助：简洁单行。 */
     fun toDebugString(): String {
         val dir = modelDir.ifBlank { modelPath }
-        return "enabled=$enabled dir=${if (dir.isBlank) "<blank>" else dir.takeLast(40)}"
+        return "enabled=$enabled dir=${if (dir.isBlank()) "<blank>" else dir.takeLast(40)}"
     }
 }
 
