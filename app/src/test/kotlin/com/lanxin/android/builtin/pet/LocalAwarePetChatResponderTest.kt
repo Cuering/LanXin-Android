@@ -78,9 +78,9 @@ class LocalAwarePetChatResponderTest {
         )
         val out = responder.respond("你好")
         assertEquals(1, provider.calls)
-        // 对齐 MNN：不覆盖 maxTokens / 不塞 system / 跳过输出约束
+        // 陪伴模式注入人设 prompt，不覆盖 maxTokens，跳过输出约束
         assertEquals(null, provider.lastMaxTokens)
-        assertEquals(null, provider.lastSystem)
+        assertEquals("你是兰心，一个温柔体贴的 AI 陪伴助手。", provider.lastSystem?.take(20))
         assertTrue(provider.lastSkipConstraint)
         assertTrue(out.contains("你好呀"))
         assertFalse(out.contains("让我分析"))
