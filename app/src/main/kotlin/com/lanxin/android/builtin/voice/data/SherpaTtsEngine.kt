@@ -98,11 +98,13 @@ class SherpaTtsEngine @Inject constructor(
             }
             val pathOk = nativeBridge.validateModelPath(modelDir)
             if (!pathOk) {
-                Log.w(TAG, "load: validateModelPath failed for dir=$modelDir")
-                error = "model_dir_missing:$modelDir"
+                // 无效/缺失目录：降级 stub READY，让上层可走 Android 系统 TTS，不硬失败
+                Log.w(TAG, "load: validateModelPath failed for dir=$modelDir — degraded to stub")
                 loadedPath = null
-                _state.value = TtsEngineState.ERROR
-                return@withLock false
+                usingNative = false
+                error = "model_dir_missing:$modelDir"
+                _state.value = TtsEngineState.READY
+                return@withLock true
             }
 
             if (modelDir.startsWith(SherpaOnnxBridge.STUB_SCHEME)) {
