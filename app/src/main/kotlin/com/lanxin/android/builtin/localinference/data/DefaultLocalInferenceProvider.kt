@@ -101,17 +101,25 @@ class DefaultLocalInferenceProvider @Inject constructor(
                 history = history
             )
         ).text
-        val cleaned = LocalReplySanitizer.clean(
-            raw = raw,
-            showThinking = config.showThinking
-        )
-        if (config.showThinking) {
-            cleaned.thinkingText?.takeIf { it.isNotEmpty() }?.let {
-                emit(ApiState.Thinking(it))
+        // skipOutputConstraint：贴近 MNNChat，原文出口（仅极轻剥 think 标签，不做大纲/复读/句截）
+        if (skipOutputConstraint) {
+            val light = LocalReplySanitizer.lightCleanForBareChat(raw)
+            if (light.isNotEmpty()) {
+                emit(ApiState.Success(light))
             }
-        }
-        if (cleaned.displayText.isNotEmpty()) {
-            emit(ApiState.Success(cleaned.displayText))
+        } else {
+            val cleaned = LocalReplySanitizer.clean(
+                raw = raw,
+                showThinking = config.showThinking
+            )
+            if (config.showThinking) {
+                cleaned.thinkingText?.takeIf { it.isNotEmpty() }?.let {
+                    emit(ApiState.Thinking(it))
+                }
+            }
+            if (cleaned.displayText.isNotEmpty()) {
+                emit(ApiState.Success(cleaned.displayText))
+            }
         }
     }
         .onStart { emit(ApiState.Loading) }
