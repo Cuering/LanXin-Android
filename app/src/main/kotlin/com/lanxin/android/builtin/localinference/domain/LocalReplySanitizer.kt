@@ -426,6 +426,40 @@ object LocalReplySanitizer {
         return collapseWhitespace(result)
     }
 
+
+
+    /**
+     * 剥离纯大纲壳：匹配 `1. xxx` / `- xxx` / `### xxx` 等无正文的编号/项目符号行，
+     * 保留后续有实际内容的段落。用于清理小模型输出的 "Thinking Process" 编号壳。
+     */
+    fun dropBareOutlineShell(text: String): String {
+        if (text.isEmpty()) return text
+        val lines = text.split('\n')
+        val out = ArrayList<String>(lines.size)
+        var inBareShell = false
+        for (line in lines) {
+            val trimmed = line.trim()
+            // 检测大纲壳模式
+            val isBareHeader = Regex("""^[\d]+[.、]\s*$""").matches(trimmed) ||
+                Regex("""^-+\s*$""").matches(trimmed) ||
+                Regex("""^#{1,6}\s*$""").matches(trimmed) ||
+                Regex("""^\*+\s*$""").matches(trimmed)
+            if (isBareHeader) {
+                inBareShell = true
+                continue
+            }
+            // 如果当前在大纲壳中且这行也是大纲风格，跳过
+            if (inBareShell && (Regex("""^[\d]+[.、]\s+[^"]*$""").matches(trimmed) ||
+                    Regex("""^-+\s+[^"]*$""").matches(trimmed))) {
+                continue
+            }
+            inBareShell = false
+            out.add(line)
+        }
+        val result = out.joinToString("\n").trim()
+        return if (result.isEmpty()) text else result
+    }
+
     /**
      * 硬截「每次只回一句话」：取首个完整句（到 。！？… 或换行），去掉后续句子。
      * 无句读时若过长（>48 字）则按逗号/顿号截半；再无则原样返回（短答不动）。
