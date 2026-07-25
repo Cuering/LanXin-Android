@@ -29,10 +29,10 @@ import kotlinx.coroutines.withTimeoutOrNull
 /**
  * 全屏陪伴 / 桌宠「想」阶段：本地脑就绪则走本地，否则 stub 短答。
  *
- * 与主聊天对齐：
- * - 注入兰心人设 + 默认输出约束（不再 skipOutputConstraint）
- * - 短 maxTokens，降低小模型跑题/复读
- * - 出口 forSpeech + 质量闸门，答非所问时回 stub
+ * 对齐 MNNChat 调用面（不是「少叠约束」那么简单）：
+ * - system 默认空；不叠输出约束
+ * - Provider skipOutputConstraint → 原文/极轻清洗出口
+ * - 质量闸门只拦明显泄漏/空壳，不拦正常多句
  */
 @Singleton
 class LocalAwarePetChatResponder @Inject constructor(
@@ -50,13 +50,16 @@ class LocalAwarePetChatResponder @Inject constructor(
         if (!ensureLocalReady()) {
             return stub.respond(text)
         }
+        // 对齐 MNNChat 调用面：
+        // - system 默认空（模型包 chat_template / 自身指令已够用；硬塞 system 反而易跑题）
+        // - skipOutputConstraint=true → Provider 走 lightClean 原文出口
+        // - 出口不再 forSpeech 硬截 / 重闸门，避免「1.」假阳性
         val states = withTimeoutOrNull(COMPANION_TIMEOUT_MS) {
             localProvider.completeAsApiState(
                 prompt = text,
-                systemPrompt = COMPANION_SYSTEM_PROMPT,
+                systemPrompt = null,
                 maxTokens = COMPANION_MAX_TOKENS,
                 history = emptyList(),
-                // 对齐 MNNChat：不叠长「输出约束」，避免小模型吐 Thinking Process / 编号壳
                 skipOutputConstraint = true
             ).toList()
         } ?: return stub.respond(text)
@@ -68,12 +71,10 @@ class LocalAwarePetChatResponder @Inject constructor(
         if (success.isBlank()) {
             return stub.respond(text)
         }
-        // 先 forDisplay（保留完整短答），再 forSpeech 给播报级清理；避免只剩「1.」
-        val display = LocalReplySanitizer.forDisplay(success, showThinking = false).trim()
-        val cleaned = LocalReplySanitizer.forSpeech(
-            display.ifBlank { success },
-            showThinking = false
-        ).ifBlank { display }
+        // Provider 已 lightClean；这里只再剥 [[mood]] 类隐藏标，保留多句自然输出
+        val cleaned = LocalReplySanitizer.lightCleanForBareChat(success)
+            .ifBlank { success }
+            .trim()
         if (!isAcceptableReply(userText = text, reply = cleaned)) {
             return stub.respond(text)
         }
@@ -101,14 +102,16 @@ class LocalAwarePetChatResponder @Inject constructor(
 
     companion object {
         /**
-         * 陪伴模式人设 — 短、硬、可测；小模型优先记身份。
+         * 可选 system（调试/对比用）。默认陪伴路径传 null，贴近 MNNChat 裸 user 消息。
          */
-        // 极短 system，贴近 MNNChat 裸对话；细节靠模型本身 + 出口清洗
-        private const val COMPANION_SYSTEM_PROMPT: String =
+        const val COMPANION_SYSTEM_PROMPT: String =
             "你是兰心。用一两句自然中文直接回答。"
 
-        /** 陪伴短答；过长易跑题复读。 */
-        const val COMPANION_MAX_TOKENS: Int = 128
+        /**
+         * 陪伴生成上限。MNNChat 默认往往更宽松；过小会截断成「1.」半截。
+         * 256 在手机小模型上仍可接受。
+         */
+        const val COMPANION_MAX_TOKENS: Int = 256
 
         /** 单轮本地推理超时；超时回 stub，避免卡死「思考中」。 */
         const val COMPANION_TIMEOUT_MS: Long = 45_000L
@@ -144,26 +147,8 @@ class LocalAwarePetChatResponder @Inject constructor(
             }
             if (!hasContent) return false
             if (GARBAGE_PATTERNS.any { it.containsMatchIn(r) }) return false
-            // 问名字却完全不提名字/兰心/叫 → 不相关
-            if (userText.contains("名字") || userText.contains("叫什么") ||
-                userText.contains("你是谁")
-            ) {
-                val ok = listOf("兰心", "叫", "名字", "我是").any { r.contains(it) }
-                if (!ok) return false
-            }
-            // 问候却答出长篇跑题（>40 且无问候词）
-            if (listOf("你好", "哈喽", "hello", "hi", "在吗").any { userText.contains(it, true) }) {
-                if (r.length > 40 &&
-                    listOf("你好", "嗨", "在", "呀", "呢", "哥哥", "姐姐").none { r.contains(it) }
-                ) {
-                    return false
-                }
-            }
-            // 问爱好却只回问候/空话
-            if (listOf("喜欢", "爱好", "兴趣").any { userText.contains(it) }) {
-                val ok = listOf("喜欢", "爱", "音乐", "聊天", "陪", "歌", "兴趣").any { r.contains(it) }
-                if (!ok) return false
-            }
+            // 只拦「明显泄漏/空壳」；主题相关不再硬拒（MNNChat 不会做这层语义闸门）
+            // 名字题若完全答成约束泄漏，已由 GARBAGE_PATTERNS 覆盖
             return true
         }
     }
