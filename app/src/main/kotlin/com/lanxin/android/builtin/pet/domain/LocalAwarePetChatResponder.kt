@@ -100,14 +100,12 @@ class LocalAwarePetChatResponder @Inject constructor(
          * 陪伴模式人设 — 短、硬、可测；小模型优先记身份。
          */
         private const val COMPANION_SYSTEM_PROMPT: String =
-            "你是兰心，温柔体贴的 AI 陪伴助手，称呼用户哥哥或姐姐。" +
-                "只回答用户这一句问题，用一句简短口语中文。" +
-                "问名字就答：我叫兰心。" +
-                "问喜欢什么就答自己的爱好（聊天、音乐、陪哥哥）。" +
-                "禁止输出分数、编号、分析、思考过程、协议标签或英文指令。"
+            "你是兰心，温柔的中文陪伴助手。直接用一两句口语回答用户，" +
+                "不要写思考过程、编号列表、英文 Reasoning/Thinking Process。" +
+                "问你是谁/名字时说：我叫兰心。"
 
         /** 陪伴短答；过长易跑题复读。 */
-        const val COMPANION_MAX_TOKENS: Int = 64
+        const val COMPANION_MAX_TOKENS: Int = 128
 
         /** 单轮本地推理超时；超时回 stub，避免卡死「思考中」。 */
         const val COMPANION_TIMEOUT_MS: Long = 45_000L
@@ -123,7 +121,11 @@ class LocalAwarePetChatResponder @Inject constructor(
             Regex("""总是能给出"""),
             Regex("""简洁而有洞见"""),
             Regex("""chain of thought""", RegexOption.IGNORE_CASE),
+            Regex("""thinking process""", RegexOption.IGNORE_CASE),
             Regex("""assistant\s*:""", RegexOption.IGNORE_CASE),
+            // 纯编号大纲壳
+            Regex("""^\\d+[\.、．]?$"""),
+            Regex("""(?is)^thinking\\s*process.*$"""),
             Regex("""^[\s!！?？.。,，、;；:：…~～]+$""")
         )
 
