@@ -332,11 +332,18 @@ class DebugAssetDownloader @Inject constructor(
         )
         staging.mkdirs()
 
+        // baseUrl 内文件 + 额外绝对 URL（如 Matcha vocoder，不在 HF 仓库）
         val files = source.relativeFiles
+        val extra = source.extraFiles
+        val totalCount = (files.size + extra.size).coerceAtLeast(1)
         var done = 0
         // 统计已就绪文件，进度起点不为 0
         for (rel in files) {
             val existing = File(staging, rel)
+            if (existing.isFile && existing.length() > 0L) done++
+        }
+        for (ef in extra) {
+            val existing = File(staging, ef.relativePath)
             if (existing.isFile && existing.length() > 0L) done++
         }
         val alreadyDone = done
@@ -347,11 +354,11 @@ class DebugAssetDownloader @Inject constructor(
             dest.parentFile?.mkdirs()
             if (dest.isFile && dest.length() > 0L) {
                 done++
-                val overall = (done * 100) / files.size
+                val overall = (done * 100) / totalCount
                 emit(
                     DebugAssetDownloadEvent.Progress(
                         downloadedBytes = done.toLong(),
-                        totalBytes = files.size.toLong(),
+                        totalBytes = totalCount.toLong(),
                         percent = overall.coerceIn(0, 90),
                         mirror = source.mirror,
                         phase = if (alreadyDone > 0) "resuming" else "downloading",
@@ -367,11 +374,11 @@ class DebugAssetDownloader @Inject constructor(
                 } else {
                     0
                 }
-                val overall = ((done * 100) + filePct) / files.size
+                val overall = ((done * 100) + filePct) / totalCount
                 emit(
                     DebugAssetDownloadEvent.Progress(
                         downloadedBytes = done.toLong() + 1,
-                        totalBytes = files.size.toLong(),
+                        totalBytes = totalCount.toLong(),
                         percent = overall.coerceIn(0, 90),
                         mirror = source.mirror,
                         phase = "downloading",
@@ -385,10 +392,55 @@ class DebugAssetDownloader @Inject constructor(
             done++
         }
 
+        // 额外绝对 URL：不走 baseUrl（Matcha 必需 vocos-22khz-univ.onnx）
+        for (ef in extra) {
+            currentCoroutineContext().ensureActive()
+            val rel = ef.relativePath
+            val dest = File(staging, rel)
+            dest.parentFile?.mkdirs()
+            if (dest.isFile && dest.length() > 0L) {
+                done++
+                val overall = (done * 100) / totalCount
+                emit(
+                    DebugAssetDownloadEvent.Progress(
+                        downloadedBytes = done.toLong(),
+                        totalBytes = totalCount.toLong(),
+                        percent = overall.coerceIn(0, 90),
+                        mirror = source.mirror,
+                        phase = if (alreadyDone > 0) "resuming" else "downloading",
+                        sourceLabel = "${source.label}+extra"
+                    )
+                )
+                continue
+            }
+            transport.downloadToFile(ef.absoluteUrl, dest) { downloaded, total ->
+                val filePct = if (total > 0) {
+                    ((downloaded * 100) / total).toInt().coerceIn(0, 100)
+                } else {
+                    0
+                }
+                val overall = ((done * 100) + filePct) / totalCount
+                emit(
+                    DebugAssetDownloadEvent.Progress(
+                        downloadedBytes = done.toLong() + 1,
+                        totalBytes = totalCount.toLong(),
+                        percent = overall.coerceIn(0, 90),
+                        mirror = source.mirror,
+                        phase = "downloading",
+                        sourceLabel = "${source.label}+extra"
+                    )
+                )
+            }
+            if (!dest.isFile || dest.length() <= 0L) {
+                throw IllegalStateException("空文件 $rel @ ${source.label} extra")
+            }
+            done++
+        }
+
         emit(
             DebugAssetDownloadEvent.Progress(
-                downloadedBytes = files.size.toLong(),
-                totalBytes = files.size.toLong(),
+                downloadedBytes = totalCount.toLong(),
+                totalBytes = totalCount.toLong(),
                 percent = 95,
                 mirror = source.mirror,
                 phase = "extracting",
@@ -409,6 +461,8 @@ class DebugAssetDownloader @Inject constructor(
         val ok = when {
             source.modelDirRel.contains("local-llm") ->
                 DebugOpenSourcePaths.isLocalLlmDirReady(target)
+            source.modelDirRel.contains("/tts/") || source.modelDirRel.contains("tts/") ->
+                DebugOpenSourcePaths.isTtsModelDirReady(target)
             else -> DebugOpenSourcePaths.isModelDirReady(target)
         }
         if (!ok) {
