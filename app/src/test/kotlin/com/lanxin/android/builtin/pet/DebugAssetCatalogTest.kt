@@ -66,23 +66,14 @@ class DebugAssetCatalogTest {
             com.lanxin.android.builtin.pet.domain.DebugAssetMirror.MIRROR_CDN
         )
         assertTrue(sources.first().baseUrl.contains("hf-mirror.com"))
-        assertTrue(sources.first().baseUrl.contains("matcha-icefall-zh-baker"))
+        assertTrue(sources.first().baseUrl.contains("vits-melo-tts-zh_en"))
         assertTrue(sources[1].baseUrl.contains("huggingface.co"))
-        assertTrue(DebugAssetCatalog.ttsModelRelativeFiles.contains("model-steps-3.onnx"))
+        assertTrue(DebugAssetCatalog.ttsModelRelativeFiles.contains("model.onnx"))
         assertTrue(DebugAssetCatalog.ttsModelRelativeFiles.contains("lexicon.txt"))
-        assertTrue(sources.first().modelDirRel.endsWith("tts/matcha-icefall-zh-baker"))
-        // vocoder 必须作为 extra 文件随下载下发（不在 HF 仓库）
-        assertTrue(sources.first().extraFiles.isNotEmpty())
-        assertTrue(
-            sources.first().extraFiles.any {
-                it.relativePath == DebugAssetCatalog.TTS_VOCODER_FILE
-            }
-        )
-        assertTrue(
-            sources.first().extraFiles.any {
-                it.absoluteUrl.contains("vocos-22khz-univ.onnx")
-            }
-        )
+        assertTrue(sources.first().modelDirRel.endsWith("tts/vits-melo-tts-zh_en"))
+        // VITS Melo：无独立 vocoder extra
+        assertTrue(sources.first().extraFiles.isEmpty())
+        assertTrue(sources.first().relativeFiles.contains("model.onnx"))
         // HF 列表本身不含 vocoder
         assertTrue(
             DebugAssetCatalog.ttsModelRelativeFiles.none { it.contains("vocos") }
@@ -102,7 +93,7 @@ class DebugAssetCatalogTest {
             DebugAssetKind.TTS,
             com.lanxin.android.builtin.pet.domain.DebugAssetMirror.OFFICIAL
         )
-        assertTrue(tts.any { it.url.contains("matcha-icefall-zh-baker") })
+        assertTrue(tts.any { it.url.contains("vits-melo-tts-zh_en") })
     }
 
     @Test
