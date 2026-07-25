@@ -1,6 +1,7 @@
 package com.lanxin.android.builtin.localinference
 
 import com.lanxin.android.builtin.localinference.data.MnnLocalLlmEngine
+import com.lanxin.android.builtin.localinference.domain.LocalInferenceDiagnostics
 import com.lanxin.android.builtin.localinference.data.MnnNativeBridge
 import com.lanxin.android.builtin.localinference.domain.LocalEngineState
 import com.lanxin.android.builtin.localinference.domain.LocalGenerateRequest
@@ -29,7 +30,7 @@ class MnnLocalLlmEngineTest {
         MnnNativeBridge.resetNativeLoadStateForTests()
     }
 
-    private fun engine() = MnnLocalLlmEngine(MnnNativeBridge())
+    private fun engine() = MnnLocalLlmEngine(MnnNativeBridge(), LocalInferenceDiagnostics())
 
     @Test
     fun `load disabled stays DISABLED`() = runBlocking {
