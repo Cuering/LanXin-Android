@@ -106,17 +106,13 @@ std::string resolveConfigPath(const std::string& path) {
  */
 void applyRuntimeConfigLocked(Llm* llm) {
     if (llm == nullptr) return;
-    // thread_num=4 与官方 Android 默认接近
-    // mixed_samplers 把 penalty 放最前；repetition_penalty≈1.15 是小模型防复读常用值
+    // 对齐 MNNChat：只设硬件/runtime，不覆盖模型包 config.json 的采样策略。
+    // 之前强行 mixed+penalty+temperature 会改变小模型行为，和官方 App 不一致。
     const char* cfg =
-        R"({"thread_num":4,"backend_type":"cpu","precision":"low","memory":"low","tmp_path":"",)"
-        R"("sampler_type":"mixed",)"
-        R"("mixed_samplers":["penalty","topK","topP","temperature"],)"
-        R"("temperature":0.7,"top_k":40,"top_p":0.9,)"
-        R"("repetition_penalty":1.15,"presence_penalty":0.1,"frequency_penalty":0.1})";
+        R"({"thread_num":4,"backend_type":"cpu","precision":"low","memory":"low","tmp_path":""})";
     try {
         bool ok = llm->set_config(cfg);
-        ALOGI("set_config ok=%d (hw+sampler+penalty)", ok ? 1 : 0);
+        ALOGI("set_config ok=%d (hw-only, sampler from model config)", ok ? 1 : 0);
     } catch (...) {
         ALOGW("set_config threw; continue with model defaults");
     }
