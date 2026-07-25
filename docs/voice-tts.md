@@ -73,6 +73,20 @@ third_party/sherpa-onnx/NOTICE
 | `tts_reference_audio` | 参考音（本阶段 OfflineTts 未用） | 空 |
 | `tts_voice_id` | 说话人 id（可解析为 sid 整数） | `lanxin` |
 
+## 装完零下载（APK 内置）
+
+构建期 `BUNDLE_TTS=1 bash scripts/ci-bundle-voice-assets.sh` 将 Matcha+`vocos-22khz-univ.onnx` 写入  
+`app/src/main/assets/voice/tts/matcha-icefall-zh-baker/`（**权重不进 git**）。
+
+运行时：
+
+1. `BuiltInVoiceAssets.ensureTtsInstalled()` 首次启动提取到  
+   `filesDir/builtin-voice/tts/matcha-icefall-zh-baker/`
+2. 自动写 `tts_model_dir` 并 `setEnabled(true)` + load
+3. 外置 `LanXin/tts/...` 仍可覆盖；半套外置会回退内置完整模型
+
+Debug / Release 正式包默认 `BUNDLE_TTS=1`（APK 约 +60–80MB）。
+
 ## 模型布局（外置 `LanXin/tts/...`）
 
 ### Matcha（推荐：matcha-icefall-zh-baker 女声）
