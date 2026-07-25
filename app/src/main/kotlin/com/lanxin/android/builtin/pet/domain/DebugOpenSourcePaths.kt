@@ -73,7 +73,10 @@ object DebugOpenSourcePaths {
     const val ASR_PARAFORMER_SMALL_REL =
         "$ROOT_DIR/asr/sherpa-onnx-paraformer-zh-small-2024-03-09"
 
-    /** TTS 推荐目录名（脚本解压后）。 */
+    /** TTS 默认推荐：VITS Melo 中英（更自然）。 */
+    const val TTS_VITS_MELO_REL = "$ROOT_DIR/tts/vits-melo-tts-zh_en"
+
+    /** 兼容旧 Matcha baker。 */
     const val TTS_MATCHA_BAKER_REL = "$ROOT_DIR/tts/matcha-icefall-zh-baker"
 
     /**
@@ -125,18 +128,25 @@ object DebugOpenSourcePaths {
     }
 
     fun ttsModelDir(baseDir: File): File {
+        val melo = File(baseDir, TTS_VITS_MELO_REL)
         val matcha = File(baseDir, TTS_MATCHA_BAKER_REL)
-        // 优先真合成就绪（含 vocoder）；否则退回宽松 isModelDirReady
+        // 优先 VITS Melo，再 Matcha，再扫 tts/ 下任意就绪目录
+        if (isTtsModelDirReady(melo)) return melo
         if (isTtsModelDirReady(matcha)) return matcha
+        if (isModelDirReady(melo)) return melo
         if (isModelDirReady(matcha)) return matcha
         for (rootName in listOf(ROOT_DIR, LEGACY_ROOT_DIR)) {
             val root = File(baseDir, "$rootName/tts")
-            val kidsReady = root.listFiles()?.filter { isTtsModelDirReady(it) }
-            if (!kidsReady.isNullOrEmpty()) return kidsReady.first()
+            val kidsReady = root.listFiles()?.filter { isTtsModelDirReady(it) }.orEmpty()
+            // 名字含 vits/melo 优先
+            kidsReady.firstOrNull {
+                it.name.contains("vits", true) || it.name.contains("melo", true)
+            }?.let { return it }
+            if (kidsReady.isNotEmpty()) return kidsReady.first()
             val kids = root.listFiles()?.filter { isModelDirReady(it) }
             if (!kids.isNullOrEmpty()) return kids.first()
         }
-        return matcha
+        return melo
     }
 
     fun localLlmModelDir(baseDir: File): File {
@@ -238,6 +248,8 @@ object DebugOpenSourcePaths {
             resolved.contains("live2d/Mao") ||
             resolved.contains("live2d/mao") ||
             resolved.contains("sherpa-onnx-") ||
-            resolved.contains("matcha-icefall")
+            resolved.contains("matcha-icefall") ||
+            resolved.contains("vits-melo") ||
+            resolved.contains("vits-zh")
     }
 }
