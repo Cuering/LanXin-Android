@@ -44,6 +44,8 @@ interface LocalInferenceProvider {
         systemPrompt: String? = null,
         maxTokens: Int? = null,
         history: List<LocalChatMessage> = emptyList(),
-        skipOutputConstraint: Boolean = false
+        skipOutputConstraint: Boolean = false,
+        /** 对齐 MNNChat：多轮不 reset KV，生成后 syncPromptCache */
+        reuseKv: Boolean = false
     ): Flow<ApiState>
 }
