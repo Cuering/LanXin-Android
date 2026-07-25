@@ -56,8 +56,8 @@ class LocalAwarePetChatResponder @Inject constructor(
                 systemPrompt = COMPANION_SYSTEM_PROMPT,
                 maxTokens = COMPANION_MAX_TOKENS,
                 history = emptyList(),
-                // 与主聊天一致：叠 NO_THINK_OR_TAGS，减少跑题/协议泄漏
-                skipOutputConstraint = false
+                // 对齐 MNNChat：不叠长「输出约束」，避免小模型吐 Thinking Process / 编号壳
+                skipOutputConstraint = true
             ).toList()
         } ?: return stub.respond(text)
 
@@ -68,8 +68,12 @@ class LocalAwarePetChatResponder @Inject constructor(
         if (success.isBlank()) {
             return stub.respond(text)
         }
-        // forSpeech：剥 think/元分析/标签 + 单句截断
-        val cleaned = LocalReplySanitizer.forSpeech(success, showThinking = false)
+        // 先 forDisplay（保留完整短答），再 forSpeech 给播报级清理；避免只剩「1.」
+        val display = LocalReplySanitizer.forDisplay(success, showThinking = false).trim()
+        val cleaned = LocalReplySanitizer.forSpeech(
+            display.ifBlank { success },
+            showThinking = false
+        ).ifBlank { display }
         if (!isAcceptableReply(userText = text, reply = cleaned)) {
             return stub.respond(text)
         }
@@ -99,10 +103,9 @@ class LocalAwarePetChatResponder @Inject constructor(
         /**
          * 陪伴模式人设 — 短、硬、可测；小模型优先记身份。
          */
+        // 极短 system，贴近 MNNChat 裸对话；细节靠模型本身 + 出口清洗
         private const val COMPANION_SYSTEM_PROMPT: String =
-            "你是兰心，温柔的中文陪伴助手。直接用一两句口语回答用户，" +
-                "不要写思考过程、编号列表、英文 Reasoning/Thinking Process。" +
-                "问你是谁/名字时说：我叫兰心。"
+            "你是兰心。用一两句自然中文直接回答。"
 
         /** 陪伴短答；过长易跑题复读。 */
         const val COMPANION_MAX_TOKENS: Int = 128
