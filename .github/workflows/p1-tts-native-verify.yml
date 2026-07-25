@@ -121,11 +121,15 @@ jobs:
           grep -E -n "Apache|sherpa-onnx|TTS|OfflineTts" third_party/sherpa-onnx/NOTICE
           grep -E -n "SherpaTtsEngine|OfflineTts|native_degraded|LanXin/tts" docs/voice-tts.md
 
-  # 真模型合成：下载 Matcha+vocoder（不进 git），用 sherpa-onnx Python 验证非空 PCM
+  # 真模型合成：下载 VITS Melo + Matcha（不进 git），用 sherpa-onnx Python 验证非空 PCM
   real-model-synth:
-    name: Real Matcha TTS synth (download models)
+    name: Real TTS synth (${{ matrix.variant }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      matrix:
+        variant: [melo, matcha]
+
     # 手动 或 主分支 push；PR 默认不跑大下载（可用 label/workflow_dispatch）
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
 
@@ -141,9 +145,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: debug-assets/tts
-          key: tts-matcha-vocos-${{ hashFiles('scripts/ci-verify-tts.py', 'scripts/download-debug-tts.sh') }}
+          key: tts-${{ matrix.variant }}-${{ hashFiles('scripts/ci-verify-tts.py', 'scripts/download-debug-tts.sh') }}
           restore-keys: |
-            tts-matcha-vocos-
+            tts-${{ matrix.variant }}-
 
       - name: Install sherpa-onnx
         run: pip install --upgrade pip && pip install 'sherpa-onnx>=1.10.0'
@@ -151,16 +155,26 @@ jobs:
       - name: Download TTS models (script, not git)
         env:
           CI: "true"
+          TTS_VARIANT: ${{ matrix.variant }}
         run: |
           mkdir -p debug-assets/tts debug-assets/.tmp
           set -x
           bash scripts/download-debug-tts.sh
           echo "== tree =="
           find debug-assets/tts -maxdepth 3 -type f | head -50
-          test -f debug-assets/tts/matcha-icefall-zh-baker/model-steps-3.onnx
-          test -f debug-assets/tts/matcha-icefall-zh-baker/vocos-22khz-univ.onnx
-          ls -lh debug-assets/tts/matcha-icefall-zh-baker/ | head
+          if [[ "${{ matrix.variant }}" == "melo" ]]; then
+            test -f debug-assets/tts/vits-melo-tts-zh_en/model.onnx
+            test -f debug-assets/tts/vits-melo-tts-zh_en/tokens.txt
+          else
+            test -f debug-assets/tts/matcha-icefall-zh-baker/model-steps-3.onnx
+            test -f debug-assets/tts/matcha-icefall-zh-baker/vocos-22khz-univ.onnx
+          fi
+          ls -lh debug-assets/tts/ | head
 
       - name: Verify real synthesis (non-empty PCM)
         run: |
-          python3 scripts/ci-verify-tts.py --tts-dir debug-assets/tts/matcha-icefall-zh-baker
+          if [[ "${{ matrix.variant }}" == "melo" ]]; then
+            python3 scripts/ci-verify-tts.py --variant melo --tts-dir debug-assets/tts/vits-melo-tts-zh_en
+          else
+            python3 scripts/ci-verify-tts.py --variant matcha --tts-dir debug-assets/tts/matcha-icefall-zh-baker
+          fi
