@@ -136,7 +136,10 @@ object DebugAssetCatalog {
         "joiner-epoch-99-avg-1.int8.onnx"
     )
 
-    /** TTS matcha-baker 目录必要文件。 */
+    /**
+     * TTS matcha-baker 目录必要文件（HF 模型仓库内）。
+     * 注意：vocoder 不在 HF 仓库，见 [TTS_VOCODER_EXTRA] / [ttsMultiFileSources]。
+     */
     val ttsModelRelativeFiles: List<String> = listOf(
         "model-steps-3.onnx",
         "tokens.txt",
@@ -153,6 +156,18 @@ object DebugAssetCatalog {
         "dict/pos_dict/prob_emit.utf8",
         "dict/pos_dict/prob_start.utf8",
         "dict/pos_dict/prob_trans.utf8"
+    )
+
+    /** Matcha 真合成必需的 vocoder 文件名。 */
+    const val TTS_VOCODER_FILE = "vocos-22khz-univ.onnx"
+
+    /** vocoder 官方 release（不在 HF matcha 仓库）。 */
+    const val TTS_VOCODER_URL =
+        "https://github.com/k2-fsa/sherpa-onnx/releases/download/vocoder-models/vocos-22khz-univ.onnx"
+
+    val TTS_VOCODER_EXTRA: ExtraFile = ExtraFile(
+        relativePath = TTS_VOCODER_FILE,
+        absoluteUrl = TTS_VOCODER_URL
     )
 
     /**
@@ -209,12 +224,23 @@ object DebugAssetCatalog {
         preferred: DebugAssetMirror
     ): List<DebugAssetUrlCandidate> = live2dFileCandidates(relativeFile, preferred)
 
+    /**
+     * 多文件源里的「额外绝对 URL 文件」（不在 baseUrl 仓库内）。
+     * 典型：Matcha TTS 的 vocoder 在独立 release 仓库。
+     */
+    data class ExtraFile(
+        val relativePath: String,
+        val absoluteUrl: String
+    )
+
     data class MultiFileSource(
         val baseUrl: String,
         val mirror: DebugAssetMirror,
         val label: String,
         val relativeFiles: List<String>,
-        val modelDirRel: String
+        val modelDirRel: String,
+        /** 不走 baseUrl 的附加文件（如 vocos vocoder）。 */
+        val extraFiles: List<ExtraFile> = emptyList()
     )
 
     fun asrMultiFileSources(
@@ -248,19 +274,23 @@ object DebugAssetCatalog {
     ): List<MultiFileSource> {
         val files = ttsModelRelativeFiles
         val modelDirRel = "${DebugOpenSourcePaths.ROOT_DIR}/tts/$TTS_MODEL_DIR"
+        // vocoder 不在 HF 仓库：附加绝对 URL，与 scripts/download-debug-tts.sh 对齐
+        val extras = listOf(TTS_VOCODER_EXTRA)
         val mirrorFirst = MultiFileSource(
             baseUrl = "https://hf-mirror.com/$HF_TTS_REPO/resolve/main",
             mirror = DebugAssetMirror.MIRROR_CDN,
             label = "hf-mirror",
             relativeFiles = files,
-            modelDirRel = modelDirRel
+            modelDirRel = modelDirRel,
+            extraFiles = extras
         )
         val official = MultiFileSource(
             baseUrl = "https://huggingface.co/$HF_TTS_REPO/resolve/main",
             mirror = DebugAssetMirror.OFFICIAL,
             label = "huggingface",
             relativeFiles = files,
-            modelDirRel = modelDirRel
+            modelDirRel = modelDirRel,
+            extraFiles = extras
         )
         return if (preferred == DebugAssetMirror.OFFICIAL) {
             listOf(official, mirrorFirst)
