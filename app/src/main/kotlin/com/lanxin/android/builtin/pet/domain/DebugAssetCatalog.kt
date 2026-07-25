@@ -40,9 +40,9 @@ object DebugAssetCatalog {
         "https://fastly.jsdelivr.net/gh/Live2D/CubismWebSamples@develop/Samples/Resources/Mao"
 
     private const val ASR_MODEL_DIR = "sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23"
-    private const val TTS_MODEL_DIR = "matcha-icefall-zh-baker"
+    private const val TTS_MODEL_DIR = "vits-melo-tts-zh_en"
     private const val HF_ASR_REPO = "csukuangfj/sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23"
-    private const val HF_TTS_REPO = "csukuangfj/matcha-icefall-zh-baker"
+    private const val HF_TTS_REPO = "csukuangfj/vits-melo-tts-zh_en"
     private const val MS_LOCAL_LLM_REPO = "MNN/Qwen2.5-1.5B-Instruct-MNN"
     private const val HF_LOCAL_LLM_REPO = "taobao-mnn/Qwen2.5-1.5B-Instruct-MNN"
 
@@ -60,13 +60,13 @@ object DebugAssetCatalog {
 
     val tts: DebugAssetSpec = DebugAssetSpec(
         kind = DebugAssetKind.TTS,
-        displayName = "TTS（matcha-icefall-zh-baker）",
-        sizeHint = "~50–80MB",
+        displayName = "TTS（vits-melo-tts-zh_en）",
+        sizeHint = "~50–100MB",
         officialUrls = listOf(
-            "$TTS_RELEASE/matcha-icefall-zh-baker.tar.bz2",
-            "$TTS_RELEASE/sherpa-onnx-matcha-icefall-zh-baker.tar.bz2"
+            "$TTS_RELEASE/vits-melo-tts-zh_en.tar.bz2",
+            "$TTS_RELEASE/sherpa-onnx-vits-melo-tts-zh_en.tar.bz2"
         ),
-        relativeReadyPath = DebugOpenSourcePaths.TTS_MATCHA_BAKER_REL,
+        relativeReadyPath = DebugOpenSourcePaths.TTS_VITS_MELO_REL,
         extractDirRel = "${DebugOpenSourcePaths.ROOT_DIR}/tts",
         licenseHint = DebugAssetLicense.ASR_TTS_HINT
     )
@@ -140,22 +140,19 @@ object DebugAssetCatalog {
      * TTS matcha-baker 目录必要文件（HF 模型仓库内）。
      * 注意：vocoder 不在 HF 仓库，见 [TTS_VOCODER_EXTRA] / [ttsMultiFileSources]。
      */
+    /**
+     * VITS Melo 目录必要文件（HF / 解压后）。
+     * 主路径仍可用 GitHub tar；多文件下载用于镜像源。
+     */
     val ttsModelRelativeFiles: List<String> = listOf(
-        "model-steps-3.onnx",
+        "model.onnx",
         "tokens.txt",
         "lexicon.txt",
-        "date.fst",
-        "number.fst",
-        "phone.fst",
         "dict/jieba.dict.utf8",
         "dict/hmm_model.utf8",
         "dict/idf.utf8",
         "dict/stop_words.utf8",
-        "dict/user.dict.utf8",
-        "dict/pos_dict/char_state_tab.utf8",
-        "dict/pos_dict/prob_emit.utf8",
-        "dict/pos_dict/prob_start.utf8",
-        "dict/pos_dict/prob_trans.utf8"
+        "dict/user.dict.utf8"
     )
 
     /** Matcha 真合成必需的 vocoder 文件名。 */
@@ -275,7 +272,8 @@ object DebugAssetCatalog {
         val files = ttsModelRelativeFiles
         val modelDirRel = "${DebugOpenSourcePaths.ROOT_DIR}/tts/$TTS_MODEL_DIR"
         // vocoder 不在 HF 仓库：附加绝对 URL，与 scripts/download-debug-tts.sh 对齐
-        val extras = listOf(TTS_VOCODER_EXTRA)
+        // VITS Melo 自包含，无需独立 vocoder
+        val extras = emptyList<ExtraFile>()
         val mirrorFirst = MultiFileSource(
             baseUrl = "https://hf-mirror.com/$HF_TTS_REPO/resolve/main",
             mirror = DebugAssetMirror.MIRROR_CDN,
