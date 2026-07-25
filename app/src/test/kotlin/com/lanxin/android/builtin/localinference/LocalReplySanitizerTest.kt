@@ -266,4 +266,20 @@ class LocalReplySanitizerTest {
         assertTrue(off!!.contains("禁止复读") || off.contains("只说一次"))
         assertTrue(off.contains("每次只回一句话"))
     }
+
+
+    @Test
+    fun dropBareOutlineShell_stripsThinkingProcessAndBareNumber() {
+        assertEquals("", LocalReplySanitizer.dropBareOutlineShell("1."))
+        assertEquals("", LocalReplySanitizer.dropBareOutlineShell("Thinking Process: 1."))
+        assertTrue(
+            LocalReplySanitizer.forSpeech("Thinking Process: 1.", showThinking = false).isEmpty() ||
+                !LocalReplySanitizer.forSpeech("Thinking Process: 1.", showThinking = false)
+                    .contains("Thinking", ignoreCase = true)
+        )
+        assertTrue(
+            LocalReplySanitizer.forSpeech("我叫兰心呀。", showThinking = false).contains("兰心")
+        )
+    }
+
 }
