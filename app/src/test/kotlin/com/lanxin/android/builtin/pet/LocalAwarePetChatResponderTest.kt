@@ -4,6 +4,7 @@ import com.lanxin.android.builtin.localinference.domain.LocalEngineState
 import com.lanxin.android.builtin.localinference.domain.LocalGenerateRequest
 import com.lanxin.android.builtin.localinference.domain.LocalGenerateResult
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceBootstrap
+import com.lanxin.android.builtin.localinference.domain.LocalInferenceDiagnostics
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceConfig
 import com.lanxin.android.builtin.localinference.domain.LocalChatMessage
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceProvider
@@ -36,7 +37,8 @@ class LocalAwarePetChatResponderTest {
             localProvider = provider,
             localSettings = settings,
             bootstrap = bootstrap,
-            stub = StubPetChatResponder()
+            stub = StubPetChatResponder(),
+            diagnostics = LocalInferenceDiagnostics()
         )
         val out = responder.respond("你好")
         // stub 问候池：不回声用户原话，只出短答 + mood 标签
@@ -74,7 +76,8 @@ class LocalAwarePetChatResponderTest {
             localProvider = provider,
             localSettings = settings,
             bootstrap = bootstrap,
-            stub = StubPetChatResponder()
+            stub = StubPetChatResponder(),
+            diagnostics = LocalInferenceDiagnostics()
         )
         val out = responder.respond("你好")
         assertEquals(1, provider.calls)
@@ -109,7 +112,8 @@ class LocalAwarePetChatResponderTest {
             localProvider = provider,
             localSettings = settings,
             bootstrap = bootstrap,
-            stub = StubPetChatResponder()
+            stub = StubPetChatResponder(),
+            diagnostics = LocalInferenceDiagnostics()
         )
         val out = responder.respond("你喜欢什么？")
         // 垃圾回复被闸门丢弃，回 stub（非分数串）
@@ -137,7 +141,8 @@ class LocalAwarePetChatResponderTest {
             localProvider = provider,
             localSettings = settings,
             bootstrap = bootstrap,
-            stub = StubPetChatResponder()
+            stub = StubPetChatResponder(),
+            diagnostics = LocalInferenceDiagnostics()
         )
         val out = responder.respond("你叫什么名字？")
         assertTrue(out.contains("兰心"))
@@ -159,7 +164,8 @@ class LocalAwarePetChatResponderTest {
             localProvider = provider,
             localSettings = settings,
             bootstrap = bootstrap,
-            stub = StubPetChatResponder()
+            stub = StubPetChatResponder(),
+            diagnostics = LocalInferenceDiagnostics()
         )
         val out = responder.respond("在吗")
         assertTrue(out.contains("[[mood="))
@@ -210,7 +216,8 @@ class LocalAwarePetChatResponderTest {
             localProvider = provider,
             localSettings = settings,
             bootstrap = bootstrap,
-            stub = StubPetChatResponder()
+            stub = StubPetChatResponder(),
+            diagnostics = LocalInferenceDiagnostics()
         )
         responder.respond("你好")
         assertEquals(1, provider.calls)
