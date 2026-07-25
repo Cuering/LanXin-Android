@@ -102,6 +102,8 @@ import androidx.lifecycle.viewModelScope
 
 import dagger.hilt.android.lifecycle.HiltViewModel
 
+import javax.inject.Inject
+
 import com.lanxin.android.builtin.pet.data.DesktopPetBridge
 import com.lanxin.android.builtin.pet.domain.BuiltInLive2dAssets
 import com.lanxin.android.builtin.pet.domain.BuiltInMusicAssets
