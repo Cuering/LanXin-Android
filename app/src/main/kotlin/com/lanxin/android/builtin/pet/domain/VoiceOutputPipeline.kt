@@ -79,7 +79,19 @@ class VoiceOutputPipeline @Inject constructor(
         val ttsLoadDurMs = System.currentTimeMillis() - t0
         if (!ttsReady) {
             val err = loadErr ?: ttsEngine.lastError ?: "tts_not_ready"
-            log?.w("speak: tts not ready ttsLoadDur=${ttsLoadDurMs}ms error=$err")
+            log?.w("speak: tts not ready ttsLoadDur=${ttsLoadDurMs}ms error=$err — try Android TTS")
+            onPlayStarted?.invoke()
+            val fallbackOk = runCatching { androidTts.speak(speechText) }.getOrDefault(false)
+            onPlayEnded?.invoke()
+            if (fallbackOk) {
+                return SpeakResult(
+                    success = true,
+                    subtitle = speechText,
+                    isStub = true,
+                    ttsLoadDurMs = ttsLoadDurMs,
+                    ttsLoadError = err
+                )
+            }
             return SpeakResult(
                 success = false, subtitle = speechText,
                 ttsLoadDurMs = ttsLoadDurMs, ttsLoadError = err
@@ -103,11 +115,10 @@ class VoiceOutputPipeline @Inject constructor(
 
         if (synth.pcm16leMono.isEmpty()) {
             log?.i("speak: synthesize empty pcm (stub=${synth.isStub}), trying Android TTS fallback")
-            // 触发回调（即使走 fallback，UI 仍需知道开始/结束）
             onPlayStarted?.invoke()
+            // 回退到 Android 系统 TTS（等播完再 onPlayEnded，避免 UI 提前收口）
+            val fallbackOk = runCatching { androidTts.speak(speechText) }.getOrDefault(false)
             onPlayEnded?.invoke()
-            // 回退到 Android 系统 TTS（不依赖离线模型）
-            val fallbackOk = androidTts.speak(speechText)
             if (fallbackOk) {
                 log?.i("speak: Android TTS fallback OK text=${speechText.take(48)}")
                 return SpeakResult(
