@@ -82,6 +82,8 @@ class LocalAwarePetChatResponderTest {
         assertEquals(256, provider.lastMaxTokens)
         assertEquals(null, provider.lastSystem)
         assertTrue(provider.lastSkipConstraint)
+        assertTrue(provider.lastReuseKv)
+        assertEquals(0, provider.lastHistorySize)
         assertTrue(out.contains("你好呀"))
         // bare path 不再激进剥「让我分析」——Provider 侧 lightClean 只剥 think/tags
         // 本测试仍走 Fake Provider 直接 Success，Responder 只 lightClean
@@ -193,6 +195,34 @@ class LocalAwarePetChatResponderTest {
         override suspend fun setPreferLocal(prefer: Boolean) = Unit
     }
 
+    @Test
+    fun `second turn passes prior history and reuseKv`() = runBlocking {
+        val settings = FakeLocalSettings(
+            LocalInferenceConfig(enabled = true, modelPath = "stub://ok")
+        )
+        val engine = FakeEngine(ready = true)
+        val bootstrap = LocalInferenceBootstrap(settings, engine)
+        val provider = RecordingProvider(
+            canServe = true,
+            states = listOf(ApiState.Success("好呀～"))
+        )
+        val responder = LocalAwarePetChatResponder(
+            localProvider = provider,
+            localSettings = settings,
+            bootstrap = bootstrap,
+            stub = StubPetChatResponder()
+        )
+        responder.respond("你好")
+        assertEquals(1, provider.calls)
+        assertEquals(0, provider.lastHistorySize)
+        responder.respond("你叫什么")
+        assertEquals(2, provider.calls)
+        // 第一轮成功后 history = user+assistant
+        assertEquals(2, provider.lastHistorySize)
+        assertTrue(provider.lastReuseKv)
+        assertEquals(2, responder.historySizeForTest())
+    }
+
     private class FakeEngine(
         ready: Boolean
     ) : LocalLlmEngine {
@@ -230,17 +260,25 @@ class LocalAwarePetChatResponderTest {
 
         override fun canServe(): Boolean = canServe
 
+        var lastReuseKv: Boolean = false
+            private set
+        var lastHistorySize: Int = -1
+            private set
+
         override fun completeAsApiState(
             prompt: String,
             systemPrompt: String?,
             maxTokens: Int?,
             history: List<LocalChatMessage>,
-            skipOutputConstraint: Boolean
+            skipOutputConstraint: Boolean,
+            reuseKv: Boolean
         ): Flow<ApiState> {
             calls += 1
             lastMaxTokens = maxTokens
             lastSystem = systemPrompt
             lastSkipConstraint = skipOutputConstraint
+            lastReuseKv = reuseKv
+            lastHistorySize = history.size
             return flow {
                 for (s in states) emit(s)
             }
