@@ -68,6 +68,7 @@ import com.lanxin.android.builtin.pet.domain.PetSettings
 import com.lanxin.android.builtin.pet.domain.VisionExplainClient
 import com.lanxin.android.builtin.pet.domain.VoiceSessionCoordinator
 import com.lanxin.android.builtin.platform.domain.SceneSensingSettings
+import com.lanxin.android.builtin.voice.domain.VoiceChatPhase
 import com.lanxin.android.builtin.voice.domain.VoiceChatSession
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -365,4 +366,19 @@ fun CompanionScreen(
             }
         }
     }
+}
+
+
+/** 语音阶段角标文案；无语音活动时返回 null。 */
+internal fun companionVoiceBadge(
+    phase: VoiceChatPhase,
+    partial: String,
+    enabled: Boolean
+): String? = when (phase) {
+    VoiceChatPhase.LISTENING ->
+        if (partial.isNotBlank()) "听：$partial" else "正在听…"
+    VoiceChatPhase.TRANSCRIBING -> "识别中…"
+    VoiceChatPhase.WAITING_REPLY -> "想回复…"
+    VoiceChatPhase.SPEAKING -> "正在说…"
+    VoiceChatPhase.IDLE -> if (enabled) "语音已开" else null
 }
