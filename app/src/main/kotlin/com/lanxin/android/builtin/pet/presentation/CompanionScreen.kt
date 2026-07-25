@@ -76,7 +76,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runCatching
 
 data class CompanionUiState(
     val musicPlaying: Boolean = false,
@@ -126,8 +125,8 @@ class CompanionViewModel @Inject constructor(
                     it.copy(
                         musicPlaying = st.playing,
                         musicTitle = st.title,
-                        musicError = st.error,
-                        trackIndex = st.trackIndex,
+                        musicError = st.error.orEmpty(),
+                        trackIndex = st.trackIndex.coerceAtLeast(0),
                         trackCount = st.trackCount,
                         trackNames = names.ifEmpty { it.trackNames },
                         musicVolume = st.volume01,
@@ -142,7 +141,7 @@ class CompanionViewModel @Inject constructor(
     fun ensureReady() {
         viewModelScope.launch {
             runCatching { BuiltInLive2dAssets.ensureInstalled(appContext) }
-            runCatching { BuiltInMusicAssets.ensureInstalled(appContext) }
+            runCatching { BuiltInMusicAssets.ensureTestTrackInstalled(appContext) }
             val scene = sceneSensingSettings.getConfig()
             val p = player()
             p.refreshPlaylist()
@@ -327,7 +326,11 @@ fun CompanionScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.PhotoCamera, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text("视觉感知", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                        Text(
+                            "视觉感知",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.weight(1f),
+                        )
                         FilledIconButton(onClick = { viewModel.setVisionLooking(!state.visionLooking) }) {
                             Icon(Icons.Default.PhotoCamera, contentDescription = "切换视觉")
                         }
@@ -354,7 +357,7 @@ fun CompanionScreen(
                     Text("语音会话", style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "phase=${voiceUi.phase}",
+                        text = voiceUi.toString(),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
