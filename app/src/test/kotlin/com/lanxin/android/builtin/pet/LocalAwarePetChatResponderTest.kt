@@ -78,14 +78,68 @@ class LocalAwarePetChatResponderTest {
         )
         val out = responder.respond("你好")
         assertEquals(1, provider.calls)
-        // 陪伴模式注入人设 prompt，不覆盖 maxTokens，跳过输出约束
-        assertEquals(null, provider.lastMaxTokens)
-        assertTrue(provider.lastSystem.orEmpty().startsWith("你是兰心，一个温柔体贴的 AI 陪伴助手。"))
-        assertTrue(provider.lastSkipConstraint)
+        // 陪伴与主聊天对齐：注入人设 + 输出约束 + 短 maxTokens
+        assertEquals(64, provider.lastMaxTokens)
+        assertTrue(provider.lastSystem.orEmpty().startsWith("你是兰心"))
+        assertFalse(provider.lastSkipConstraint)
         assertTrue(out.contains("你好呀"))
         assertFalse(out.contains("让我分析"))
         assertFalse(out.contains("**分析**"))
         assertTrue(out.contains("[[mood="))
+    }
+
+    @Test
+    fun `quality gate rejects garbage score reply`() = runBlocking {
+        val settings = FakeLocalSettings(
+            LocalInferenceConfig(enabled = true, modelPath = "/models/x")
+        )
+        val engine = FakeEngine(ready = true)
+        val bootstrap = LocalInferenceBootstrap(settings, engine)
+        val provider = RecordingProvider(
+            canServe = true,
+            states = listOf(
+                ApiState.Loading,
+                ApiState.Success("（0-5 分） 4 你好！"),
+                ApiState.Done
+            )
+        )
+        val responder = LocalAwarePetChatResponder(
+            localProvider = provider,
+            localSettings = settings,
+            bootstrap = bootstrap,
+            stub = StubPetChatResponder()
+        )
+        val out = responder.respond("你喜欢什么？")
+        // 垃圾回复被闸门丢弃，回 stub（非分数串）
+        assertFalse(out.contains("0-5"))
+        assertFalse(out.contains("分）"))
+        assertTrue(out.contains("[[mood="))
+    }
+
+    @Test
+    fun `quality gate rejects off-topic name answer`() = runBlocking {
+        val settings = FakeLocalSettings(
+            LocalInferenceConfig(enabled = true, modelPath = "/models/x")
+        )
+        val engine = FakeEngine(ready = true)
+        val bootstrap = LocalInferenceBootstrap(settings, engine)
+        val provider = RecordingProvider(
+            canServe = true,
+            states = listOf(
+                ApiState.Loading,
+                ApiState.Success("我帮你回答问题时要表现出耐心。"),
+                ApiState.Done
+            )
+        )
+        val responder = LocalAwarePetChatResponder(
+            localProvider = provider,
+            localSettings = settings,
+            bootstrap = bootstrap,
+            stub = StubPetChatResponder()
+        )
+        val out = responder.respond("你叫什么名字？")
+        assertTrue(out.contains("兰心"))
+        assertFalse(out.contains("表现出耐心"))
     }
 
     @Test
