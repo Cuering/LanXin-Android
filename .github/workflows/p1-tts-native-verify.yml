@@ -7,9 +7,14 @@ on:
     paths:
       - 'app/src/main/kotlin/com/lanxin/android/builtin/voice/**'
       - 'app/src/test/kotlin/com/lanxin/android/builtin/voice/**'
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/pet/domain/**'
+      - 'app/src/test/kotlin/com/lanxin/android/builtin/pet/**'
       - 'app/build.gradle.kts'
       - 'app/libs/**'
       - 'docs/voice-tts.md'
+      - 'docs/debug-assets.md'
+      - 'scripts/ci-verify-tts.py'
+      - 'scripts/download-debug-tts.sh'
       - 'builtin/voice/**'
       - 'third_party/sherpa-onnx/**'
       - 'ARCHITECTURE.md'
@@ -19,9 +24,14 @@ on:
     paths:
       - 'app/src/main/kotlin/com/lanxin/android/builtin/voice/**'
       - 'app/src/test/kotlin/com/lanxin/android/builtin/voice/**'
+      - 'app/src/main/kotlin/com/lanxin/android/builtin/pet/domain/**'
+      - 'app/src/test/kotlin/com/lanxin/android/builtin/pet/**'
       - 'app/build.gradle.kts'
       - 'app/libs/**'
       - 'docs/voice-tts.md'
+      - 'docs/debug-assets.md'
+      - 'scripts/ci-verify-tts.py'
+      - 'scripts/download-debug-tts.sh'
       - 'builtin/voice/**'
       - 'third_party/sherpa-onnx/**'
       - 'ARCHITECTURE.md'
@@ -79,6 +89,15 @@ jobs:
             --tests "com.lanxin.android.builtin.voice.*" \
             --no-daemon --stacktrace
 
+      - name: Run pet TTS readiness / download unit tests
+        run: |
+          ./gradlew :app:testDebugUnitTest \
+            --tests "com.lanxin.android.builtin.pet.PetPathReadinessTest" \
+            --tests "com.lanxin.android.builtin.pet.DebugAssetCatalogTest" \
+            --tests "com.lanxin.android.builtin.pet.DebugAssetDownloaderTest" \
+            --tests "com.lanxin.android.builtin.pet.VoiceOutputPipelineTest" \
+            --no-daemon --stacktrace
+
       - name: Surfaces and docs present
         run: |
           test -f docs/voice-tts.md
@@ -101,3 +120,42 @@ jobs:
           grep -E -n "downloadSherpaOnnxAar|sherpa-onnx" app/build.gradle.kts
           grep -E -n "Apache|sherpa-onnx|TTS|OfflineTts" third_party/sherpa-onnx/NOTICE
           grep -E -n "SherpaTtsEngine|OfflineTts|native_degraded|LanXin/tts" docs/voice-tts.md
+
+  # 真模型合成：下载 Matcha+vocoder（不进 git），用 sherpa-onnx Python 验证非空 PCM
+  real-model-synth:
+    name: Real Matcha TTS synth (download models)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # 手动 或 主分支 push；PR 默认不跑大下载（可用 label/workflow_dispatch）
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache TTS model dir
+        uses: actions/cache@v4
+        with:
+          path: debug-assets/tts
+          key: tts-matcha-vocos-${{ hashFiles('scripts/ci-verify-tts.py', 'scripts/download-debug-tts.sh') }}
+          restore-keys: |
+            tts-matcha-vocos-
+
+      - name: Install sherpa-onnx
+        run: pip install --upgrade pip && pip install 'sherpa-onnx>=1.10.0'
+
+      - name: Download TTS models (script, not git)
+        run: |
+          mkdir -p debug-assets/tts
+          bash scripts/download-debug-tts.sh
+          test -f debug-assets/tts/matcha-icefall-zh-baker/model-steps-3.onnx
+          test -f debug-assets/tts/matcha-icefall-zh-baker/vocos-22khz-univ.onnx
+          ls -lh debug-assets/tts/matcha-icefall-zh-baker/ | head
+
+      - name: Verify real synthesis (non-empty PCM)
+        run: |
+          python3 scripts/ci-verify-tts.py --tts-dir debug-assets/tts/matcha-icefall-zh-baker
