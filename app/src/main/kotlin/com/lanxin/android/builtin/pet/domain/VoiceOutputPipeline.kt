@@ -150,6 +150,11 @@ class VoiceOutputPipeline @Inject constructor(
         )
 
         // === 环节 3：play ===
+        log?.i(
+            "speak: play start pcmBytes=${synth.pcm16leMono.size} " +
+                "rate=${synth.sampleRateHz} stub=${synth.isStub} " +
+                "lastError=${ttsEngine.lastError}"
+        )
         onPlayStarted?.invoke()
         val t2 = System.currentTimeMillis()
         val playResult = runCatching {
@@ -171,7 +176,11 @@ class VoiceOutputPipeline @Inject constructor(
             )
         }
 
-        log?.i("speak done synthDur=${synthDurMs}ms playDur=${playDurMs}ms text=${speechText.take(48)}")
+        log?.i(
+            "speak done synthDur=${synthDurMs}ms playDur=${playDurMs}ms " +
+                "pcmBytes=${synth.pcm16leMono.size} rate=${synth.sampleRateHz} " +
+                "stub=${synth.isStub} text=${speechText.take(48)}"
+        )
         return SpeakResult(
             success = true, subtitle = subtitle, isStub = synth.isStub,
             ttsLoadDurMs = ttsLoadDurMs,
