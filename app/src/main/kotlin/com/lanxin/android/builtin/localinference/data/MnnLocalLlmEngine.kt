@@ -20,6 +20,7 @@ import com.lanxin.android.builtin.localinference.domain.LocalEngineState
 import com.lanxin.android.builtin.localinference.domain.LocalGenerateRequest
 import com.lanxin.android.builtin.localinference.domain.LocalGenerateResult
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceConfig
+import com.lanxin.android.builtin.localinference.domain.LocalInferenceDiagnostics
 import com.lanxin.android.builtin.localinference.domain.LocalLlmEngine
 import com.lanxin.android.util.PathImportHelper
 import java.io.File
@@ -46,7 +47,8 @@ import kotlinx.coroutines.withContext
  */
 @Singleton
 class MnnLocalLlmEngine @Inject constructor(
-    private val nativeBridge: MnnNativeBridge
+    private val nativeBridge: MnnNativeBridge,
+    private val diagnostics: LocalInferenceDiagnostics
 ) : LocalLlmEngine {
 
     private val mutex = Mutex()
@@ -133,6 +135,7 @@ class MnnLocalLlmEngine @Inject constructor(
                 usingNative = true
                 error = null
                 _state.value = LocalEngineState.READY
+                diagnostics.log("load", "native READY path=${File(loadPath).name}")
                 return@withLock true
             }
 
@@ -144,6 +147,7 @@ class MnnLocalLlmEngine @Inject constructor(
             usingNative = false
             error = "native_degraded:$reason"
             _state.value = LocalEngineState.READY
+            diagnostics.log("load", "DEGRADED stub reason=$reason path=${File(loadPath).name}")
             true
         }
     }
@@ -178,17 +182,27 @@ class MnnLocalLlmEngine @Inject constructor(
 
         if (usingNative) {
             // MNNChat：keep_history 时不 reset，生成后 syncPromptCache。
-            // 单轮/无连贯 history 时仍 reset，避免脏 KV。
             if (!request.reuseKv) {
                 nativeBridge.reset()
             }
             val (roles, contents) = buildChatMessages(request)
+            val t0 = System.currentTimeMillis()
+            diagnostics.log(
+                "engine",
+                "generate begin reuseKv=${request.reuseKv} msgs=${roles.size} max=$maxTokens " +
+                    "sys=${!request.systemPrompt.isNullOrBlank()} hist=${request.history.size} " +
+                    "prompt=${request.prompt.trim().take(40)}"
+            )
             val text = withContext(Dispatchers.IO) {
                 nativeBridge.generateChat(roles, contents, maxTokens)
             }
+            val dur = System.currentTimeMillis() - t0
             if (text != null) {
+                diagnostics.log(
+                    "engine",
+                    "generate ok durMs=$dur replyLen=${text.length} preview=${text.trim().take(60).replace('\n',' ')}"
+                )
                 if (request.reuseKv) {
-                    // 同步完整对话（含本轮 assistant），对齐官方 Response 收尾
                     val cleaned = text.trim()
                     if (cleaned.isNotEmpty()) {
                         val allRoles = roles + "assistant"
@@ -196,6 +210,7 @@ class MnnLocalLlmEngine @Inject constructor(
                         withContext(Dispatchers.IO) {
                             nativeBridge.syncPromptCache(allRoles, allContents)
                         }
+                        diagnostics.log("engine", "syncPromptCache msgs=${allRoles.size}")
                     }
                 }
                 return LocalGenerateResult(
@@ -204,6 +219,10 @@ class MnnLocalLlmEngine @Inject constructor(
                     isStub = false
                 )
             }
+            diagnostics.log(
+                "engine",
+                "generate null durMs=$dur err=${nativeBridge.lastError()}"
+            )
             // native 生成失败 → 仍返回可诊断 stub 行，避免崩溃
         }
 
