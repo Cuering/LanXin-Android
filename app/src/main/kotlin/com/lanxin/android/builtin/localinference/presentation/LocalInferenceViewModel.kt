@@ -21,9 +21,13 @@ import androidx.lifecycle.viewModelScope
 import com.lanxin.android.builtin.localinference.domain.InferenceRouteCoordinator
 import com.lanxin.android.builtin.localinference.domain.LocalEngineState
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceBootstrap
+import com.lanxin.android.builtin.localinference.domain.LocalInferenceDiagnostics
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceConfig
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceSettings
 import com.lanxin.android.builtin.localinference.domain.LocalLlmEngine
+import com.lanxin.android.builtin.localinference.data.MnnLocalLlmEngine
+import java.io.File
+import android.os.Environment
 import com.lanxin.android.builtin.localinference.domain.NetworkStatusProvider
 import com.lanxin.android.util.LocalPathImporter
 import com.lanxin.android.util.PathImportHelper
@@ -56,7 +60,10 @@ data class LocalInferenceUiState(
     val routePreview: String = "",
     val networkAvailable: Boolean = true,
     /** 一键开启后若缺模型，引导选文件夹。 */
-    val needModelPicker: Boolean = false
+    val needModelPicker: Boolean = false,
+    /** 最近一次诊断报告全文（用于复制）。 */
+    val lastExportReport: String? = null,
+    val lastExportPath: String? = null
 )
 
 @HiltViewModel
@@ -66,7 +73,8 @@ class LocalInferenceViewModel @Inject constructor(
     private val routeCoordinator: InferenceRouteCoordinator,
     private val networkStatusProvider: NetworkStatusProvider,
     private val pathImporter: LocalPathImporter,
-    private val bootstrap: LocalInferenceBootstrap
+    private val bootstrap: LocalInferenceBootstrap,
+    private val diagnostics: LocalInferenceDiagnostics
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LocalInferenceUiState())
@@ -380,5 +388,56 @@ class LocalInferenceViewModel @Inject constructor(
 
     fun clearSnackbar() {
         _uiState.update { it.copy(snackbarMessage = null) }
+    }
+
+    /** 生成诊断报告：写入 state.lastExportReport，并尽量落到外部存储 LanXin/logs/。 */
+    fun exportDiagnosticsReport() {
+        viewModelScope.launch {
+            val st = _uiState.value
+            val usingNative = (engine as? MnnLocalLlmEngine)?.isUsingNative
+            val report = diagnostics.buildReport(
+                engineState = st.engineState.name,
+                lastError = engine.lastError ?: st.lastError,
+                modelPath = st.modelPath,
+                usingNative = usingNative,
+                routePreview = st.routePreview,
+                extraHeader = mapOf(
+                    "enabled" to st.enabled.toString(),
+                    "maxTokens" to st.maxTokens.toString(),
+                    "contextWindow" to st.contextWindowTokens.toString(),
+                    "preferLocal" to st.preferLocal.toString(),
+                    "eventCount" to diagnostics.snapshotLines().size.toString()
+                )
+            )
+            val base = runCatching {
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
+            }.getOrNull()
+            val path = diagnostics.writeReportFile(report, base)
+                ?: diagnostics.writeReportFile(
+                    report,
+                    runCatching { Environment.getExternalStorageDirectory() }.getOrNull()
+                )
+            _uiState.update {
+                it.copy(
+                    lastExportReport = report,
+                    lastExportPath = path,
+                    snackbarMessage = if (path != null) {
+                        "诊断已生成，已复制并保存到 $path"
+                    } else {
+                        "诊断已生成，请点复制（文件保存失败可仅用剪贴板）"
+                    }
+                )
+            }
+            diagnostics.log("export", "report_ready path=${path ?: "clipboard_only"} bytes=${report.length}")
+        }
+    }
+
+    fun clearExportReport() {
+        _uiState.update { it.copy(lastExportReport = null) }
+    }
+
+    fun clearDiagnosticsEvents() {
+        diagnostics.clear()
+        _uiState.update { it.copy(snackbarMessage = "已清空诊断事件缓冲") }
     }
 }
