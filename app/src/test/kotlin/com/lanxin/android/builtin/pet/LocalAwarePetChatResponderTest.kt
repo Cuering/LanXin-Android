@@ -80,8 +80,6 @@ class LocalAwarePetChatResponderTest {
         assertEquals(1, provider.calls)
         // 对齐 MNNChat：null system、skip 约束、更大 maxTokens、原文出口
         assertEquals(256, provider.lastMaxTokens)
-        assertTrue(provider.lastSystem == null || provider.lastSystem == "unset")
-        // RecordingProvider 初始 lastSystem="unset" 被覆盖为 null
         assertEquals(null, provider.lastSystem)
         assertTrue(provider.lastSkipConstraint)
         assertTrue(out.contains("你好呀"))
