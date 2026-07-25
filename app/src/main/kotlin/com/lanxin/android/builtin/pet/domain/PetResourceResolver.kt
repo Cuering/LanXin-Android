@@ -76,11 +76,24 @@ object PetResourceResolver {
             openSourceBaseDir = openSourceBaseDir
         )
         // debug/release 均探测 openSource：用户下载到 externalFiles 后配置可空
-        val ttsDir = MeijuDebugPaths.resolveTtsModelDirIfPresent(
+        val ttsDirResolved = MeijuDebugPaths.resolveTtsModelDirIfPresent(
             filesDir,
             ttsDirConfigured,
             openSourceBaseDir = openSourceBaseDir
         )
+        val ttsDir = if (ttsDirResolved.isNotBlank() &&
+            DebugOpenSourcePaths.isTtsModelDirReady(File(ttsDirResolved))
+        ) {
+            ttsDirResolved
+        } else {
+            // 外置半套/空 → 回退 APK 内置 Matcha（需已 ensureTtsInstalled）
+            val builtin = BuiltInVoiceAssets.ttsInstalledDir(filesDir)
+            if (DebugOpenSourcePaths.isTtsModelDirReady(builtin)) {
+                builtin.absolutePath
+            } else {
+                ttsDirResolved
+            }
+        }
         val ttsRef = if (isDebug) {
             MeijuDebugPaths.resolveTtsReferenceIfPresent(filesDir, ttsRefConfigured)
         } else {
