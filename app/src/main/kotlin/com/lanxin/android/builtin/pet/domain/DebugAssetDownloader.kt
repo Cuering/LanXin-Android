@@ -80,7 +80,8 @@ class DebugAssetDownloader @Inject constructor(
             }
             DebugAssetKind.TTS -> {
                 val d = DebugOpenSourcePaths.ttsModelDir(baseDir)
-                if (DebugOpenSourcePaths.isModelDirReady(d)) d.absolutePath else ""
+                // 真合成需要 vocoder；仅有 acoustic 不算 ready
+                if (DebugOpenSourcePaths.isTtsModelDirReady(d)) d.absolutePath else ""
             }
             DebugAssetKind.LOCAL_LLM -> {
                 val d = DebugOpenSourcePaths.localLlmModelDir(baseDir)
