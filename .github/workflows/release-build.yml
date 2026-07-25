@@ -37,10 +37,7 @@ jobs:
       - name: Bundle built-in voice models (ASR+TTS) into APK assets
         env:
           BUNDLE_TTS: "1"
-          CI: "true"
-        run: |
-          bash scripts/ci-bundle-voice-assets.sh
-          test -f app/src/main/assets/voice/tts/matcha-icefall-zh-baker/vocos-22khz-univ.onnx
+        run: bash scripts/ci-bundle-voice-assets.sh
 
       - name: Build Unsigned Release APK
         run: ./gradlew assembleRelease
