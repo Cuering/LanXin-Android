@@ -18,6 +18,7 @@ package com.lanxin.android.builtin.pet.domain
 
 import com.lanxin.android.builtin.localinference.domain.LocalChatMessage
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceBootstrap
+import com.lanxin.android.builtin.localinference.domain.LocalInferenceDiagnostics
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceProvider
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceSettings
 import com.lanxin.android.builtin.localinference.domain.LocalReplySanitizer
@@ -43,7 +44,8 @@ class LocalAwarePetChatResponder @Inject constructor(
     private val localProvider: LocalInferenceProvider,
     private val localSettings: LocalInferenceSettings,
     private val bootstrap: LocalInferenceBootstrap,
-    private val stub: StubPetChatResponder
+    private val stub: StubPetChatResponder,
+    private val diagnostics: LocalInferenceDiagnostics
 ) : PetChatResponder {
 
     private val mutex = Mutex()
@@ -56,6 +58,7 @@ class LocalAwarePetChatResponder @Inject constructor(
             return@withLock stub.respond(text)
         }
         if (!ensureLocalReady()) {
+            diagnostics.log("companion", "not_ready → stub user=${text.take(40)}")
             return@withLock stub.respond(text)
         }
 
@@ -63,6 +66,11 @@ class LocalAwarePetChatResponder @Inject constructor(
         trimHistoryIfNeeded()
 
         val historySnapshot = turnHistory.toList()
+        diagnostics.log(
+            "companion",
+            "round begin hist=${historySnapshot.size} reuseKv=true max=$COMPANION_MAX_TOKENS user=${text.take(40)}"
+        )
+        val t0 = System.currentTimeMillis()
         val states = withTimeoutOrNull(COMPANION_TIMEOUT_MS) {
             localProvider.completeAsApiState(
                 prompt = text,
@@ -72,25 +80,40 @@ class LocalAwarePetChatResponder @Inject constructor(
                 skipOutputConstraint = true,
                 reuseKv = true
             ).toList()
-        } ?: return@withLock stub.respond(text)
+        }
+        if (states == null) {
+            diagnostics.log("companion", "timeout ${COMPANION_TIMEOUT_MS}ms → stub")
+            return@withLock stub.respond(text)
+        }
 
         val success = states
             .filterIsInstance<ApiState.Success>()
             .joinToString("") { it.textChunk }
             .trim()
         if (success.isBlank()) {
+            val err = states.filterIsInstance<ApiState.Error>().lastOrNull()?.message
+            diagnostics.log("companion", "blank success err=$err → stub durMs=${System.currentTimeMillis()-t0}")
             return@withLock stub.respond(text)
         }
         val cleaned = LocalReplySanitizer.lightCleanForBareChat(success)
             .ifBlank { success }
             .trim()
         if (!isAcceptableReply(userText = text, reply = cleaned)) {
+            diagnostics.log(
+                "companion",
+                "rejected by gate preview=${cleaned.take(50).replace('\n',' ')} → stub"
+            )
             return@withLock stub.respond(text)
         }
 
         // 成功才写入 history（对齐 MNNChat：可见对话与引擎 cache 同步）
         turnHistory.add(LocalChatMessage(role = "user", content = text))
         turnHistory.add(LocalChatMessage(role = "assistant", content = cleaned))
+        diagnostics.log(
+            "companion",
+            "ok durMs=${System.currentTimeMillis()-t0} histNow=${turnHistory.size} " +
+                "reply=${cleaned.take(60).replace('\n',' ')}"
+        )
 
         val mood = guessMood(text, cleaned)
         return@withLock "[[mood=$mood]]\n$cleaned"
