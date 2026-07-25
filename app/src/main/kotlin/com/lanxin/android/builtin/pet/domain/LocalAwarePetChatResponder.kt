@@ -20,7 +20,6 @@ import com.lanxin.android.builtin.localinference.domain.LocalInferenceBootstrap
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceProvider
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceSettings
 import com.lanxin.android.builtin.localinference.domain.LocalReplySanitizer
-import com.lanxin.android.builtin.persona.domain.BuiltinPersonas
 import com.lanxin.android.data.dto.ApiState
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -30,9 +29,10 @@ import kotlinx.coroutines.withTimeoutOrNull
 /**
  * 全屏陪伴 / 桌宠「想」阶段：本地脑就绪则走本地，否则 stub 短答。
  *
- * - 注入 [BuiltinPersonas.DEFAULT] 人设（兰心），让 LLM 知道自己的身份
- * - 出口用 forSpeech（含 limitToOneSentence），每次只说一句
- * - 引擎 generate 前 reset KV + ChatMessages 模板
+ * 与主聊天对齐：
+ * - 注入兰心人设 + 默认输出约束（不再 skipOutputConstraint）
+ * - 短 maxTokens，降低小模型跑题/复读
+ * - 出口 forSpeech + 质量闸门，答非所问时回 stub
  */
 @Singleton
 class LocalAwarePetChatResponder @Inject constructor(
@@ -54,9 +54,10 @@ class LocalAwarePetChatResponder @Inject constructor(
             localProvider.completeAsApiState(
                 prompt = text,
                 systemPrompt = COMPANION_SYSTEM_PROMPT,
-                maxTokens = null,
+                maxTokens = COMPANION_MAX_TOKENS,
                 history = emptyList(),
-                skipOutputConstraint = true
+                // 与主聊天一致：叠 NO_THINK_OR_TAGS，减少跑题/协议泄漏
+                skipOutputConstraint = false
             ).toList()
         } ?: return stub.respond(text)
 
@@ -67,9 +68,9 @@ class LocalAwarePetChatResponder @Inject constructor(
         if (success.isBlank()) {
             return stub.respond(text)
         }
-        // forSpeech 会先剥 think/元分析/标签，再 limitToOneSentence（每次只说一句）
+        // forSpeech：剥 think/元分析/标签 + 单句截断
         val cleaned = LocalReplySanitizer.forSpeech(success, showThinking = false)
-        if (cleaned.isBlank()) {
+        if (!isAcceptableReply(userText = text, reply = cleaned)) {
             return stub.respond(text)
         }
         val mood = guessMood(text, cleaned)
@@ -96,18 +97,61 @@ class LocalAwarePetChatResponder @Inject constructor(
 
     companion object {
         /**
-         * 陪伴模式人设 prompt — 兰心，温柔陪伴。
-         * 与 BuiltinPersonas.DEFAULT 一致，单独定义避免跨模块依赖冲突。
+         * 陪伴模式人设 — 短、硬、可测；小模型优先记身份。
          */
         private const val COMPANION_SYSTEM_PROMPT: String =
-            "你是兰心，一个温柔体贴的 AI 陪伴助手。你性格温和、语气亲切，" +
-                "叫用户「哥哥」或「姐姐」。每次只说一句简短的回应，不说长句。" +
-                "用口语化的方式交流，让人觉得温暖和被关心。"
+            "你是兰心，温柔体贴的 AI 陪伴助手，称呼用户哥哥或姐姐。" +
+                "只回答用户这一句问题，用一句简短口语中文。" +
+                "问名字就答：我叫兰心。" +
+                "问喜欢什么就答自己的爱好（聊天、音乐、陪哥哥）。" +
+                "禁止输出分数、编号、分析、思考过程、协议标签或英文指令。"
 
-        /** 陪伴不再覆盖 maxTokens；Provider 收到 null 时用设置页默认。 */
-        const val COMPANION_MAX_TOKENS: Int = 0
+        /** 陪伴短答；过长易跑题复读。 */
+        const val COMPANION_MAX_TOKENS: Int = 64
 
         /** 单轮本地推理超时；超时回 stub，避免卡死「思考中」。 */
         const val COMPANION_TIMEOUT_MS: Long = 45_000L
+
+        /** 明显垃圾/泄漏模式 → 丢弃走 stub。 */
+        private val GARBAGE_PATTERNS = listOf(
+            Regex("""\(\s*0\s*[-~到至]\s*\d+\s*分\s*\)"""),
+            Regex("""\b\d+\s*分\b"""),
+            Regex("""系统已明确"""),
+            Regex("""输出约束"""),
+            Regex("""要表现出"""),
+            Regex("""chain of thought""", RegexOption.IGNORE_CASE),
+            Regex("""assistant\s*:""", RegexOption.IGNORE_CASE),
+            Regex("""^[\s!！?？.。,，、;；:：…~～]+$""")
+        )
+
+        /**
+         * 质量闸门：空/过短/标点/泄漏/明显不相关 → false。
+         */
+        fun isAcceptableReply(userText: String, reply: String): Boolean {
+            val r = reply.trim()
+            if (r.length < 2) return false
+            // 仅标点
+            if (r.all { !it.isLetterOrDigit() && it.code < 0x4E00 || it in " \t\n" }) {
+                // 允许含中文；纯符号拒绝
+                if (r.none { it.code in 0x4E00..0x9FFF || it.isLetterOrDigit() }) return false
+            }
+            if (GARBAGE_PATTERNS.any { it.containsMatchIn(r) }) return false
+            // 问名字却完全不提名字/兰心/叫 → 不相关
+            if (userText.contains("名字") || userText.contains("叫什么") ||
+                userText.contains("你是谁")
+            ) {
+                val ok = listOf("兰心", "叫", "名字", "我是").any { r.contains(it) }
+                if (!ok) return false
+            }
+            // 问候却答出长篇跑题（>40 且无问候词）
+            if (listOf("你好", "哈喽", "hello", "hi", "在吗").any { userText.contains(it, true) }) {
+                if (r.length > 40 &&
+                    listOf("你好", "嗨", "在", "呀", "呢", "哥哥", "姐姐").none { r.contains(it) }
+                ) {
+                    return false
+                }
+            }
+            return true
+        }
     }
 }
