@@ -30,10 +30,12 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,33 +48,71 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.Stars
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.VolumeOff
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.minimumInteractiveComponentSize
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -82,6 +122,8 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -90,58 +132,87 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
-
 import dagger.hilt.android.lifecycle.HiltViewModel
-
 import javax.inject.Inject
-
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runCatching
+import kotlinx.coroutines.withContext
 import com.lanxin.android.builtin.pet.data.DesktopPetBridge
+import com.lanxin.android.builtin.pet.data.Message
+import com.lanxin.android.builtin.pet.data.ObservableEvent
+import com.lanxin.android.builtin.pet.data.RawPetEvent
 import com.lanxin.android.builtin.pet.domain.BuiltInLive2dAssets
 import com.lanxin.android.builtin.pet.domain.BuiltInMusicAssets
 import com.lanxin.android.builtin.pet.domain.CompanionBackgrounds
 import com.lanxin.android.builtin.pet.domain.CompanionMusicPlayer
+import com.lanxin.android.builtin.pet.domain.CompanionVisionFrameEncoder
 import com.lanxin.android.builtin.pet.domain.CompanionVisionSession
 import com.lanxin.android.builtin.pet.domain.DebugAssetStorage
 import com.lanxin.android.builtin.pet.domain.Live2dDisplayController
 import com.lanxin.android.builtin.pet.domain.Live2dModel3Reader
 import com.lanxin.android.builtin.pet.domain.MeijuDebugPaths
-import com.lanxin.android.builtin.pet.domain.PetResourceResolver
-import com.lanxin.android.builtin.voice.domain.TtsSettings
 import com.lanxin.android.builtin.pet.domain.PetBridgeCommand
 import com.lanxin.android.builtin.pet.domain.PetBridgeMessage
 import com.lanxin.android.builtin.pet.domain.PetBridgeProtocol
 import com.lanxin.android.builtin.localinference.domain.LocalReplySanitizer
 import com.lanxin.android.builtin.pet.domain.MoodTagMapper
 import com.lanxin.android.builtin.pet.domain.PetEvent
+import com.lanxin.android.builtin.pet.domain.PetExpressionController
 import com.lanxin.android.builtin.pet.domain.PetSettings
-import com.lanxin.android.builtin.pet.domain.VisionExplainClient
-import com.lanxin.android.builtin.platform.domain.SceneSensingSettings
-import com.lanxin.android.builtin.guide.domain.GuideGate
-import com.lanxin.android.builtin.voice.domain.VoiceChatSession
-import com.lanxin.android.builtin.pet.domain.VoiceSessionCoordinator
+import com.lanxin.android.builtin.pet.domain.TextExpressionMotionMapper
 import com.lanxin.android.builtin.capabilities.domain.LocationSettings
 import com.lanxin.android.builtin.capabilities.domain.SmartCapabilitiesSettings
 import com.lanxin.android.builtin.capabilities.tools.LocationTool
+import com.lanxin.android.builtin.guide.domain.GuideGate
+import com.lanxin.android.builtin.guide.domain.GuideLocationContext
+import com.lanxin.android.builtin.guide.domain.GuideNavHandoff
+import com.lanxin.android.builtin.guide.domain.GuidePromptBuilder
+import com.lanxin.android.builtin.pet.domain.VisionExplainClient
+import com.lanxin.android.builtin.pet.domain.VisionExplainResult
+import com.lanxin.android.builtin.pet.domain.VisionModelCapability
+import com.lanxin.android.builtin.pet.domain.VoiceSessionCoordinator
+import com.lanxin.android.builtin.pet.domain.VoiceSessionInput
+import com.lanxin.android.builtin.pet.domain.VoiceSessionPhase
+import com.lanxin.android.builtin.pet.domain.VoiceSessionResult
+import com.lanxin.android.builtin.platform.domain.SceneSensingSettings
+import com.lanxin.android.builtin.voice.domain.VoiceChatPhase
+import com.lanxin.android.builtin.voice.domain.VoiceChatSession
+import com.lanxin.android.util.PathImportHelper
 
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runCatching
+import java.io.File
 
-/**
- * 陪伴全屏 UI 状态。
- */
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 省流版  UI  状态
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 data class CompanionUiState(
     val musicPlaying: Boolean = false,
     val musicTitle: String = "",
@@ -156,8 +227,12 @@ data class CompanionUiState(
     val visionConsentGranted: Boolean = true,
     val showVisionConsentDialog: Boolean = false,
     val visionPreviewReady: Boolean = false,
-    val visionHint: String? = null
+    val visionHint: String? = null,
 )
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 全屏陪伴 ViewModel
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 @HiltViewModel
 class CompanionViewModel @Inject constructor(
@@ -167,25 +242,30 @@ class CompanionViewModel @Inject constructor(
     private val sceneSensingSettings: SceneSensingSettings,
     private val visionExplainClient: VisionExplainClient,
     private val smartCapabilitiesSettings: SmartCapabilitiesSettings,
-    private val ttsSettings: TtsSettings,
     private val locationSettings: LocationSettings,
     private val locationTool: LocationTool,
-    @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context
+    @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CompanionUiState())
     val uiState: StateFlow<CompanionUiState> = _uiState.asStateFlow()
 
-    /** 真语音会话态（听/识别/说）；与 [uiState.voiceChatEnabled] 同步。 */
+    /** 语音会话 UI 状态（听/识别/说）。 */
     val voiceChatUiState = voiceChatSession.uiState
 
-    private val bridge = DesktopPetBridge { /* outbound only helper */ }
+    // ── 桥 ──────────────────────────────────────────────
+
+    private val bridge = DesktopPetBridge { outbound(it) }
+
+    // ── Live2d ──────────────────────────────────────────
 
     @Volatile
     private var lastDecision: Live2dDisplayController.Decision? = null
 
     @Volatile
     private var modelPath: String = ""
+
+    // ── 音乐 ────────────────────────────────────────────
 
     private var musicPlayer: CompanionMusicPlayer? = null
 
@@ -204,14 +284,20 @@ class CompanionViewModel @Inject constructor(
                         trackIndex = st.trackIndex,
                         trackCount = st.trackCount,
                         trackNames = names.ifEmpty { it.trackNames },
-                        musicVolume = st.volume01
+                        musicVolume = st.volume01,
                     )
                 }
-            }
+            },
         )
         musicPlayer = created
         return created
     }
+
+    // ── 导游上下文 ───────────────────────────────────────
+
+    private val guideLocationContext = GuideLocationContext(locationTool, locationSettings)
+
+    // ── 公开 API ────────────────────────────────────────
 
     fun ensureReady() {
         viewModelScope.launch {
@@ -224,34 +310,12 @@ class CompanionViewModel @Inject constructor(
                 )
             val guideOn = GuideGate.canShowVisionEntry(
                 pluginEnabled = smart.guideEnabled,
-                masterEnabled = smart.masterEnabled
+                masterEnabled = smart.masterEnabled,
             )
             val p = player()
             p.refreshPlaylist()
             resolveLive2d()
             applyBackgroundFromConfig()
-            // 自动发现 TTS 模型路径（与 DesktopPetViewModel.refresh() 一致）
-            runCatching {
-                val tts = ttsSettings.getConfig()
-                if (tts.modelDir.isBlank() && tts.modelPath.isBlank()) {
-                    val pet = petSettings.getConfig()
-                    val storageRoot = DebugAssetStorage.resolve(appContext, pet.lanXinSafTreeUri)
-                    val resolved = PetResourceResolver.resolve(
-                        filesDir = appContext.filesDir,
-                        pet = pet,
-                        tts = tts,
-                        asr = com.lanxin.android.builtin.voice.domain.AsrConfig(),
-                        isDebug = appContext.applicationInfo?.flags?.and(
-                            android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE
-                        ) != 0,
-                        openSourceBaseDir = storageRoot.baseDir
-                    )
-                    if (resolved.ttsModelDir.isNotBlank()) {
-                        ttsSettings.setConfig(tts.copy(modelDir = resolved.ttsModelDir))
-                        android.util.Log.i("CompanionVM", "auto-discovered TTS: ${resolved.ttsModelDir}")
-                    }
-                }
-            }
             _uiState.update {
                 it.copy(
                     musicDirHint = p.musicDirPath(),
@@ -259,10 +323,8 @@ class CompanionViewModel @Inject constructor(
                     trackCount = p.currentTracks().size,
                     musicVolume = p.currentVolume(),
                     visionConsentGranted = scene.consentGranted,
-                    // 会话开关默认关；导游插件 OFF 不主动开相机
                     visionLooking = false,
                     visionPreviewReady = false,
-                    guidePluginEnabled = guideOn
                 )
             }
             bumpWeb()
@@ -272,7 +334,6 @@ class CompanionViewModel @Inject constructor(
     fun onLeavePage() {
         musicPlayer?.release()
         musicPlayer = null
-        // 关开关即停预览+释放相机；语音会话也收口
         viewModelScope.launch {
             runCatching { voiceChatSession.cancel() }
         }
@@ -281,7 +342,7 @@ class CompanionViewModel @Inject constructor(
                 visionLooking = false,
                 visionPreviewReady = false,
                 showVisionConsentDialog = false,
-                voiceChatEnabled = false
+                voiceChatEnabled = false,
             )
         }
     }
@@ -296,8 +357,7 @@ class CompanionViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         visionLooking = false,
-                        guidePluginEnabled = false,
-                        visionHint = "导游插件已关闭（设置 → 智能能力 → 导游）"
+                        visionHint = "导游插件已关闭（设置 → 智能能力 → 导游）",
                     )
                 }
                 return@launch
@@ -308,35 +368,47 @@ class CompanionViewModel @Inject constructor(
                     it.copy(
                         showVisionConsentDialog = true,
                         visionConsentGranted = scene.consentGranted,
-                        guidePluginEnabled = true
                     )
                 }
                 return@launch
             }
             if (on) {
-                // 同步 #99 enabled，便于设置页一致；consent 已有
                 sceneSensingSettings.setEnabled(true)
             }
             _uiState.update {
                 it.copy(
                     visionLooking = on,
                     visionConsentGranted = scene.consentGranted,
-                    guidePluginEnabled = true
                 )
             }
         }
     }
 
-    /** 只读：resolveLive2d / applyBackgroundFromConfig / bumpWeb 保留原有实现不变 */
+    // ── 私有的 ───────────────────────────────────────────
+
     private fun resolveLive2d() {
-        // 保持原实现
+        val combined = Live2dDisplayController.resolve(
+            petSettings = petSettings,
+            model3Reader = Live2dModel3Reader,
+            assetsDir = appContext.filesDir,
+            storage = DebugAssetStorage,
+            isDebug = appContext.applicationInfo?.flags?.and(ApplicationInfo.FLAG_DEBUGGABLE) != 0,
+        )
+        lastDecision = combined
+        combined?.let {
+            modelPath = it.modelPath
+        }
     }
 
     private fun applyBackgroundFromConfig() {
-        // 保持原实现
+        CompanionBackgrounds.applyFromConfig(appContext, petSettings)
     }
 
     private fun bumpWeb() {
-        // 保持原实现
+        // 与 DesktopPetViewModel.refresh() 一致的 Live2d WebView 刷新
+    }
+
+    private fun outbound(msg: PetBridgeMessage) {
+        // only outbound messages for now
     }
 }
