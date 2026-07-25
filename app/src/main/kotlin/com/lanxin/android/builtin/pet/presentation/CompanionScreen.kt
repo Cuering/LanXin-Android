@@ -210,7 +210,7 @@ import com.lanxin.android.util.PathImportHelper
 import java.io.File
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 省流版  UI  状态
+// 省流版 UI 状态
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 data class CompanionUiState(
@@ -410,5 +410,273 @@ class CompanionViewModel @Inject constructor(
 
     private fun outbound(msg: PetBridgeMessage) {
         // only outbound messages for now
+    }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 全屏陪伴 Composable
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CompanionScreen(
+    onNavigateBack: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
+    audioUiViewModel: androidx.lifecycle.ViewModelStoreOwner,
+) {
+    val vm: CompanionViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+        viewModelStoreOwner = androidx.compose.ui.platform.LocalContext.current as androidx.activity.ComponentActivity
+    )
+    // 临时简化：直接使用平台的 ViewModelProvider
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val focusManager = LocalFocusManager.current
+    val ctx = LocalContext.current
+
+    // ── 进入/离开 ────────────────────────────────────────
+
+    LaunchedEffect(Unit) {
+        vm.ensureReady()
+    }
+    DisposableEffect(Unit) {
+        onDispose { vm.onLeavePage() }
+    }
+
+    // ── UI 订阅 ──────────────────────────────────────────
+
+    val state by vm.uiState.collectAsStateWithLifecycle()
+    val voiceUi by vm.voiceChatUiState.collectAsStateWithLifecycle()
+
+    // ── 语音会话框架 ─────────────────────────────────────
+
+    var chatInput by rememberSaveable { mutableStateOf("") }
+    var showChatSheet by rememberSaveable { mutableStateOf(false) }
+
+    // ── 选歌 ─────────────────────────────────────────────
+
+    var showPickTrackDialog by remember { mutableStateOf(false) }
+
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        topBar = {
+            TopAppBar(
+                title = { Text("全屏陪伴") },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { showChatSheet = true }) {
+                        Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = "语音")
+                    }
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(Icons.Default.Settings, contentDescription = "设置")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                ),
+            )
+        },
+    ) { pad ->
+        LazyColumn(
+            modifier = Modifier
+                .padding(pad)
+                .fillMaxSize()
+                .padding(horizontal = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            // ── 音乐播放器 ──────────────────────────────────
+            item {
+                MusicPlayerCard(
+                    state = state,
+                    onPlayPause = {
+                        scope.launch {
+                            vm.player().toggle()
+                        }
+                    },
+                    onPrev = {
+                        scope.launch {
+                            vm.player().prev()
+                        }
+                    },
+                    onNext = {
+                        scope.launch {
+                            vm.player().next()
+                        }
+                    },
+                    onPickTrack = { showPickTrackDialog = true },
+                    onVolumeChange = { vol ->
+                        scope.launch {
+                            vm.player().setVolume(vol)
+                        }
+                    },
+                    onRefresh = {
+                        scope.launch {
+                            vm.player().refreshPlaylist()
+                        }
+                    },
+                )
+            }
+            // ── 视觉 ──────────────────────────────────────
+            item {
+                VisionCard(
+                    state = state,
+                    onToggle = { vm.setVisionLooking(!state.visionLooking) },
+                )
+            }
+            // ── 语音 ──────────────────────────────────────
+            item {
+                VoiceChatCard(
+                    voiceUi = voiceUi,
+                    onToggle = {
+                        scope.launch {
+                            vm.voiceChatSession.toggle()
+                        }
+                    },
+                )
+            }
+        }
+    }
+}
+
+// ── 子组件 ──────────────────────────────────────────
+
+@Composable
+private fun MusicPlayerCard(
+    state: CompanionUiState,
+    onPlayPause: () -> Unit,
+    onPrev: () -> Unit,
+    onNext: () -> Unit,
+    onPickTrack: () -> Unit,
+    onVolumeChange: (Float) -> Unit,
+    onRefresh: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.MusicNote, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = if (state.musicPlaying) state.musicTitle else "未播放",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = onRefresh) {
+                    Icon(Icons.Default.Refresh, contentDescription = "刷新")
+                }
+            }
+            if (state.musicError.isNotEmpty()) {
+                Text(
+                    text = state.musicError,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+            // 进度占位
+            LinearProgressIndicator(
+                progress = { if (state.trackCount > 0) state.trackIndex.toFloat() / state.trackCount else 0f },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                FilledIconButton(onClick = onPrev, modifier = Modifier.size(36.dp)) {
+                    Icon(Icons.Default.SkipPrevious, contentDescription = "上一首", modifier = Modifier.size(18.dp))
+                }
+                FilledIconButton(onClick = onPlayPause, modifier = Modifier.size(36.dp)) {
+                    Icon(
+                        if (state.musicPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = if (state.musicPlaying) "暂停" else "播放",
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+                FilledIconButton(onClick = onNext, modifier = Modifier.size(36.dp)) {
+                    Icon(Icons.Default.SkipNext, contentDescription = "下一首", modifier = Modifier.size(18.dp))
+                }
+                Spacer(Modifier.weight(1f))
+                FilledIconButton(onClick = onPickTrack, modifier = Modifier.size(36.dp)) {
+                    Icon(Icons.Default.List, contentDescription = "选歌", modifier = Modifier.size(18.dp))
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+            Text("音量", style = MaterialTheme.typography.labelSmall)
+            Slider(
+                value = state.musicVolume,
+                onValueChange = onVolumeChange,
+                valueRange = 0f..1f,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            if (state.musicDirHint.isNotEmpty()) {
+                Text(
+                    text = "音乐目录: ${state.musicDirHint}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun VisionCard(
+    state: CompanionUiState,
+    onToggle: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.PhotoCamera, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("视觉感知", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                FilledIconButton(onClick = onToggle, modifier = Modifier.size(36.dp)) {
+                    Icon(
+                        if (state.visionLooking) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                        contentDescription = if (state.visionLooking) "关闭" else "开启",
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
+            if (state.visionHint != null) {
+                Text(
+                    text = state.visionHint,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun VoiceChatCard(
+    state: com.lanxin.android.builtin.voice.domain.VoiceChatUiState,
+    onToggle: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Mic, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("语音会话", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                FilledIconButton(onClick = onToggle, modifier = Modifier.size(36.dp)) {
+                    Icon(
+                        if (state.isListening) Icons.Default.MicOff else Icons.Default.Mic,
+                        contentDescription = if (state.isListening) "关闭" else "开启",
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
+        }
     }
 }
