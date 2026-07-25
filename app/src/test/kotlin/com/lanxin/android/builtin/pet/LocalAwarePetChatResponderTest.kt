@@ -219,15 +219,18 @@ class LocalAwarePetChatResponderTest {
             stub = StubPetChatResponder(),
             diagnostics = LocalInferenceDiagnostics()
         )
-        responder.respond("你好")
+        val out1 = responder.respond("你好")
+        assertTrue("first turn should use local: $out1", out1.contains("好呀") || out1.contains("好"))
         assertEquals(1, provider.calls)
         assertEquals(0, provider.lastHistorySize)
-        responder.respond("你叫什么")
+        val out2 = responder.respond("你叫什么")
         assertEquals(2, provider.calls)
-        // 第一轮成功后 history = user+assistant
+        // 第二轮入参 history = 第一轮 user+assistant
         assertEquals(2, provider.lastHistorySize)
         assertTrue(provider.lastReuseKv)
-        assertEquals(2, responder.historySizeForTest())
+        // 两轮成功后进程内共 4 条（2 user + 2 assistant）
+        assertEquals(4, responder.historySizeForTest())
+        assertTrue(out2.isNotBlank())
     }
 
     private class FakeEngine(
