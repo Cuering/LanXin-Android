@@ -63,14 +63,10 @@ enum class TtsEngineState {
 }
 
 /**
- * TTS 配置快照。
+ * TTS 配置。
  *
- * @property enabled 是否启用 TTS（桌宠会话可独立开关；默认关）
- * @property modelPath 兼容旧键 / 单文件路径（不入库大文件）
- * @property modelDir TTS 模型目录（DataStore `tts_model_dir`；一等公民）
- * @property referenceAudio 参考音 wav 路径（DataStore `tts_reference_audio`）
- * @property voiceId 音色 / 说话人 id（stub 忽略）
- * @property sampleRateHz 输出采样率
+ * @property modelDir 首选模型目录
+ * @property modelPath 兼容层：部分旧配置存 modelPath
  */
 data class TtsConfig(
     val enabled: Boolean = false,
@@ -83,6 +79,12 @@ data class TtsConfig(
     companion object {
         const val DEFAULT_VOICE_ID = "lanxin"
         const val DEFAULT_SAMPLE_RATE_HZ = 22_050
+    }
+
+    /** Debug 日志：简短摘要，不暴露完整路径。 */
+    fun toDebugString(): String {
+        val dir = modelDir.ifBlank { modelPath }
+        return "enabled=$enabled dir=${if (dir.isBlank()) "<blank>" else dir.takeLast(40)}"
     }
 }
 
@@ -129,16 +131,4 @@ data class TtsSynthesizeResult(
         result = 31 * result + subtitle.hashCode()
         return result
     }
-}
-
-/**
- * TTS 设置门面。
- */
-interface TtsSettings {
-    suspend fun getConfig(): TtsConfig
-    suspend fun setEnabled(enabled: Boolean)
-    suspend fun setModelPath(path: String?)
-    suspend fun setModelDir(path: String?)
-    suspend fun setReferenceAudio(path: String?)
-    suspend fun setVoiceId(voiceId: String)
 }
