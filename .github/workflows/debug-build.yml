@@ -76,7 +76,7 @@ jobs:
       - name: Build signed debug APK
         run: |
           chmod +x gradlew
-          ./gradlew assembleSignedDebug --no-daemon --build-cache -Pci
+          ./gradlew assembleSignedDebug --no-daemon --no-build-cache -Pci
 
       - name: Upload signed debug APK
         uses: actions/upload-artifact@v7
