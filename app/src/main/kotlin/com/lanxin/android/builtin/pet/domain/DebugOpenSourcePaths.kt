@@ -126,9 +126,13 @@ object DebugOpenSourcePaths {
 
     fun ttsModelDir(baseDir: File): File {
         val matcha = File(baseDir, TTS_MATCHA_BAKER_REL)
+        // 优先真合成就绪（含 vocoder）；否则退回宽松 isModelDirReady
+        if (isTtsModelDirReady(matcha)) return matcha
         if (isModelDirReady(matcha)) return matcha
         for (rootName in listOf(ROOT_DIR, LEGACY_ROOT_DIR)) {
             val root = File(baseDir, "$rootName/tts")
+            val kidsReady = root.listFiles()?.filter { isTtsModelDirReady(it) }
+            if (!kidsReady.isNullOrEmpty()) return kidsReady.first()
             val kids = root.listFiles()?.filter { isModelDirReady(it) }
             if (!kids.isNullOrEmpty()) return kids.first()
         }
@@ -177,6 +181,38 @@ object DebugOpenSourcePaths {
         if (hasOnnx) return true
         // 极宽松：非空子目录（历史兼容）
         return children.any { it.isFile && it.length() > 0L }
+    }
+
+    /**
+     * TTS 真合成就绪：在 [isModelDirReady] 之上，Matcha 还需 vocoder。
+     * 缺 vocos 时 [SherpaTtsBridge] 只能 stub，故下载验收必须更严。
+     */
+    fun isTtsModelDirReady(dir: File): Boolean {
+        if (!isModelDirReady(dir)) return false
+        val names = dir.listFiles()?.map { it.name.lowercase() }?.toSet().orEmpty()
+        val hasAcoustic = names.any {
+            it.endsWith(".onnx") && !it.contains("vocos") &&
+                !it.contains("vocoder") && !it.contains("hifigan")
+        }
+        if (!hasAcoustic) return false
+        // Matcha 目录（名含 matcha / 有 model-steps）必须有 vocoder
+        val looksMatcha = dir.name.contains("matcha", ignoreCase = true) ||
+            names.any { it.contains("model-steps") && it.endsWith(".onnx") }
+        if (looksMatcha) {
+            val hasVocoder = names.any {
+                it.contains("vocos") || it.contains("vocoder") || it.contains("hifigan")
+            }
+            // 也允许 vocoder 在上一级
+            val parentHas = dir.parentFile?.listFiles()?.any { f ->
+                f.isFile && (
+                    f.name.contains("vocos", true) ||
+                        f.name.contains("vocoder", true) ||
+                        f.name.contains("hifigan", true)
+                    )
+            } == true
+            if (!hasVocoder && !parentHas) return false
+        }
+        return true
     }
 
     /** ASR 更严：至少 tokens + encoder/decoder/joiner 之一。 */
