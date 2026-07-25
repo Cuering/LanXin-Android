@@ -114,7 +114,10 @@ class VoiceOutputPipeline @Inject constructor(
         val synthDurMs = System.currentTimeMillis() - t1
 
         if (synth.pcm16leMono.isEmpty()) {
-            log?.i("speak: synthesize empty pcm (stub=${synth.isStub}), trying Android TTS fallback")
+            log?.i(
+                "speak: synthesize empty pcm (stub=${synth.isStub}) " +
+                    "lastError=${ttsEngine.lastError} — trying Android TTS fallback"
+            )
             onPlayStarted?.invoke()
             // 回退到 Android 系统 TTS（等播完再 onPlayEnded，避免 UI 提前收口）
             val fallbackOk = runCatching { androidTts.speak(speechText) }.getOrDefault(false)
@@ -183,19 +186,32 @@ class VoiceOutputPipeline @Inject constructor(
      * 无模型路径时仍尝试 load：stub 不需要真实文件；真引擎失败后回 lastError / no_tts_model。
      */
     private suspend fun ensureTtsReady(): Pair<Boolean, String?> {
-        if (ttsEngine.isReady) return Pair(true, null)
         val config = ttsSettings.getConfig()
+        val modelPresent = config.modelDir.isNotBlank() || config.modelPath.isNotBlank()
+        // 已 READY 但 lastError 含 native_degraded/model_dir_missing：若配置有路径则强制重载
+        val degraded = ttsEngine.lastError?.let { err ->
+            err.startsWith("native_degraded") ||
+                err.startsWith("model_dir_missing") ||
+                err.startsWith("not_ready")
+        } == true
+        if (ttsEngine.isReady && !(degraded && modelPresent)) {
+            return Pair(true, null)
+        }
         val toLoad = if (config.enabled) config else config.copy(enabled = true)
         return runCatching {
+            if (degraded && modelPresent) {
+                runCatching { ttsEngine.unload() }
+            }
             val loaded = ttsEngine.load(toLoad)
             if (loaded && !config.enabled) {
                 ttsSettings.setEnabled(true)
             }
             if (loaded && ttsEngine.isReady) {
+                // 仍可能是 stub READY：上层靠 isStub / 空 PCM 再回退系统 TTS
                 Pair(true, null)
             } else {
                 val err = ttsEngine.lastError
-                    ?: if (config.modelDir.isBlank() && config.modelPath.isBlank()) {
+                    ?: if (!modelPresent) {
                         "no_tts_model"
                     } else {
                         "tts_not_ready"
