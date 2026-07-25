@@ -25,10 +25,11 @@ import java.io.FileOutputStream
  * 仓内内置 ASR/TTS 模型（跟随 APK 打包，首次启动时提取到 filesDir）。
  *
  * 策略：
- * - **ASR**：`assets/voice/asr/` 下 sherpa-onnx 小模型 → `filesDir/builtin-voice/asr/`（约 12MB）
- * - **TTS**：`assets/voice/tts/matcha-icefall-zh-baker/`（含 vocoder，约 60–80MB）
- *   → `filesDir/builtin-voice/tts/matcha-icefall-zh-baker/`
+ * - **ASR**：`assets/voice/asr/` 下 sherpa-onnx 小模型 → `filesDir/builtin-voice/asr/`
+ * - **TTS（默认 VITS）**：`assets/voice/tts/vits-melo-tts-zh_en/`
+ *   → `filesDir/builtin-voice/tts/vits-melo-tts-zh_en/`
  *   构建期由 `BUNDLE_TTS=1 bash scripts/ci-bundle-voice-assets.sh` 写入 assets（**不进 git**）
+ * - 兼容旧包：若 assets 仍是 matcha，也可提取并识别
  *
  * 许可：sherpa-onnx 模型 Apache 2.0
  * https://github.com/k2-fsa/sherpa-onnx
@@ -38,27 +39,34 @@ object BuiltInVoiceAssets {
     /** assets 下 ASR 模型根（相对 AssetManager）。 */
     const val ASR_ASSET_ROOT = "voice/asr/sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23"
 
-    /** assets 下 TTS Matcha 模型根（含 vocos vocoder）。 */
-    const val TTS_ASSET_ROOT = "voice/tts/matcha-icefall-zh-baker"
+    /** 默认内置 TTS：VITS Melo 中英（更自然）。 */
+    const val TTS_ASSET_ROOT = "voice/tts/vits-melo-tts-zh_en"
+
+    /** 兼容旧 APK / 半迁移：Matcha baker。 */
+    const val TTS_ASSET_ROOT_LEGACY_MATCHA = "voice/tts/matcha-icefall-zh-baker"
 
     /** ASR 提取后相对 filesDir 的根。 */
-    const val ASR_INSTALLED_ROOT_REL = "builtin-voice/asr/sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23"
+    const val ASR_INSTALLED_ROOT_REL =
+        "builtin-voice/asr/sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23"
 
-    /** TTS 提取后相对 filesDir 的根。 */
-    const val TTS_INSTALLED_ROOT_REL = "builtin-voice/tts/matcha-icefall-zh-baker"
+    /** TTS 提取后相对 filesDir 的根（VITS）。 */
+    const val TTS_INSTALLED_ROOT_REL = "builtin-voice/tts/vits-melo-tts-zh_en"
+
+    /** 兼容旧提取路径。 */
+    const val TTS_INSTALLED_ROOT_LEGACY_MATCHA = "builtin-voice/tts/matcha-icefall-zh-baker"
 
     /** ASR 标志文件。 */
     const val ASR_MARKER = "tokens.txt"
 
-    /** TTS 完整性标志：Matcha 必须有 vocoder 才算可真合成。 */
-    const val TTS_VOCODER_MARKER = "vocos-22khz-univ.onnx"
+    /** VITS 完整性：tokens + 至少一个非 vocoder 的 onnx。 */
+    const val TTS_TOKENS_MARKER = "tokens.txt"
 
     const val ASR_LICENSE_HINT =
         "内置轻量 ASR 模型：sherpa-onnx-streaming-zipformer-zh-14M（量化 int8）。" +
             "许可 Apache 2.0，https://github.com/k2-fsa/sherpa-onnx"
 
     const val TTS_LICENSE_HINT =
-        "内置 TTS：matcha-icefall-zh-baker + vocos-22khz-univ（随 APK 打包，首次启动提取）。" +
+        "内置 TTS：vits-melo-tts-zh_en（VITS，随 APK 打包，首次启动提取）。" +
             "许可 Apache 2.0，https://github.com/k2-fsa/sherpa-onnx"
 
     fun asrPackaged(am: AssetManager): Boolean {
@@ -67,11 +75,21 @@ object BuiltInVoiceAssets {
         }.getOrDefault(false)
     }
 
-    fun ttsPackaged(am: AssetManager): Boolean {
+    /** 优先 VITS assets；否则兼容旧 Matcha。 */
+    fun resolveTtsAssetRoot(am: AssetManager): String? {
+        if (ttsPackagedAt(am, TTS_ASSET_ROOT)) return TTS_ASSET_ROOT
+        if (ttsPackagedAt(am, TTS_ASSET_ROOT_LEGACY_MATCHA)) return TTS_ASSET_ROOT_LEGACY_MATCHA
+        return null
+    }
+
+    fun ttsPackaged(am: AssetManager): Boolean = resolveTtsAssetRoot(am) != null
+
+    private fun ttsPackagedAt(am: AssetManager, root: String): Boolean {
         return runCatching {
-            // 必须能打开 vocoder，避免半套 assets 误判
-            am.open("$TTS_ASSET_ROOT/$TTS_VOCODER_MARKER").close()
-            true
+            am.open("$root/$TTS_TOKENS_MARKER").close()
+            // 至少一个 onnx
+            val kids = am.list(root) ?: return@runCatching false
+            kids.any { it.endsWith(".onnx", ignoreCase = true) }
         }.getOrDefault(false)
     }
 
@@ -79,14 +97,28 @@ object BuiltInVoiceAssets {
 
     fun ttsInstalledDir(filesDir: File): File = File(filesDir, TTS_INSTALLED_ROOT_REL)
 
+    fun ttsInstalledDirLegacyMatcha(filesDir: File): File =
+        File(filesDir, TTS_INSTALLED_ROOT_LEGACY_MATCHA)
+
     fun isAsrInstalled(filesDir: File): Boolean {
         val marker = File(asrInstalledDir(filesDir), ASR_MARKER)
         return marker.isFile && marker.length() > 0L
     }
 
     fun isTtsInstalled(filesDir: File): Boolean {
-        val dir = ttsInstalledDir(filesDir)
-        return DebugOpenSourcePaths.isTtsModelDirReady(dir)
+        val vits = ttsInstalledDir(filesDir)
+        if (DebugOpenSourcePaths.isTtsModelDirReady(vits)) return true
+        val matcha = ttsInstalledDirLegacyMatcha(filesDir)
+        return DebugOpenSourcePaths.isTtsModelDirReady(matcha)
+    }
+
+    /** 已安装目录（优先 VITS）。 */
+    fun resolveInstalledTtsDir(filesDir: File): File? {
+        val vits = ttsInstalledDir(filesDir)
+        if (DebugOpenSourcePaths.isTtsModelDirReady(vits)) return vits
+        val matcha = ttsInstalledDirLegacyMatcha(filesDir)
+        if (DebugOpenSourcePaths.isTtsModelDirReady(matcha)) return matcha
+        return null
     }
 
     fun resolveAsrIfPackaged(context: Context): String {
@@ -98,15 +130,11 @@ object BuiltInVoiceAssets {
 
     fun resolveTtsIfPackaged(context: Context): String {
         val filesDir = context.filesDir
-        if (isTtsInstalled(filesDir)) return ttsInstalledDir(filesDir).absolutePath
-        if (ttsPackaged(context.assets)) return "asset://$TTS_ASSET_ROOT"
-        return ""
+        resolveInstalledTtsDir(filesDir)?.let { return it.absolutePath }
+        val assetRoot = resolveTtsAssetRoot(context.assets) ?: return ""
+        return "asset://$assetRoot"
     }
 
-    /**
-     * 将 assets 中 ASR 模型递归提取到 filesDir。
-     * @return 提取后的 ASR 目录绝对路径；若 assets 无模型则返回 null
-     */
     fun ensureAsrInstalled(context: Context): String? {
         val filesDir = context.filesDir
         val destDir = asrInstalledDir(filesDir)
@@ -124,28 +152,27 @@ object BuiltInVoiceAssets {
     }
 
     /**
-     * 将 assets 中 TTS（Matcha+vocoder）提取到 filesDir。
-     * 已完整安装则直接返回路径；半套（缺 vocoder）会重新提取。
+     * 将 assets 中 TTS（优先 VITS Melo）提取到 filesDir。
+     * 已完整安装则直接返回路径；半套会重新提取。
      */
     fun ensureTtsInstalled(context: Context): String? {
         val filesDir = context.filesDir
-        val destDir = ttsInstalledDir(filesDir)
-        if (isTtsInstalled(filesDir)) {
-            return destDir.absolutePath
-        }
+        resolveInstalledTtsDir(filesDir)?.let { return it.absolutePath }
         return runCatching {
             val am = context.assets
-            if (!ttsPackaged(am)) return@runCatching null
+            val assetRoot = resolveTtsAssetRoot(am) ?: return@runCatching null
+            val destRel = if (assetRoot.contains("matcha", ignoreCase = true)) {
+                TTS_INSTALLED_ROOT_LEGACY_MATCHA
+            } else {
+                TTS_INSTALLED_ROOT_REL
+            }
+            val destDir = File(filesDir, destRel)
             if (destDir.exists()) destDir.deleteRecursively()
-            copyAssetDir(am, TTS_ASSET_ROOT, destDir)
-            if (isTtsInstalled(filesDir)) destDir.absolutePath else null
+            copyAssetDir(am, assetRoot, destDir)
+            if (DebugOpenSourcePaths.isTtsModelDirReady(destDir)) destDir.absolutePath else null
         }.getOrNull()
     }
 
-    /**
-     * 一次确保 ASR+TTS 均已从 APK 提取（装完零下载路径）。
-     * @return Pair(asrPath?, ttsPath?)
-     */
     fun ensureAllInstalled(context: Context): Pair<String?, String?> {
         return Pair(ensureAsrInstalled(context), ensureTtsInstalled(context))
     }
@@ -154,7 +181,6 @@ object BuiltInVoiceAssets {
         destDir.mkdirs()
         val children = am.list(assetPath) ?: emptyArray()
         if (children.isEmpty()) {
-            // 可能是单文件
             runCatching {
                 copyAssetFile(am, assetPath, File(destDir, File(assetPath).name))
             }
