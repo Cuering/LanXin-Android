@@ -71,6 +71,22 @@ class DebugAssetCatalogTest {
         assertTrue(DebugAssetCatalog.ttsModelRelativeFiles.contains("model-steps-3.onnx"))
         assertTrue(DebugAssetCatalog.ttsModelRelativeFiles.contains("lexicon.txt"))
         assertTrue(sources.first().modelDirRel.endsWith("tts/matcha-icefall-zh-baker"))
+        // vocoder 必须作为 extra 文件随下载下发（不在 HF 仓库）
+        assertTrue(sources.first().extraFiles.isNotEmpty())
+        assertTrue(
+            sources.first().extraFiles.any {
+                it.relativePath == DebugAssetCatalog.TTS_VOCODER_FILE
+            }
+        )
+        assertTrue(
+            sources.first().extraFiles.any {
+                it.absoluteUrl.contains("vocos-22khz-univ.onnx")
+            }
+        )
+        // HF 列表本身不含 vocoder
+        assertTrue(
+            DebugAssetCatalog.ttsModelRelativeFiles.none { it.contains("vocos") }
+        )
     }
 
     @Test
