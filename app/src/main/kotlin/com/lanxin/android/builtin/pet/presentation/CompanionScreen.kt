@@ -123,8 +123,8 @@ import com.lanxin.android.builtin.localinference.domain.LocalReplySanitizer
 import com.lanxin.android.builtin.pet.domain.MoodTagMapper
 import com.lanxin.android.builtin.pet.domain.PetEvent
 import com.lanxin.android.builtin.pet.domain.PetSettings
-import com.lanxin.android.builtin.pet.domain.SceneSensingSettings
-import com.lanxin.android.builtin.pet.domain.GuideGate
+import com.lanxin.android.builtin.platform.domain.SceneSensingSettings
+import com.lanxin.android.builtin.guide.domain.GuideGate
 import com.lanxin.android.builtin.voice.domain.VoiceChatSession
 import com.lanxin.android.builtin.pet.domain.VoiceSessionCoordinator
 import com.lanxin.android.builtin.settings.domain.LocationSettings
