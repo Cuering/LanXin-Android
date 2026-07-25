@@ -213,17 +213,22 @@ def main():
         asr_dir = args.asr_dir
         tts_dir = args.tts_dir
 
-    print()
-    print("=" * 60)
-    print("Verifying ASR model...")
-    print("=" * 60)
-    verify_asr(asr_dir or os.path.join(workdir, "sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23"))
+    if asr_dir or args.download:
+        print()
+        print("=" * 60)
+        print("Verifying ASR model...")
+        print("=" * 60)
+        verify_asr(asr_dir or os.path.join(workdir, "sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23"))
+    else:
+        print("⏭  skip ASR (no --asr-dir / --download)")
 
     print()
     print("=" * 60)
     print("Verifying TTS model (files + native synthesis)...")
     print("=" * 60)
-    verify_tts(tts_dir or os.path.join(workdir, "matcha-icefall-zh-baker"))
+    final_tts = tts_dir or os.path.join(workdir, "matcha-icefall-zh-baker")
+    assert os.path.isdir(final_tts), f"TTS dir missing: {final_tts}"
+    verify_tts(final_tts)
 
     print()
     print("=" * 60)
