@@ -217,6 +217,27 @@ class DesktopPetViewModel @Inject constructor(
             BuiltInLive2dAssets.ensureInstalled(app)
             // 仓内 ASR 模型 → filesDir，开箱离线听写
             BuiltInVoiceAssets.ensureAsrInstalled(app)
+            // 装完零下载：从 APK assets 提取 Matcha+vocoder
+            val builtinTts = BuiltInVoiceAssets.ensureTtsInstalled(app)
+            if (!builtinTts.isNullOrBlank()) {
+                val cur = ttsSettings.getConfig()
+                val curDir = cur.modelDir.ifBlank { cur.modelPath }.trim()
+                val needBind = curDir.isBlank() ||
+                    !DebugOpenSourcePaths.isTtsModelDirReady(File(curDir))
+                if (needBind) {
+                    ttsSettings.setModelDir(builtinTts)
+                    ttsSettings.setEnabled(true)
+                    runCatching {
+                        ttsEngine.unload()
+                        ttsEngine.load(
+                            ttsSettings.getConfig().copy(
+                                enabled = true,
+                                modelDir = builtinTts
+                            )
+                        )
+                    }
+                }
+            }
             val config = petSettings.getConfig()
             val storageRoot = DebugAssetStorage.resolve(app, config.lanXinSafTreeUri)
             val tts = ttsSettings.getConfig()
