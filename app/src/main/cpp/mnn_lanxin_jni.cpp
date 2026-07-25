@@ -807,15 +807,32 @@ Java_com_lanxin_android_builtin_localinference_data_MnnNativeBridge_nativeGenera
     try {
         JavaStreamBuf sbuf(env);
         std::ostream os(&sbuf);
-        // 同时收集完整输出
-        std::ostringstream acc;
-        // tee: 用自定义 ostream 写 Java；再读 context
-        g_llm->response(messages, &os, nullptr, maxNew);
+        // 对齐 MNNChat 流式：prefill(0) + generate(1) 逐步，可早停/cancel
+        g_llm->response(messages, &os, "", /*max_new_tokens=*/0);
+        int produced = 0;
+        while (!g_cancel.load() && produced < maxNew) {
+            if (g_llm->stoped()) break;
+            auto* ctx = g_llm->getContext();
+            if (ctx != nullptr) {
+                using MNN::Transformer::LlmStatus;
+                if (ctx->status == LlmStatus::NORMAL_FINISHED ||
+                    ctx->status == LlmStatus::USER_CANCEL ||
+                    ctx->status == LlmStatus::INTERNAL_ERROR ||
+                    ctx->status == LlmStatus::TIMEOUT) {
+                    break;
+                }
+            }
+            g_llm->generate(1);
+            ++produced;
+        }
         std::string out;
         if (g_llm->getContext() != nullptr) {
             out = g_llm->getContext()->generate_str;
         }
-        // 若 context 空，acc 可能也空（片段已回调）；用空串合法
+        if (auto* ctx = g_llm->getContext()) {
+            ALOGI("PERF stream prefill=%d decode=%d produced=%d max=%d",
+                  ctx->prompt_len, ctx->gen_seq_len, produced, maxNew);
+        }
         clearError();
         clearStreamListener(env);
         return newStringUtfSafe(env, out);
