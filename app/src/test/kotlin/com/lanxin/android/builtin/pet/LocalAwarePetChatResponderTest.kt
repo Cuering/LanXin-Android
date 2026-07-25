@@ -78,13 +78,15 @@ class LocalAwarePetChatResponderTest {
         )
         val out = responder.respond("你好")
         assertEquals(1, provider.calls)
-        // 陪伴与主聊天对齐：注入人设 + 输出约束 + 短 maxTokens
-        assertEquals(64, provider.lastMaxTokens)
-        assertTrue(provider.lastSystem.orEmpty().startsWith("你是兰心"))
-        assertFalse(provider.lastSkipConstraint)
+        // 对齐 MNNChat：null system、skip 约束、更大 maxTokens、原文出口
+        assertEquals(256, provider.lastMaxTokens)
+        assertTrue(provider.lastSystem == null || provider.lastSystem == "unset")
+        // RecordingProvider 初始 lastSystem="unset" 被覆盖为 null
+        assertEquals(null, provider.lastSystem)
+        assertTrue(provider.lastSkipConstraint)
         assertTrue(out.contains("你好呀"))
-        assertFalse(out.contains("让我分析"))
-        assertFalse(out.contains("**分析**"))
+        // bare path 不再激进剥「让我分析」——Provider 侧 lightClean 只剥 think/tags
+        // 本测试仍走 Fake Provider 直接 Success，Responder 只 lightClean
         assertTrue(out.contains("[[mood="))
     }
 
