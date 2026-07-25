@@ -18,33 +18,57 @@
 
 package com.lanxin.android.builtin.pet.presentation
 
-import android.content.pm.ApplicationInfo
-import android.view.ViewGroup
-import android.webkit.WebSettings
-import android.webkit.WebView
-import android.webkit.WebViewClient
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PhotoCamera
-import androidx.compose.material.icons.filled.VolumeUp
-import androidx.compose.material.icons.filled.VolumeOff
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.zIndex
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import com.lanxin.android.builtin.pet.domain.BuiltInLive2dAssets
+import com.lanxin.android.builtin.pet.domain.BuiltInMusicAssets
+import com.lanxin.android.builtin.pet.domain.CompanionMusicPlayer
+import com.lanxin.android.builtin.pet.domain.CompanionVisionSession
+import com.lanxin.android.builtin.pet.domain.Live2dDisplayController
+import com.lanxin.android.builtin.pet.domain.PetSettings
+import com.lanxin.android.builtin.pet.domain.VisionExplainClient
+import com.lanxin.android.builtin.pet.domain.VoiceSessionCoordinator
+import com.lanxin.android.builtin.platform.domain.SceneSensingSettings
+import com.lanxin.android.builtin.voice.domain.VoiceChatSession
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -53,25 +77,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runCatching
-
-import com.lanxin.android.builtin.pet.data.DesktopPetBridge
-import com.lanxin.android.builtin.pet.domain.BuiltInLive2dAssets
-import com.lanxin.android.builtin.pet.domain.BuiltInMusicAssets
-import com.lanxin.android.builtin.pet.domain.CompanionBackgrounds
-import com.lanxin.android.builtin.pet.domain.CompanionMusicPlayer
-import com.lanxin.android.builtin.pet.domain.CompanionVisionSession
-import com.lanxin.android.builtin.pet.domain.DebugAssetStorage
-import com.lanxin.android.builtin.pet.domain.Live2dDisplayController
-import com.lanxin.android.builtin.pet.domain.Live2dModel3Reader
-import com.lanxin.android.builtin.pet.domain.MeijuDebugPaths
-import com.lanxin.android.builtin.pet.domain.PetBridgeCommand
-import com.lanxin.android.builtin.pet.domain.PetBridgeMessage
-import com.lanxin.android.builtin.pet.domain.PetBridgeProtocol
-import com.lanxin.android.builtin.pet.domain.PetSettings
-import com.lanxin.android.builtin.pet.domain.VisionExplainClient
-import com.lanxin.android.builtin.pet.domain.VoiceSessionCoordinator
-import com.lanxin.android.builtin.platform.domain.SceneSensingSettings
-import com.lanxin.android.builtin.voice.domain.VoiceChatSession
 
 data class CompanionUiState(
     val musicPlaying: Boolean = false,
@@ -105,13 +110,8 @@ class CompanionViewModel @Inject constructor(
 
     val voiceChatUiState = voiceChatSession.uiState
 
-    private val bridge = DesktopPetBridge { }
-
     @Volatile
     private var lastDecision: Live2dDisplayController.Decision? = null
-
-    @Volatile
-    private var modelPath: String = ""
 
     private var musicPlayer: CompanionMusicPlayer? = null
 
@@ -147,7 +147,6 @@ class CompanionViewModel @Inject constructor(
             val p = player()
             p.refreshPlaylist()
             resolveLive2d()
-            applyBackgroundFromConfig()
             _uiState.update {
                 it.copy(
                     musicDirHint = p.musicDirPath(),
@@ -159,7 +158,6 @@ class CompanionViewModel @Inject constructor(
                     visionPreviewReady = false,
                 )
             }
-            bumpWeb()
         }
     }
 
@@ -203,22 +201,165 @@ class CompanionViewModel @Inject constructor(
         }
     }
 
+    fun toggleMusic() {
+        player().togglePlayPause()
+    }
+
+    fun nextTrack() {
+        player().next()
+    }
+
+    fun previousTrack() {
+        player().previous()
+    }
+
+    fun setMusicVolume(level: Float) {
+        player().setVolume(level)
+    }
+
     private fun resolveLive2d() {
-        Live2dDisplayController.resolve(
-            petSettings = petSettings,
-            model3Reader = Live2dModel3Reader,
-            assetsDir = appContext.filesDir,
-            storage = DebugAssetStorage,
-            isDebug = appContext.applicationInfo?.flags?.and(ApplicationInfo.FLAG_DEBUGGABLE) != 0,
-        )?.let {
-            lastDecision = it
-            modelPath = it.modelPath
+        val installed = BuiltInLive2dAssets.installedModelFile(appContext.filesDir).absolutePath
+        lastDecision = Live2dDisplayController.decide(resolvedPath = installed)
+    }
+}
+
+@Composable
+fun CompanionScreen(
+    onBackAction: () -> Unit,
+    onOpenSettings: () -> Unit,
+    viewModel: CompanionViewModel = hiltViewModel(),
+) {
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val voiceUi by viewModel.voiceChatUiState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(Unit) {
+        viewModel.ensureReady()
+    }
+    DisposableEffect(Unit) {
+        onDispose { viewModel.onLeavePage() }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("全屏陪伴") },
+                navigationIcon = {
+                    IconButton(onClick = onBackAction) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(Icons.Default.Settings, contentDescription = "设置")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                ),
+            )
+        },
+    ) { pad ->
+        Column(
+            modifier = Modifier
+                .padding(pad)
+                .fillMaxSize()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.MusicNote, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = state.musicTitle.ifBlank { "未播放" },
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    if (state.musicError.isNotEmpty()) {
+                        Text(
+                            text = state.musicError,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilledIconButton(onClick = viewModel::previousTrack) {
+                            Icon(Icons.Default.SkipPrevious, contentDescription = "上一首")
+                        }
+                        FilledIconButton(onClick = viewModel::toggleMusic) {
+                            Icon(
+                                if (state.musicPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = if (state.musicPlaying) "暂停" else "播放",
+                            )
+                        }
+                        FilledIconButton(onClick = viewModel::nextTrack) {
+                            Icon(Icons.Default.SkipNext, contentDescription = "下一首")
+                        }
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text("音量", style = MaterialTheme.typography.labelSmall)
+                    Slider(
+                        value = state.musicVolume,
+                        onValueChange = viewModel::setMusicVolume,
+                        valueRange = 0f..1f,
+                    )
+                    if (state.musicDirHint.isNotEmpty()) {
+                        Text(
+                            text = "音乐目录: ${state.musicDirHint}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.PhotoCamera, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("视觉感知", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                        FilledIconButton(onClick = { viewModel.setVisionLooking(!state.visionLooking) }) {
+                            Icon(Icons.Default.PhotoCamera, contentDescription = "切换视觉")
+                        }
+                    }
+                    Text(
+                        text = if (state.visionLooking) "已开启" else "已关闭",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    state.visionHint?.let { hint ->
+                        Text(
+                            text = hint,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+            }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text("语音会话", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "phase=${voiceUi.phase}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
     }
-
-    private fun applyBackgroundFromConfig() {
-        CompanionBackgrounds.applyFromConfig(appContext, petSettings)
-    }
-
-    private fun bumpWeb() { }
 }
