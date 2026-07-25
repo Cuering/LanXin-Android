@@ -74,9 +74,11 @@ class DebugAssetCatalogTest {
         // VITS Melo：无独立 vocoder extra
         assertTrue(sources.first().extraFiles.isEmpty())
         assertTrue(sources.first().relativeFiles.contains("model.onnx"))
-        // HF 列表本身不含 vocoder
+        // HF 列表本身不含 matcha vocoder
         assertTrue(
-            DebugAssetCatalog.ttsModelRelativeFiles.none { it.contains("vocos") }
+            DebugAssetCatalog.ttsModelRelativeFiles.none {
+                it.contains("vocos")
+            }
         )
     }
 
