@@ -274,8 +274,8 @@ class CompanionViewModel @Inject constructor(
         )
         return when (val result = visionExplainClient.explain(question = question, frame = frame)) {
             is VisionExplainResult.Ok -> result.replyText
-            is VisionExplainResult.Unavailable -> result.message
-            else -> result.toString()
+            is VisionExplainResult.Unavailable -> result.userMessage
+            is VisionExplainResult.Error -> result.userMessage
         }
     }
 
