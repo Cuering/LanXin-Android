@@ -86,12 +86,17 @@ class ClawResidentService : Service() {
                 startForeground(NOTIFICATION_ID, buildNotification("机器人宿主常驻中", "动态插件可保持存活"))
             }
         } catch (e: Exception) {
-            Log.w(TAG, "startForeground denied, running as background service", e)
-            CrashHandler.reportNonFatal(
-                "ClawResidentService.startForeground",
-                e,
-                detail = "FGS denied; continue background if possible"
-            )
+            // Android 12+ 后台启动 FGS 被拒是预期软失败，只打日志，不弹 Non-Fatal
+            Log.w(TAG, "startForeground denied, running as background service: ${e.message}")
+            val isFgsDenied = e.javaClass.simpleName.contains("ForegroundService") ||
+                (e.message?.contains("startForeground", ignoreCase = true) == true)
+            if (!isFgsDenied) {
+                CrashHandler.reportNonFatal(
+                    "ClawResidentService.startForeground",
+                    e,
+                    detail = "FGS denied; continue background if possible"
+                )
+            }
         }
         platformHost.setResidentRunning(true)
     }
