@@ -1,1 +1,146 @@
-LyoKICogQ29weXJpZ2h0IDIwMjUgTGFuWGluIENvbnRyaWJ1dG9ycwogKgogKiBMaWNlbnNlZCB1bmRlciB0aGUgQXBhY2hlIExpY2Vuc2UsIFZlcnNpb24gMi4wICh0aGUgIkxpY2Vuc2UiKTsKICogeW91IG1heSBub3QgdXNlIHRoaXMgZmlsZSBleGNlcHQgaW4gY29tcGxpYW5jZSB3aXRoIHRoZSBMaWNlbnNlLgogKiBZb3UgbWF5IG9idGFpbiBhIGNvcHkgb2YgdGhlIExpY2Vuc2UgYXQKICoKICogICAgIGh0dHA6Ly93d3cuYXBhY2hlLm9yZy9saWNlbnNlcy9MSUNFTlNFLTIuMAogKgogKiBVbmxlc3MgcmVxdWlyZWQgYnkgYXBwbGljYWJsZSBsYXcgb3IgYWdyZWVkIHRvIGluIHdyaXRpbmcsIHNvZnR3YXJlCiAqIGRpc3RyaWJ1dGVkIHVuZGVyIHRoZSBMaWNlbnNlIGlzIGRpc3RyaWJ1dGVkIG9uIGFuICJBUyBJUyIgQkFTSVMsCiAqIFdJVEhPVVQgV0FSUkFOVElFUyBPUiBDT05ESVRJT05TIE9GIEFOWSBLaW5kLCBlaXRoZXIgZXhwcmVzcyBvciBpbXBsaWVkLgogKiBTZWUgdGhlIExpY2Vuc2UgZm9yIHRoZSBzcGVjaWZpYyBsYW5ndWFnZSBnb3Zlcm5pbmcgcGVybWlzc2lvbnMgYW5kCiAqIGxpbWl0YXRpb25zIHVuZGVyIHRoZSBMaWNlbnNlLgogKi8KCnBhY2thZ2UgY29tLmxhbnhpbi5hbmRyb2lkLmJ1aWx0aW4udm9pY2UuZG9tYWluCgppbXBvcnQga290bGlueC5jb3JvdXRpbmVzLmZsb3cuU3RhdGVGbG93CgovKioKICog6K+t6Z+z5ZCI5oiQKFRUUynlvJ/mnI7mkpXooYzjgIIKICoKICog5a6e546w77yaSGlscCDihpIgW2NvbS5sYW54aW4uYW5kcm9pZC5idWlsdGluLnZvaWNlLmRhdGEuU2hlcnBhVHRzRW5naW5lXQogKiDvvIhub3RpdmUgT2ZmbGluZVR0cyDlj6/nlKjliJnlh7rkuL/kuJPjgIHlkZblgZzjvIkvIHN0dWI6Ly8g6ZmN57 O77IyJKVvuCjkuoZ54bW0gW2NvbS5sYW54aW4uYW5kcm9pZC5idWlsdGluLnZvaWNlLmRhdGEuU3R1YlR0c0VuZ2luZV0o5Y2V5rWpKeOAggogKiDkvJrorr7lsZ4gW2NvbS5sYW54aW4uYW5kcm9pZC5idWlsdGluLnBldC5kb21haW4uVm9pY2VTZXNzaW9uQ29vcmRpbmF0b3JdIOS4jeaekOWPr+aWueWjsemXugogKgogKiDmqKHlnovphZrlrp3lp4vln5/luZUgYExhblhpbi90dHMvYO+8iOS4sua1juaXtuW4g+aYr+WSjCBBU1Ig5YWx55SoIHNoZXJwYS1vbm54IEFBUuOAggoqLwppbnRlcmZhY2UgVHRzRW5naW5lIHsKCiAgICB2YWwgc3RhdGU6IFN0YXRlRmxvdzxUZHNFbmdpbmVTdGF0ZT4KCiAgICB2YWwgaXNSZWFkeTogQm9vbGVhbgoKICAgIHZhbCBpc0F2YWlsYWJsZTogQm9vbGVhbgoKICAgIHZhbCBsYXN0RXJyb3I6IFN0cmluZz8KCiAgICBzdXNwZW5kIGZ1biBsb2FkKGNvbmZpZzogVHRzQ29uZmlnKTogQm9vbGVhbgoKICAgIHN1c3BlbmQgZnVuIHVubG9hZCgpCgogICAgLyoqCiAgICAgKiDmlofmnK3ihpLpn7PpopjvvIhzdHViIOWPr+i/lOWbnuexu+ivhSBQQ00gKyDlrZfnpaXmloftmIVK77yJ44CiICAgICAqCiAgICAgKiBAdGhyb3dzIElsbGVnYWxTdGF0ZUV4Y2VwdGlvbiDlvJ/mnIrmnKrlr7zlvIDnlJ/lhavkvY0KICAgICAqLwogICAgc3VzcGVuZCBmdW4gc3ludGhlc2l6ZShyZXF1ZXN0OiBUdHNTeW50aGVzaXplUmVxdWVzdCk6IFR0c1N5bnRoZXNpemVSZXN1bHQKfQoKLyoqCiAqIFRUUyDlvJ/mnI7nirbliLEuCiAqLwplbnVtIGNsYXNzIFR0c0VuZ2luZVN0YXRlIHsKICAgIERJU0FCTEVELAogICAgSURMRSwKICAgIExPQURJTkcsCiAgICBSRUFEWSwKICAgIFNQRUFLSU5HLAogICAgRVJST1IKfQoKLyoqCiAqIFRUUyDphY3nva7jgIIKICoKICogQHByb3BlcnR5IG1vZGVsRGlyIOmDqeWAi+aooeWcu+ebruW9lQogKiBAcHJvcGVydHkgbW9kZWxQYXRoIOWPhuVusOWxjjrpg6jphY3phY3nva7lrZfnlKggbW9kZWxQYXRoCiAqLwpkYXRhIGNsYXNzIFR0c0NvbmZpZygKICAgIHZhbCBlbmFibGVkOiBCb29sZWFuID0gZmFsc2UsCiAgICB2YWwgbW9kZWxQYXRoOiBTdHJpbmcgPSAiIiwKICAgIHZhbCBtb2RlbERpcjogU3RyaW5nID0gIiIsCiAgICB2YWwgcmVmZXJlbmNlQXVkaW86IFN0cmluZyA9ICIiLAogICAgdmFsIHZvaWNlSWQ6IFN0cmluZyA9IERFRkFVTFRfVk9JQ0VfSUQsCiAgICB2YWwgc2FtcGxlUmF0ZUh6OiBJbnQgPSBERUZBVUxUX1NBTVBMRV9SQVRFX0haCikgewogICAgY29tcGFuaW9uIG9iamVjdCB7CiAgICAgICAgY29uc3QgdmFsIERFRkFVTFRfVk9JQ0VfSUQgPSAibGFueGluIgogICAgICAgIGNvbnN0IHZhbCBERUZBVUxUX1NBTVBMRV9SQVRFX0haID0gMjJfMDUwCiAgICB9CgogICAgLyoqIERlYnVnIOaXpeW+he+8muerr+WzmuaUueimge+8jOS4jeaPkOWxglampuW6l+i+k+WQvuOAgiovCiAgICBmdW4gdG9EZWJ1Z1N0cmluZygpOiBTdHJpbmcgewogICAgICAgIHZhbCBkaXIgPSBtb2RlbERpci5pZkJsYW5rIHsgbW9kZWxQYXRoIH0KICAgICAgICByZXR1cm4gImVuYWJsZWQ9JGVuYWJsZWQgZGlyPSR7aWYgKGRpci5pc0JsYW5rKSAiPGJsYW5rPiIgZWxzZSBkaXIudGFrZUxhc3QoNDApfSIKICAgIH0KfQoKLyoqCiAqIOWQhOaYkOivt+axgi4KICovCmRhdGEgY2xhc3MgVHRzU3ludGhlc2l6ZVJlcXVlc3QoCiAgICB2YWwgdGV4dDogU3RyaW5nLAogICAgdmFsIHZvaWNlSWQ6IFN0cmluZz8gPSBudWxsLAogICAgdmFsIHNhbXBsZVJhdGVIejogSW50PyA9IG51bGwKKQoKLyoqCiAqIOWQhOaYkOe7k+aenOOAggogKgogKiBAcHJvcGVydHkgcGNtMTZsZU1vbm8gMTYtYml0IExFIOWNleeHt+mfs++8m3N0dWIg5Y+v5Li65Y+q5Li655qE5pW05L2zCiAqIEBwcm9wZXJ0eSBzYW1wbGVSYXRlSHogphCaoemfs+WOhwogKiBAcHJvcGVydHkgZHVyYXRpb25NcyDoiKXorq3ml7Yg5LuOCiAqIEBwcm9wZXJ0eSBpc1N0dWIg5piv5ZCmIHN0dWIKICogQHByb3BlcnR5IHN1YnRpdGxlIOawoeawtOWtl+W5le+8iOW4jOW5tOetieS6jiDovpPlhaUgdGV4dO+8iQogKi8KZGF0YSBjbGFzcyBUdHNTeW50aGVzaXplUmVzdWx0KAogICAgdmFsIHBjbTE2bGVNb25vOiBCeXRlQXJyYXksCiAgICB2YWwgc2FtcGxlUmF0ZUh6OiBJbnQsCiAgICB2YWwgZHVyYXRpb25NczogTG9uZywKICAgIHZhbCBpc1N0dWI6IEJvb2xlYW4gPSBmYWxzZSwKICAgIHZhbCBzdWJ0aXRsZTogU3RyaW5nID0gIiIKKSB7CiAgICBvdmVycmlkZSBmdW4gZXF1YWxzKG90aGVyOiBBbnk/KTogQm9vbGVhbiB7CiAgICAgICAgaWYgKHRoaXMgPT09IG90aGVyKSByZXR1cm4gdHJ1ZQogICAgICAgIGlmIChvdGhlciAhaXMgVHRzU3ludGhlc2l6ZVJlc3VsdCkgcmV0dXJuIGZhbHNlCiAgICAgICAgcmV0dXJuIHBjbTE2bGVNb25vLmNvbnRlbnRFcXVhbHMob3RoZXIucGNtMTZsZU1vbm8pICYmCiAgICAgICAgICAgIHNhbXBsZVJhdGVIeiA9PSBvdGhlci5zYW1wbGVSYXRlSHogJiYKICAgICAgICAgICAgZHVyYXRpb25NcyA9PSBvdGhlci5kdXJhdGlvbk1zICYmCiAgICAgICAgICAgIGlzU3R1YiA9PSBvdGhlci5pc1N0dWIgJiYKICAgICAgICAgICAgc3VidGl0bGUgPT0gb3RoZXIuc3VidGl0bGUKICAgIH0KCiAgICBvdmVycmlkZSBmdW4gaGFzaENvZGUoKTogSW50IHsKICAgICAgICB2YXIgcmVzdWx0ID0gcGNtMTZsZU1vbm8uY29udGVudEhhc2hDb2RlKCkKICAgICAgICByZXN1bHQgPSAzMSAqIHJlc3VsdCArIHNhbXBsZVJhdGVIegogICAgICAgIHJlc3VsdCA9IDMxICogcmVzdWx0ICsgZHVyYXRpb25Ncy5oYXNoQ29kZSgpCiAgICAgICAgcmVzdWx0ID0gMzEgKiByZXN1bHQgKyBpc1N0dWIuaGFzaENvZGUoKQogICAgICAgIHJlc3VsdCA9IDMxICogcmVzdWx0ICsgc3VidGl0bGUuaGFzaENvZGUoKQogICAgICAgIHJldHVybiByZXN1bHQKICAgIH0KfQoKLyoqCiAqIFRUUyDor7vlvaLpl6jpopHjgIIKICovCmludGVyZmFjZSBUdHNTZXR0aW5ncyB7CiAgICBzdXNwZW5kIGZ1biBnZXRDb25maWcoKTogVHRzQ29uZmlnCiAgICBzdXNwZW5kIGZ1biBzZXRFbmFibGVkKGVuYWJsZWQ6IEJvb2xlYW4pCiAgICBzdXNwZW5kIGZ1biBzZXRNb2RlbFBhdGgocGF0aDogU3RyaW5nPykKICAgIHN1c3BlbmQgZnVuIHNldE1vZGVsRGlyKHBhdGg6IFN0cmluZz8pCiAgICBzdXNwZW5kIGZ1biBzZXRSZWZlcmVuY2VBdWRpbyhwYXRoOiBTdHJpbmc/KQogICAgc3VzcGVuZCBmdW4gc2V0Vm9pY2VJZCh2b2ljZUlkOiBTdHJpbmcpCn0K
+/*
+ * Copyright 2025 LanXin Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.lanxin.android.builtin.voice.domain
+
+import kotlinx.coroutines.flow.StateFlow
+
+/**
+ * 语音合成(TTS)引擎接口。
+ *
+ * 实现：Hilt → [com.lanxin.android.builtin.voice.data.SherpaTtsEngine]
+ * （native OfflineTts 可用则使用本地、离线）/ stub:// 用于测试
+ * [com.lanxin.android.builtin.voice.data.StubTtsEngine](单测用)。
+ * * 不关联 [com.lanxin.android.builtin.pet.domain.VoiceSessionCoordinator] 的生命周期。
+ *
+ * 通常用法见 `LanXin/tts/` 目录（包含 ASR 共用 sherpa-onnx AAR）。
+ */
+interface TtsEngine {
+
+    val state: StateFlow<TtsEngineState>
+
+    val isReady: Boolean
+
+    val isAvailable: Boolean
+
+    val lastError: String?
+
+    suspend fun load(config: TtsConfig): Boolean
+
+    suspend fun unload()
+
+    /**
+     * 文本→语音（stub 则返回空 PCM + 空时长）。
+     *
+     * @throws IllegalStateException 引擎未加载或已释放
+     */
+    suspend fun synthesize(request: TtsSynthesizeRequest): TtsSynthesizeResult
+}
+
+/**
+ * TTS 引擎状态枚举。
+ */
+enum class TtsEngineState {
+    DISABLED,
+    IDLE,
+    LOADING,
+    READY,
+    SPEAKING,
+    ERROR
+}
+
+/**
+ * TTS 配置。
+ *
+ * @property modelDir 模型目录路径
+ * @property modelPath 完整模型文件路径
+ */
+data class TtsConfig(
+    val enabled: Boolean = false,
+    val modelPath: String = "",
+    val modelDir: String = "",
+    val referenceAudio: String = "",
+    val voiceId: String = DEFAULT_VOICE_ID,
+    val sampleRateHz: Int = DEFAULT_SAMPLE_RATE_HZ
+) {
+    companion object {
+        const val DEFAULT_VOICE_ID = "lanxin"
+        const val DEFAULT_SAMPLE_RATE_HZ = 22_050
+    }
+
+    /** Debug 辅助：简洁单行。 */
+    fun toDebugString(): String {
+        val dir = modelDir.ifBlank { modelPath }
+        return "enabled=$enabled dir=${if (dir.isBlank) "<blank>" else dir.takeLast(40)}"
+    }
+}
+
+/**
+ * 合成请求。
+ */
+data class TtsSynthesizeRequest(
+    val text: String,
+    val voiceId: String? = null,
+    val sampleRateHz: Int? = null
+)
+
+/**
+ * 合成结果。
+ *
+ * @property pcm16leMono 16-bit LE 单声道 PCM 数据
+ * @property sampleRateHz 采样率
+ * @property durationMs 时长 单位ms
+ * @property isStub 是否 stub
+ * @property subtitle 字幕文本（分句对齐 text）
+ */
+data class TtsSynthesizeResult(
+    val pcm16leMono: ByteArray,
+    val sampleRateHz: Int,
+    val durationMs: Long,
+    val isStub: Boolean = false,
+    val subtitle: String = ""
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is TtsSynthesizeResult) return false
+        return pcm16leMono.contentEquals(other.pcm16leMono) &&
+            sampleRateHz == other.sampleRateHz &&
+            durationMs == other.durationMs &&
+            isStub == other.isStub &&
+            subtitle == other.subtitle
+    }
+
+    override fun hashCode(): Int {
+        var result = pcm16leMono.contentHashCode()
+        result = 31 * result + sampleRateHz
+        result = 31 * result + durationMs.hashCode()
+        result = 31 * result + isStub.hashCode()
+        result = 31 * result + subtitle.hashCode()
+        return result
+    }
+}
+
+/**
+ * TTS 设置接口。
+ */
+interface TtsSettings {
+    suspend fun getConfig(): TtsConfig
+    suspend fun setEnabled(enabled: Boolean)
+    suspend fun setModelPath(path: String?)
+    suspend fun setModelDir(path: String?)
+    suspend fun setReferenceAudio(path: String?)
+    suspend fun setVoiceId(voiceId: String)
+}
