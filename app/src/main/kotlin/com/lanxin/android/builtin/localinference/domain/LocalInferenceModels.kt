@@ -93,7 +93,13 @@ data class LocalGenerateRequest(
     val maxTokens: Int? = null,
     val temperature: Float? = null,
     /** 多轮历史（role=system/user/assistant），不含当前 prompt */
-    val history: List<LocalChatMessage> = emptyList()
+    val history: List<LocalChatMessage> = emptyList(),
+    /**
+     * 对齐 MNNChat keep_history：
+     * - false（默认）：生成前 reset KV，适合单轮/完整 history 重建且不复用缓存
+     * - true：不 reset；调用方应传入连贯 history，生成后引擎会 syncPromptCache
+     */
+    val reuseKv: Boolean = false
 )
 
 /**
