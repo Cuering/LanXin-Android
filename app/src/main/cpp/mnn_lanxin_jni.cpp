@@ -867,6 +867,61 @@ Java_com_lanxin_android_builtin_localinference_data_MnnNativeBridge_nativeGenera
 }
 
 JNIEXPORT void JNICALL
+
+JNIEXPORT jboolean JNICALL
+Java_com_lanxin_android_builtin_localinference_data_MnnNativeBridge_nativeSyncPromptCache(
+        JNIEnv* env,
+        jobject /* thiz */,
+        jobjectArray rolesJ,
+        jobjectArray contentsJ) {
+    if (rolesJ == nullptr || contentsJ == nullptr) {
+        return JNI_FALSE;
+    }
+    const jsize nRoles = env->GetArrayLength(rolesJ);
+    const jsize nContents = env->GetArrayLength(contentsJ);
+    if (nRoles != nContents || nRoles <= 0) {
+        return JNI_FALSE;
+    }
+    ChatMessages messages;
+    messages.reserve(static_cast<size_t>(nRoles));
+    for (jsize i = 0; i < nRoles; ++i) {
+        auto roleObj = (jstring) env->GetObjectArrayElement(rolesJ, i);
+        auto contentObj = (jstring) env->GetObjectArrayElement(contentsJ, i);
+        if (roleObj == nullptr || contentObj == nullptr) {
+            if (roleObj) env->DeleteLocalRef(roleObj);
+            if (contentObj) env->DeleteLocalRef(contentObj);
+            continue;
+        }
+        const char* r = env->GetStringUTFChars(roleObj, nullptr);
+        const char* c = env->GetStringUTFChars(contentObj, nullptr);
+        if (r && c) {
+            messages.emplace_back(std::string(r), std::string(c));
+        }
+        if (r) env->ReleaseStringUTFChars(roleObj, r);
+        if (c) env->ReleaseStringUTFChars(contentObj, c);
+        env->DeleteLocalRef(roleObj);
+        env->DeleteLocalRef(contentObj);
+    }
+    if (messages.empty()) {
+        return JNI_FALSE;
+    }
+    std::lock_guard<std::mutex> lock(g_mutex);
+    if (g_llm == nullptr) {
+        return JNI_FALSE;
+    }
+    try {
+        g_llm->syncPromptCache(messages);
+        ALOGI("syncPromptCache ok msgs=%zu", messages.size());
+        return JNI_TRUE;
+    } catch (const std::exception& e) {
+        ALOGW("syncPromptCache exception: %s", e.what());
+        return JNI_FALSE;
+    } catch (...) {
+        ALOGW("syncPromptCache exception:unknown");
+        return JNI_FALSE;
+    }
+}
+
 Java_com_lanxin_android_builtin_localinference_data_MnnNativeBridge_nativeCancel(
         JNIEnv* /* env */,
         jobject /* thiz */) {
