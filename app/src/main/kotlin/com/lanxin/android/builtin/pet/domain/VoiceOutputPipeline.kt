@@ -55,6 +55,10 @@ class VoiceOutputPipeline @Inject constructor(
 ) {
     private val log = logManager?.getLogger(TAG)
 
+    /** 已 load 的配置指纹；modelDir/voiceId/ref 变化时强制重载。 */
+    @Volatile
+    private var lastLoadedFingerprint: String? = null
+
     /**
      * 文字合成语音并播放。
      *
@@ -100,8 +104,14 @@ class VoiceOutputPipeline @Inject constructor(
 
         // === 环节 2：synthesize ===
         val t1 = System.currentTimeMillis()
+        val cfgForSynth = ttsSettings.getConfig()
         val synth = runCatching {
-            ttsEngine.synthesize(TtsSynthesizeRequest(text = speechText))
+            ttsEngine.synthesize(
+                TtsSynthesizeRequest(
+                    text = speechText,
+                    voiceId = cfgForSynth.voiceId.takeIf { it.isNotBlank() }
+                )
+            )
         }.getOrElse { e ->
             val dur = System.currentTimeMillis() - t1
             log?.w("speak: synthesize failed dur=${dur}ms error=${e.message}")
@@ -197,25 +207,40 @@ class VoiceOutputPipeline @Inject constructor(
     private suspend fun ensureTtsReady(): Pair<Boolean, String?> {
         val config = ttsSettings.getConfig()
         val modelPresent = config.modelDir.isNotBlank() || config.modelPath.isNotBlank()
+        val fingerprint = listOf(
+            config.modelDir.trim(),
+            config.modelPath.trim(),
+            config.voiceId.trim(),
+            config.referenceAudio.trim(),
+            config.enabled.toString()
+        ).joinToString("|")
         // 已 READY 但 lastError 含 native_degraded/model_dir_missing：若配置有路径则强制重载
         val degraded = ttsEngine.lastError?.let { err ->
             err.startsWith("native_degraded") ||
                 err.startsWith("model_dir_missing") ||
-                err.startsWith("not_ready")
+                err.startsWith("not_ready") ||
+                err.startsWith("unsupported_tts_layout")
         } == true
-        if (ttsEngine.isReady && !(degraded && modelPresent)) {
+        val configChanged = lastLoadedFingerprint != null && lastLoadedFingerprint != fingerprint
+        if (ttsEngine.isReady && !configChanged && !(degraded && modelPresent)) {
             return Pair(true, null)
         }
         val toLoad = if (config.enabled) config else config.copy(enabled = true)
         return runCatching {
-            if (degraded && modelPresent) {
+            if ((degraded && modelPresent) || configChanged) {
+                log?.i(
+                    "ensureTts: reload degraded=$degraded configChanged=$configChanged " +
+                        "fp=${fingerprint.takeLast(80)}"
+                )
                 runCatching { ttsEngine.unload() }
+                lastLoadedFingerprint = null
             }
             val loaded = ttsEngine.load(toLoad)
             if (loaded && !config.enabled) {
                 ttsSettings.setEnabled(true)
             }
             if (loaded && ttsEngine.isReady) {
+                lastLoadedFingerprint = fingerprint
                 // 仍可能是 stub READY：上层靠 isStub / 空 PCM 再回退系统 TTS
                 Pair(true, null)
             } else {
