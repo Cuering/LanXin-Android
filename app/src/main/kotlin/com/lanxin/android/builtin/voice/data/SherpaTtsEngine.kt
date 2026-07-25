@@ -129,7 +129,12 @@ class SherpaTtsEngine @Inject constructor(
 
             val loaded = nativeBridge.loadModel(modelDir)
             if (loaded) {
-                Log.i(TAG, "load: OK, mode=${nativeBridge.currentMode()} rate=${nativeBridge.sampleRate()} dir=$modelDir")
+                Log.i(
+                    TAG,
+                    "load: OK, mode=${nativeBridge.currentMode()} rate=${nativeBridge.sampleRate()} " +
+                        "dir=$modelDir voiceId=${config.voiceId} sid=${parseSpeakerId(config.voiceId)} " +
+                        "ref=${config.referenceAudio.takeLast(48)}"
+                )
                 loadedPath = modelDir
                 usingNative = true
                 error = null
@@ -184,6 +189,12 @@ class SherpaTtsEngine @Inject constructor(
 
         if (usingNative) {
             _state.value = TtsEngineState.SPEAKING
+            Log.i(
+                TAG,
+                "synthesize: native mode=${nativeBridge.currentMode()} sid=$sid " +
+                    "voiceId=${request.voiceId ?: config.voiceId} " +
+                    "ref=${config.referenceAudio.takeLast(32)} text=${text.take(32)}"
+            )
             val audio = withContext(Dispatchers.IO) {
                 runCatching {
                     nativeBridge.synthesize(text = text, speakerId = sid, speed = 1.0f)
@@ -223,11 +234,21 @@ class SherpaTtsEngine @Inject constructor(
         return config.modelPath.trim()
     }
 
+    /**
+     * 解析说话人 id：
+     * - `"0"` / `"12"` → 整数
+     * - `"sid:3"` / `"speaker-2"` → 取数字
+     * - `"lanxin"` 等无数字 → 0（单说话人 VITS/Melo 默认）
+     * multi-speaker（如 fanchen-C）请在设置里填数字 voiceId。
+     */
     private fun parseSpeakerId(voiceId: String?): Int {
         if (voiceId.isNullOrBlank()) return 0
-        voiceId.toIntOrNull()?.let { return it.coerceAtLeast(0) }
-        // "lanxin" / "sid:1" 等
-        val digits = voiceId.filter { it.isDigit() }
+        val trimmed = voiceId.trim()
+        trimmed.toIntOrNull()?.let { return it.coerceAtLeast(0) }
+        // sid:1 / speaker=2 / voice_3
+        Regex("""(?i)(?:sid|speaker|spk|voice)[=:_-]?(\d+)""").find(trimmed)?.groupValues?.getOrNull(1)
+            ?.toIntOrNull()?.let { return it.coerceAtLeast(0) }
+        val digits = trimmed.filter { it.isDigit() }
         return digits.toIntOrNull()?.coerceAtLeast(0) ?: 0
     }
 }
