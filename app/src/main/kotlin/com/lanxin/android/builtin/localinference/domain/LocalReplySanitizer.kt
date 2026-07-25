@@ -74,7 +74,8 @@ object LocalReplySanitizer {
         """(?im)^\s*(?:让我分析一下|让我思考|让我想想|我来分析|接下来分析|分析一下这个问题|""" +
             """查看可用工具|检查工具可用性|生成友好回应|首先[，,]?分析|逐步分析|""" +
             """用户意图是|用户说的是|所以我应该|我应该回复|注意[：:].*隐藏标签|""" +
-            """只能用可见内容回复|我需要先|让我先).*"""
+            """只能用可见内容回复|我需要先|让我先|""" +
+            """Thinking Process|Reasoning|Step[- ]?by[- ]?step|Let me think|I need to).*"""
     )
 
     /**
@@ -133,7 +134,14 @@ object LocalReplySanitizer {
         "Markdown 报告",
         "协议标签（[[…]]",
         "直接对用户说短句",
-        "每次只回一句话"
+        "每次只回一句话",
+        // 英文思考泄漏（小模型 / 指令模型常见）
+        "Thinking Process",
+        "thinking process",
+        "Reasoning:",
+        "Step-by-step",
+        "Let me think",
+        "I need to"
     )
 
     /**
@@ -183,7 +191,7 @@ object LocalReplySanitizer {
         val withoutTags = stripHiddenTags(withoutMeta)
         // 小模型常见 phrase loop：同一短句连刷到 maxTokens
         // 句级硬截 [limitToOneSentence] 可选；陪伴已对齐 MNN 不再默认调用
-        val display = collapseRepeatedPhrase(withoutTags)
+        val display = dropBareOutlineShell(collapseRepeatedPhrase(withoutTags))
         val speech = stripEmojiAndDecorations(display)
         return if (showThinking) {
             CleanedReply(displayText = display, speechText = speech, thinkingText = thinking)
