@@ -114,11 +114,14 @@ class LocalAwarePetChatResponder @Inject constructor(
 
         /** 明显垃圾/泄漏模式 → 丢弃走 stub。 */
         private val GARBAGE_PATTERNS = listOf(
-            Regex("""\(\s*0\s*[-~到至]\s*\d+\s*分\s*\)"""),
-            Regex("""\b\d+\s*分\b"""),
+            // 全角/半角括号分数泄漏，如「（0-5 分） 4 你好！」
+            Regex("""[（(]\s*0\s*[-~～到至]\s*\d+\s*分\s*[）)]"""),
+            Regex("""\d+\s*分[）)\s，,]"""),
             Regex("""系统已明确"""),
             Regex("""输出约束"""),
             Regex("""要表现出"""),
+            Regex("""总是能给出"""),
+            Regex("""简洁而有洞见"""),
             Regex("""chain of thought""", RegexOption.IGNORE_CASE),
             Regex("""assistant\s*:""", RegexOption.IGNORE_CASE),
             Regex("""^[\s!！?？.。,，、;；:：…~～]+$""")
@@ -150,6 +153,11 @@ class LocalAwarePetChatResponder @Inject constructor(
                 ) {
                     return false
                 }
+            }
+            // 问爱好却只回问候/空话
+            if (listOf("喜欢", "爱好", "兴趣").any { userText.contains(it) }) {
+                val ok = listOf("喜欢", "爱", "音乐", "聊天", "陪", "歌", "兴趣").any { r.contains(it) }
+                if (!ok) return false
             }
             return true
         }
