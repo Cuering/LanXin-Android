@@ -129,9 +129,19 @@ class LocalReplySanitizerTest {
         assertFalse(speech.contains("★"))
         assertTrue(speech.contains("你好呀"))
         assertTrue(speech.contains("今天开心吗"))
-        // forSpeech uses limitToOneSentence, so it stops at the first sentence-ending punctuation
-        // The test input has a question mark after "今天开心吗", so speech only contains up to that point.
-        // "让哥哥抱抱" appears after the question mark and is therefore truncated by design.
+        // forSpeech 不再默认硬截一句；多句可保留（硬截见 forSpeechOneSentence）
+        assertTrue(speech.contains("让哥哥抱抱"))
+    }
+
+    @Test
+    fun `lightCleanForBareChat only strips think and hidden tags`() {
+        val raw = "<think>内部</think>\n你好呀～\n[[mood=smile]]\n今天开心吗？"
+        val out = LocalReplySanitizer.lightCleanForBareChat(raw)
+        assertTrue(out.contains("你好呀"))
+        assertTrue(out.contains("今天开心吗"))
+        assertFalse(out.contains("think", ignoreCase = true))
+        assertFalse(out.contains("[["))
+        assertFalse(out.contains("内部"))
     }
 
     @Test
