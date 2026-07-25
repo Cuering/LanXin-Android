@@ -249,4 +249,26 @@ class PetPathReadinessTest {
         )
         assertEquals("", resolved.asrModelPath)
     }
+
+    @Test
+    fun tts_nonEmptyDirWithoutVocoder_notReady() {
+        val d = tmp.newFolder("matcha-icefall-zh-baker")
+        File(d, "model-steps-3.onnx").writeText("x")
+        File(d, "tokens.txt").writeText("t")
+        val c = PetPathReadiness.check(PetPathReadiness.Kind.TTS, d.absolutePath)
+        assertFalse(c.ready)
+        assertTrue(c.label.contains("vocoder") || c.detail.contains("vocos"))
+    }
+
+    @Test
+    fun tts_dirWithVocoder_ready() {
+        val d = tmp.newFolder("matcha-icefall-zh-baker")
+        File(d, "model-steps-3.onnx").writeText("x")
+        File(d, "tokens.txt").writeText("t")
+        File(d, "vocos-22khz-univ.onnx").writeText("v")
+        val c = PetPathReadiness.check(PetPathReadiness.Kind.TTS, d.absolutePath)
+        assertTrue(c.ready)
+        assertEquals("已就绪", c.label)
+    }
+
 }
