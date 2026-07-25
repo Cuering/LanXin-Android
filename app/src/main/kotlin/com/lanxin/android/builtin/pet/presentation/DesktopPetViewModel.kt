@@ -53,6 +53,7 @@ import com.lanxin.android.builtin.voice.domain.TtsSettings
 import com.lanxin.android.util.LocalPathImporter
 import com.lanxin.android.util.PathImportHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.io.File
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -986,7 +987,7 @@ class DesktopPetViewModel @Inject constructor(
         ) {
             ttsSettings.setModelDir(ttsResolved)
             // 发现完整模型时自动启用并加载，避免「目录有了仍 stub」
-            if (DebugOpenSourcePaths.isTtsModelDirReady(java.io.File(ttsResolved))) {
+            if (DebugOpenSourcePaths.isTtsModelDirReady(File(ttsResolved))) {
                 ttsSettings.setEnabled(true)
                 runCatching {
                     ttsEngine.unload()
