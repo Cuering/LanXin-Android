@@ -129,6 +129,77 @@ void applyRuntimeConfigLocked(Llm* llm) {
     }
 }
 
+
+/** 对齐 MNNChat restoreAndroidSteppingStatusIfNeeded：
+ *  预编译 libMNN 在每步 generate(1) 后可能把 status 标成 MAX_TOKENS_FINISHED / NORMAL_FINISHED，
+ *  若直接当结束，会只出 1 个 token。官方 App 会把终态拨回 RUNNING 再继续。
+ */
+void restoreAndroidSteppingStatusIfNeeded(Llm* llm) {
+    if (llm == nullptr) return;
+    auto* context = llm->getContext();
+    if (context == nullptr) return;
+    using MNN::Transformer::LlmStatus;
+    if (context->status == LlmStatus::MAX_TOKENS_FINISHED ||
+        context->status == LlmStatus::NORMAL_FINISHED) {
+        auto* mutable_ctx = const_cast<MNN::Transformer::LlmContext*>(context);
+        mutable_ctx->status = LlmStatus::RUNNING;
+    }
+}
+
+/**
+ * 逐步 decode 一轮（MNNChat 同款）。
+ * @return 实际 generate(1) 次数
+ */
+int stepDecodeLocked(Llm* llm, int maxNew) {
+    if (llm == nullptr || maxNew < 1) return 0;
+    using MNN::Transformer::LlmStatus;
+    int produced = 0;
+    restoreAndroidSteppingStatusIfNeeded(llm);
+    while (!g_cancel.load() && produced < maxNew) {
+        // 真 stop token：stoped() 且不在「假终态」窗口里
+        // 官方用流式 EOP 判定；这里用 stoped() + gen_seq_len 增长作兜底
+        int gen_before = 0;
+        if (auto* ctx = llm->getContext()) {
+            gen_before = ctx->gen_seq_len;
+        }
+        llm->generate(1);
+        ++produced;
+
+        auto* ctx = llm->getContext();
+        if (ctx == nullptr) break;
+
+        // 预编译 runtime：每步可能 MAX_TOKENS_FINISHED，但未到 max → 拨回继续
+        if (ctx->status == LlmStatus::MAX_TOKENS_FINISHED &&
+            produced < maxNew && !g_cancel.load()) {
+            // 若本步完全没产出新 token，视为真结束
+            if (ctx->gen_seq_len <= gen_before) {
+                break;
+            }
+            restoreAndroidSteppingStatusIfNeeded(llm);
+            continue;
+        }
+        if (ctx->status == LlmStatus::USER_CANCEL ||
+            ctx->status == LlmStatus::INTERNAL_ERROR ||
+            ctx->status == LlmStatus::TIMEOUT) {
+            break;
+        }
+        if (ctx->status == LlmStatus::NORMAL_FINISHED) {
+            // 自然结束：若本步有产出，先收下再停；无产出直接停
+            break;
+        }
+        if (llm->stoped() && ctx->gen_seq_len > gen_before) {
+            // stoped 且已有增量：再确认是否真结束（有的 runtime stoped 偏早）
+            // 保守：stoped() 为真则结束
+            break;
+        }
+        if (llm->stoped() && ctx->gen_seq_len <= gen_before) {
+            break;
+        }
+    }
+    return produced;
+}
+
+
 /**
  * 返回从 pos 开始的 UTF-8 码点需要的字节数；非法首字节返回 -1。
  * 仅看首字节期望长度，不验证后续字节。
@@ -587,24 +658,9 @@ Java_com_lanxin_android_builtin_localinference_data_MnnNativeBridge_nativeGenera
     g_cancel.store(false);
     try {
         std::ostringstream os;
-        // 同 Chat：prefill + 逐步 decode，避免一次打满 maxTokens
+        std::ostringstream os;
         g_llm->response(prompt, &os, "", /*max_new_tokens=*/0);
-        int produced = 0;
-        while (!g_cancel.load() && produced < maxNew) {
-            if (g_llm->stoped()) break;
-            auto* ctx = g_llm->getContext();
-            if (ctx != nullptr) {
-                using MNN::Transformer::LlmStatus;
-                if (ctx->status == LlmStatus::NORMAL_FINISHED ||
-                    ctx->status == LlmStatus::USER_CANCEL ||
-                    ctx->status == LlmStatus::INTERNAL_ERROR ||
-                    ctx->status == LlmStatus::TIMEOUT) {
-                    break;
-                }
-            }
-            g_llm->generate(1);
-            ++produced;
-        }
+        int produced = stepDecodeLocked(g_llm, maxNew);
         std::string out = os.str();
         if (out.empty() && g_llm->getContext() != nullptr) {
             out = g_llm->getContext()->generate_str;
@@ -678,33 +734,11 @@ Java_com_lanxin_android_builtin_localinference_data_MnnNativeBridge_nativeGenera
 
     g_cancel.store(false);
     try {
-        // === 对齐 MNNChat LlmSession::Response 的核心路径 ===
-        // 官方：response(history, os, "", 0) 只做 prefill
-        //       再 while generate(1) 直到 stop / max / cancel
-        // 兰心旧路径：response(..., maxNew) 一次打满 → 小模型常不早停 → 又慢又长又跑偏
+        // === 对齐 MNNChat LlmSession::Response ===
+        // prefill only + stepDecode（含 Android 预编译 runtime 假终态恢复）
         std::ostringstream os;
-        // prefill only
         g_llm->response(messages, &os, "", /*max_new_tokens=*/0);
-
-        int produced = 0;
-        while (!g_cancel.load() && produced < maxNew) {
-            // 已自然结束（stop token）则退出
-            if (g_llm->stoped()) {
-                break;
-            }
-            auto* ctx = g_llm->getContext();
-            if (ctx != nullptr) {
-                using MNN::Transformer::LlmStatus;
-                if (ctx->status == LlmStatus::NORMAL_FINISHED ||
-                    ctx->status == LlmStatus::USER_CANCEL ||
-                    ctx->status == LlmStatus::INTERNAL_ERROR ||
-                    ctx->status == LlmStatus::TIMEOUT) {
-                    break;
-                }
-            }
-            g_llm->generate(1);
-            ++produced;
-        }
+        int produced = stepDecodeLocked(g_llm, maxNew);
 
         std::string out = os.str();
         if (out.empty() && g_llm->getContext() != nullptr) {
@@ -807,24 +841,9 @@ Java_com_lanxin_android_builtin_localinference_data_MnnNativeBridge_nativeGenera
     try {
         JavaStreamBuf sbuf(env);
         std::ostream os(&sbuf);
-        // 对齐 MNNChat 流式：prefill(0) + generate(1) 逐步，可早停/cancel
+        // 流式同款 prefill + stepDecode
         g_llm->response(messages, &os, "", /*max_new_tokens=*/0);
-        int produced = 0;
-        while (!g_cancel.load() && produced < maxNew) {
-            if (g_llm->stoped()) break;
-            auto* ctx = g_llm->getContext();
-            if (ctx != nullptr) {
-                using MNN::Transformer::LlmStatus;
-                if (ctx->status == LlmStatus::NORMAL_FINISHED ||
-                    ctx->status == LlmStatus::USER_CANCEL ||
-                    ctx->status == LlmStatus::INTERNAL_ERROR ||
-                    ctx->status == LlmStatus::TIMEOUT) {
-                    break;
-                }
-            }
-            g_llm->generate(1);
-            ++produced;
-        }
+        int produced = stepDecodeLocked(g_llm, maxNew);
         std::string out;
         if (g_llm->getContext() != nullptr) {
             out = g_llm->getContext()->generate_str;
