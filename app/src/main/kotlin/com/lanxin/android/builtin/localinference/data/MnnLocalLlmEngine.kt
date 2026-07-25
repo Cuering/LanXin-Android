@@ -177,11 +177,12 @@ class MnnLocalLlmEngine @Inject constructor(
         val modelName = loadedPath?.let { File(it).name } ?: "?"
 
         if (usingNative) {
-            // 对齐 MNNChat：完整 ChatMessages 重建前清 KV，避免脏上下文答非所问
+            // 陪伴目前每轮 history 为空、只带当前 user：必须 reset，否则旧 KV 污染。
+            // 真正的多轮加速应像 MNNChat 一样 keep_history + 追加消息，而不是每轮塞满 system。
+            // 速度关键已在 JNI：response(...,0)+generate(1) 早停，不再一次打满 maxTokens。
             nativeBridge.reset()
             val (roles, contents) = buildChatMessages(request)
             val text = withContext(Dispatchers.IO) {
-                // 一律走 ChatMessages + apply_chat_template（含仅 user 单轮）
                 nativeBridge.generateChat(roles, contents, maxTokens)
             }
             if (text != null) {
