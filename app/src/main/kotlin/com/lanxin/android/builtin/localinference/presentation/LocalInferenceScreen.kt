@@ -183,7 +183,7 @@ fun LocalInferenceScreen(
             )
             SetupGuideCard(steps = guideSteps)
 
-            // 报错一键复制反馈
+            // MNN / 陪伴诊断：聊几句后一键导出，可直接转开发者
             Card(
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.tertiaryContainer
@@ -191,40 +191,67 @@ fun LocalInferenceScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "遇到报错？一键复制反馈",
+                        text = "MNN 对比诊断（可转开发者）",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "会复制：引擎状态 / 路由预览 / 最后错误 / 模型路径摘要。\n" +
-                            "常见失败：模型包缺文件、只选了单文件、内存不足、未授权麦克风。",
+                        text = "请先在陪伴里说 2～3 句话，再点下方按钮。\n" +
+                            "会生成：引擎状态 / usingNative / 每轮 reuseKv·history·耗时·回复预览 / 最后错误。\n" +
+                            "复制全文发我就行；有权限时还会写到 Documents/LanXin/logs/。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onTertiaryContainer
                     )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Button(
+                        onClick = {
+                            viewModel.exportDiagnosticsReport()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("生成并复制完整诊断日志")
+                    }
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedButton(
                         onClick = {
-                            val report = buildString {
-                                appendLine("=== 兰心本地脑反馈 ===")
-                                appendLine("引擎: ${stateLabel(state.engineState)}")
-                                appendLine("启用: ${state.enabled}")
-                                appendLine("优先本地: ${state.preferLocal}")
-                                appendLine("路由: ${state.routePreview}")
-                                appendLine("模型路径: ${state.modelPath.ifBlank { "(空)" }}")
-                                appendLine("最后错误: ${state.lastError ?: "(无)"}")
-                                appendLine("网络: ${if (state.networkAvailable) "有" else "无"}")
-                                appendLine("上下文窗口: ${state.contextWindowTokens}")
-                                appendLine("maxTokens: ${state.maxTokens}")
+                            val report = state.lastExportReport
+                            if (report.isNullOrBlank()) {
+                                viewModel.exportDiagnosticsReport()
+                            } else {
+                                clipboard.setText(AnnotatedString(report))
+                                scope.launch {
+                                    snackbarHostState.showSnackbar("已复制完整诊断（可直接粘贴发给开发者）")
+                                }
                             }
-                            clipboard.setText(AnnotatedString(report))
-                            scope.launch {
-                                snackbarHostState.showSnackbar("已复制到剪贴板，可粘贴反馈")
-                            }
-                        }
+                        },
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("复制诊断信息")
+                        Text("再次复制最近一次报告")
                     }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    TextButton(
+                        onClick = { viewModel.clearDiagnosticsEvents() },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("清空事件缓冲")
+                    }
+                    if (!state.lastExportPath.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "文件: ${state.lastExportPath}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                    }
+                }
+            }
+
+            // 自动：导出报告生成后写入剪贴板
+            LaunchedEffect(state.lastExportReport) {
+                val report = state.lastExportReport
+                if (!report.isNullOrBlank()) {
+                    clipboard.setText(AnnotatedString(report))
                 }
             }
 
