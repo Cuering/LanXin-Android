@@ -198,9 +198,12 @@ class MnnLocalLlmEngine @Inject constructor(
             }
             val dur = System.currentTimeMillis() - t0
             if (text != null) {
+                val perf = nativeBridge.lastPerf()
                 diagnostics.log(
                     "engine",
-                    "generate ok durMs=$dur replyLen=${text.length} preview=${text.trim().take(60).replace('\n',' ')}"
+                    "generate ok durMs=$dur replyLen=${text.length} " +
+                        "preview=${text.trim().take(60).replace('\n', ' ')}" +
+                        (if (perf != null) " | $perf" else "")
                 )
                 if (request.reuseKv) {
                     val cleaned = text.trim()
