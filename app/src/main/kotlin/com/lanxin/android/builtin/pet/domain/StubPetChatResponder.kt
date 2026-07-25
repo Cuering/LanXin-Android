@@ -37,6 +37,11 @@ class StubPetChatResponder @Inject constructor() : PetChatResponder {
             return "[[mood=listen]]\n嗯？我在听。"
         }
         val lower = t.lowercase()
+        // 身份问题优先：本地脑未就绪或质量闸门回落时也要答对名字
+        if (listOf("名字", "叫什么", "你是谁", "你叫").any { t.contains(it) }) {
+            return "[[mood=smile]]
+我叫兰心呀，温柔陪你聊天的小助手～"
+        }
         val mood = when {
             listOf("音乐", "听歌", "放歌", "bgm", "唱歌").any { t.contains(it) || lower.contains(it) } ->
                 "music"
