@@ -223,6 +223,13 @@ class MnnNativeBridge @Inject constructor() {
         runCatching { nativeReset() }
     }
 
+    /** 最近一次 native PERF 行（prefill/decode t/s）。 */
+    @Synchronized
+    fun lastPerf(): String? {
+        if (!tryLoadNative()) return null
+        return runCatching { nativeLastPerf() }.getOrNull()?.takeIf { it.isNotBlank() }
+    }
+
     /**
      * 对齐 MNNChat：decode 结束后把完整对话（含 assistant）同步进 prompt cache，
      * 使下一轮 prefill 可复用 KV。
@@ -279,6 +286,7 @@ class MnnNativeBridge @Inject constructor() {
 
     private external fun nativeCancel()
     private external fun nativeReset()
+    private external fun nativeLastPerf(): String?
     private external fun nativeSyncPromptCache(roles: Array<String>, contents: Array<String>): Boolean
     private external fun nativeUnload()
     private external fun nativeLastError(): String?
