@@ -34,6 +34,14 @@ jobs:
           sdkmanager "$latest_stable_version"
           echo "$ANDROID_SDK_ROOT/build-tools/$latest_version_number" >> $GITHUB_PATH
 
+      - name: Bundle built-in voice models (ASR+TTS) into APK assets
+        env:
+          BUNDLE_TTS: "1"
+          CI: "true"
+        run: |
+          bash scripts/ci-bundle-voice-assets.sh
+          test -f app/src/main/assets/voice/tts/matcha-icefall-zh-baker/vocos-22khz-univ.onnx
+
       - name: Build Unsigned Release APK
         run: ./gradlew assembleRelease
 
