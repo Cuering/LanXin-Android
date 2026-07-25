@@ -20,6 +20,8 @@ import com.lanxin.android.builtin.pet.domain.OverlayPosition
 import com.lanxin.android.builtin.pet.domain.PetConfig
 import com.lanxin.android.builtin.pet.domain.PetSettings
 import com.lanxin.android.builtin.pet.domain.StubPetChatResponder
+import com.lanxin.android.builtin.pet.domain.VoiceInputPipeline
+import com.lanxin.android.builtin.pet.domain.VoiceOutputPipeline
 import com.lanxin.android.builtin.pet.domain.VoiceSessionCoordinator
 import com.lanxin.android.builtin.pet.domain.VoiceSessionInput
 import com.lanxin.android.builtin.pet.domain.VoiceSessionPhase
@@ -62,6 +64,7 @@ import com.lanxin.android.builtin.systemtools.domain.UserFileIoResult
 import com.lanxin.android.builtin.systemtools.domain.UserFileProbe
 import com.lanxin.android.builtin.voice.data.PcmAudioPlayer
 import com.lanxin.android.builtin.voice.data.StubTtsEngine
+import com.lanxin.android.builtin.voice.domain.SystemTtsSpeaker
 import com.lanxin.android.builtin.voice.domain.TtsConfig
 import com.lanxin.android.builtin.voice.domain.TtsSettings
 import kotlinx.coroutines.runBlocking
@@ -179,6 +182,11 @@ class VoiceSessionToolBridgeTest {
         override fun probe(uriString: String): UserFileProbe? = null
     }
 
+    private class FakeAndroidTts : SystemTtsSpeaker {
+        override val available: Boolean = true
+        override suspend fun speak(text: String): Boolean = false
+    }
+
     private fun registry(): DeviceToolRegistry {
         val gateway = StubCalendarGateway()
         val notes = StubNotesStore()
@@ -214,12 +222,18 @@ class VoiceSessionToolBridgeTest {
         val tts = StubTtsEngine()
         runBlocking { tts.load(TtsConfig(enabled = true)) }
         return VoiceSessionCoordinator(
-            responder = StubPetChatResponder(),
-            ttsEngine = tts,
-            ttsSettings = FakeTtsSettings(),
+            inputPipeline = VoiceInputPipeline(
+                responder = StubPetChatResponder(),
+                deviceToolBridge = bridge
+            ),
+            outputPipeline = VoiceOutputPipeline(
+                ttsEngine = tts,
+                ttsSettings = FakeTtsSettings(),
+                pcmPlayer = PcmAudioPlayer(),
+                androidTts = FakeAndroidTts()
+            ),
             petSettings = FakePetSettings(PetConfig(enabled = true)),
-            deviceToolBridge = bridge,
-            pcmPlayer = PcmAudioPlayer()
+            deviceToolBridge = bridge
         )
     }
 

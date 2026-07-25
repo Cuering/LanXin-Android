@@ -29,9 +29,11 @@ import kotlinx.coroutines.withTimeoutOrNull
 /**
  * 全屏陪伴 / 桌宠「想」阶段：本地脑就绪则走本地，否则 stub 短答。
  *
- * - 不塞 Chat 输入框；不拉云端全链路（陪伴优先低延迟离线）
- * - 限短 maxTokens，减少元分析长输出与等待
- * - 出口再清洗一次，避免 think / 元分析泄漏
+ * 推理尽量对齐 MNN 官方 App：
+ * - 不塞长 system / 输出约束（[skipOutputConstraint]=true）
+ * - 不硬砍 maxTokens（用设置默认，通常 512）
+ * - 引擎 generate 前 reset KV + ChatMessages 模板
+ * - 出口只做轻量 forDisplay（剥 think/标签），**不再** limitToOneSentence
  */
 @Singleton
 class LocalAwarePetChatResponder @Inject constructor(
@@ -49,15 +51,13 @@ class LocalAwarePetChatResponder @Inject constructor(
         if (!ensureLocalReady()) {
             return stub.respond(text)
         }
-        val system = LocalReplySanitizer.appendOutputConstraint(
-            systemPrompt = COMPANION_SYSTEM,
-            showThinking = false
-        )
         val states = withTimeoutOrNull(COMPANION_TIMEOUT_MS) {
             localProvider.completeAsApiState(
                 prompt = text,
-                systemPrompt = system,
-                maxTokens = COMPANION_MAX_TOKENS
+                systemPrompt = null,
+                maxTokens = null,
+                history = emptyList(),
+                skipOutputConstraint = true
             ).toList()
         } ?: return stub.respond(text)
 
@@ -68,10 +68,8 @@ class LocalAwarePetChatResponder @Inject constructor(
         if (success.isBlank()) {
             return stub.respond(text)
         }
-        // 清洗 + 硬截「每次只回一句话」（仅陪伴本地脑路径）
-        val cleaned = LocalReplySanitizer.limitToOneSentence(
-            LocalReplySanitizer.forDisplay(success, showThinking = false)
-        )
+        // 轻量清洗 only：不硬截一句
+        val cleaned = LocalReplySanitizer.forDisplay(success, showThinking = false)
         if (cleaned.isBlank()) {
             return stub.respond(text)
         }
@@ -98,14 +96,11 @@ class LocalAwarePetChatResponder @Inject constructor(
     }
 
     companion object {
-        /** 陪伴 system：角色短答，叠加输出约束；硬约束「每次只回一句话」。 */
-        const val COMPANION_SYSTEM: String =
-            "你是兰心，温柔、亲近的中文陪伴角色。用户在全屏陪伴里跟你说话。" +
-                "用口语短句回复，像面对面聊天；不要列点、不要写报告。" +
-                "每次只回一句话；句子不要重复；禁止把同一句连写多遍。"
-
-        /** 陪伴生成上限：短答优先，降低延迟与元分析/复读空间。 */
-        const val COMPANION_MAX_TOKENS: Int = 64
+        /**
+         * 陪伴不再覆盖 maxTokens；测试侧用此常量表示「走默认」哨兵。
+         * Provider 收到 null 时用设置页 [LocalInferenceConfig.maxTokens]（默认 512）。
+         */
+        const val COMPANION_MAX_TOKENS: Int = 0
 
         /** 单轮本地推理超时；超时回 stub，避免卡死「思考中」。 */
         const val COMPANION_TIMEOUT_MS: Long = 45_000L

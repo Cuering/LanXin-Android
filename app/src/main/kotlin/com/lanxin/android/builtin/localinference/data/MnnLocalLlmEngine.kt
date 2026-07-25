@@ -162,6 +162,12 @@ class MnnLocalLlmEngine @Inject constructor(
         }
     }
 
+    override suspend fun reset() = withContext(Dispatchers.IO) {
+        if (usingNative && isReady) {
+            nativeBridge.reset()
+        }
+    }
+
     override suspend fun generate(request: LocalGenerateRequest): LocalGenerateResult {
         if (!isReady) {
             error("LocalLlmEngine not ready: state=${_state.value}, error=$error")
@@ -171,13 +177,12 @@ class MnnLocalLlmEngine @Inject constructor(
         val modelName = loadedPath?.let { File(it).name } ?: "?"
 
         if (usingNative) {
+            // 对齐 MNNChat：完整 ChatMessages 重建前清 KV，避免脏上下文答非所问
+            nativeBridge.reset()
             val (roles, contents) = buildChatMessages(request)
             val text = withContext(Dispatchers.IO) {
-                if (roles.size > 1) {
-                    nativeBridge.generateChat(roles, contents, maxTokens)
-                } else {
-                    nativeBridge.generate(request.prompt.trim(), maxTokens)
-                }
+                // 一律走 ChatMessages + apply_chat_template（含仅 user 单轮）
+                nativeBridge.generateChat(roles, contents, maxTokens)
             }
             if (text != null) {
                 return LocalGenerateResult(
@@ -220,25 +225,19 @@ class MnnLocalLlmEngine @Inject constructor(
             .coerceIn(LocalInferenceConfig.MIN_MAX_TOKENS, LocalInferenceConfig.MAX_MAX_TOKENS)
 
         if (usingNative) {
+            nativeBridge.reset()
             val (roles, contents) = buildChatMessages(request)
-            if (roles.size > 1) {
-                // generateChatStream 的回调是非 suspend lambda，用 Channel 桥接 flow emit
-                val channel = Channel<String>(Channel.UNLIMITED)
-                withContext(Dispatchers.IO) {
-                    nativeBridge.generateChatStream(roles, contents, maxTokens) { piece ->
-                        channel.trySend(piece)
-                        false
-                    }
-                    channel.close()
+            // generateChatStream 的回调是非 suspend lambda，用 Channel 桥接 flow emit
+            val channel = Channel<String>(Channel.UNLIMITED)
+            withContext(Dispatchers.IO) {
+                nativeBridge.generateChatStream(roles, contents, maxTokens) { piece ->
+                    channel.trySend(piece)
+                    false
                 }
-                for (piece in channel) {
-                    emit(piece)
-                }
-            } else {
-                val text = withContext(Dispatchers.IO) {
-                    nativeBridge.generate(request.prompt.trim(), maxTokens)
-                }
-                if (text != null) emit(text)
+                channel.close()
+            }
+            for (piece in channel) {
+                emit(piece)
             }
         } else {
             val result = generate(request)
@@ -250,7 +249,7 @@ class MnnLocalLlmEngine @Inject constructor(
      * 构建 ChatMessages 数组（对齐 MNN Chat 的多轮格式）。
      *
      * - 有 systemPrompt → ["system","user",…] 或 ["system","user","assistant","user",…]
-     * - 无 systemPrompt + 单轮 → roles.size==1，调用方走 generate fast path
+     * - 无 system + 单轮 → ["user"]，仍走 generateChat / apply_chat_template
      */
     private fun buildChatMessages(
         request: LocalGenerateRequest

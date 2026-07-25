@@ -86,11 +86,22 @@ object PetResourceResolver {
         } else {
             ttsRefConfigured.trim()
         }
-        val asrPath = MeijuDebugPaths.resolveAsrIfPresent(
+        val asrResolved = MeijuDebugPaths.resolveAsrIfPresent(
             filesDir,
             asrConfigured,
             openSourceBaseDir = openSourceBaseDir
         )
+        val asrPath = if (asrResolved.isNotBlank()) {
+            asrResolved
+        } else {
+            // 配置空 + 开源包空 → 回退内置 APK 模型
+            val builtin = BuiltInVoiceAssets.asrInstalledDir(filesDir)
+            if (builtin.isDirectory && builtin.listFiles()?.isNotEmpty() == true) {
+                builtin.absolutePath
+            } else {
+                asrResolved
+            }
+        }
         val localLlm = MeijuDebugPaths.resolveLocalLlmIfPresent(
             filesDir,
             localLlmConfigured,
