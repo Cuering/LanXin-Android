@@ -130,11 +130,11 @@ class LocalAwarePetChatResponder @Inject constructor(
         fun isAcceptableReply(userText: String, reply: String): Boolean {
             val r = reply.trim()
             if (r.length < 2) return false
-            // 仅标点
-            if (r.all { !it.isLetterOrDigit() && it.code < 0x4E00 || it in " \t\n" }) {
-                // 允许含中文；纯符号拒绝
-                if (r.none { it.code in 0x4E00..0x9FFF || it.isLetterOrDigit() }) return false
+            // 纯符号/空白 → 拒绝（如「！」）
+            val hasContent = r.any {
+                it.isLetterOrDigit() || it.code in 0x4E00..0x9FFF
             }
+            if (!hasContent) return false
             if (GARBAGE_PATTERNS.any { it.containsMatchIn(r) }) return false
             // 问名字却完全不提名字/兰心/叫 → 不相关
             if (userText.contains("名字") || userText.contains("叫什么") ||
