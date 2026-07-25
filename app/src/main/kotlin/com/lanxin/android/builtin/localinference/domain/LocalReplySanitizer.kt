@@ -446,35 +446,39 @@ object LocalReplySanitizer {
 
 
     /**
-     * 剥离纯大纲壳：匹配 `1. xxx` / `- xxx` / `### xxx` 等无正文的编号/项目符号行，
-     * 保留后续有实际内容的段落。用于清理小模型输出的 "Thinking Process" 编号壳。
+     * 剥离纯大纲壳 / Thinking Process 空壳。
+     *
+     * - `1.` / `Thinking Process: 1.` 等无正文 → 空串
+     * - 有真实正文时保留正文行
      */
     fun dropBareOutlineShell(text: String): String {
         if (text.isEmpty()) return text
-        val lines = text.split('\n')
+        val lines = text.replace("\r\n", "\n").split('\n')
         val out = ArrayList<String>(lines.size)
-        var inBareShell = false
         for (line in lines) {
             val trimmed = line.trim()
-            // 检测大纲壳模式
-            val isBareHeader = Regex("""^[\d]+[.、]\s*$""").matches(trimmed) ||
-                Regex("""^-+\s*$""").matches(trimmed) ||
-                Regex("""^#{1,6}\s*$""").matches(trimmed) ||
-                Regex("""^\*+\s*$""").matches(trimmed)
-            if (isBareHeader) {
-                inBareShell = true
+            if (trimmed.isEmpty()) {
+                if (out.isNotEmpty() && out.last().isNotEmpty()) out += ""
                 continue
             }
-            // 如果当前在大纲壳中且这行也是大纲风格，跳过
-            if (inBareShell && (Regex("""^[\d]+[.、]\s+[^"]*$""").matches(trimmed) ||
-                    Regex("""^-+\s+[^"]*$""").matches(trimmed))) {
-                continue
-            }
-            inBareShell = false
-            out.add(line)
+            if (isBareOutlineLine(trimmed)) continue
+            out += line
         }
-        val result = out.joinToString("\n").trim()
-        return if (result.isEmpty()) text else result
+        return out.joinToString("\n").trim()
+    }
+
+    /** 纯编号/项目符号/Thinking Process 空壳行。 */
+    private fun isBareOutlineLine(trimmed: String): Boolean {
+        // "1." "1、" "12."
+        if (Regex("""^\d+[.、．]?\s*$""").matches(trimmed)) return true
+        // "Thinking Process" / "Thinking Process: 1." / "thinking process: ..."
+        if (Regex("""(?i)^thinking\s*process\b.*$""").matches(trimmed)) return true
+        // 空 markdown 标题/分隔
+        if (Regex("""^#{1,6}\s*$""").matches(trimmed)) return true
+        if (Regex("""^[-*•]+\s*$""").matches(trimmed)) return true
+        // 仅有编号前缀、后面几乎无汉字/字母内容（如 "1. " / "1.  "）
+        if (Regex("""^\d+[.、．]\s*$""").matches(trimmed)) return true
+        return false
     }
 
     /**
