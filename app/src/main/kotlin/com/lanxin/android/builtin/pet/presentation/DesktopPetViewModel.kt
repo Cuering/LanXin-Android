@@ -884,11 +884,11 @@ class DesktopPetViewModel @Inject constructor(
                             storageRoot.safWritable && mirror.attempted && !mirror.success ->
                                 "；${mirror.message}"
                             storageRoot.safWritable ->
-                                "（引擎写 App 目录，已授权 SAF 公共树）"
+                                "（引擎写 App 外置 LanXin/）"
                             storageRoot.safGranted ->
-                                "（SAF 已授权但不可写；引擎写 App 私有）"
+                                "（公共不可写；引擎写 App 外置 LanXin/）"
                             else ->
-                                "（公共目录不可写，已回退；可点「授权公共 LanXin」）"
+                                "（公共目录不可写，已回退；已自动使用 App 外置 LanXin/）"
                         }
                         _uiState.update {
                             it.copy(
