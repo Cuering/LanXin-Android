@@ -87,22 +87,12 @@ class DebugAssetStorageTest {
     }
 
     @Test
-    fun publicLanXinCandidates_rootThenDocuments() {
-        val external = tmp.newFolder("emulated0")
+    fun publicLanXinCandidates_rootOnly() {
+        val external = tmp.newFolder("ext")
         val candidates = DebugAssetStorage.publicLanXinCandidates(external)
-        assertEquals(2, candidates.size)
-        assertEquals(File(external, "LanXin"), candidates[0].lanXinDir)
-        assertEquals(external, candidates[0].baseDir)
-        // 第二候选在 Documents/LanXin（docs 名可能来自 Environment 或字面量回退）
-        assertEquals("LanXin", candidates[1].lanXinDir.name)
-        assertEquals(candidates[1].baseDir, candidates[1].lanXinDir.parentFile)
-        assertEquals(external, candidates[1].baseDir.parentFile)
-        // relativeReadyPath 契约：baseDir + LanXin/... 落在 lanXinDir 下
-        val ready = File(candidates[0].baseDir, "LanXin${File.separator}asr${File.separator}x")
-        assertTrue(
-            ready.canonicalPath.startsWith(candidates[0].lanXinDir.canonicalPath + File.separator) ||
-                ready.canonicalPath == candidates[0].lanXinDir.canonicalPath
-        )
+        assertEquals(1, candidates.size)
+        assertEquals(File(external, "LanXin").absolutePath, candidates[0].lanXinDir.absolutePath)
+        assertEquals(external.absolutePath, candidates[0].baseDir.absolutePath)
     }
 
     /**
@@ -164,7 +154,7 @@ class DebugAssetStorageTest {
             safWritable = true,
             safTreeUri = treeUri
         )
-        assertTrue(DebugAssetStorage.shouldMirror(mustMirror))
+        assertFalse(DebugAssetStorage.shouldMirror(mustMirror)) // SAF mirror disabled
         assertTrue(mustMirror.shouldMirrorToSaf)
         assertTrue(mustMirror.publicWritable)
     }
