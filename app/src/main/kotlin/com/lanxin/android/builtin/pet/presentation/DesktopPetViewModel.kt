@@ -403,6 +403,21 @@ class DesktopPetViewModel @Inject constructor(
         }
     }
 
+    fun setTtsEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            ttsSettings.setEnabled(enabled)
+            // Do not re-enable ASR when toggling TTS.
+            _uiState.update {
+                it.copy(
+                    ttsEnabled = enabled,
+                    snackbarMessage = if (enabled) "已开启 TTS" else "已关闭 TTS"
+                )
+            }
+            refresh()
+        }
+    }
+
+
     fun setLive2dModelPath(path: String) {
         viewModelScope.launch {
             petSettings.setLive2dModelPath(path.ifBlank { null })
