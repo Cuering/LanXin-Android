@@ -107,11 +107,6 @@ fun DesktopPetScreen(
         uri?.toString()?.let(viewModel::importTtsReferenceFromDocument)
     }
     // 公共 LanXin/ 目录 SAF 授权（下载主路径仍写 App 私有；成功后可选镜像）
-    val lanXinSafTreePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocumentTree()
-    ) { uri: Uri? ->
-        uri?.toString()?.let(viewModel::grantLanXinSafTree)
-    }
 
     DisposableEffect(lifecycleOwner) {
         val obs = LifecycleEventObserver { _, event ->
@@ -404,61 +399,19 @@ fun DesktopPetScreen(
                                 append(state.downloadRootPath)
                                 when {
                                     !state.downloadRootFallback -> Unit
-                                    state.safWritable ->
-                                        append("（引擎写 App 私有；下载完成后会镜像到公共树）")
-                                    state.safGranted ->
-                                        append("（SAF 已授权但不可写；仅 App 私有）")
                                     else ->
-                                        append("（公共目录不可写，已回退 App 私有）")
+                                        append("（公共不可写，已回退 App 外置 LanXin/）")
                                 }
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    // SAF：授权后下载会镜像到公共 LanXin；失败可见，无授权时仍可用 App 私有
                     Text(
-                        buildString {
-                            append("公共目录：")
-                            when {
-                                state.safWritable ->
-                                    append(
-                                        "已授权可写 · ${state.safDisplayLabel.ifBlank { "LanXin" }}" +
-                                            "（已建 live2d/asr/tts/models 骨架；下载完成后同步）"
-                                    )
-                                state.safGranted ->
-                                    append(
-                                        "已授权但不可写 · ${state.safDisplayLabel.ifBlank { "—" }}" +
-                                            "（请重新选择可写的 LanXin 文件夹）"
-                                    )
-                                else ->
-                                    append(
-                                        "未授权（App 已自动建私有 LanXin/ 骨架；" +
-                                            "点下方授权公共 LanXin 后可在文件管理器看到模型）"
-                                    )
-                            }
-                        },
+                        "日志目录：LanXin/logs/（与资源同根；不再使用 Documents，无需授权文件夹）",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        OutlinedButton(
-                            onClick = { lanXinSafTreePicker.launch(null) },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(
-                                if (state.safGranted) "重新授权公共 LanXin" else "授权公共 LanXin"
-                            )
-                        }
-                        if (state.safGranted) {
-                            TextButton(onClick = viewModel::clearLanXinSafTree) {
-                                Text("清除授权")
-                            }
-                        }
-                    }
                     Text(
                         state.live2dLicenseHint,
                         style = MaterialTheme.typography.bodySmall,
