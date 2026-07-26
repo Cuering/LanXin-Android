@@ -38,7 +38,8 @@ class LocalAwarePetChatResponderTest {
             localSettings = settings,
             bootstrap = bootstrap,
             stub = StubPetChatResponder(),
-            diagnostics = LocalInferenceDiagnostics()
+            diagnostics = LocalInferenceDiagnostics(),
+            engine = engine
         )
         val out = responder.respond("你好")
         // stub 问候池：不回声用户原话，只出短答 + mood 标签
@@ -77,15 +78,17 @@ class LocalAwarePetChatResponderTest {
             localSettings = settings,
             bootstrap = bootstrap,
             stub = StubPetChatResponder(),
-            diagnostics = LocalInferenceDiagnostics()
+            diagnostics = LocalInferenceDiagnostics(),
+            engine = engine
         )
         val out = responder.respond("你好")
         assertEquals(1, provider.calls)
-        // 对齐 MNNChat：null system、skip 约束、更大 maxTokens、原文出口
-        assertEquals(256, provider.lastMaxTokens)
-        assertEquals(null, provider.lastSystem)
-        assertTrue(provider.lastSkipConstraint)
-        assertTrue(provider.lastReuseKv)
+        // 小模型护栏：短 system + 输出约束 + 64 maxTokens
+        assertEquals(64, provider.lastMaxTokens)
+        assertTrue(provider.lastSystem!!.contains("兰心"))
+        assertFalse(provider.lastSkipConstraint)
+        // 首轮无 history 时 reuseKv=false，避免空 cache 污染
+        assertFalse(provider.lastReuseKv)
         assertEquals(0, provider.lastHistorySize)
         assertTrue(out.contains("你好呀"))
         // bare path 不再激进剥「让我分析」——Provider 侧 lightClean 只剥 think/tags
@@ -113,7 +116,8 @@ class LocalAwarePetChatResponderTest {
             localSettings = settings,
             bootstrap = bootstrap,
             stub = StubPetChatResponder(),
-            diagnostics = LocalInferenceDiagnostics()
+            diagnostics = LocalInferenceDiagnostics(),
+            engine = engine
         )
         val out = responder.respond("你喜欢什么？")
         // 垃圾回复被闸门丢弃，回 stub（非分数串）
@@ -142,7 +146,8 @@ class LocalAwarePetChatResponderTest {
             localSettings = settings,
             bootstrap = bootstrap,
             stub = StubPetChatResponder(),
-            diagnostics = LocalInferenceDiagnostics()
+            diagnostics = LocalInferenceDiagnostics(),
+            engine = engine
         )
         val out = responder.respond("你叫什么名字？")
         assertTrue(out.contains("兰心"))
@@ -165,7 +170,8 @@ class LocalAwarePetChatResponderTest {
             localSettings = settings,
             bootstrap = bootstrap,
             stub = StubPetChatResponder(),
-            diagnostics = LocalInferenceDiagnostics()
+            diagnostics = LocalInferenceDiagnostics(),
+            engine = engine
         )
         val out = responder.respond("在吗")
         assertTrue(out.contains("[[mood="))
@@ -217,7 +223,8 @@ class LocalAwarePetChatResponderTest {
             localSettings = settings,
             bootstrap = bootstrap,
             stub = StubPetChatResponder(),
-            diagnostics = LocalInferenceDiagnostics()
+            diagnostics = LocalInferenceDiagnostics(),
+            engine = engine
         )
         val out1 = responder.respond("你好")
         assertTrue("first turn should use local: $out1", out1.contains("好呀") || out1.contains("好"))
@@ -253,6 +260,27 @@ class LocalAwarePetChatResponderTest {
         override suspend fun generate(request: LocalGenerateRequest): LocalGenerateResult =
             LocalGenerateResult(text = "stub")
         override fun stream(request: LocalGenerateRequest): Flow<String> = flowOf("")
+        override suspend fun reset() {}
+    }
+
+    
+    @Test
+    fun `gate rejects numeric range gibberish and cyrillic`() {
+        assertFalse(
+            LocalAwarePetChatResponder.isAcceptableReply(
+                "你好",
+                "рассу, 24-26, 32-34, 36-38, 44-46, 56-68"
+            )
+        )
+        assertFalse(
+            LocalAwarePetChatResponder.isAcceptableReply(
+                "你是谁",
+                "时间可以是24-26，28-30，32-34，36-38，44-46"
+            )
+        )
+        assertTrue(
+            LocalAwarePetChatResponder.isAcceptableReply("你好", "你好呀，我是兰心。")
+        )
     }
 
     private class RecordingProvider(
