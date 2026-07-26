@@ -1,5 +1,7 @@
 <resources>
     <string name="app_name">兰心</string>
+    <string name="mnnchat" translatable="false">MNNChat</string>
+    <string name="mnnchat_description">MNNChat OpenAI-compatible API (phone LAN :8080/v1, Bearer mnn-llm-chat)</string>
     <string name="lanxin_introduction_logo">LanXin Introduction Logo</string>
     <string name="welcome_title">你的专属温柔助理\n兰心\n随时在你身边</string>
     <string name="welcome_description">哥哥好~ 我是兰心\n有什么需要帮忙的吗？</string>
