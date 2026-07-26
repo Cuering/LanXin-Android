@@ -10,6 +10,7 @@ object ModelConstants {
     val groqModels = linkedSetOf("llama-3.2-3b-preview", "llama-3.2-1b-preview", "llama-3.1-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it")
     val ollamaModels = linkedSetOf<String>()
     val lanxinModels = linkedSetOf("兰心")
+    val mnnchatModels = linkedSetOf("mnn-default")
 
     const val OPENAI_API_URL = "http://你的服务器IP:6185/v1/"
     const val ANTHROPIC_API_URL = "https://api.anthropic.com/v1/"
@@ -18,6 +19,9 @@ object ModelConstants {
     const val OPENROUTER_API_URL = "https://openrouter.ai/api/v1/"
     const val OLLAMA_API_URL = "http://localhost:11434/v1/"
     const val LANXIN_API_URL = "http://111.228.54.127:6185"
+    /** MNNChat OpenAI-compatible base; user replaces host with phone LAN IP. */
+    const val MNNCHAT_API_URL = "http://127.0.0.1:8080/v1/"
+    const val MNNCHAT_DEFAULT_TOKEN = "mnn-llm-chat"
 
     fun getDefaultAPIUrl(apiType: ApiType) = when (apiType) {
         ApiType.OPENAI -> OPENAI_API_URL
