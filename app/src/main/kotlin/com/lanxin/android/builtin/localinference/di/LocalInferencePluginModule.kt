@@ -1,27 +1,15 @@
 package com.lanxin.android.builtin.localinference.di
 
-import com.lanxin.android.builtin.localinference.LocalInferencePlugin
-import com.lanxin.android.builtin.localinference.domain.LocalInferencePluginConfig
-import com.lanxin.android.plugin.PluginManager
 import dagger.Module
-import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
-import javax.inject.Singleton
 
+/**
+ * 本地脑已从主程序剥离：不再向 PluginManager 注册编译期插件。
+ * 能力源码仍保留供单测 / 后续动态插件包引用；用户从插件市场安装动态包后加载。
+ *
+ * 空 Module 保留，避免旧 import 断链；真正入口见 docs/plugins/。
+ */
 @Module
 @InstallIn(SingletonComponent::class)
-object LocalInferencePluginModule {
-
-    @Provides
-    @Singleton
-    fun provideLocalInferencePluginRegistration(
-        pluginManager: PluginManager,
-        plugin: LocalInferencePlugin
-    ): LocalInferencePluginRegistration {
-        pluginManager.register(plugin, defaultEnabled = LocalInferencePluginConfig.DEFAULT_ENABLED)
-        return LocalInferencePluginRegistration(plugin)
-    }
-}
-
-data class LocalInferencePluginRegistration(val plugin: LocalInferencePlugin)
+object LocalInferencePluginModule
