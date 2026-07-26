@@ -101,7 +101,7 @@ class LocalAwarePetChatResponder @Inject constructor(
             return@withLock stub.respond(text)
         }
         // Provider 已 clean；再轻量兜底 + 单句硬截（陪伴口语）
-        val cleaned = LocalReplySanitizer.limitToOneSentence(
+        val cleaned = pickCompanionUtterance(
             LocalReplySanitizer.forDisplay(success, showThinking = false)
                 .ifBlank { LocalReplySanitizer.lightCleanForBareChat(success) }
         ).trim()
@@ -207,6 +207,34 @@ class LocalAwarePetChatResponder @Inject constructor(
             Regex("""^[\d\s,，、;；:：.。\-~/|]+$""")
         )
 
+
+        /**
+         * 从模型胡喷里挑一句能用的陪伴口语：
+         * - 去掉开头残片（“吗？”）
+         * - 优先含人设/陈述的短句，避免只剩反问
+         */
+        fun pickCompanionUtterance(raw: String): String {
+            val base = LocalReplySanitizer.limitToOneSentence(raw).trim()
+            if (base.isEmpty()) return ""
+            // 若 limit 后仍是残片，尝试按句号/问号切开取更好的一句
+            val parts = raw
+                .split(Regex("""(?<=[。！？!?…] )|(?<=[。！？!?…])"""))
+                .map { it.trim() }
+                .filter { it.length >= 2 }
+            if (parts.isEmpty()) return base
+            val ranked = parts.sortedByDescending { s ->
+                var score = 0
+                if (listOf("我是", "兰心", "我会", "我可以", "我能", "你好").any { s.contains(it) }) score += 5
+                if (s.endsWith("。") || s.endsWith("！") || s.endsWith("!")) score += 2
+                if (s.endsWith("？") || s.endsWith("?")) score -= 2
+                if (s.length in 4..40) score += 1
+                if (s.matches(Regex("""^[吗呢吧啊哦嗯呀。！？!?,，、…]+$"""))) score -= 10
+                score
+            }
+            val best = ranked.first()
+            return LocalReplySanitizer.limitToOneSentence(best).ifBlank { base }
+        }
+
         fun isAcceptableReply(userText: String, reply: String): Boolean {
             val r = reply.trim()
             if (r.length < 2) return false
@@ -223,6 +251,24 @@ class LocalAwarePetChatResponder @Inject constructor(
                 val punct = r.count { it in "。！？…!?" }
                 if (punct == 0 && cjk < r.length / 4) return false
             }
+            // 残片：以语气助词/标点开头且过短
+            if (r.length <= 4 && r.matches(Regex("""^[吗呢吧啊哦嗯呀。！？!?,，、…]+$"""))) {
+                return false
+            }
+            // 用户在问「你是谁/叫什么/能做什么」，回复却只是反问用户
+            val userAsksIdentity = listOf("你是谁", "你叫什么", "你的名字", "你会做什么", "你能做什么", "你能回答")
+                .any { userText.contains(it) }
+            if (userAsksIdentity) {
+                val onlyQuestion = r.endsWith("？") || r.endsWith("?")
+                val asksBack = listOf("你叫什么", "你是谁", "你有什么技能", "你有什么能力", "你喜欢", "你快乐吗", "你在想什么")
+                    .any { r.contains(it) }
+                val mentionsSelf = listOf("我是", "兰心", "桌宠", "我会", "我可以", "我能").any { r.contains(it) }
+                if (onlyQuestion && asksBack && !mentionsSelf) return false
+                if (asksBack && !mentionsSelf && r.length <= 16) return false
+            }
+            // 连续复读同一短问句
+            val qParts = Regex("""[^？?]+[？?]""").findAll(r).map { it.value.trim() }.toList()
+            if (qParts.size >= 2 && qParts.distinct().size == 1) return false
             return true
         }
     }
