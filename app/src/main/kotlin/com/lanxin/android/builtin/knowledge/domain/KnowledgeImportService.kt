@@ -293,8 +293,23 @@ class KnowledgeImportService @Inject constructor(
             return@flow
         }
 
-        // 确保模型就绪
-        runCatching { pipeline.warmUp() }
+        // 确保嵌入模型就绪；缺失时明确失败（常见：未放 GTE-small）
+        val warmed = runCatching { pipeline.warmUp() }.getOrDefault(false)
+        if (!warmed) {
+            emit(
+                ImportProgress(
+                    phase = ImportPhase.FAILED,
+                    fileName = fileName,
+                    message = "嵌入模型未就绪：请将 GTE-small 放到 Download/LanXin/models/gte-small/\n" +
+                        "需要 model_int8.onnx 与 tokenizer.json",
+                    error = "embedding_not_ready",
+                    charCount = parsed.charCount,
+                    totalChunks = chunkTexts.size,
+                    elapsedMs = System.currentTimeMillis() - startedAt
+                )
+            )
+            return@flow
+        }
 
         // externalId 基座：文件内容 hash 的正 long，chunk 用 base + index
         // source 形如 knowledge:文件名，便于按文件统计/覆盖；号段与 VectorSource.KNOWLEDGE 区分
@@ -346,6 +361,26 @@ class KnowledgeImportService @Inject constructor(
 
         val elapsed = System.currentTimeMillis() - startedAt
         val totalInStore = runCatching { vectorStore.count(sourceLabel) }.getOrDefault(0L)
+
+        if (success == 0) {
+            emit(
+                ImportProgress(
+                    phase = ImportPhase.FAILED,
+                    fileName = fileName,
+                    message = "向量化全部失败（$failed 段）。多为嵌入模型缺失/损坏：\n" +
+                        "请放置 Download/LanXin/models/gte-small/{model_int8.onnx,tokenizer.json}",
+                    error = "all_chunks_failed",
+                    charCount = parsed.charCount,
+                    totalChunks = chunkTexts.size,
+                    doneChunks = chunkTexts.size,
+                    successCount = 0,
+                    failedCount = failed,
+                    elapsedMs = elapsed,
+                    storeCount = totalInStore
+                )
+            )
+            return@flow
+        }
 
         emit(
             ImportProgress(
@@ -458,9 +493,27 @@ class KnowledgeImportService @Inject constructor(
         if (mime.isNullOrBlank()) {
             mime = when (DocumentTypes.extensionOf(name)) {
                 "pdf" -> "application/pdf"
-                "md", "markdown" -> "text/markdown"
-                "txt" -> "text/plain"
+                "md", "markdown", "mdown" -> "text/markdown"
+                "txt", "text", "log" -> "text/plain"
                 else -> "application/octet-stream"
+            }
+        }
+        // 部分文件管理器 DISPLAY_NAME 无扩展名，但 URI 路径含 .md
+        if (DocumentTypes.extensionOf(name).isEmpty()) {
+            val fromUri = uri.lastPathSegment.orEmpty()
+            val guess = fromUri.substringAfterLast('/', missingDelimiterValue = fromUri)
+            if (DocumentTypes.extensionOf(guess).isNotEmpty()) {
+                name = guess
+            }
+        }
+        // 仍无扩展名时，用 mime 补后缀，避免 Markdown 分段策略失效
+        if (DocumentTypes.extensionOf(name).isEmpty()) {
+            val m = mime?.lowercase().orEmpty()
+            name = when {
+                m.contains("markdown") -> "$name.md"
+                m == "application/pdf" -> "$name.pdf"
+                m.startsWith("text/") -> "$name.txt"
+                else -> name
             }
         }
         return FileMeta(name, mime)
