@@ -59,6 +59,7 @@ class LocalAwarePetChatResponder @Inject constructor(
 ) : PetChatResponder {
 
     private val mutex = Mutex()
+
     /** 不含 system；仅 user/assistant 成对。 */
     private val turnHistory = CopyOnWriteArrayList<LocalChatMessage>()
 
@@ -110,7 +111,7 @@ class LocalAwarePetChatResponder @Inject constructor(
             .trim()
         if (success.isBlank()) {
             val err = states.filterIsInstance<ApiState.Error>().lastOrNull()?.message
-            diagnostics.log("companion", "blank success err=$err → stub durMs=${System.currentTimeMillis()-t0}")
+            diagnostics.log("companion", "blank success err=$err → stub durMs=${System.currentTimeMillis() - t0}")
             return@withLock stub.respond(text)
         }
         // Provider 已 clean；再轻量兜底 + 单句硬截（陪伴口语）
@@ -134,7 +135,7 @@ class LocalAwarePetChatResponder @Inject constructor(
         turnHistory.add(LocalChatMessage(role = "assistant", content = cleaned))
         diagnostics.log(
             "companion",
-            "ok durMs=${System.currentTimeMillis()-t0} histNow=${turnHistory.size} " +
+            "ok durMs=${System.currentTimeMillis() - t0} histNow=${turnHistory.size} " +
                 "reply=${cleaned.take(60).replace('\n',' ')}"
         )
 
