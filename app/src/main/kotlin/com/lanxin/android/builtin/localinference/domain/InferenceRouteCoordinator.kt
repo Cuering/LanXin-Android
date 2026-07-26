@@ -52,8 +52,11 @@ class InferenceRouteCoordinator @Inject constructor(
         forceCloudAvailable: Boolean? = null,
         forceLocal: Boolean = false
     ): InferenceRouteDecision {
-        // Product: local brain is a plugin (default OFF). Skip local route unless enabled.
-        if (PRODUCT_CLOUD_ONLY) {
+        // Product: local brain is optional plugin (default OFF).
+        // forceLocal still allowed (plugin/session explicit) so unit tests & 手动选本地可用。
+        if (forceLocal) {
+            runCatching { bootstrap.ensureReady(enableIfNeeded = true) }
+        } else if (PRODUCT_CLOUD_ONLY) {
             val localOn = runCatching { settings.getConfig().enabled }.getOrDefault(false)
             if (!localOn) {
                 return InferenceRouteDecision(
@@ -61,11 +64,6 @@ class InferenceRouteCoordinator @Inject constructor(
                     reason = RouteReason.DEFAULT_CLOUD
                 )
             }
-            // plugin onLoad set enabled=true — fall through to normal ChatRouter
-        }
-        // forceLocal：有路径则自动 enable + load（冷启动懒加载 / 重试）
-        if (forceLocal) {
-            runCatching { bootstrap.ensureReady(enableIfNeeded = true) }
         }
         val networkOk = networkStatusProvider.isNetworkAvailable()
         val preferLocal = settings.isPreferLocal()
