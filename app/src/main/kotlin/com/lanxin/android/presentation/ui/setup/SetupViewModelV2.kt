@@ -76,6 +76,12 @@ class SetupViewModelV2 @Inject constructor(
         _selectedClientType.value = clientType
         _platformName.value = getDefaultPlatformName(clientType)
         _apiUrl.value = getDefaultApiUrl(clientType)
+        if (clientType == ClientType.MNNCHAT && _apiKey.value.isBlank()) {
+            _apiKey.value = ModelConstants.MNNCHAT_DEFAULT_TOKEN
+        }
+        if (clientType == ClientType.MNNCHAT && _model.value.isBlank()) {
+            _model.value = ModelConstants.mnnchatModels.first()
+        }
         _apiKey.value = ""
         _model.value = ""
         _wizardStep.value = 0
@@ -213,6 +219,7 @@ class SetupViewModelV2 @Inject constructor(
         ClientType.OPENROUTER -> "OpenRouter"
         ClientType.CUSTOM -> ""
         ClientType.LANXIN -> "兰心"
+        ClientType.MNNCHAT -> "MNNChat"
     }
 
     private fun getDefaultApiUrl(clientType: ClientType): String = when (clientType) {
@@ -224,6 +231,7 @@ class SetupViewModelV2 @Inject constructor(
         ClientType.OPENROUTER -> ModelConstants.OPENROUTER_API_URL
         ClientType.CUSTOM -> ""
         ClientType.LANXIN -> ModelConstants.LANXIN_API_URL
+        ClientType.MNNCHAT -> ModelConstants.MNNCHAT_API_URL
     }
 
     companion object {

@@ -85,7 +85,8 @@ object VisionModelCapability {
         ClientType.OPENROUTER,
         ClientType.CUSTOM,
         ClientType.GROQ,
-        ClientType.OLLAMA -> true
+        ClientType.OLLAMA,
+        ClientType.MNNCHAT -> true
         ClientType.ANTHROPIC,
         ClientType.GOOGLE,
         ClientType.LANXIN -> false

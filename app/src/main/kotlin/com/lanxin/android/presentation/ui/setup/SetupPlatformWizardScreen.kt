@@ -564,4 +564,5 @@ private fun getApiHelpUrl(clientType: ClientType): String? = when (clientType) {
     ClientType.OPENROUTER -> "https://openrouter.ai/keys"
     ClientType.CUSTOM -> null
     ClientType.LANXIN -> null
+    ClientType.MNNCHAT -> null
 }

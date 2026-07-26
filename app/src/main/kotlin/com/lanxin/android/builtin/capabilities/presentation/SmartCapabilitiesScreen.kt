@@ -152,8 +152,8 @@ fun SmartCapabilitiesScreen(
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "本页只管能力开关：主开关关闭时，本地模型 / 语音 / 助手工具 / 位置与周边 / 看世界一律拒绝。" +
-                            "本地模型与看世界默认关。Live2D/背景/音乐与下载资源请去「桌宠 / 语音陪伴」。",
+                        text = "本页只管能力开关：主开关关闭时，助手工具 / 位置与周边 / 看世界一律拒绝。" +
+                            "本地脑与 ASR 已移除；对话走云端/MNNChat。TTS 与 Live2D 请去「桌宠 / 语音陪伴」。",
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -165,6 +165,12 @@ fun SmartCapabilitiesScreen(
                 }
             }
 
+            Text(
+                text = "本地脑与 ASR 已移除。对话走云端/MNNChat API。TTS 可在「桌宠 / 语音陪伴」页单独开关。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
             CapabilitySwitchRow(
                 title = "主开关",
                 description = "关则子能力一律拒",
@@ -173,28 +179,6 @@ fun SmartCapabilitiesScreen(
             )
 
             HorizontalDivider()
-
-            CapabilitySwitchRow(
-                title = "本地模型",
-                description = "默认关；0.5B/1.5B 或 7B Q4；打开后须能真正 load",
-                checked = state.localInferenceEnabled,
-                enabled = state.masterEnabled,
-                onCheckedChange = {
-                    viewModel.setChild(SmartCapabilityId.LOCAL_INFERENCE, it)
-                },
-                onDetailClick = onNavigateToLocalInference
-            )
-
-            CapabilitySwitchRow(
-                title = "语音",
-                description = "ASR + TTS 会话；悬浮窗不绑死为 ON",
-                checked = state.voiceEnabled,
-                enabled = state.masterEnabled,
-                onCheckedChange = {
-                    viewModel.setChild(SmartCapabilityId.VOICE, it)
-                },
-                onDetailClick = onNavigateToVoice
-            )
 
             CapabilitySwitchRow(
                 title = "助手工具",
@@ -224,16 +208,6 @@ fun SmartCapabilitiesScreen(
                 enabled = state.masterEnabled,
                 onCheckedChange = {
                     viewModel.setChild(SmartCapabilityId.NAVIGATE, it)
-                }
-            )
-
-            CapabilitySwitchRow(
-                title = "导游",
-                description = "默认关；看世界讲解 / 位置增强（lanxin.guide）",
-                checked = state.guideEnabled,
-                enabled = state.masterEnabled,
-                onCheckedChange = {
-                    viewModel.setChild(SmartCapabilityId.GUIDE, it)
                 }
             )
 
@@ -275,8 +249,6 @@ fun SmartCapabilitiesScreen(
 
             AnimatedVisibility(visible = state.advancedExpanded) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    AdvancedLink("本地模型 · 模型文件夹 / 参数（唯一配置源）", onNavigateToLocalInference)
-                    AdvancedLink("离线语音 · ASR 模型 / 语言", onNavigateToVoice)
                     AdvancedLink("系统工具 · 分项与写确认", onNavigateToSystemTools)
                     AdvancedLink("联网搜索 · 条数 / 区域", onNavigateToWebSearch)
                     AdvancedLink("设备感知 · system_info", onNavigateToDeviceSensing)

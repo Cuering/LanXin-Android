@@ -117,7 +117,7 @@ data class SmartCapabilitiesConfig(
     companion object {
         const val DEFAULT_MASTER = true
         const val DEFAULT_LOCAL_INFERENCE = false
-        const val DEFAULT_VOICE = true
+        const val DEFAULT_VOICE = false
         const val DEFAULT_ASSISTANT_TOOLS = true
         const val DEFAULT_LOCATION_AROUND = true
 
@@ -137,8 +137,6 @@ data class SmartCapabilitiesConfig(
 
         /** 主 UI 展示的五组（不含兼容别名 / 插件镜像）。 */
         val PRIMARY_IDS: List<SmartCapabilityId> = listOf(
-            SmartCapabilityId.LOCAL_INFERENCE,
-            SmartCapabilityId.VOICE,
             SmartCapabilityId.ASSISTANT_TOOLS,
             SmartCapabilityId.LOCATION_AROUND,
             SmartCapabilityId.SCENE_VISION

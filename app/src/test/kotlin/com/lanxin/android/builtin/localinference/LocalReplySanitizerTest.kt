@@ -291,5 +291,4 @@ class LocalReplySanitizerTest {
             LocalReplySanitizer.forSpeech("我叫兰心呀。", showThinking = false).contains("兰心")
         )
     }
-
 }

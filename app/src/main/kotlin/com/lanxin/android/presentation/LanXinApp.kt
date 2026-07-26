@@ -3,8 +3,6 @@ package com.lanxin.android.presentation
 import android.app.Application
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
-import com.lanxin.android.builtin.guide.di.GuidePluginRegistration
-import com.lanxin.android.builtin.navigate.di.NavigatePluginRegistration
 import com.lanxin.android.builtin.persona.di.PersonaPluginRegistration
 import com.lanxin.android.builtin.scheduler.di.SchedulerPluginRegistration
 import com.lanxin.android.builtin.statistics.di.StatisticsPluginRegistration
@@ -61,13 +59,6 @@ class LanXinApp : Application(), Configuration.Provider {
     @Inject
     lateinit var unifiedInboxPluginRegistration: UnifiedInboxPluginRegistration
 
-    /** 导航 / 导游独立插件（默认 OFF；注入以触发 register） */
-    @Inject
-    lateinit var navigatePluginRegistration: NavigatePluginRegistration
-
-    @Inject
-    lateinit var guidePluginRegistration: GuidePluginRegistration
-
     @Inject
     lateinit var clawResidentController: ClawResidentController
 
@@ -79,6 +70,7 @@ class LanXinApp : Application(), Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
         // 尽早安装：捕获 Java/Kotlin 未处理异常，写 crash-*.log + 崩溃展示页
+        // 默认文案已为中文（values/strings.xml）
         CrashHandler.init(this)
         logManager.initialize(this)
         val log = logManager.getLogger("LanXinApp")

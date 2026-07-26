@@ -20,7 +20,8 @@ object ProviderModelListSupport {
         ClientType.GROQ,
         ClientType.OLLAMA,
         ClientType.OPENROUTER,
-        ClientType.CUSTOM -> true
+        ClientType.CUSTOM,
+        ClientType.MNNCHAT -> true
         ClientType.ANTHROPIC,
         ClientType.GOOGLE,
         ClientType.LANXIN -> false
@@ -35,7 +36,8 @@ object ProviderModelListSupport {
         ClientType.GROQ,
         ClientType.OLLAMA,
         ClientType.OPENROUTER,
-        ClientType.CUSTOM -> true
+        ClientType.CUSTOM,
+        ClientType.MNNCHAT -> true
         ClientType.ANTHROPIC,
         ClientType.GOOGLE,
         ClientType.LANXIN -> false

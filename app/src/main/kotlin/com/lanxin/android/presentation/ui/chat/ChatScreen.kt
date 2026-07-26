@@ -818,7 +818,8 @@ fun ChatInputBox(
     val voiceBusy = voiceChatUiState.isBusy
     val micRecording = voiceListening || micUiState.phase == ChatMicPhase.RECORDING
     val micBusy = voiceBusy || micUiState.phase == ChatMicPhase.TRANSCRIBING
-    val micEnabled = chatEnabled && !voiceBusy && micUiState.micToggleEnabled
+    val PRODUCT_DISABLE_MIC = true
+    val micEnabled = !PRODUCT_DISABLE_MIC && chatEnabled && !voiceBusy && micUiState.micToggleEnabled
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()

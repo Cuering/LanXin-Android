@@ -161,7 +161,29 @@ fun DesktopPetScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            // 本地语音对话就绪清单（可点击跳转）
+
+            // TTS standalone toggle (ASR removed from product surface)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("TTS 语音输出", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        "关闭后不朗读回复；桌宠与陪伴界面保留。ASR/语音输入已移除。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = state.ttsEnabled,
+                    onCheckedChange = viewModel::setTtsEnabled
+                )
+            }
+
+// 本地语音对话就绪清单（可点击跳转）
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -173,7 +195,7 @@ fun DesktopPetScreen(
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
-                        "本地语音对话 · 就绪清单",
+                        "陪伴资源就绪清单（TTS 可关；ASR 已下线）",
                         fontWeight = FontWeight.SemiBold,
                         style = MaterialTheme.typography.titleSmall
                     )
@@ -193,7 +215,7 @@ fun DesktopPetScreen(
                         color = MaterialTheme.colorScheme.onSecondaryContainer
                     )
                     Text(
-                        "① 下方一键下载 ASR/TTS（可选 Live2D）→ ② 跳转本地模型导入/加载 → " +
+                        "① 可选下载 TTS/Live2D → ② 平台设置接 MNNChat API → " +
                             "③ 开总开关 → ④ 全屏陪伴说话。报错复制各页状态卡反馈。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSecondaryContainer

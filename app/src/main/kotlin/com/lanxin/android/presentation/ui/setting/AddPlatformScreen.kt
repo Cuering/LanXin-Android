@@ -169,6 +169,7 @@ fun AddPlatformScreen(
                                     ClientType.OPENROUTER -> ModelConstants.OPENROUTER_API_URL
                                     ClientType.CUSTOM -> ""
                                     ClientType.LANXIN -> ModelConstants.LANXIN_API_URL
+                                    ClientType.MNNCHAT -> ModelConstants.MNNCHAT_API_URL
                                 }
                                 viewModel.clearFetchState()
                                 clientTypeExpanded = false
@@ -460,6 +461,7 @@ private fun getClientTypeName(clientType: ClientType): String = when (clientType
     ClientType.OPENROUTER -> "OpenRouter"
     ClientType.CUSTOM -> stringResource(R.string.custom)
     ClientType.LANXIN -> "兰心"
+    ClientType.MNNCHAT -> "MNNChat"
 }
 
 @Composable
@@ -472,6 +474,7 @@ private fun getClientTypeDescription(clientType: ClientType): String = when (cli
     ClientType.OPENROUTER -> stringResource(R.string.client_type_openrouter_desc)
     ClientType.CUSTOM -> stringResource(R.string.client_type_custom_desc)
     ClientType.LANXIN -> "专属定制的兰心 AI 助理"
+    ClientType.MNNCHAT -> stringResource(R.string.mnnchat_description)
 }
 
 @Composable
@@ -484,4 +487,5 @@ private fun getModelPlaceholder(clientType: ClientType): String = when (clientTy
     ClientType.OPENROUTER -> "openai/gpt-4o"
     ClientType.CUSTOM -> stringResource(R.string.model_name)
     ClientType.LANXIN -> "兰心"
+    ClientType.MNNCHAT -> "mnn-default"
 }
