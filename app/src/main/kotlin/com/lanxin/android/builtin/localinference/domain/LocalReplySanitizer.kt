@@ -34,10 +34,12 @@ object LocalReplySanitizer {
      * 默认 system 侧引导（极短）：只留硬禁止项，避免长约束被小模型原样泄漏。
      * （[LocalInferenceConfig.showThinking] 关闭时注入）。
      */
+    /**
+     * 对齐 MNNChat：官方默认 system 仅 "You are a helpful assistant."，
+     * 过长约束会被 0.8B 原样泄漏或触发「答案：」模板。只留最短硬禁止。
+     */
     const val NO_THINK_OR_TAGS_INSTRUCTION: String =
-        "【输出约束】直接对用户说短句，每次只回一句话，不输出思考过程、" +
-            "分析报告、协议标签（[[…]]、<…>、<think>）或元话术。" +
-            "同一句话只说一次，禁止复读、禁止把同一句连写多遍。"
+        "直接回复用户，不要输出思考过程或协议标签。"
 
     /** 已闭合的 `<think>…</think>`（跨行、大小写不敏感）。 */
     private val CLOSED_THINK_REGEX = Regex(

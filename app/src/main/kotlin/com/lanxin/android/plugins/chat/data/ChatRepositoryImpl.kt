@@ -80,6 +80,10 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.withContext
+import java.time.ZoneId
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 class ChatRepositoryImpl @Inject constructor(
     @param:ApplicationContext private val context: Context,
@@ -177,6 +181,7 @@ class ChatRepositoryImpl @Inject constructor(
             }
             if (ChatLocalFallback.shouldUseLocal(decision)) {
                 // 多轮 + 滑动窗口压缩；记忆/KB 已在 App 侧注入 userMessages；本地不做 tool_call
+                // 对齐 MNNChat：短 system + 本地时间；避免裸 Qwen 人设/不知几点
                 val userTexts = userMessages.map { it.effectiveContent() }
                 val assistantTexts = userTexts.indices.map { i ->
                     assistantMessages.getOrNull(i)
@@ -187,10 +192,11 @@ class ChatRepositoryImpl @Inject constructor(
                 val config = runCatching {
                     localInferenceSettings?.getConfig()
                 }.getOrNull() ?: LocalInferenceConfig()
+                val effectiveSystem = buildLocalSystemPrompt(platform.systemPrompt)
                 val compressed = LocalContextCompressor.compressFromMessages(
                     userTexts = userTexts,
                     assistantTexts = assistantTexts,
-                    systemPrompt = platform.systemPrompt,
+                    systemPrompt = effectiveSystem,
                     contextWindowTokens = config.contextWindowTokens,
                     maxNewTokens = config.maxTokens
                 )
@@ -200,8 +206,10 @@ class ChatRepositoryImpl @Inject constructor(
                 }
                 return localProvider.completeAsApiState(
                     prompt = currentUser,
-                    systemPrompt = platform.systemPrompt?.takeIf { it.isNotBlank() },
-                    history = compressed.history
+                    systemPrompt = effectiveSystem,
+                    history = compressed.history,
+                    // 主聊天：保留轻清洗，但不再叠长「【输出约束】」（已内嵌短 system）
+                    skipOutputConstraint = true
                 )
             }
         } else {

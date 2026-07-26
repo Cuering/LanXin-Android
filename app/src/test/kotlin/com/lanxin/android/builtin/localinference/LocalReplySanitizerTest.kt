@@ -274,7 +274,8 @@ class LocalReplySanitizerTest {
     fun `appendOutputConstraint forbids phrase loop`() {
         val off = LocalReplySanitizer.appendOutputConstraint(null, showThinking = false)
         assertTrue(off!!.contains("禁止复读") || off.contains("只说一次"))
-        assertTrue(off.contains("每次只回一句话"))
+        // 对齐 MNNChat：默认约束极短，不再强制「每次只回一句话」
+        assertTrue(off!!.contains("直接回复") || off.contains("思考过程"))
     }
 
 

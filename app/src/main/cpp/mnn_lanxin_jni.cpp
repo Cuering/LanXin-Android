@@ -660,7 +660,7 @@ Java_com_lanxin_android_builtin_localinference_data_MnnNativeBridge_nativeGenera
     g_cancel.store(false);
     try {
         std::ostringstream os;
-        g_llm->response(prompt, &os, "", /*max_new_tokens=*/0);
+        g_llm->response(prompt, &os, "<eop>", /*max_new_tokens=*/0);
         int produced = stepDecodeLocked(g_llm, maxNew);
         std::string out = os.str();
         if (out.empty() && g_llm->getContext() != nullptr) {
@@ -738,7 +738,7 @@ Java_com_lanxin_android_builtin_localinference_data_MnnNativeBridge_nativeGenera
         // === 对齐 MNNChat LlmSession::Response ===
         // prefill only + stepDecode（含 Android 预编译 runtime 假终态恢复）
         std::ostringstream os;
-        g_llm->response(messages, &os, "", /*max_new_tokens=*/0);
+        g_llm->response(messages, &os, "<eop>", /*max_new_tokens=*/0);
         int produced = stepDecodeLocked(g_llm, maxNew);
 
         std::string out = os.str();
@@ -847,7 +847,7 @@ Java_com_lanxin_android_builtin_localinference_data_MnnNativeBridge_nativeGenera
         JavaStreamBuf sbuf(env);
         std::ostream os(&sbuf);
         // 流式同款 prefill + stepDecode
-        g_llm->response(messages, &os, "", /*max_new_tokens=*/0);
+        g_llm->response(messages, &os, "<eop>", /*max_new_tokens=*/0);
         int produced = stepDecodeLocked(g_llm, maxNew);
         std::string out;
         if (g_llm->getContext() != nullptr) {
