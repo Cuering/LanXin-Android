@@ -83,16 +83,14 @@ class LocalAwarePetChatResponderTest {
         )
         val out = responder.respond("你好")
         assertEquals(1, provider.calls)
-        // 小模型护栏：短 system + 输出约束 + 64 maxTokens
-        assertEquals(64, provider.lastMaxTokens)
+        // 小模型护栏：短 system + 48 maxTokens；约束已内嵌 system，skip 外层叠加
+        assertEquals(48, provider.lastMaxTokens)
         assertTrue(provider.lastSystem!!.contains("兰心"))
-        assertFalse(provider.lastSkipConstraint)
-        // 首轮无 history 时 reuseKv=false，避免空 cache 污染
+        assertTrue(provider.lastSkipConstraint)
+        // 弱模型全程 reuseKv=false
         assertFalse(provider.lastReuseKv)
         assertEquals(0, provider.lastHistorySize)
         assertTrue(out.contains("你好呀"))
-        // bare path 不再激进剥「让我分析」——Provider 侧 lightClean 只剥 think/tags
-        // 本测试仍走 Fake Provider 直接 Success，Responder 只 lightClean
         assertTrue(out.contains("[[mood="))
     }
 
@@ -208,7 +206,7 @@ class LocalAwarePetChatResponderTest {
     }
 
     @Test
-    fun `second turn passes prior history and reuseKv`() = runBlocking {
+    fun `second turn passes prior history without reuseKv`() = runBlocking {
         val settings = FakeLocalSettings(
             LocalInferenceConfig(enabled = true, modelPath = "stub://ok")
         )
@@ -230,12 +228,12 @@ class LocalAwarePetChatResponderTest {
         assertTrue("first turn should use local: $out1", out1.contains("好呀") || out1.contains("好"))
         assertEquals(1, provider.calls)
         assertEquals(0, provider.lastHistorySize)
+        assertFalse(provider.lastReuseKv)
         val out2 = responder.respond("你叫什么")
         assertEquals(2, provider.calls)
-        // 第二轮入参 history = 第一轮 user+assistant
+        // 第二轮仍带清洗后 history，但 reuseKv 恒 false
         assertEquals(2, provider.lastHistorySize)
-        assertTrue(provider.lastReuseKv)
-        // 两轮成功后进程内共 4 条（2 user + 2 assistant）
+        assertFalse(provider.lastReuseKv)
         assertEquals(4, responder.historySizeForTest())
         assertTrue(out2.isNotBlank())
     }
