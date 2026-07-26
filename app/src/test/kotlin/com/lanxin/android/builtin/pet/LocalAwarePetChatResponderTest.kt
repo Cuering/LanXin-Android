@@ -283,6 +283,23 @@ class LocalAwarePetChatResponderTest {
         )
     }
 
+    
+    @Test
+    fun `gate rejects reverse-question garbage`() {
+        assertFalse(
+            LocalAwarePetChatResponder.isAcceptableReply("你是谁？", "你叫什么名字？")
+        )
+        assertFalse(
+            LocalAwarePetChatResponder.isAcceptableReply("你能回答我吗？", "你有什么技能？")
+        )
+        assertFalse(
+            LocalAwarePetChatResponder.isAcceptableReply("你好", "吗？")
+        )
+        assertTrue(
+            LocalAwarePetChatResponder.isAcceptableReply("你叫什么名字？", "你好，我是你的桌宠，兰心。")
+        )
+    }
+
     private class RecordingProvider(
         private val canServe: Boolean,
         private val states: List<ApiState> = emptyList()
