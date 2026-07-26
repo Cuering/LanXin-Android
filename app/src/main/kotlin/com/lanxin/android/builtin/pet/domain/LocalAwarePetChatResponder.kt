@@ -21,6 +21,7 @@ import com.lanxin.android.builtin.localinference.domain.LocalInferenceBootstrap
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceDiagnostics
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceProvider
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceSettings
+import com.lanxin.android.builtin.localinference.domain.LocalLlmEngine
 import com.lanxin.android.builtin.localinference.domain.LocalReplySanitizer
 import com.lanxin.android.data.dto.ApiState
 import java.util.concurrent.CopyOnWriteArrayList
@@ -34,10 +35,12 @@ import kotlinx.coroutines.withTimeoutOrNull
 /**
  * 全屏陪伴 / 桌宠「想」阶段：本地脑就绪则走本地，否则 stub 短答。
  *
- * 对齐 MNNChat 会话面：
+ * 对齐 MNNChat 会话面，并补上小模型必需的护栏：
  * - 进程内多轮 history（user/assistant 交替）
  * - reuseKv=true：不每轮 reset，生成后 syncPromptCache
- * - system 默认空；skip 输出约束；轻清洗出口
+ * - 注入短 system（人设 + 输出约束），不再裸跑
+ * - 较短 maxTokens，降低 phrase-loop / 胡言数字串概率
+ * - 质量闸门拒绝后清 history + reset 引擎，避免脏 KV 回灌
  */
 @Singleton
 class LocalAwarePetChatResponder @Inject constructor(
@@ -45,7 +48,8 @@ class LocalAwarePetChatResponder @Inject constructor(
     private val localSettings: LocalInferenceSettings,
     private val bootstrap: LocalInferenceBootstrap,
     private val stub: StubPetChatResponder,
-    private val diagnostics: LocalInferenceDiagnostics
+    private val diagnostics: LocalInferenceDiagnostics,
+    private val engine: LocalLlmEngine
 ) : PetChatResponder {
 
     private val mutex = Mutex()
@@ -68,17 +72,18 @@ class LocalAwarePetChatResponder @Inject constructor(
         val historySnapshot = turnHistory.toList()
         diagnostics.log(
             "companion",
-            "round begin hist=${historySnapshot.size} reuseKv=true max=$COMPANION_MAX_TOKENS user=${text.take(40)}"
+            "round begin hist=${historySnapshot.size} reuseKv=${historySnapshot.isNotEmpty()} max=$COMPANION_MAX_TOKENS user=${text.take(40)}"
         )
         val t0 = System.currentTimeMillis()
         val states = withTimeoutOrNull(COMPANION_TIMEOUT_MS) {
             localProvider.completeAsApiState(
                 prompt = text,
-                systemPrompt = null,
+                systemPrompt = COMPANION_SYSTEM_PROMPT,
                 maxTokens = COMPANION_MAX_TOKENS,
                 history = historySnapshot,
-                skipOutputConstraint = true,
-                reuseKv = true
+                // 小模型必须带输出约束；裸跑易出数字串/乱码
+                skipOutputConstraint = false,
+                reuseKv = historySnapshot.isNotEmpty()
             ).toList()
         }
         if (states == null) {
@@ -95,14 +100,19 @@ class LocalAwarePetChatResponder @Inject constructor(
             diagnostics.log("companion", "blank success err=$err → stub durMs=${System.currentTimeMillis()-t0}")
             return@withLock stub.respond(text)
         }
-        val cleaned = LocalReplySanitizer.lightCleanForBareChat(success)
-            .ifBlank { success }
-            .trim()
+        // Provider 已 clean；再轻量兜底 + 单句硬截（陪伴口语）
+        val cleaned = LocalReplySanitizer.limitToOneSentence(
+            LocalReplySanitizer.forDisplay(success, showThinking = false)
+                .ifBlank { LocalReplySanitizer.lightCleanForBareChat(success) }
+        ).trim()
         if (!isAcceptableReply(userText = text, reply = cleaned)) {
             diagnostics.log(
                 "companion",
-                "rejected by gate preview=${cleaned.take(50).replace('\n',' ')} → stub"
+                "rejected by gate preview=${cleaned.take(50).replace('\n',' ')} → stub + reset"
             )
+            // 拒答：清进程 history，并 reset native KV，避免脏上下文污染下一轮
+            turnHistory.clear()
+            runCatching { engine.reset() }
             return@withLock stub.respond(text)
         }
 
@@ -153,11 +163,16 @@ class LocalAwarePetChatResponder @Inject constructor(
     }
 
     companion object {
+        /**
+         * 短人设置顶（小模型对前置事实更稳）。
+         * 细节约束交给 LocalReplySanitizer.appendOutputConstraint。
+         */
         const val COMPANION_SYSTEM_PROMPT: String =
-            "你是兰心。用一两句自然中文直接回答。"
+            "你是兰心，用户身边的桌宠陪伴。用一两句自然中文直接回答对方。" +
+                "不要输出思考过程、评分、数字区间清单、英文推理或复读同一句。"
 
-        /** 陪伴生成上限。 */
-        const val COMPANION_MAX_TOKENS: Int = 256
+        /** 陪伴生成上限：宁短勿爆；256 易 phrase-loop / 胡言数字串。 */
+        const val COMPANION_MAX_TOKENS: Int = 64
 
         /** 单轮本地推理超时。 */
         const val COMPANION_TIMEOUT_MS: Long = 45_000L
@@ -178,17 +193,36 @@ class LocalAwarePetChatResponder @Inject constructor(
             Regex("""assistant\s*:""", RegexOption.IGNORE_CASE),
             Regex("""^\d+[\.、．]?$"""),
             Regex("""(?is)^thinking\s*process.*$"""),
-            Regex("""^[\s!！?？.。,，、;；:：…~～]+$""")
+            Regex("""^[\s!！?？.。,，、;；:：…~～]+$"""),
+            // 常见胡言：反问身份/时间周期复读
+            Regex("""你不是我爷爷"""),
+            Regex("""时间的周期或时间段"""),
+            Regex("""你是指时间"""),
+            // 胡言数字区间串：24-26, 32-34, 36-38 …
+            Regex("""(?:\d+\s*[-~～—]\s*\d+\s*[,，、|/]\s*){2,}"""),
+            Regex("""(?:\d+\s*[-~～—]\s*\d+.*){3,}"""),
+            // 西里尔等乱码起手（如 рассу）
+            Regex("""[\u0400-\u04FF]{2,}"""),
+            // 纯数字/标点拼盘
+            Regex("""^[\d\s,，、;；:：.。\-~/|]+$""")
         )
 
         fun isAcceptableReply(userText: String, reply: String): Boolean {
             val r = reply.trim()
             if (r.length < 2) return false
-            val hasContent = r.any {
-                it.isLetterOrDigit() || it.code in 0x4E00..0x9FFF
-            }
-            if (!hasContent) return false
+            val cjk = r.count { it.code in 0x4E00..0x9FFF }
+            val letters = r.count { it.isLetter() }
+            val digits = r.count { it.isDigit() }
+            // 至少要有一点中文可读内容；纯拉丁/数字乱喷拒掉
+            if (cjk < 1 && letters + digits < 2) return false
+            if (cjk == 0 && digits >= 6) return false
+            if (cjk > 0 && digits > cjk * 3 && digits >= 8) return false
             if (GARBAGE_PATTERNS.any { it.containsMatchIn(r) }) return false
+            // 过长且几乎无句读的复读/胡言
+            if (r.length >= 80) {
+                val punct = r.count { it in "。！？…!?" }
+                if (punct == 0 && cjk < r.length / 4) return false
+            }
             return true
         }
     }
