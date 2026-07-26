@@ -58,6 +58,7 @@ object DebugOpenSourcePaths {
         "models",
         "models/local-llm",
         "models/local-llm/light",
+        "models/gte-small",
         "backgrounds",
         "music",
         "logs"
@@ -88,6 +89,9 @@ object DebugOpenSourcePaths {
      * App 一键下载落盘：`LanXin/models/local-llm/light/`。
      */
     const val LOCAL_LLM_LIGHT_DIR_REL = "$ROOT_DIR/models/local-llm/light"
+
+    /** 知识库嵌入模型：GTE-small int8 + tokenizer */
+    const val GTE_SMALL_DIR_REL = "$ROOT_DIR/models/gte-small"
 
     /** 本地脑就绪判定关键文件。 */
     const val LOCAL_LLM_READY_FILE = "llm.mnn"
