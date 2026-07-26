@@ -149,7 +149,7 @@ class SmartCapabilitiesPreferences @Inject constructor(
         resolved: SmartCapabilitiesConfig
     ) {
         e[masterKey] = resolved.masterEnabled
-        e[localKey] = resolved.localInferenceEnabled
+        e[localKey] = false // product: local brain off
         e[voiceKey] = resolved.voiceEnabled
         e[assistantToolsKey] = resolved.assistantToolsEnabled
         e[locationAroundKey] = resolved.locationAroundEnabled
@@ -181,7 +181,10 @@ class SmartCapabilitiesPreferences @Inject constructor(
             if (prefs[notes] == null) e[notes] = true
             if (prefs[userFile] == null) e[userFile] = true
         }
-        e[booleanPreferencesKey(AsrPreferences.KEY_ENABLED)] = resolved.voiceEnabled
+        // ASR product-off: never enable offline ASR from smart capabilities
+        e[booleanPreferencesKey(AsrPreferences.KEY_ENABLED)] = false
+        // TTS remains independent via tts_enabled; only mirror when voice group on (legacy)
+        // e[booleanPreferencesKey(AsrPreferences.KEY_ENABLED)] = resolved.voiceEnabled
         e[booleanPreferencesKey(TtsPreferences.KEY_ENABLED)] = resolved.voiceEnabled
         e[booleanPreferencesKey(LocalInferencePreferences.KEY_ENABLED)] =
             resolved.localInferenceEnabled
