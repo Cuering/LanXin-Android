@@ -1,6 +1,8 @@
 package com.lanxin.android.core.log
 
 import android.content.Context
+import com.lanxin.android.builtin.pet.domain.DebugAssetStorage
+import com.lanxin.android.builtin.pet.domain.DebugOpenSourcePaths
 import java.io.File
 import java.io.FileOutputStream
 import java.io.OutputStreamWriter
@@ -13,6 +15,7 @@ import javax.inject.Singleton
 
 /**
  * 日志管理器：初始化文件轮转 + 提供 getLogger()。
+ * 落盘：`LanXin/logs/`（与模型资源同根，见 [DebugAssetStorage]）。
  * 参考 AstrBot LogManager。
  */
 @Singleton
@@ -42,9 +45,13 @@ class LogManager @Inject constructor(
         if (!initialized.compareAndSet(false, true)) return
         this.minLevel = minLevel
         this.maxFileBytes = maxFileMb * 1024L * 1024L
-        val dir = File(context.filesDir, "logs")
+        // 默认授权/自建的 LanXin/logs，不再单独开 filesDir/logs 或 Documents
+        val root = DebugAssetStorage.resolve(context)
+        val dir = File(root.lanXinDir, DebugOpenSourcePaths.LOGS_DIR)
         if (!dir.exists()) dir.mkdirs()
-        logDir = dir
+        // 若公共/外置失败，最后才回退内部
+        logDir = if (dir.isDirectory && (dir.canWrite() || dir.exists())) dir
+        else File(context.filesDir, "LanXin/logs").also { it.mkdirs() }
     }
 
     fun getLogger(name: String = "default"): LanXinLogger =
