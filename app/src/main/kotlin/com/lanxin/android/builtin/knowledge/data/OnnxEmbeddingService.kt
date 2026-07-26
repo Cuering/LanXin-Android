@@ -22,6 +22,8 @@ import com.lanxin.android.builtin.knowledge.domain.EmbeddingService
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
+import com.lanxin.android.builtin.pet.domain.DebugAssetStorage
+import com.lanxin.android.builtin.pet.domain.DebugOpenSourcePaths
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.nio.LongBuffer
@@ -72,9 +74,9 @@ class OnnxEmbeddingService @Inject constructor(
             if (session != null && tokenizer != null) return@withLock true
             runCatching {
                 val modelBytes = loadModelBytes()
-                    ?: error("未找到 GTE-small 模型，请将 model_int8.onnx 放到 assets 或 filesDir")
+                    ?: error("未找到 GTE-small：请将 model_int8.onnx 放到 Download/LanXin/models/gte-small/ 或 filesDir")
                 val tok = loadTokenizer()
-                    ?: error("未找到 tokenizer.json")
+                    ?: error("未找到 tokenizer.json：请放到 Download/LanXin/models/gte-small/")
 
                 val ortEnv = OrtEnvironment.getEnvironment()
                 val opts = OrtSession.SessionOptions().apply {
@@ -209,9 +211,11 @@ class OnnxEmbeddingService @Inject constructor(
     }
 
     private fun loadModelBytes(): ByteArray? {
-        val local = File(context.filesDir, "${EmbeddingConstants.MODEL_DIR}/${EmbeddingConstants.MODEL_FILE}")
-        if (local.exists() && local.length() > 0) {
-            return local.readBytes()
+        for (f in candidateModelFiles()) {
+            if (f.exists() && f.length() > 0) {
+                Log.i(TAG, "load GTE model from ${f.absolutePath} (${f.length()} bytes)")
+                return runCatching { f.readBytes() }.getOrNull()
+            }
         }
         return runCatching {
             context.assets.open(EmbeddingConstants.MODEL_ASSET_PATH).use { it.readBytes() }
@@ -219,15 +223,48 @@ class OnnxEmbeddingService @Inject constructor(
     }
 
     private fun loadTokenizer(): BertTokenizer? {
-        val local = File(context.filesDir, "${EmbeddingConstants.MODEL_DIR}/${EmbeddingConstants.TOKENIZER_FILE}")
-        if (local.exists() && local.length() > 0) {
-            return local.inputStream().use { BertTokenizer.fromInputStream(it) }
+        for (f in candidateTokenizerFiles()) {
+            if (f.exists() && f.length() > 0) {
+                Log.i(TAG, "load tokenizer from ${f.absolutePath}")
+                return runCatching { f.inputStream().use { BertTokenizer.fromInputStream(it) } }.getOrNull()
+            }
         }
         return runCatching {
             context.assets.open(EmbeddingConstants.TOKENIZER_ASSET_PATH).use {
                 BertTokenizer.fromInputStream(it)
             }
         }.getOrNull()
+    }
+
+    /**
+     * 查找顺序：
+     * 1. filesDir/models/gte-small/
+     * 2. {external}/LanXin/models/gte-small/
+     * 3. getExternalFilesDir()/LanXin/models/gte-small/
+     * 4. assets
+     */
+    private fun candidateModelFiles(): List<File> {
+        val name = EmbeddingConstants.MODEL_FILE
+        return candidateGteFiles(name)
+    }
+
+    private fun candidateTokenizerFiles(): List<File> {
+        val name = EmbeddingConstants.TOKENIZER_FILE
+        return candidateGteFiles(name)
+    }
+
+    private fun candidateGteFiles(fileName: String): List<File> {
+        val relInside = "${EmbeddingConstants.MODEL_DIR}/$fileName"
+        val out = LinkedHashSet<File>()
+        out += File(context.filesDir, relInside)
+        for (c in DebugAssetStorage.publicLanXinCandidates()) {
+            out += File(c.lanXinDir, "models/gte-small/$fileName")
+        }
+        context.getExternalFilesDir(null)?.let { ext ->
+            out += File(ext, "${DebugOpenSourcePaths.ROOT_DIR}/models/gte-small/$fileName")
+            out += File(ext, "models/gte-small/$fileName")
+        }
+        return out.toList()
     }
 
     fun close() {
