@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-07-26T00:00:00Z",
+  "plugins": [
+    {
+      "id": "lanxin.local_inference",
+      "name": "本地脑",
+      "version": "1.0.0",
+      "description": "端侧本地 LLM。编译期可选插件：在插件管理启用即可（无需 APK）。动态 APK 包见 plugins/ 目录（若有 Release 附件）。",
+      "author": "LanXin",
+      "download_url": "https://raw.githubusercontent.com/Cuering/LanXin-Android/main/docs/plugins/README-local-inference.md",
+      "min_app_version": "0.8.0",
+      "checksum": "",
+      "size": 0
+    },
+    {
+      "id": "lanxin.asr",
+      "name": "离线 ASR",
+      "version": "1.0.0",
+      "description": "端侧语音识别。默认不启用；插件管理开启后可用。",
+      "author": "LanXin",
+      "download_url": "https://raw.githubusercontent.com/Cuering/LanXin-Android/main/docs/plugins/README-asr.md",
+      "min_app_version": "0.8.0",
+      "checksum": "",
+      "size": 0
+    },
+    {
+      "id": "lanxin.tts",
+      "name": "TTS 语音输出",
+      "version": "1.0.0",
+      "description": "朗读助手回复。默认安装；可在插件管理关闭。",
+      "author": "LanXin",
+      "download_url": "https://raw.githubusercontent.com/Cuering/LanXin-Android/main/docs/plugins/README-tts.md",
+      "min_app_version": "0.8.0",
+      "checksum": "",
+      "size": 0
+    },
+    {
+      "id": "lanxin.guide",
+      "name": "导游",
+      "version": "1.0.0",
+      "description": "看世界讲解 / 位置增强。默认不启用；插件管理开启。",
+      "author": "LanXin",
+      "download_url": "https://raw.githubusercontent.com/Cuering/LanXin-Android/main/docs/plugins/README-guide.md",
+      "min_app_version": "0.8.0",
+      "checksum": "",
+      "size": 0
+    }
+  ]
+}
