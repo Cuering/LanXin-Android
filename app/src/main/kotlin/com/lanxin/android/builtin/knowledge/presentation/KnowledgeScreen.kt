@@ -269,8 +269,17 @@ private fun StatusCard(
                 fontWeight = FontWeight.SemiBold
             )
             Spacer(modifier = Modifier.height(8.dp))
-            Text("嵌入模型：${if (embeddingReady) "就绪" else "未就绪 / 预热中"}")
+            Text("嵌入模型：${if (embeddingReady) "就绪" else "未就绪（导入会失败）"}")
             Text("向量条目：$vectorCount")
+            if (!embeddingReady) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "请将 GTE-small 放到 Download/LanXin/models/gte-small/\n" +
+                        "需要 model_int8.onnx 与 tokenizer.json，然后点刷新",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
             Text(
                 text = "分段：窗口 ${TextChunker.DEFAULT_WINDOW} / 重叠 ${TextChunker.DEFAULT_OVERLAP}",
                 style = MaterialTheme.typography.bodySmall,
