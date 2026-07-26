@@ -46,6 +46,11 @@ private val platformTypes = listOf(
         descriptionResId = R.string.lanxin_description
     ),
     PlatformTypeInfo(
+        clientType = ClientType.MNNCHAT,
+        titleResId = R.string.mnnchat,
+        descriptionResId = R.string.mnnchat_description
+    ),
+    PlatformTypeInfo(
         clientType = ClientType.OPENAI,
         titleResId = R.string.openai,
         descriptionResId = R.string.openai_description
