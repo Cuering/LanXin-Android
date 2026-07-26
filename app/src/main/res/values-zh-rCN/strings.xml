@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">LanXin</string>
+    <string name="mnnchat" translatable="false">MNNChat</string>
+    <string name="mnnchat_description">本机/局域网 MNNChat（OpenAI 兼容 :8080/v1，默认 Bearer mnn-llm-chat）</string>
     <string name="lanxin_introduction_logo">兰心介绍图标</string>
     <string name="welcome_title">卓越的 AI 助理：\n 文明之智，尽收股掌。</string>
     <string name="welcome_description">选择最适合你的模型，畅所欲问！</string>
