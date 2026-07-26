@@ -169,4 +169,5 @@ fun getClientTypeDisplayName(clientType: ClientType): String = when (clientType)
     ClientType.OLLAMA -> "Ollama"
     ClientType.CUSTOM -> "Custom"
     ClientType.LANXIN -> "兰心"
+    ClientType.MNNCHAT -> "MNNChat"
 }
