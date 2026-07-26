@@ -634,12 +634,12 @@ fun DesktopPetScreen(
                     )
 
                     PathPickerField(
-                        label = "TTS 参考音频",
+                        label = "TTS 参考音频（暂未接入合成）",
                         path = state.ttsReferenceConfigured,
-                        readyLabel = "生效：${
+                        readyLabel = "已保存路径（当前引擎不读此文件）：${
                             state.ttsReferenceResolved.ifBlank { "（空）" }
                         }",
-                        helperText = "常见音频：wav / mp3 / m4a / ogg 等。",
+                        helperText = "当前 sherpa Offline TTS（Melo/Matcha）只支持模型内 speakerId，不能用参考音频克隆音色。路径会保存，后续换引擎再用。想换声请改 voiceId/sid 或换多说话人模型。",
                         pickButtonText = "选择音频",
                         onPick = {
                             ttsRefPicker.launch(
