@@ -63,9 +63,9 @@ class TtsPreferences @Inject constructor(
     }
 
     override suspend fun setEnabled(enabled: Boolean) {
+        // TTS is independent of ASR/voice-input group (product: ASR removed).
         dataStore.edit {
             it[enabledKey] = enabled
-            it[booleanPreferencesKey(SmartCapabilitiesPreferences.KEY_VOICE)] = enabled
         }
     }
 
