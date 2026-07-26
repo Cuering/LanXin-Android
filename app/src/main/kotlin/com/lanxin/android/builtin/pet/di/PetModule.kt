@@ -19,6 +19,8 @@ package com.lanxin.android.builtin.pet.di
 import com.lanxin.android.builtin.pet.data.KtorAssetDownloadTransport
 import com.lanxin.android.builtin.pet.data.PetPreferences
 import com.lanxin.android.builtin.pet.domain.AssetDownloadTransport
+import com.lanxin.android.builtin.pet.domain.CompanionContextEnricher
+import com.lanxin.android.builtin.pet.domain.DefaultCompanionContextEnricher
 import com.lanxin.android.builtin.pet.domain.OpenAiVisionExplainClient
 import com.lanxin.android.builtin.pet.domain.LocalAwarePetChatResponder
 import com.lanxin.android.builtin.pet.domain.PetChatResponder
@@ -48,6 +50,12 @@ abstract class PetModule {
     @Binds
     @Singleton
     abstract fun bindPetChatResponder(impl: LocalAwarePetChatResponder): PetChatResponder
+
+    @Binds
+    @Singleton
+    abstract fun bindCompanionContextEnricher(
+        impl: DefaultCompanionContextEnricher
+    ): CompanionContextEnricher
 
     @Binds
     @Singleton
