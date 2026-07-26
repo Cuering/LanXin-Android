@@ -86,8 +86,8 @@ class LocalAwarePetChatResponderTest {
         )
         val out = responder.respond("你好")
         assertEquals(1, provider.calls)
-        // 小模型护栏：短 system + 48 maxTokens；约束已内嵌 system，skip 外层叠加
-        assertEquals(48, provider.lastMaxTokens)
+        // 对齐 MNNChat：短 system + 更大 maxTokens；约束已内嵌 system，skip 外层叠加
+        assertEquals(256, provider.lastMaxTokens)
         assertTrue(provider.lastSystem!!.contains("兰心"))
         assertTrue(provider.lastSkipConstraint)
         // 弱模型全程 reuseKv=false
