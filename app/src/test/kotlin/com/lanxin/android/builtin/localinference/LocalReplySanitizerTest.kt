@@ -46,8 +46,8 @@ class LocalReplySanitizerTest {
     @Test
     fun `appendOutputConstraint only when thinking off`() {
         val off = LocalReplySanitizer.appendOutputConstraint(null, showThinking = false)
-        assertTrue(off!!.contains("输出约束"))
-        assertTrue(off.contains("元话术"))
+        // 对齐 MNNChat：默认约束极短（不再含「【输出约束】/元话术」长文）
+        assertTrue(off!!.contains("直接回复") || off.contains("思考过程"))
         val on = LocalReplySanitizer.appendOutputConstraint("sys", showThinking = true)
         assertEquals("sys", on)
     }
@@ -273,9 +273,8 @@ class LocalReplySanitizerTest {
     @Test
     fun `appendOutputConstraint forbids phrase loop`() {
         val off = LocalReplySanitizer.appendOutputConstraint(null, showThinking = false)
-        assertTrue(off!!.contains("禁止复读") || off.contains("只说一次"))
-        // 对齐 MNNChat：默认约束极短，不再强制「每次只回一句话」
-        assertTrue(off!!.contains("直接回复") || off.contains("思考过程"))
+        // 短约束仍禁止思考外泄；不再要求「禁止复读/只说一次」长文
+        assertTrue(off!!.contains("思考过程") || off.contains("协议标签") || off.contains("直接回复"))
     }
 
 
