@@ -52,12 +52,16 @@ class InferenceRouteCoordinator @Inject constructor(
         forceCloudAvailable: Boolean? = null,
         forceLocal: Boolean = false
     ): InferenceRouteDecision {
-        // Product: strip local brain — always cloud / MNNChat API.
+        // Product: local brain is a plugin (default OFF). Skip local route unless enabled.
         if (PRODUCT_CLOUD_ONLY) {
-            return InferenceRouteDecision(
-                target = InferenceRouteTarget.CLOUD,
-                reason = RouteReason.DEFAULT_CLOUD
-            )
+            val localOn = runCatching { settings.getConfig().enabled }.getOrDefault(false)
+            if (!localOn) {
+                return InferenceRouteDecision(
+                    target = InferenceRouteTarget.CLOUD,
+                    reason = RouteReason.DEFAULT_CLOUD
+                )
+            }
+            // plugin onLoad set enabled=true — fall through to normal ChatRouter
         }
         // forceLocal：有路径则自动 enable + load（冷启动懒加载 / 重试）
         if (forceLocal) {
