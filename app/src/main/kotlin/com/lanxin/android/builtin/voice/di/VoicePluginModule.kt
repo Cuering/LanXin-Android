@@ -1,40 +1,16 @@
 package com.lanxin.android.builtin.voice.di
 
-import com.lanxin.android.builtin.voice.AsrPlugin
-import com.lanxin.android.builtin.voice.TtsPlugin
-import com.lanxin.android.builtin.voice.domain.AsrPluginConfig
-import com.lanxin.android.builtin.voice.domain.TtsPluginConfig
-import com.lanxin.android.plugin.PluginManager
 import dagger.Module
-import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
-import javax.inject.Singleton
 
+/**
+ * ASR / TTS 已从主程序默认插件剥离：
+ * - ASR：不注册；需动态插件或后续市场包
+ * - TTS：保留引擎实现供桌宠可选调用，但不作为「默认安装的插件」注册到 PluginManager
+ *
+ * 空 Module 避免 Hilt 图断裂。
+ */
 @Module
 @InstallIn(SingletonComponent::class)
-object VoicePluginModule {
-
-    @Provides
-    @Singleton
-    fun provideAsrPluginRegistration(
-        pluginManager: PluginManager,
-        plugin: AsrPlugin
-    ): AsrPluginRegistration {
-        pluginManager.register(plugin, defaultEnabled = AsrPluginConfig.DEFAULT_ENABLED)
-        return AsrPluginRegistration(plugin)
-    }
-
-    @Provides
-    @Singleton
-    fun provideTtsPluginRegistration(
-        pluginManager: PluginManager,
-        plugin: TtsPlugin
-    ): TtsPluginRegistration {
-        pluginManager.register(plugin, defaultEnabled = TtsPluginConfig.DEFAULT_ENABLED)
-        return TtsPluginRegistration(plugin)
-    }
-}
-
-data class AsrPluginRegistration(val plugin: AsrPlugin)
-data class TtsPluginRegistration(val plugin: TtsPlugin)
+object VoicePluginModule
