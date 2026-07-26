@@ -16,6 +16,11 @@
 
 package com.lanxin.android.builtin.pet.domain
 
+import com.lanxin.android.builtin.knowledge.domain.VectorPipeline
+import java.time.ZoneId
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import com.lanxin.android.builtin.localinference.domain.LocalChatMessage
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceBootstrap
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceDiagnostics
@@ -49,7 +54,8 @@ class LocalAwarePetChatResponder @Inject constructor(
     private val bootstrap: LocalInferenceBootstrap,
     private val stub: StubPetChatResponder,
     private val diagnostics: LocalInferenceDiagnostics,
-    private val engine: LocalLlmEngine
+    private val engine: LocalLlmEngine,
+    private val contextEnricher: CompanionContextEnricher
 ) : PetChatResponder {
 
     private val mutex = Mutex()
@@ -79,12 +85,13 @@ class LocalAwarePetChatResponder @Inject constructor(
             "round begin hist=${historySnapshot.size} reuseKv=false max=$COMPANION_MAX_TOKENS user=${text.take(40)}"
         )
         val t0 = System.currentTimeMillis()
+        val systemPrompt = buildCompanionSystemPrompt(text)
         // 生成前强制 reset，避免上轮 raw 输出残留
         runCatching { engine.reset() }
         val states = withTimeoutOrNull(COMPANION_TIMEOUT_MS) {
             localProvider.completeAsApiState(
                 prompt = text,
-                systemPrompt = COMPANION_SYSTEM_PROMPT,
+                systemPrompt = systemPrompt,
                 maxTokens = COMPANION_MAX_TOKENS,
                 history = historySnapshot,
                 // 约束已写进 system，避免再叠长「【输出约束】」干扰弱模型
@@ -157,6 +164,11 @@ class LocalAwarePetChatResponder @Inject constructor(
         }
     }
 
+
+    private suspend fun buildCompanionSystemPrompt(userText: String): String {
+        return contextEnricher.enrich(COMPANION_SYSTEM_PROMPT, userText)
+    }
+
     private fun guessMood(user: String, reply: String): String {
         val lower = (user + reply).lowercase()
         return when {
@@ -175,9 +187,9 @@ class LocalAwarePetChatResponder @Inject constructor(
          */
         const val COMPANION_SYSTEM_PROMPT: String =
             "你是兰心（桌宠）。对方是用户。" +
-                "只用简体中文回一句，用「我」自称，不要把用户叫作兰心。" +
-                "禁止输出任何英文、思考过程、解题步骤、选项ABCD、数字清单、再见串戏。" +
-                "示例：用户说你好 → 你好呀，我在呢。"
+                "只用简体中文回一句口语，用「我」自称，不要把用户叫作兰心。" +
+                "禁止：英文、思考过程、「答案：」模板、解题、选项ABCD、复读、再见串戏。" +
+                "示例：早上好 → 早上好呀，我在呢。"
 
         /** 陪伴生成上限：宁短勿爆；256 易 phrase-loop / 胡言数字串。 */
         const val COMPANION_MAX_TOKENS: Int = 48
@@ -213,6 +225,10 @@ class LocalAwarePetChatResponder @Inject constructor(
             Regex("""[\u0400-\u04FF]{2,}"""),
             // 纯数字/标点拼盘
             Regex("""^[\d\s,，、;；:：.。\-~/|]+$"""),
+            Regex("""答案[：:]"""),
+            Regex("""请回答[：:]"""),
+            Regex("""注意：回答请只"""),
+            Regex("""感觉挺好的。你也觉得"""),
             // 英文 CoT / 解题串（弱模型或非中文权重常见）
             Regex("""(?i)we need to analyze"""),
             Regex("""(?i)okay,? the user"""),
@@ -241,7 +257,10 @@ class LocalAwarePetChatResponder @Inject constructor(
          * 注意：含「兰心」不一定好——弱模型常把用户叫作兰心。
          */
         fun pickCompanionUtterance(raw: String): String {
-            val light = LocalReplySanitizer.lightCleanForBareChat(raw)
+            val light0 = LocalReplySanitizer.lightCleanForBareChat(raw)
+            val light = light0
+                .replace(Regex("""^(?:答案|请回答)\s*[：:]\s*"""), "")
+                .trim()
             val parts = light
                 .split(Regex("""(?<=[。！？!?…])|(?<=[。！？!?…] )"""))
                 .map { it.trim().trimStart('，', ',', '、', '！', '!', '？', '?', '。', ' ') }
@@ -263,6 +282,8 @@ class LocalAwarePetChatResponder @Inject constructor(
             if (listOf("开心", "早上好", "你好", "在的", "陪你", "当然").any { s.contains(it) }) score += 3
             // 把用户叫作兰心 / 无故道别 → 重罚
             if (ROLE_FLIP_PATTERNS.any { it.containsMatchIn(s) }) score -= 12
+            if (s.contains("答案") || s.contains("请回答")) score -= 12
+            if (s.contains("一份水果和一些坚果")) score -= 15
             if (s.contains("再见") || s.contains("晚安")) score -= 8
             if (s.endsWith("。") || s.endsWith("！") || s.endsWith("!")) score += 1
             if (s.endsWith("？") || s.endsWith("?")) score -= 1
@@ -286,6 +307,8 @@ class LocalAwarePetChatResponder @Inject constructor(
             if (cjk == 0 && digits >= 6) return false
             if (cjk > 0 && digits > cjk * 3 && digits >= 8) return false
             if (GARBAGE_PATTERNS.any { it.containsMatchIn(r) }) return false
+            if (r.contains("答案：") || r.contains("答案:") || r.contains("请回答：")) return false
+            if (r.contains("注意：回答请只")) return false
             // 用户说中文时，拒纯英文/英主中辅的「思考体」
             val userCjk = userText.count { it.code in 0x4E00..0x9FFF }
             val latin = r.count { it in 'A'..'Z' || it in 'a'..'z' }
@@ -325,3 +348,66 @@ class LocalAwarePetChatResponder @Inject constructor(
         }
     }
 }
+
+
+/**
+ * 陪伴 system 上下文增强：系统时间、知识库摘录等。
+ * 失败必须静默，不能阻断对话。
+ */
+fun interface CompanionContextEnricher {
+    suspend fun enrich(baseSystemPrompt: String, userText: String): String
+}
+
+/** 单测 / 无知识库时使用。 */
+class NoOpCompanionContextEnricher : CompanionContextEnricher {
+    override suspend fun enrich(baseSystemPrompt: String, userText: String): String = baseSystemPrompt
+}
+
+/**
+ * 注入当前本地时间 + 可选知识库短摘录。
+ */
+@Singleton
+class DefaultCompanionContextEnricher @Inject constructor(
+    private val vectorPipeline: VectorPipeline
+) : CompanionContextEnricher {
+
+    override suspend fun enrich(baseSystemPrompt: String, userText: String): String {
+        val now = formatNow()
+        val kb = retrieveKnowledgeSnippet(userText)
+        return buildString {
+            append(baseSystemPrompt)
+            append(" 现在是").append(now).append("。")
+            if (kb != null) {
+                append(" 可参考资料：").append(kb)
+            }
+        }
+    }
+
+    private fun formatNow(): String {
+        val z = ZonedDateTime.now(ZoneId.systemDefault())
+        val fmt = DateTimeFormatter.ofPattern("yyyy年M月d日 EEEE HH:mm", Locale.CHINA)
+        return z.format(fmt)
+    }
+
+    private suspend fun retrieveKnowledgeSnippet(query: String): String? {
+        val q = query.trim()
+        if (q.length < 2) return null
+        val greet = listOf("你好", "早上好", "晚安", "在吗", "嗨", "哈喽", "hello", "hi")
+        if (greet.any { q.equals(it, ignoreCase = true) || q == "$it！" || q == "$it~" }) {
+            return null
+        }
+        return try {
+            val hits = vectorPipeline.searchHybrid(q, topK = 2, source = null)
+            if (hits.isEmpty()) return null
+            val parts = hits
+                .map { it.textPreview.replace('\n', ' ').trim() }
+                .filter { it.length >= 8 }
+                .take(2)
+            if (parts.isEmpty()) null
+            else parts.joinToString("；") { it.take(120) }.take(220)
+        } catch (_: Exception) {
+            null
+        }
+    }
+}
+
