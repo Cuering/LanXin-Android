@@ -161,7 +161,7 @@ fun DesktopPetScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            
+
             // TTS standalone toggle (ASR removed from product surface)
             Row(
                 modifier = Modifier
