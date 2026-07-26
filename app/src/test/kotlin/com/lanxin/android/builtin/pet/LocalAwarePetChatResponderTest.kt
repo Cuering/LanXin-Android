@@ -11,6 +11,7 @@ import com.lanxin.android.builtin.localinference.domain.LocalInferenceProvider
 import com.lanxin.android.builtin.localinference.domain.LocalInferenceSettings
 import com.lanxin.android.builtin.localinference.domain.LocalLlmEngine
 import com.lanxin.android.builtin.pet.domain.LocalAwarePetChatResponder
+import com.lanxin.android.builtin.pet.domain.NoOpCompanionContextEnricher
 import com.lanxin.android.builtin.pet.domain.StubPetChatResponder
 import com.lanxin.android.data.dto.ApiState
 import kotlinx.coroutines.flow.Flow
@@ -39,7 +40,8 @@ class LocalAwarePetChatResponderTest {
             bootstrap = bootstrap,
             stub = StubPetChatResponder(),
             diagnostics = LocalInferenceDiagnostics(),
-            engine = engine
+            engine = engine,
+            contextEnricher = NoOpCompanionContextEnricher()
         )
         val out = responder.respond("你好")
         // stub 问候池：不回声用户原话，只出短答 + mood 标签
@@ -79,7 +81,8 @@ class LocalAwarePetChatResponderTest {
             bootstrap = bootstrap,
             stub = StubPetChatResponder(),
             diagnostics = LocalInferenceDiagnostics(),
-            engine = engine
+            engine = engine,
+            contextEnricher = NoOpCompanionContextEnricher()
         )
         val out = responder.respond("你好")
         assertEquals(1, provider.calls)
@@ -115,7 +118,8 @@ class LocalAwarePetChatResponderTest {
             bootstrap = bootstrap,
             stub = StubPetChatResponder(),
             diagnostics = LocalInferenceDiagnostics(),
-            engine = engine
+            engine = engine,
+            contextEnricher = NoOpCompanionContextEnricher()
         )
         val out = responder.respond("你喜欢什么？")
         // 垃圾回复被闸门丢弃，回 stub（非分数串）
@@ -145,7 +149,8 @@ class LocalAwarePetChatResponderTest {
             bootstrap = bootstrap,
             stub = StubPetChatResponder(),
             diagnostics = LocalInferenceDiagnostics(),
-            engine = engine
+            engine = engine,
+            contextEnricher = NoOpCompanionContextEnricher()
         )
         val out = responder.respond("你叫什么名字？")
         assertTrue(out.contains("兰心"))
@@ -169,7 +174,8 @@ class LocalAwarePetChatResponderTest {
             bootstrap = bootstrap,
             stub = StubPetChatResponder(),
             diagnostics = LocalInferenceDiagnostics(),
-            engine = engine
+            engine = engine,
+            contextEnricher = NoOpCompanionContextEnricher()
         )
         val out = responder.respond("在吗")
         assertTrue(out.contains("[[mood="))
@@ -177,6 +183,26 @@ class LocalAwarePetChatResponderTest {
         assertFalse(out.contains("boom"))
         // 不再回声用户原话
         assertFalse(out.contains("在吗") && out.contains("听到了"))
+    }
+
+
+    @Test
+    fun `gate rejects answer-template chinese garbage`() {
+        assertFalse(
+            LocalAwarePetChatResponder.isAcceptableReply(
+                "兰心早上好",
+                "答案：我吃了一份水果和一些坚果，感觉挺好的。"
+            )
+        )
+        assertFalse(
+            LocalAwarePetChatResponder.isAcceptableReply(
+                "兰心早上好",
+                "！ 请回答： 你吃早饭了没？"
+            )
+        )
+        assertTrue(
+            LocalAwarePetChatResponder.isAcceptableReply("兰心早上好", "早上好呀，我在呢。")
+        )
     }
 
     private class FakeLocalSettings(
@@ -222,7 +248,8 @@ class LocalAwarePetChatResponderTest {
             bootstrap = bootstrap,
             stub = StubPetChatResponder(),
             diagnostics = LocalInferenceDiagnostics(),
-            engine = engine
+            engine = engine,
+            contextEnricher = NoOpCompanionContextEnricher()
         )
         val out1 = responder.respond("你好")
         assertTrue("first turn should use local: $out1", out1.contains("好呀") || out1.contains("好"))
