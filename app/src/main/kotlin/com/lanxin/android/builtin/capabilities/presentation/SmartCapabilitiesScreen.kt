@@ -249,7 +249,7 @@ fun SmartCapabilitiesScreen(
 
             AnimatedVisibility(visible = state.advancedExpanded) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                            AdvancedLink("系统工具 · 分项与写确认", onNavigateToSystemTools)
+                    AdvancedLink("系统工具 · 分项与写确认", onNavigateToSystemTools)
                     AdvancedLink("联网搜索 · 条数 / 区域", onNavigateToWebSearch)
                     AdvancedLink("设备感知 · system_info", onNavigateToDeviceSensing)
                     AdvancedLink("看世界 · consent / 识别", onNavigateToSceneVision)
