@@ -52,6 +52,13 @@ class InferenceRouteCoordinator @Inject constructor(
         forceCloudAvailable: Boolean? = null,
         forceLocal: Boolean = false
     ): InferenceRouteDecision {
+        // Product: strip local brain — always cloud / MNNChat API.
+        if (PRODUCT_CLOUD_ONLY) {
+            return InferenceRouteDecision(
+                target = InferenceRouteTarget.CLOUD,
+                reason = RouteReason.DEFAULT_CLOUD
+            )
+        }
         // forceLocal：有路径则自动 enable + load（冷启动懒加载 / 重试）
         if (forceLocal) {
             runCatching { bootstrap.ensureReady(enableIfNeeded = true) }
@@ -107,6 +114,9 @@ class InferenceRouteCoordinator @Inject constructor(
     }
 
     companion object {
+        /** 产品：关闭本地脑路由，一律云端/MNNChat。 */
+        const val PRODUCT_CLOUD_ONLY = true
+
         /**
          * 无网且本地不可用时的用户可见错误（缩短，可重试）。
          */
