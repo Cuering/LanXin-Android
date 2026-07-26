@@ -270,5 +270,4 @@ class PetPathReadinessTest {
         assertTrue(c.ready)
         assertEquals("已就绪", c.label)
     }
-
 }
