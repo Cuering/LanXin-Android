@@ -221,8 +221,8 @@ extensions.configure<ApplicationExtension> {
         applicationId = "com.lanxin.android"
         minSdk = 31
         targetSdk = 37
-        versionCode = 22
-        versionName = "0.7.6"
+        versionCode = 23
+        versionName = "0.8.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
