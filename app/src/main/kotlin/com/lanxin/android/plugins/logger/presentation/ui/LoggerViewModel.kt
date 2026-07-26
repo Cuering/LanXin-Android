@@ -1,6 +1,8 @@
 package com.lanxin.android.plugins.logger.presentation.ui
 
 import android.content.Context
+import com.lanxin.android.builtin.pet.domain.DebugAssetStorage
+import com.lanxin.android.builtin.pet.domain.DebugOpenSourcePaths
 import android.content.Intent
 import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
@@ -128,7 +130,11 @@ class LoggerViewModel @Inject constructor(
             val source = state.selectedFile
             val out = withContext(Dispatchers.IO) {
                 val stamp = System.currentTimeMillis()
-                val dest = File(context.cacheDir, "lanxin_log_export_$stamp.log")
+                val logsDir = File(
+                    DebugAssetStorage.resolve(context).lanXinDir,
+                    DebugOpenSourcePaths.LOGS_DIR
+                ).also { it.mkdirs() }
+                val dest = File(logsDir, "lanxin_log_export_$stamp.log")
                 when {
                     source != null && source.exists() -> {
                         source.copyTo(dest, overwrite = true)
