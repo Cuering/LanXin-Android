@@ -70,7 +70,7 @@ third_party/sherpa-onnx/NOTICE
 | `tts_enabled` | 启用 TTS | `false` |
 | `tts_model_dir` | 模型目录（一等公民） | 空 |
 | `tts_model_path` | 兼容旧单路径；`modelDir` 空时回退 | 空 |
-| `tts_reference_audio` | 参考音（本阶段 OfflineTts 未用） | 空 |
+| `tts_reference_audio` | 参考音路径（**本阶段 OfflineTts 未接入合成**；UI 可保存，引擎忽略） | 空 |
 | `tts_voice_id` | 说话人 id（可解析为 sid 整数） | `lanxin` |
 
 ## 装完零下载（APK 内置）
