@@ -289,7 +289,7 @@ class LocalAwarePetChatResponderTest {
         override suspend fun reset() {}
     }
 
-    
+
     @Test
     fun `gate rejects numeric range gibberish and cyrillic`() {
         assertFalse(
@@ -309,7 +309,7 @@ class LocalAwarePetChatResponderTest {
         )
     }
 
-    
+
     @Test
     fun `gate rejects reverse-question garbage`() {
         assertFalse(
@@ -326,7 +326,7 @@ class LocalAwarePetChatResponderTest {
         )
     }
 
-    
+
     @Test
     fun `gate rejects role-flip goodbye`() {
         assertFalse(
