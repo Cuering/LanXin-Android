@@ -37,7 +37,7 @@ import kotlinx.coroutines.withTimeoutOrNull
  *
  * 对齐 MNNChat 会话面，并补上小模型必需的护栏：
  * - 进程内多轮 history（user/assistant 交替）
- * - reuseKv=true：不每轮 reset，生成后 syncPromptCache
+ * - reuseKv=false：每轮 reset + 清洗后 history 重建（弱模型必需）
  * - 注入短 system（人设 + 输出约束），不再裸跑
  * - 较短 maxTokens，降低 phrase-loop / 胡言数字串概率
  * - 质量闸门拒绝后清 history + reset 引擎，避免脏 KV 回灌
@@ -70,20 +70,26 @@ class LocalAwarePetChatResponder @Inject constructor(
         trimHistoryIfNeeded()
 
         val historySnapshot = turnHistory.toList()
+        // 弱模型：禁止 reuseKv。
+        // 原因：generate 返回的是 64 token 原始胡喷，syncPromptCache 会把「再见/角色串戏」
+        // 整段写进 native KV，而 history 只存清洗后短句 → 下一轮被脏缓存带偏。
+        // 每轮 reset + 用清洗后的 history 重建 ChatMessages 更稳。
         diagnostics.log(
             "companion",
-            "round begin hist=${historySnapshot.size} reuseKv=${historySnapshot.isNotEmpty()} max=$COMPANION_MAX_TOKENS user=${text.take(40)}"
+            "round begin hist=${historySnapshot.size} reuseKv=false max=$COMPANION_MAX_TOKENS user=${text.take(40)}"
         )
         val t0 = System.currentTimeMillis()
+        // 生成前强制 reset，避免上轮 raw 输出残留
+        runCatching { engine.reset() }
         val states = withTimeoutOrNull(COMPANION_TIMEOUT_MS) {
             localProvider.completeAsApiState(
                 prompt = text,
                 systemPrompt = COMPANION_SYSTEM_PROMPT,
                 maxTokens = COMPANION_MAX_TOKENS,
                 history = historySnapshot,
-                // 小模型必须带输出约束；裸跑易出数字串/乱码
-                skipOutputConstraint = false,
-                reuseKv = historySnapshot.isNotEmpty()
+                // 约束已写进 system，避免再叠长「【输出约束】」干扰弱模型
+                skipOutputConstraint = true,
+                reuseKv = false
             ).toList()
         }
         if (states == null) {
@@ -168,17 +174,19 @@ class LocalAwarePetChatResponder @Inject constructor(
          * 细节约束交给 LocalReplySanitizer.appendOutputConstraint。
          */
         const val COMPANION_SYSTEM_PROMPT: String =
-            "你是兰心，用户身边的桌宠陪伴。用一两句自然中文直接回答对方。" +
-                "不要输出思考过程、评分、数字区间清单、英文推理或复读同一句。"
+            "你是兰心（桌宠），对方是用户。用「我」自称，不要把用户叫作兰心。" +
+                "只回一句简短中文，直接回应本轮内容。" +
+                "禁止：对用户说「兰心再见/早上好兰心」、祝用户做兰心的梦、复读再见、" +
+                "角色串戏双人对话、思考过程、数字清单、英文推理。"
 
         /** 陪伴生成上限：宁短勿爆；256 易 phrase-loop / 胡言数字串。 */
-        const val COMPANION_MAX_TOKENS: Int = 64
+        const val COMPANION_MAX_TOKENS: Int = 48
 
         /** 单轮本地推理超时。 */
         const val COMPANION_TIMEOUT_MS: Long = 45_000L
 
         /** 进程内保留的最近轮数（user+assistant 为一轮）。 */
-        const val MAX_HISTORY_TURNS: Int = 6
+        const val MAX_HISTORY_TURNS: Int = 3
 
         private val GARBAGE_PATTERNS = listOf(
             Regex("""[（(]\s*0\s*[-~～到至]\s*\d+\s*分\s*[）)]"""),
@@ -208,31 +216,52 @@ class LocalAwarePetChatResponder @Inject constructor(
         )
 
 
+        /** 把用户叫作兰心 / 向兰心道别的串戏句。 */
+        private val ROLE_FLIP_PATTERNS = listOf(
+            Regex("""早上好兰心"""),
+            Regex("""兰心早上好"""),
+            Regex("""^兰心[，,！!]"""),
+            Regex("""兰心[，,].*(再见|晚安|好梦|愉快)"""),
+            Regex("""(再见|晚安|好梦).{0,6}兰心"""),
+            Regex("""祝你有个好梦"""),
+            Regex("""很高兴认识你""") // 用户已认识桌宠时仍「初见」通常是串戏
+        )
+
         /**
-         * 从模型胡喷里挑一句能用的陪伴口语：
-         * - 去掉开头残片（“吗？”）
-         * - 优先含人设/陈述的短句，避免只剩反问
+         * 从模型胡喷里挑一句能用的陪伴口语。
+         * 注意：含「兰心」不一定好——弱模型常把用户叫作兰心。
          */
         fun pickCompanionUtterance(raw: String): String {
-            val base = LocalReplySanitizer.limitToOneSentence(raw).trim()
-            if (base.isEmpty()) return ""
-            // 若 limit 后仍是残片，尝试按句号/问号切开取更好的一句
-            val parts = raw
-                .split(Regex("""(?<=[。！？!?…] )|(?<=[。！？!?…])"""))
-                .map { it.trim() }
+            val light = LocalReplySanitizer.lightCleanForBareChat(raw)
+            val parts = light
+                .split(Regex("""(?<=[。！？!?…])|(?<=[。！？!?…] )"""))
+                .map { it.trim().trimStart('，', ',', '、', '！', '!', '？', '?', '。', ' ') }
                 .filter { it.length >= 2 }
-            if (parts.isEmpty()) return base
-            val ranked = parts.sortedByDescending { s ->
-                var score = 0
-                if (listOf("我是", "兰心", "我会", "我可以", "我能", "你好").any { s.contains(it) }) score += 5
-                if (s.endsWith("。") || s.endsWith("！") || s.endsWith("!")) score += 2
-                if (s.endsWith("？") || s.endsWith("?")) score -= 2
-                if (s.length in 4..40) score += 1
-                if (s.matches(Regex("""^[吗呢吧啊哦嗯呀。！？!?,，、…]+$"""))) score -= 10
-                score
+            if (parts.isEmpty()) {
+                return LocalReplySanitizer.limitToOneSentence(light).trim()
             }
+            val ranked = parts.sortedByDescending { s -> scoreUtterance(s) }
             val best = ranked.first()
-            return LocalReplySanitizer.limitToOneSentence(best).ifBlank { base }
+            // 最高分仍很差则返回空，交给闸门拒答
+            if (scoreUtterance(best) < 0) return ""
+            return LocalReplySanitizer.limitToOneSentence(best).trim()
+        }
+
+        fun scoreUtterance(s: String): Int {
+            var score = 0
+            if (listOf("我是", "我会", "我可以", "我能", "我在", "我挺", "我很", "我呀").any { s.contains(it) }) score += 6
+            if (s.startsWith("我") || s.startsWith("嗯") || s.startsWith("好") || s.startsWith("嗨") || s.startsWith("嘿")) score += 2
+            if (listOf("开心", "早上好", "你好", "在的", "陪你", "当然").any { s.contains(it) }) score += 3
+            // 把用户叫作兰心 / 无故道别 → 重罚
+            if (ROLE_FLIP_PATTERNS.any { it.containsMatchIn(s) }) score -= 12
+            if (s.contains("再见") || s.contains("晚安")) score -= 8
+            if (s.endsWith("。") || s.endsWith("！") || s.endsWith("!")) score += 1
+            if (s.endsWith("？") || s.endsWith("?")) score -= 1
+            if (s.length in 4..36) score += 2
+            if (s.length > 48) score -= 2
+            if (s.matches(Regex("""^[吗呢吧啊哦嗯呀。！？!?,，、…]+$"""))) score -= 10
+            // 单独「兰心」称呼加分已取消（旧逻辑误伤）
+            return score
         }
 
         fun isAcceptableReply(userText: String, reply: String): Boolean {
@@ -241,32 +270,36 @@ class LocalAwarePetChatResponder @Inject constructor(
             val cjk = r.count { it.code in 0x4E00..0x9FFF }
             val letters = r.count { it.isLetter() }
             val digits = r.count { it.isDigit() }
-            // 至少要有一点中文可读内容；纯拉丁/数字乱喷拒掉
             if (cjk < 1 && letters + digits < 2) return false
             if (cjk == 0 && digits >= 6) return false
             if (cjk > 0 && digits > cjk * 3 && digits >= 8) return false
             if (GARBAGE_PATTERNS.any { it.containsMatchIn(r) }) return false
-            // 过长且几乎无句读的复读/胡言
             if (r.length >= 80) {
                 val punct = r.count { it in "。！？…!?" }
                 if (punct == 0 && cjk < r.length / 4) return false
             }
-            // 残片：以语气助词/标点开头且过短
             if (r.length <= 4 && r.matches(Regex("""^[吗呢吧啊哦嗯呀。！？!?,，、…]+$"""))) {
                 return false
             }
-            // 用户在问「你是谁/叫什么/能做什么」，回复却只是反问用户
-            val userAsksIdentity = listOf("你是谁", "你叫什么", "你的名字", "你会做什么", "你能做什么", "你能回答")
+            // 角色串戏：把用户叫作兰心 / 无故道别
+            if (ROLE_FLIP_PATTERNS.any { it.containsMatchIn(r) }) return false
+            val userBye = listOf("再见", "拜拜", "晚安", "回头聊").any { userText.contains(it) }
+            if (!userBye && (r.contains("再见") || r.contains("晚安") || r.contains("好梦"))) {
+                return false
+            }
+            // 身份类问题必须自称
+            val userAsksIdentity = listOf("你是谁", "你叫什么", "你的名字", "你会做什么", "你能做什么", "你能回答", "你是兰心")
                 .any { userText.contains(it) }
             if (userAsksIdentity) {
-                val onlyQuestion = r.endsWith("？") || r.endsWith("?")
-                val asksBack = listOf("你叫什么", "你是谁", "你有什么技能", "你有什么能力", "你喜欢", "你快乐吗", "你在想什么")
+                val mentionsSelf = listOf("我是", "我呀", "就是我", "我会", "我可以", "我能").any { r.contains(it) }
+                val asksBack = listOf("你叫什么", "你是谁", "你有什么技能", "你有什么能力", "你喜欢", "你快乐吗")
                     .any { r.contains(it) }
-                val mentionsSelf = listOf("我是", "兰心", "桌宠", "我会", "我可以", "我能").any { r.contains(it) }
-                if (onlyQuestion && asksBack && !mentionsSelf) return false
-                if (asksBack && !mentionsSelf && r.length <= 16) return false
+                if (asksBack && !mentionsSelf) return false
+                if (!mentionsSelf && r.length <= 20 && !r.contains("兰心")) {
+                    // 允许「对呀，我就是兰心」类；纯「嗯」不够
+                    if (!r.contains("对") && !r.contains("嗯")) return false
+                }
             }
-            // 连续复读同一短问句
             val qParts = Regex("""[^？?]+[？?]""").findAll(r).map { it.value.trim() }.toList()
             if (qParts.size >= 2 && qParts.distinct().size == 1) return false
             return true
