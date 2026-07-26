@@ -174,10 +174,10 @@ class LocalAwarePetChatResponder @Inject constructor(
          * 细节约束交给 LocalReplySanitizer.appendOutputConstraint。
          */
         const val COMPANION_SYSTEM_PROMPT: String =
-            "你是兰心（桌宠），对方是用户。用「我」自称，不要把用户叫作兰心。" +
-                "只回一句简短中文，直接回应本轮内容。" +
-                "禁止：对用户说「兰心再见/早上好兰心」、祝用户做兰心的梦、复读再见、" +
-                "角色串戏双人对话、思考过程、数字清单、英文推理。"
+            "你是兰心（桌宠）。对方是用户。" +
+                "只用简体中文回一句，用「我」自称，不要把用户叫作兰心。" +
+                "禁止输出任何英文、思考过程、解题步骤、选项ABCD、数字清单、再见串戏。" +
+                "示例：用户说你好 → 你好呀，我在呢。"
 
         /** 陪伴生成上限：宁短勿爆；256 易 phrase-loop / 胡言数字串。 */
         const val COMPANION_MAX_TOKENS: Int = 48
@@ -212,7 +212,16 @@ class LocalAwarePetChatResponder @Inject constructor(
             // 西里尔等乱码起手（如 рассу）
             Regex("""[\u0400-\u04FF]{2,}"""),
             // 纯数字/标点拼盘
-            Regex("""^[\d\s,，、;；:：.。\-~/|]+$""")
+            Regex("""^[\d\s,，、;；:：.。\-~/|]+$"""),
+            // 英文 CoT / 解题串（弱模型或非中文权重常见）
+            Regex("""(?i)we need to analyze"""),
+            Regex("""(?i)okay,? the user"""),
+            Regex("""(?i)looking back at the conversation"""),
+            Regex("""(?i)the answer is one of"""),
+            Regex("""(?i)multiple[- ]choice"""),
+            Regex("""(?i)let me think"""),
+            Regex("""(?i)first,? i (need|will|should)"""),
+            Regex("""(?i)the user's (query|question|message)""")
         )
 
 
@@ -260,7 +269,10 @@ class LocalAwarePetChatResponder @Inject constructor(
             if (s.length in 4..36) score += 2
             if (s.length > 48) score -= 2
             if (s.matches(Regex("""^[吗呢吧啊哦嗯呀。！？!?,，、…]+$"""))) score -= 10
-            // 单独「兰心」称呼加分已取消（旧逻辑误伤）
+            val cjk = s.count { it.code in 0x4E00..0x9FFF }
+            val latin = s.count { it in 'A'..'Z' || it in 'a'..'z' }
+            if (cjk == 0 && latin >= 4) score -= 15
+            if (latin > cjk * 2 && latin >= 8) score -= 10
             return score
         }
 
@@ -274,6 +286,13 @@ class LocalAwarePetChatResponder @Inject constructor(
             if (cjk == 0 && digits >= 6) return false
             if (cjk > 0 && digits > cjk * 3 && digits >= 8) return false
             if (GARBAGE_PATTERNS.any { it.containsMatchIn(r) }) return false
+            // 用户说中文时，拒纯英文/英主中辅的「思考体」
+            val userCjk = userText.count { it.code in 0x4E00..0x9FFF }
+            val latin = r.count { it in 'A'..'Z' || it in 'a'..'z' }
+            if (userCjk >= 1) {
+                if (cjk == 0 && latin >= 4) return false
+                if (latin >= 12 && latin > cjk * 2) return false
+            }
             if (r.length >= 80) {
                 val punct = r.count { it in "。！？…!?" }
                 if (punct == 0 && cjk < r.length / 4) return false
