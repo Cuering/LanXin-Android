@@ -4,6 +4,9 @@ import android.app.Application
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import com.lanxin.android.builtin.guide.di.GuidePluginRegistration
+import com.lanxin.android.builtin.localinference.di.LocalInferencePluginRegistration
+import com.lanxin.android.builtin.voice.di.AsrPluginRegistration
+import com.lanxin.android.builtin.voice.di.TtsPluginRegistration
 import com.lanxin.android.builtin.navigate.di.NavigatePluginRegistration
 import com.lanxin.android.builtin.persona.di.PersonaPluginRegistration
 import com.lanxin.android.builtin.scheduler.di.SchedulerPluginRegistration
@@ -67,6 +70,16 @@ class LanXinApp : Application(), Configuration.Provider {
 
     @Inject
     lateinit var guidePluginRegistration: GuidePluginRegistration
+
+    /** 本地脑 / ASR 默认 OFF；TTS 默认 ON（插件管理可关） */
+    @Inject
+    lateinit var localInferencePluginRegistration: LocalInferencePluginRegistration
+
+    @Inject
+    lateinit var asrPluginRegistration: AsrPluginRegistration
+
+    @Inject
+    lateinit var ttsPluginRegistration: TtsPluginRegistration
 
     @Inject
     lateinit var clawResidentController: ClawResidentController
