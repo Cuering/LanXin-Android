@@ -1,5 +1,8 @@
 package com.lanxin.android.presentation
 
+import com.lanxin.android.builtin.pet.domain.DebugAssetStorage
+import com.lanxin.android.builtin.pet.domain.DebugOpenSourcePaths
+
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -130,7 +133,7 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
     ) {
         val ctx = appContext ?: return
         try {
-            val dir = File(ctx.filesDir, "logs")
+            val dir = File(DebugAssetStorage.resolve(ctx).lanXinDir, DebugOpenSourcePaths.LOGS_DIR)
             if (!dir.exists()) dir.mkdirs()
             val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
             val file = File(dir, "$prefix-$stamp.log")
