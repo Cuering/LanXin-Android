@@ -300,6 +300,31 @@ class LocalAwarePetChatResponderTest {
         )
     }
 
+    
+    @Test
+    fun `gate rejects role-flip goodbye`() {
+        assertFalse(
+            LocalAwarePetChatResponder.isAcceptableReply("今天开心吗？", "兰心，再见！")
+        )
+        assertFalse(
+            LocalAwarePetChatResponder.isAcceptableReply("兰心早上好", "早上好兰心！")
+        )
+        assertFalse(
+            LocalAwarePetChatResponder.isAcceptableReply("你是兰心啊", "兰心，祝你有个好梦。")
+        )
+        assertTrue(
+            LocalAwarePetChatResponder.isAcceptableReply("今天开心吗？", "开心呀，有你在就很好。")
+        )
+    }
+
+    @Test
+    fun `pick prefers first-person over role-flip`() {
+        val raw = "开心哦，你呢？兰心！ 今天有什么计划吗？兰心，再见！再见！"
+        val picked = LocalAwarePetChatResponder.pickCompanionUtterance(raw)
+        assertFalse(picked.contains("再见"))
+        assertFalse(picked.startsWith("兰心"))
+    }
+
     private class RecordingProvider(
         private val canServe: Boolean,
         private val states: List<ApiState> = emptyList()
