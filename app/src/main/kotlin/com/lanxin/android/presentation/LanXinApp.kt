@@ -1,9 +1,6 @@
 package com.lanxin.android.presentation
 
 import android.app.Application
-import android.content.res.Configuration
-import android.os.LocaleList
-import java.util.Locale
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import com.lanxin.android.builtin.persona.di.PersonaPluginRegistration
@@ -73,15 +70,7 @@ class LanXinApp : Application(), Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
         // 尽早安装：捕获 Java/Kotlin 未处理异常，写 crash-*.log + 崩溃展示页
-        // 默认中文界面（默认 values 已为中文；并强制应用 locale）
-        runCatching {
-            val locale = Locale.forLanguageTag("zh-CN")
-            Locale.setDefault(locale)
-            val config = Configuration(resources.configuration)
-            config.setLocales(LocaleList(locale))
-            @Suppress("DEPRECATION")
-            resources.updateConfiguration(config, resources.displayMetrics)
-        }
+        // 默认文案已为中文（values/strings.xml）
         CrashHandler.init(this)
         logManager.initialize(this)
         val log = logManager.getLogger("LanXinApp")
