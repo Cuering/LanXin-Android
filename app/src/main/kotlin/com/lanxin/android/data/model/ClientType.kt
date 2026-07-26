@@ -9,6 +9,7 @@ enum class ClientType {
     OLLAMA,
     CUSTOM,
     LANXIN,
+
     /** MNNChat OpenAI-compatible local API (phone :8080/v1) */
     MNNCHAT
 }
