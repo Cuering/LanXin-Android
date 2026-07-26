@@ -34,6 +34,9 @@ object DebugOpenSourcePaths {
     /** 用户可见的资源根目录名（手机文件管理器 → LanXin）。 */
     const val ROOT_DIR = "LanXin"
 
+    /** 运行日志（相对 LanXin/）。 */
+    const val LOGS_DIR = "logs"
+
     /** 历史落盘目录名（兼容旧路径识别）。 */
     const val LEGACY_ROOT_DIR = "debug-assets"
 
@@ -56,7 +59,8 @@ object DebugOpenSourcePaths {
         "models/local-llm",
         "models/local-llm/light",
         "backgrounds",
-        "music"
+        "music",
+        "logs"
     )
 
     /** Live2D Mao model3（download-debug-live2d 默认大小写 Mao）。 */
