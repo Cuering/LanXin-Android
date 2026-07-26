@@ -42,21 +42,19 @@
 
 ### 落盘路径（用户可访问）
 
-App **自动创建**统一 `LanXin/` 目录树（启动/进入资源设置时 `DebugAssetStorage.resolve`），
+App **自动创建**统一 `LanXin/` 目录树（启动/进入资源设置时 `DebugAssetStorage.resolve`），**不再**使用 `Documents/LanXin`，**不再**要求用户授权 SAF 文件夹；日志写在 `LanXin/logs/`。
 用户不必手建文件夹；模型 / ASR / TTS / 本地脑 / 背景 / 音乐都落在该树下。
 
 | 优先级 | 路径 | 说明 |
 |:------:|------|------|
 | **1** | `{外部存储}/LanXin/` | 如 `/storage/emulated/0/LanXin/`；文件管理器易见（File 直写） |
-| **1b** | `{外部存储}/Documents/LanXin/` | 根 `LanXin` 不可写时尝试标准文档树 |
 | 2 | `Android/data/com.lanxin.android/files/LanXin/` | 公共目录不可写时回退（`getExternalFilesDir`） |
-| **SAF** | 用户 OpenDocumentTree 授权的公共 `LanXin/` | 设置页「授权公共 LanXin」；**引擎仍写 File 路径**，下载完成后**镜像**到 SAF 树；授权时同步建子目录骨架 |
-| 子目录 | `live2d/` · `asr/` · `tts/` · `models/local-llm/light/` · `backgrounds/` · `music/` | 相对 `LanXin/`；Live2D 以目录内 `*.model3.json` 为准 |
+| 子目录 | `live2d/` · `asr/` · `tts/` · `models/local-llm/light/` · `backgrounds/` · `music/` · `logs/` | 相对 `LanXin/`；Live2D 以目录内 `*.model3.json` 为准 |
 | 兼容 | 历史 `filesDir/debug-assets/live2d/` | 仍可被路径解析与模型列表识别 |
 
 成功下载后 UI 展示「已保存到 <绝对路径>」；若走了回退且 SAF 可写，会追加镜像结果（成功/失败均可见，**禁止静默**）。
 
-文件管理器打开路径示例：`内部存储/LanXin/` 或 `内部存储/Documents/LanXin/`，可见 `live2d` / `asr` / `tts` / `models` 等空目录（下载后才有文件）。
+文件管理器打开路径示例：`内部存储/LanXin/` 可见 `live2d` / `asr` / `tts` / `models` 等空目录（下载后才有文件）。
 
 #### SAF 授权与写入契约
 
