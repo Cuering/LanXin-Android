@@ -324,6 +324,32 @@ class LocalAwarePetChatResponderTest {
         assertFalse(picked.startsWith("兰心"))
     }
 
+
+    @Test
+    fun `gate rejects english cot when user speaks chinese`() {
+        assertFalse(
+            LocalAwarePetChatResponder.isAcceptableReply(
+                "你好",
+                "We need to analyze the question: A 3-digit number"
+            )
+        )
+        assertFalse(
+            LocalAwarePetChatResponder.isAcceptableReply(
+                "你是谁",
+                "Okay, the user provided a question that seems incomplete."
+            )
+        )
+        assertFalse(
+            LocalAwarePetChatResponder.isAcceptableReply(
+                "用中文回答",
+                "Looking back at the conversation"
+            )
+        )
+        assertTrue(
+            LocalAwarePetChatResponder.isAcceptableReply("你好", "你好呀，我在呢。")
+        )
+    }
+
     private class RecordingProvider(
         private val canServe: Boolean,
         private val states: List<ApiState> = emptyList()
