@@ -219,6 +219,34 @@ class ChatRepositoryImpl @Inject constructor(
         return completeChatCloud(userMessages, assistantMessages, platform)
     }
 
+
+    /**
+     * 本地主聊天 system：对齐 MNNChat 的短 system_prompt + 实时时钟。
+     * - 已有非空 platform/persona system → 保留并追加时间
+     * - 否则注入极短兰心锚点，避免裸权重自称 Qwen / 不知几点
+     */
+    private fun buildLocalSystemPrompt(platformPrompt: String?): String {
+        val base = platformPrompt?.trim().orEmpty()
+        val now = formatLocalNow()
+        val anchor = if (base.isBlank()) {
+            "你是兰心，一个友好的中文助手。用自然口语简体中文回复。"
+        } else {
+            base
+        }
+        return if (anchor.contains("现在是")) {
+            anchor
+        } else {
+            "$anchor\n现在是$now。"
+        }
+    }
+
+    private fun formatLocalNow(): String {
+        val z = ZonedDateTime.now(ZoneId.systemDefault())
+        val week = z.format(DateTimeFormatter.ofPattern("EEEE", Locale.CHINA))
+        val hm = z.format(DateTimeFormatter.ofPattern("HH:mm"))
+        return z.format(DateTimeFormatter.ofPattern("yyyy年M月d日")) + " $week $hm"
+    }
+
     /**
      * 云端 Provider 完成路径（6.1 原逻辑）。
      */
