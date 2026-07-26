@@ -103,7 +103,7 @@ object MarketDefaults {
      * 指向本仓库 docs 下的 sample 索引，便于演示；可在设置中覆盖。
      */
     const val DEFAULT_CATALOG_URL =
-        "https://raw.githubusercontent.com/Cuering/LanXin-Android/main/docs/plugin-market-index.sample.json"
+        "https://raw.githubusercontent.com/Cuering/LanXin-Android/main/docs/plugin-market-index.json"
 
     /** DataStore 键：市场索引 URL。 */
     const val PREF_CATALOG_URL = "plugin_market_catalog_url"
