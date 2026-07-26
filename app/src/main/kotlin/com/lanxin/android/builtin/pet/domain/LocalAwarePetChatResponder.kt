@@ -185,14 +185,18 @@ class LocalAwarePetChatResponder @Inject constructor(
          * 短人设置顶（小模型对前置事实更稳）。
          * 细节约束交给 LocalReplySanitizer.appendOutputConstraint。
          */
+        /**
+         * 对齐 MNNChat：默认 system 极短（官方默认 "You are a helpful assistant."）。
+         * 过长禁止项会让 0.8B 复读约束、走「答案：」模板。时间由 [CompanionContextEnricher] 注入。
+         */
         const val COMPANION_SYSTEM_PROMPT: String =
-            "你是兰心（桌宠）。对方是用户。" +
-                "只用简体中文回一句口语，用「我」自称，不要把用户叫作兰心。" +
-                "禁止：英文、思考过程、「答案：」模板、解题、选项ABCD、复读、再见串戏。" +
-                "示例：早上好 → 早上好呀，我在呢。"
+            "你是兰心，一个友好的中文桌宠助手。用自然口语简体中文回复，用「我」自称。"
 
-        /** 陪伴生成上限：宁短勿爆；256 易 phrase-loop / 胡言数字串。 */
-        const val COMPANION_MAX_TOKENS: Int = 48
+        /**
+         * 对齐 MNNChat：默认 max_new_tokens 可达 2048。
+         * 陪伴仍限 256，避免弱模型 phrase-loop；48 会截断正常多句回答。
+         */
+        const val COMPANION_MAX_TOKENS: Int = 256
 
         /** 单轮本地推理超时。 */
         const val COMPANION_TIMEOUT_MS: Long = 45_000L
@@ -257,22 +261,33 @@ class LocalAwarePetChatResponder @Inject constructor(
          * 注意：含「兰心」不一定好——弱模型常把用户叫作兰心。
          */
         fun pickCompanionUtterance(raw: String): String {
+            // 对齐 MNNChat GenerateResultProcessor：只剥 think/隐藏标签，尽量保留自然多句。
             val light0 = LocalReplySanitizer.lightCleanForBareChat(raw)
             val light = light0
                 .replace(Regex("""^(?:答案|请回答)\s*[：:]\s*"""), "")
                 .trim()
+            if (light.isEmpty()) return ""
+            // 整段无明显垃圾则直接用（对齐 MNNChat：不硬截一句）
+            val looksGarbage = GARBAGE_PATTERNS.any { it.containsMatchIn(light) } ||
+                ROLE_FLIP_PATTERNS.any { it.containsMatchIn(light) } ||
+                light.contains("答案：") || light.contains("答案:") || light.contains("请回答：")
+            if (!looksGarbage && scoreUtterance(light) >= 0 && light.length in 2..480) {
+                return light.trim()
+            }
             val parts = light
                 .split(Regex("""(?<=[。！？!?…])|(?<=[。！？!?…] )"""))
                 .map { it.trim().trimStart('，', ',', '、', '！', '!', '？', '?', '。', ' ') }
                 .filter { it.length >= 2 }
             if (parts.isEmpty()) {
-                return LocalReplySanitizer.limitToOneSentence(light).trim()
+                return light.take(240).trim()
             }
             val ranked = parts.sortedByDescending { s -> scoreUtterance(s) }
             val best = ranked.first()
             // 最高分仍很差则返回空，交给闸门拒答
             if (scoreUtterance(best) < 0) return ""
-            return LocalReplySanitizer.limitToOneSentence(best).trim()
+            // 拼接高分句（最多 3 句），贴近 MNN 自然多句
+            val good = ranked.filter { scoreUtterance(it) >= 0 }.take(3)
+            return good.joinToString("").take(480).trim().ifEmpty { best }
         }
 
         fun scoreUtterance(s: String): Int {
