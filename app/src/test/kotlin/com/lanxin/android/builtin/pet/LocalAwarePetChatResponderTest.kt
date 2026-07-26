@@ -229,7 +229,8 @@ class LocalAwarePetChatResponderTest {
         assertEquals(1, provider.calls)
         assertEquals(0, provider.lastHistorySize)
         assertFalse(provider.lastReuseKv)
-        val out2 = responder.respond("你叫什么")
+        // 第二轮用非身份问句，避免质量闸门因「你叫什么」拒掉短答「好呀」
+        val out2 = responder.respond("今天开心吗")
         assertEquals(2, provider.calls)
         // 第二轮仍带清洗后 history，但 reuseKv 恒 false
         assertEquals(2, provider.lastHistorySize)
