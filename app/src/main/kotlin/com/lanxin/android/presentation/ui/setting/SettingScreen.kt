@@ -215,7 +215,7 @@ fun SettingScreen(
 
             SettingItem(
                 title = "智能能力",
-                description = "总开关与能力清单：本地模型 / 语音 / 助手工具 / 位置 / 看世界（体验资源不在此页）",
+                description = "总开关与能力清单：助手工具 / 位置 / 看世界（本地脑与 ASR 已移除）",
                 onItemClick = onNavigateToSmartCapabilities,
                 showTrailingIcon = true,
                 showLeadingIcon = false
@@ -223,7 +223,7 @@ fun SettingScreen(
 
             SettingItem(
                 title = "桌宠 / 语音陪伴",
-                description = "体验与资源：全屏陪伴、悬浮窗、Live2D/背景/音乐、ASR·TTS 下载（开关见智能能力）",
+                description = "体验与资源：全屏陪伴、悬浮窗、Live2D/背景/音乐；TTS 可单独开关（ASR 已移除）",
                 onItemClick = onNavigateToDesktopPet,
                 showTrailingIcon = true,
                 showLeadingIcon = false
