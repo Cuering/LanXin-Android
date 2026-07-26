@@ -29,8 +29,8 @@ import org.junit.rules.TemporaryFolder
 /**
  * 无 Android Context 的 [DebugAssetStorage] 契约：
  * - 无 SAF 时仍可写（fromBaseDir / File 主路径）
- * - 镜像仅在 usedFallback + safWritable + 非空 treeUri 时放行
- * - 授权后 shouldMirror=true，禁止「显示已授权却不镜像」
+ * - SAF 镜像已关闭：shouldMirror 恒为 false
+ * - publicWritable 仅表示公共 File 直写成功（!usedFallback）
  */
 class DebugAssetStorageTest {
 
@@ -84,6 +84,7 @@ class DebugAssetStorageTest {
         assertTrue(File(lanXin, "models/local-llm/light").isDirectory)
         assertTrue(File(lanXin, "backgrounds").isDirectory)
         assertTrue(File(lanXin, "music").isDirectory)
+        assertTrue(File(lanXin, "logs").isDirectory)
     }
 
     @Test
@@ -96,12 +97,10 @@ class DebugAssetStorageTest {
     }
 
     /**
-     * 镜像门控与 [DebugAssetStorage.shouldMirror] / [Root.shouldMirrorToSaf] 一致：
-     * `!usedFallback || !safWritable || blank tree → 不镜像`。
-     * 实际 DocumentsContract 需 instrumented；此处锁 JVM 契约。
+     * SAF 镜像已关闭：任意 Root 标志组合下 shouldMirror 均为 false。
      */
     @Test
-    fun mirrorToSafIfNeeded_gated_byRootFlags() {
+    fun mirrorToSafIfNeeded_alwaysDisabled() {
         val base = tmp.newFolder("files")
         val local = File(base, "LanXin/asr/model.onnx").apply {
             parentFile?.mkdirs()
@@ -120,47 +119,22 @@ class DebugAssetStorageTest {
             safDisplayLabel = "LanXin"
         )
 
-        // 公共 File 可写：不镜像
         assertFalse(DebugAssetStorage.shouldMirror(baseRoot))
         assertFalse(baseRoot.shouldMirrorToSaf)
-        // 回退但 SAF 不可写
-        assertFalse(
-            DebugAssetStorage.shouldMirror(
-                baseRoot.copy(usedFallback = true, safWritable = false)
-            )
-        )
-        // 回退可写但 tree 空
-        assertFalse(
-            DebugAssetStorage.shouldMirror(
-                baseRoot.copy(usedFallback = true, safWritable = true, safTreeUri = "")
-            )
-        )
-        // 未授权
-        assertFalse(
-            DebugAssetStorage.shouldMirror(
-                baseRoot.copy(
-                    usedFallback = true,
-                    safGranted = false,
-                    safWritable = false,
-                    safTreeUri = ""
-                )
-            )
-        )
-        // 仅：回退 + 可写 + 非空 tree → 放行镜像
-        val treeUri =
-            "content://com.android.externalstorage.documents/tree/primary%3ALanXin"
-        val mustMirror = baseRoot.copy(
+
+        val wouldHaveMirrored = baseRoot.copy(
             usedFallback = true,
             safWritable = true,
-            safTreeUri = treeUri
+            safTreeUri = "content://com.android.externalstorage.documents/tree/primary%3ALanXin"
         )
-        assertFalse(DebugAssetStorage.shouldMirror(mustMirror)) // SAF mirror disabled
-        assertTrue(mustMirror.shouldMirrorToSaf)
-        assertTrue(mustMirror.publicWritable)
+        assertFalse(DebugAssetStorage.shouldMirror(wouldHaveMirrored))
+        assertFalse(wouldHaveMirrored.shouldMirrorToSaf)
+        // 回退路径：公共 File 不可写
+        assertFalse(wouldHaveMirrored.publicWritable)
     }
 
     @Test
-    fun publicWritable_trueWhenFileOrSaf() {
+    fun publicWritable_onlyWhenNotFallback() {
         val base = tmp.newFolder("x")
         val fileOk = DebugAssetStorage.Root(
             baseDir = base,
@@ -170,11 +144,12 @@ class DebugAssetStorageTest {
         )
         assertTrue(fileOk.publicWritable)
 
+        // 回退后即使历史 safWritable=true，也不再算 publicWritable
         val fallbackNoSaf = fileOk.copy(usedFallback = true, safWritable = false)
         assertFalse(fallbackNoSaf.publicWritable)
 
         val fallbackWithSaf = fileOk.copy(usedFallback = true, safWritable = true)
-        assertTrue(fallbackWithSaf.publicWritable)
+        assertFalse(fallbackWithSaf.publicWritable)
     }
 
     @Test
